@@ -19,6 +19,9 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Settings2 } from "lucide-react"
+import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 
 export default function CheckInvoicePage() {
   const router = useRouter()
@@ -26,6 +29,11 @@ export default function CheckInvoicePage() {
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    "orderNo",
+    "customerName",
+    "status",
+  ])
   const [checkData, setCheckData] = useState({
     status: "approve",
     remarks: "",
@@ -45,7 +53,10 @@ export default function CheckInvoicePage() {
         (item: any) => item.stage === "Make Invoice" && item.status === "Completed"
       ).filter(
         (item: any) => 
-          !completed.some((completedItem: any) => completedItem.doNumber === item.doNumber)
+          !completed.some((completedItem: any) => 
+            (completedItem.doNumber && item.doNumber && completedItem.doNumber === item.doNumber) ||
+            (completedItem.orderNo && item.orderNo && completedItem.orderNo === item.orderNo)
+          )
       )
       setPendingOrders(pending)
     }
@@ -156,7 +167,7 @@ export default function CheckInvoicePage() {
       description="Review and verify invoice details."
       pendingCount={filteredPendingOrders.length}
       historyData={historyOrders.map((order) => ({
-        date: new Date(order.checkInvoiceData?.checkedAt || new Date()).toLocaleDateString(),
+        date: new Date(order.checkInvoiceData?.checkedAt || new Date()).toLocaleDateString("en-GB"),
         stage: "Check Invoice",
         status: order.checkInvoiceData?.status === "approve" ? "Approved" : "Rejected",
         remarks: order.checkInvoiceData?.remarks || "-",
@@ -164,91 +175,176 @@ export default function CheckInvoicePage() {
       partyNames={customerNames}
       onFilterChange={setFilterValues}
     >
-      <Card className="border-none shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader className="bg-muted/30">
-            <TableRow>
-              <TableHead>Action</TableHead>
-              <TableHead>Order No</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Invoice No</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredPendingOrders.length > 0 ? (
-              filteredPendingOrders.map((order, index) => (
-                <TableRow key={index}>
-                  <TableCell>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button size="sm">Check</Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-lg">
-                        <DialogHeader>
-                          <DialogTitle>Check Invoice: {order.orderNo}</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="space-y-2">
-                            <Label>Invoice Status</Label>
-                            <RadioGroup
-                              value={checkData.status}
-                              onValueChange={(value) => setCheckData({ ...checkData, status: value })}
-                              className="flex gap-4"
-                            >
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="approve" id="approve" />
-                                <Label htmlFor="approve" className="text-green-600 cursor-pointer">
-                                  Approve
-                                </Label>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="reject" id="reject" />
-                                <Label htmlFor="reject" className="text-red-600 cursor-pointer">
-                                  Reject
-                                </Label>
-                              </div>
-                            </RadioGroup>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Remarks</Label>
-                            <Textarea
-                              value={checkData.remarks}
-                              onChange={(e) => setCheckData({ ...checkData, remarks: e.target.value })}
-                              placeholder="Enter any remarks..."
-                            />
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button
-                            onClick={() => handleSubmit(order)}
-                            disabled={isProcessing}
-                            variant={checkData.status === "reject" ? "destructive" : "default"}
-                          >
-                            {isProcessing ? "Processing..." : checkData.status === "approve" ? "Approve Invoice" : "Reject Invoice"}
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </TableCell>
-                  <TableCell className="font-medium">{order.orderNo}</TableCell>
-                  <TableCell>{order.customerName}</TableCell>
-                  <TableCell>{order.invoiceData?.invoiceNo || "—"}</TableCell>
-                  <TableCell>
-                    <Badge className="bg-teal-100 text-teal-700">Pending Review</Badge>
+      <div className="space-y-4">
+        <div className="flex justify-end gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="bg-transparent">
+                <Settings2 className="mr-2 h-4 w-4" />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[250px] max-h-[400px] overflow-y-auto">
+              <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {ALL_COLUMNS.map((col) => (
+                <DropdownMenuCheckboxItem
+                  key={col.id}
+                  className="capitalize"
+                  checked={visibleColumns.includes(col.id)}
+                  onCheckedChange={(checked) => {
+                    setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
+                  }}
+                >
+                  {col.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
+              <TableRow>
+                <TableHead className="w-[80px]">Action</TableHead>
+                {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                  <TableHead key={col.id} className="whitespace-nowrap text-center">
+                    {col.label}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredPendingOrders.length > 0 ? (
+                   filteredPendingOrders.map((order, index) => {
+                      const internalOrder = order.data?.orderData || order;
+                      const preApproval = order.data?.preApprovalData || internalOrder.preApprovalData || {};
+
+                      const prodNames = internalOrder.products?.map((p: any) => p.productName).join(", ") || 
+                                        internalOrder.preApprovalProducts?.map((p: any) => p.oilType).join(", ") || 
+                                        "";
+                      const uoms = internalOrder.products?.map((p: any) => p.uom).join(", ") || "";
+                      const qtys = internalOrder.products?.map((p: any) => p.orderQty).join(", ") || "";
+                      const altUoms = internalOrder.products?.map((p: any) => p.altUom).join(", ") || "";
+                      const altQtys = internalOrder.products?.map((p: any) => p.altQty).join(", ") || "";
+                      
+                      const ratesLtr = internalOrder.preApprovalProducts?.map((p: any) => p.ratePerLtr).join(", ") || internalOrder.ratePerLtr || "—";
+                      const rates15Kg = internalOrder.preApprovalProducts?.map((p: any) => p.rateLtr).join(", ") || internalOrder.rateLtr || "—";
+                      const oilTypes = internalOrder.preApprovalProducts?.map((p: any) => p.oilType).join(", ") || internalOrder.oilType || "—";
+
+                      const row = {
+                        orderNo: internalOrder.doNumber || internalOrder.orderNo || "DO-XXX",
+                        deliveryPurpose: internalOrder.orderPurpose || "—",
+                        customerType: internalOrder.customerType || "—",
+                        orderType: internalOrder.orderType || "—",
+                        soNo: internalOrder.soNumber || "—",
+                        partySoDate: internalOrder.soDate || "—",
+                        customerName: internalOrder.customerName || "—",
+                        itemConfirm: internalOrder.itemConfirm || "—",
+                        productName: prodNames,
+                        uom: uoms,
+                        orderQty: qtys,
+                        altUom: altUoms,
+                        altQty: altQtys,
+                        oilType: oilTypes,
+                        ratePerLtr: ratesLtr,
+                        ratePer15Kg: rates15Kg,
+                        rateOfMaterial: internalOrder.rateMaterial || "—",
+                        totalWithGst: internalOrder.totalWithGst || "—",
+                        transportType: internalOrder.dispatchData?.transportType || "—",
+                        uploadSo: "so_document.pdf",
+                        contactPerson: internalOrder.contactPerson || "—",
+                        whatsapp: internalOrder.whatsappNo || "—",
+                        address: internalOrder.customerAddress || "—",
+                        paymentTerms: internalOrder.paymentTerms || "—",
+                        advanceTaken: internalOrder.advancePaymentTaken || "—",
+                        advanceAmount: internalOrder.advanceAmount || "—",
+                        isBroker: internalOrder.isBrokerOrder || "—",
+                        brokerName: internalOrder.brokerName || "—",
+                        deliveryDate: internalOrder.deliveryDate || "—",
+                        qtyToDispatch: internalOrder.dispatchData?.qtyToDispatch || "—",
+                        deliveryFrom: internalOrder.deliveryData?.deliveryFrom || "—",
+                        status: "Pending Review", // Special handling for badge
+                      }
+
+                   return (
+                   <TableRow key={index}>
+                     <TableCell className="text-center">
+                       <Dialog>
+                         <DialogTrigger asChild>
+                           <Button size="sm">Check</Button>
+                         </DialogTrigger>
+                         <DialogContent className="max-w-lg">
+                           <DialogHeader>
+                             <DialogTitle>Check Invoice: {order.orderNo}</DialogTitle>
+                           </DialogHeader>
+                           <div className="space-y-4 py-4">
+                             <div className="space-y-2">
+                               <Label>Invoice Status</Label>
+                               <RadioGroup
+                                 value={checkData.status}
+                                 onValueChange={(value) => setCheckData({ ...checkData, status: value })}
+                                 className="flex gap-4"
+                               >
+                                 <div className="flex items-center space-x-2">
+                                   <RadioGroupItem value="approve" id="approve" />
+                                   <Label htmlFor="approve" className="text-green-600 cursor-pointer">
+                                     Approve
+                                   </Label>
+                                 </div>
+                                 <div className="flex items-center space-x-2">
+                                   <RadioGroupItem value="reject" id="reject" />
+                                   <Label htmlFor="reject" className="text-red-600 cursor-pointer">
+                                     Reject
+                                   </Label>
+                                 </div>
+                               </RadioGroup>
+                             </div>
+                             <div className="space-y-2">
+                               <Label>Remarks</Label>
+                               <Textarea
+                                 value={checkData.remarks}
+                                 onChange={(e) => setCheckData({ ...checkData, remarks: e.target.value })}
+                                 placeholder="Enter any remarks..."
+                               />
+                             </div>
+                           </div>
+                           <DialogFooter>
+                             <Button
+                               onClick={() => handleSubmit(order)}
+                               disabled={isProcessing}
+                               variant={checkData.status === "reject" ? "destructive" : "default"}
+                             >
+                               {isProcessing ? "Processing..." : checkData.status === "approve" ? "Approve Invoice" : "Reject Invoice"}
+                             </Button>
+                           </DialogFooter>
+                         </DialogContent>
+                       </Dialog>
+                     </TableCell>
+                     {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                       <TableCell key={col.id} className="whitespace-nowrap text-center">
+                         {col.id === "status" ? (
+                            <div className="flex justify-center">
+                               <Badge className="bg-teal-100 text-teal-700">Pending Review</Badge>
+                            </div>
+                         ) : row[col.id as keyof typeof row]}
+                       </TableCell>
+                     ))}
+                   </TableRow>
+                   )
+                })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
+                    No invoices pending for review
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                  No invoices pending for review
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+              )}
+            </TableBody>
+          </Table>
+        </Card>
+      </div>
     </WorkflowStageShell>
   )
 }

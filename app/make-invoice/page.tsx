@@ -20,6 +20,9 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Upload } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Settings2 } from "lucide-react"
+import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 
 export default function MakeInvoicePage() {
   const router = useRouter()
@@ -27,6 +30,11 @@ export default function MakeInvoicePage() {
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    "orderNo",
+    "customerName",
+    "status",
+  ])
   const [invoiceType, setInvoiceType] = useState<"independent" | "common" | "">("")
   const [invoiceData, setInvoiceData] = useState({
     invoiceNo: "",
@@ -51,7 +59,10 @@ export default function MakeInvoicePage() {
         (item: any) => item.stage === "Security Approval" && item.status === "Completed"
       ).filter(
         (item: any) => 
-          !completed.some((completedItem: any) => completedItem.doNumber === item.doNumber)
+          !completed.some((completedItem: any) => 
+            (completedItem.doNumber && item.doNumber && completedItem.doNumber === item.doNumber) ||
+            (completedItem.orderNo && item.orderNo && completedItem.orderNo === item.orderNo)
+          )
       )
       setPendingOrders(pending)
     }
@@ -167,140 +178,221 @@ export default function MakeInvoicePage() {
       }))}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
+      remarksColName="Invoice No"
     >
-      <Card className="border-none shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader className="bg-muted/30">
-            <TableRow>
-              <TableHead>Action</TableHead>
-              <TableHead>Order No</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Products</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredPendingOrders.length > 0 ? (
-              filteredPendingOrders.map((order, index) => (
-                <TableRow key={index}>
-                  <TableCell>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button size="sm">Create Invoice</Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-lg">
-                        <DialogHeader>
-                          <DialogTitle>Make Invoice: {order.orderNo}</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          
-                          <div className="space-y-2">
-                              <Label>Build Type</Label>
-                              <Select value={invoiceType} onValueChange={(val: any) => setInvoiceType(val)}>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select Type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="independent">Independent</SelectItem>
-                                  <SelectItem value="common">Common</SelectItem>
-                                </SelectContent>
-                              </Select>
-                          </div>
+      <div className="space-y-4">
+        <div className="flex justify-end gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="bg-transparent">
+                <Settings2 className="mr-2 h-4 w-4" />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[250px] max-h-[400px] overflow-y-auto">
+              <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {ALL_COLUMNS.map((col) => (
+                <DropdownMenuCheckboxItem
+                  key={col.id}
+                  className="capitalize"
+                  checked={visibleColumns.includes(col.id)}
+                  onCheckedChange={(checked) => {
+                    setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
+                  }}
+                >
+                  {col.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
-                          {invoiceType === "independent" && (
-                            <div className="space-y-2">
-                                <Label>Invoice Date</Label>
-                                <Input 
-                                    type="date" 
-                                    value={invoiceData.invoiceDate} 
-                                    onChange={(e) => setInvoiceData({...invoiceData, invoiceDate: e.target.value})} 
-                                />
-                            </div>
-                          )}
+        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
+              <TableRow>
+                <TableHead className="w-[80px]">Action</TableHead>
+                {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                  <TableHead key={col.id} className="whitespace-nowrap text-center">
+                    {col.label}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredPendingOrders.length > 0 ? (
+                filteredPendingOrders.map((order, index) => {
+                   const prodNames = order.products?.map((p: any) => p.productName).join(", ") || "";
+                   const uoms = order.products?.map((p: any) => p.uom).join(", ") || "";
+                   const qtys = order.products?.map((p: any) => p.orderQty).join(", ") || "";
+                   const altUoms = order.products?.map((p: any) => p.altUom).join(", ") || "";
+                   const altQtys = order.products?.map((p: any) => p.altQty).join(", ") || "";
+                   
+                   const ratesLtr = order.preApprovalProducts?.map((p: any) => p.ratePerLtr).join(", ") || order.ratePerLtr || "—";
+                   const rates15Kg = order.preApprovalProducts?.map((p: any) => p.rateLtr).join(", ") || order.rateLtr || "—";
+                   const oilTypes = order.preApprovalProducts?.map((p: any) => p.oilType).join(", ") || order.oilType || "—";
 
-                          <div className="space-y-2">
-                            <Label>Invoice Number</Label>
-                            <Input
-                              value={invoiceData.invoiceNo}
-                              onChange={(e) => setInvoiceData({ ...invoiceData, invoiceNo: e.target.value })}
-                              placeholder="Enter invoice number"
-                            />
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <Label>Qty</Label>
-                            <Input
-                              type="number"
-                              value={invoiceData.qty}
-                              onChange={(e) => setInvoiceData({ ...invoiceData, qty: e.target.value })}
-                              placeholder="Enter Quantity"
-                            />
-                          </div>
+                   const row = {
+                     orderNo: order.doNumber || order.orderNo || "DO-XXX",
+                     deliveryPurpose: order.orderPurpose || "—",
+                     customerType: order.customerType || "—",
+                     orderType: order.orderType || "—",
+                     soNo: order.soNumber || "—",
+                     partySoDate: order.soDate || "—",
+                     customerName: order.customerName || "—",
+                     itemConfirm: order.itemConfirm || "—",
+                     productName: prodNames,
+                     uom: uoms,
+                     orderQty: qtys,
+                     altUom: altUoms,
+                     altQty: altQtys,
+                     oilType: oilTypes,
+                     ratePerLtr: ratesLtr,
+                     ratePer15Kg: rates15Kg,
+                     rateOfMaterial: order.rateMaterial || "—",
+                     totalWithGst: order.totalWithGst || "—",
+                     transportType: order.dispatchData?.transportType || "—",
+                     uploadSo: "so_document.pdf",
+                     contactPerson: order.contactPerson || "—",
+                     whatsapp: order.whatsappNo || "—",
+                     address: order.customerAddress || "—",
+                     paymentTerms: order.paymentTerms || "—",
+                     advanceTaken: order.advancePaymentTaken || "—",
+                     advanceAmount: order.advanceAmount || "—",
+                     isBroker: order.isBrokerOrder || "—",
+                     brokerName: order.brokerName || "—",
+                     deliveryDate: order.deliveryDate || "—",
+                     qtyToDispatch: order.dispatchData?.qtyToDispatch || "—",
+                     deliveryFrom: order.deliveryData?.deliveryFrom || "—",
+                     status: "Pending Invoice", // Special handling for badge
+                   }
 
-                          {invoiceType === "independent" && (
-                            <div className="space-y-2">
-                                <Label>Bill Amount</Label>
-                                <Input
-                                    type="number" 
-                                    value={invoiceData.billAmount} 
-                                    onChange={(e) => setInvoiceData({...invoiceData, billAmount: e.target.value})} 
-                                    placeholder="Enter Bill Amount"
-                                />
-                            </div>
-                          )}
+                   return (
+                   <TableRow key={index}>
+                     <TableCell>
+                       <Dialog>
+                         <DialogTrigger asChild>
+                           <Button size="sm">Create Invoice</Button>
+                         </DialogTrigger>
+                         <DialogContent className="max-w-lg">
+                           <DialogHeader>
+                             <DialogTitle>Make Invoice: {order.orderNo}</DialogTitle>
+                           </DialogHeader>
+                           <div className="space-y-4 py-4">
+                             
+                             <div className="space-y-2">
+                                 <Label>Build Type</Label>
+                                 <Select value={invoiceType} onValueChange={(val: any) => setInvoiceType(val)}>
+                                   <SelectTrigger>
+                                     <SelectValue placeholder="Select Type" />
+                                   </SelectTrigger>
+                                   <SelectContent>
+                                     <SelectItem value="independent">Independent</SelectItem>
+                                     <SelectItem value="common">Common</SelectItem>
+                                   </SelectContent>
+                                 </Select>
+                             </div>
 
-                          <div className="space-y-2">
-                            <Label>Upload Invoice</Label>
-                            <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                              <Input
-                                type="file"
-                                accept=".pdf,.jpg,.png"
-                                onChange={(e) => {
-                                  if (e.target.files?.[0]) {
-                                    setInvoiceData({ ...invoiceData, invoiceFile: e.target.files[0] })
-                                  }
-                                }}
-                                className="hidden"
-                                id="invoice-upload"
-                              />
-                              <label htmlFor="invoice-upload" className="cursor-pointer">
-                                <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                                <p className="text-sm text-muted-foreground">
-                                  {invoiceData.invoiceFile ? invoiceData.invoiceFile.name : "Click to upload invoice"}
-                                </p>
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button
-                            onClick={() => handleSubmit(order)}
-                            disabled={!invoiceData.invoiceNo || !invoiceType || isProcessing}
-                          >
-                            {isProcessing ? "Processing..." : "Submit Invoice"}
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </TableCell>
-                  <TableCell className="font-medium">{order.orderNo}</TableCell>
-                  <TableCell>{order.customerName}</TableCell>
-                  <TableCell>{order.productCount} Products</TableCell>
-                  <TableCell>
-                    <Badge className="bg-cyan-100 text-cyan-700">Pending Invoice</Badge>
+                             {invoiceType === "independent" && (
+                               <div className="space-y-2">
+                                   <Label>Invoice Date</Label>
+                                   <Input 
+                                       type="date" 
+                                       value={invoiceData.invoiceDate} 
+                                       onChange={(e) => setInvoiceData({...invoiceData, invoiceDate: e.target.value})} 
+                                   />
+                               </div>
+                             )}
+
+                             <div className="space-y-2">
+                               <Label>Invoice Number</Label>
+                               <Input
+                                 value={invoiceData.invoiceNo}
+                                 onChange={(e) => setInvoiceData({ ...invoiceData, invoiceNo: e.target.value })}
+                                 placeholder="Enter invoice number"
+                               />
+                             </div>
+                             
+                             <div className="space-y-2">
+                               <Label>Qty</Label>
+                               <Input
+                                 type="number"
+                                 value={invoiceData.qty}
+                                 onChange={(e) => setInvoiceData({ ...invoiceData, qty: e.target.value })}
+                                 placeholder="Enter Quantity"
+                               />
+                             </div>
+
+                             {invoiceType === "independent" && (
+                               <div className="space-y-2">
+                                   <Label>Bill Amount</Label>
+                                   <Input
+                                       type="number" 
+                                       value={invoiceData.billAmount} 
+                                       onChange={(e) => setInvoiceData({...invoiceData, billAmount: e.target.value})} 
+                                       placeholder="Enter Bill Amount"
+                                   />
+                               </div>
+                             )}
+
+                             <div className="space-y-2">
+                               <Label>Upload Invoice</Label>
+                               <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                                 <Input
+                                   type="file"
+                                   accept=".pdf,.jpg,.png"
+                                   onChange={(e) => {
+                                     if (e.target.files?.[0]) {
+                                       setInvoiceData({ ...invoiceData, invoiceFile: e.target.files[0] })
+                                     }
+                                   }}
+                                   className="hidden"
+                                   id="invoice-upload"
+                                 />
+                                 <label htmlFor="invoice-upload" className="cursor-pointer">
+                                   <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                                   <p className="text-sm text-muted-foreground">
+                                     {invoiceData.invoiceFile ? invoiceData.invoiceFile.name : "Click to upload invoice"}
+                                   </p>
+                                 </label>
+                               </div>
+                             </div>
+                           </div>
+                           <DialogFooter>
+                             <Button
+                               onClick={() => handleSubmit(order)}
+                               disabled={!invoiceData.invoiceNo || !invoiceType || isProcessing}
+                             >
+                               {isProcessing ? "Processing..." : "Submit Invoice"}
+                             </Button>
+                           </DialogFooter>
+                         </DialogContent>
+                       </Dialog>
+                     </TableCell>
+                     {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                        <TableCell key={col.id} className="whitespace-nowrap text-center">
+                          {col.id === "status" ? (
+                             <div className="flex justify-center">
+                                <Badge className="bg-cyan-100 text-cyan-700">Pending Invoice</Badge>
+                             </div>
+                          ) : row[col.id as keyof typeof row]}
+                        </TableCell>
+                      ))}
+                   </TableRow>
+                   )
+                })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
+                    No orders pending for invoice creation
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                  No orders pending for invoice creation
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+              )}
+            </TableBody>
+          </Table>
+        </Card>
+      </div>
     </WorkflowStageShell>
   )
 }

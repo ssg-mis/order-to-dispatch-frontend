@@ -81,7 +81,11 @@ export function AppSidebar() {
                       asChild
                       isActive={isActive}
                       tooltip={item.title}
-                      className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                      className={`transition-all duration-200 ease-in-out hover:pl-3 group-data-[collapsible=icon]:hover:pl-0 ${
+                        isActive 
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm font-medium" 
+                          : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                      }`}
                     >
                       <Link href={item.url}>
                         <item.icon className="h-4 w-4" />

@@ -12,11 +12,52 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useToast } from "@/hooks/use-toast"
 import { useState, useEffect } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Settings2 } from "lucide-react"
+
 
 export default function CommitmentReviewPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [isConfirming, setIsConfirming] = useState(false)
+  const PAGE_COLUMNS = [
+    { id: "orderNo", label: "DO Number" },
+    { id: "soNo", label: "SO No." },
+    { id: "deliveryPurpose", label: "Order Type (Delivery Purpose)" },
+    { id: "startDate", label: "Start Date" },
+    { id: "endDate", label: "End Date" },
+    { id: "deliveryDate", label: "Delivery Date" },
+    { id: "orderType", label: "Order Type" },
+    { id: "customerType", label: "Customer Type" },
+    { id: "partySoDate", label: "Party SO Date" },
+    { id: "customerName", label: "Customer Name" },
+    { id: "oilType", label: "Oil Type" },
+    { id: "ratePer15Kg", label: "Rate Per 15 kg" },
+    { id: "ratePerLtr", label: "Rate Per Ltr." }, // Aggregated
+    { id: "productName", label: "Product Name" },
+    { id: "uom", label: "UOM" },
+    { id: "orderQty", label: "Order Quantity" },
+    { id: "altUom", label: "Alt UOM" },
+    { id: "altQty", label: "Alt Qty (Kg)" },
+    { id: "totalWithGst", label: "Total Amount with GST" },
+    { id: "transportType", label: "Type of Transporting" },
+    { id: "contactPerson", label: "Customer Contact Person Name" },
+    { id: "whatsapp", label: "Customer Contact Person Whatsapp No." },
+    { id: "address", label: "Customer Address" },
+    { id: "paymentTerms", label: "Payment Terms" },
+    { id: "advanceTaken", label: "Advance Payment to be Taken" },
+    { id: "advanceAmount", label: "Advance Amount" },
+    { id: "isBroker", label: "Is this order Through Broker" },
+    { id: "brokerName", label: "Broker Name (If Order Through Broker)" },
+    { id: "uploadSo", label: "Upload SO." },
+    { id: "status", label: "Status" },
+  ]
+
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    "orderNo",
+    "customerName",
+    "status",
+  ])
   
   // State for list of orders
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
@@ -35,6 +76,7 @@ export default function CommitmentReviewPage() {
   const [history, setHistory] = useState<any[]>([])
 
   useEffect(() => {
+    // 1. Load History
     const savedHistory = localStorage.getItem("workflowHistory")
     let historyData = []
     if (savedHistory) {
@@ -49,7 +91,6 @@ export default function CommitmentReviewPage() {
       const preApprovalMap = new Map();
       historyData.forEach((h: any) => {
           if (h.stage === "Pre-Approval" && h.orderNo) {
-             // If multiple, later ones overwrite, which is usually fine or we want the one that led to this
              preApprovalMap.set(h.orderNo, h.data?.overallRemark || h.data?.preApprovalData?.overallRemark);
           }
       });
@@ -57,7 +98,6 @@ export default function CommitmentReviewPage() {
       const formattedHistory = stageHistory.map((item: any) => {
           let remark = item.remarks;
           if (!remark || remark === "-") {
-              // Try to fetch from Pre-Approval
               remark = preApprovalMap.get(item.orderNo) || "Verified"; 
           }
           return {
@@ -68,55 +108,84 @@ export default function CommitmentReviewPage() {
           }
       })
       setHistory(formattedHistory)
+    }
       
-      // LOGIC: Use a "Latest Stage" approach to determine pending items.
-      // Group history by Order No to find the most recent stage for each order.
+      // LOGIC: Use a "Latest Stage" approach to determine pending items from history.
       const latestStatusByOrder = new Map();
-      
       historyData.forEach((entry: any) => {
-          if (entry.orderNo) {
-            latestStatusByOrder.set(entry.orderNo, entry);
+          const key = entry.orderNo || entry.doNumber
+          if (key) {
+            latestStatusByOrder.set(key, entry);
           }
       });
 
       const pendingFromHistory: any[] = [];
       latestStatusByOrder.forEach((entry, orderNo) => {
+          // Case 1: Pre-Approval Completed -> Ready for Approval
           if (entry.stage === "Pre-Approval" && entry.status === "Completed") {
-               // Extract the order data
-               const orderData = entry.data?.orderData || entry.data || entry;
-               // Attach the remark to the object for reference
+               // Merge metadata from pre-approval into the order object so it's carried forward
+               const rawOrder = entry.data?.orderData || entry.data || entry;
+               const orderData = {
+                   ...rawOrder,
+                   preApprovalData: entry.data // Keep the full pre-approval context
+               }
+               // Attach the remark
                if (entry.data?.overallRemark) {
                    orderData.preApprovalRemark = entry.data.overallRemark;
                }
                pendingFromHistory.push(orderData);
           }
+          // Case 2: Regular Order from History directly (if stored there by punch)
+          else if (entry.stage === "Approval Of Order" && entry.status === "Pending") {
+               const orderData = entry; 
+               pendingFromHistory.push(orderData);
+          }
       });
       
-      // Also merge in any single-item data from legacy/manual flow if needed.
-      const savedCommitmentData = localStorage.getItem("commitmentReviewData")
-      let directPending: any = null
-      if (savedCommitmentData) {
-         try {
-             const parsed = JSON.parse(savedCommitmentData)
-             if (parsed?.orderData) {
-                 directPending = parsed.orderData
-             }
-         } catch (e) {
-             console.error("Failed to parse commitmentReviewData", e)
-         }
-      }
-      
-      // Merge history pending and direct pending
-      const mergedPending = [...pendingFromHistory]
-      if (directPending) {
-          const existsInPending = mergedPending.some(o => (o.doNumber || o.orderNo) === (directPending.doNumber || directPending.orderNo))
-          if (!existsInPending) {
-              mergedPending.unshift(directPending)
-          }
+      // 2. Load Persisted Pending Items (for Direct Regular Orders)
+      const savedPending = localStorage.getItem("approvalPendingItems")
+      let persistedPending = savedPending ? JSON.parse(savedPending) : []
+
+      // 3. Load New Incoming Data (Regular Order Handoff)
+      const savedOrderData = localStorage.getItem("orderData")
+      if (savedOrderData) {
+        try {
+            const data = JSON.parse(savedOrderData)
+            // Only add if it's meant for this stage and strictly Pending (Regular Order)
+            if (data.stage === "Approval Of Order" && data.status === "Pending") {
+                // Check if already processed in history
+                const isProcessed = historyData.some(
+                    (item: any) => item.stage === "Approval Of Order" && (item.orderNo === (data.doNumber || "DO-XXX"))
+                )
+                
+                if (!isProcessed) {
+                     // Check if already in persisted list
+                     const exists = persistedPending.some((o: any) => 
+                         (o.doNumber || o.orderNo) === (data.doNumber || data.orderNo)
+                     )
+                     if (!exists) {
+                         persistedPending = [data, ...persistedPending]
+                         localStorage.setItem("approvalPendingItems", JSON.stringify(persistedPending))
+                     }
+                }
+            }
+        } catch(e) {}
       }
 
+      // 4. Merge history pending and direct persisted pending
+      const mergedPending = [...pendingFromHistory]
+      
+      persistedPending.forEach((item: any) => {
+          const exists = mergedPending.some(o => (o.doNumber || o.orderNo) === (item.doNumber || item.orderNo))
+          if (!exists) {
+              mergedPending.push(item)
+          }
+      })
+      
+      // Sort by recency
+      // mergedPending.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+
       setPendingOrders(mergedPending)
-    }
   }, [])
 
   const checkItems = [
@@ -188,7 +257,18 @@ export default function CommitmentReviewPage() {
 
          // Update local state immediately
         setHistory((prev) => [...prev, historyEntry])
-        setPendingOrders((prev) => prev.filter(o => (o.doNumber || o.orderNo) !== orderIdentifier))
+
+        const newPending = pendingOrders.filter(o => (o.doNumber || o.orderNo) !== orderIdentifier)
+        setPendingOrders(newPending)
+        
+        // Update persisted list as well
+        const savedPending = localStorage.getItem("approvalPendingItems")
+        if (savedPending) {
+           const list = JSON.parse(savedPending)
+           const updatedList = list.filter((o: any) => (o.doNumber || o.orderNo) !== orderIdentifier)
+           localStorage.setItem("approvalPendingItems", JSON.stringify(updatedList))
+        }
+
         setSelectedOrder(null)
 
       } else {
@@ -225,7 +305,18 @@ export default function CommitmentReviewPage() {
         
         // Update local state immediately
         setHistory((prev) => [...prev, historyEntry])
-        setPendingOrders((prev) => prev.filter(o => (o.doNumber || o.orderNo) !== orderIdentifier))
+        
+        const newPending = pendingOrders.filter(o => (o.doNumber || o.orderNo) !== orderIdentifier)
+        setPendingOrders(newPending)
+
+        // Update persisted list as well
+        const savedPending = localStorage.getItem("approvalPendingItems")
+        if (savedPending) {
+           const list = JSON.parse(savedPending)
+           const updatedList = list.filter((o: any) => (o.doNumber || o.orderNo) !== orderIdentifier)
+           localStorage.setItem("approvalPendingItems", JSON.stringify(updatedList))
+        }
+
         setSelectedOrder(null)
 
         toast({
@@ -318,111 +409,190 @@ export default function CommitmentReviewPage() {
         partyNames={customerNames}
         onFilterChange={setFilterValues}
     >
-      <Card className="border-none shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader className="bg-muted/30">
-            <TableRow>
-              <TableHead>Action</TableHead>
-              <TableHead>DO Number</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Products</TableHead>
-              <TableHead>Credit Score</TableHead>
-              <TableHead>Days Pending</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredPendingOrders.length > 0 ? (
-              filteredPendingOrders.map((order: any, index: number) => (
-              <TableRow key={index}>
-                <TableCell>
-                  <Dialog open={selectedOrder?.doNumber === order.doNumber} onOpenChange={(open) => {
-                      if (open) setSelectedOrder(order)
-                      else setSelectedOrder(null)
-                  }}>
-                    <DialogTrigger asChild>
-                      <Button size="sm" onClick={() => setSelectedOrder(order)}>Verify Order</Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-xl">
-                      <DialogHeader>
-                        <DialogTitle>Verification Checklist: {selectedOrder?.soNumber || selectedOrder?.doNumber}</DialogTitle>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="space-y-2 p-3 rounded-lg bg-muted/20">
-                            <Label className="text-base font-semibold">Source of Material</Label>
-                            <Select value={sourceOfMaterial} onValueChange={setSourceOfMaterial}>
-                                <SelectTrigger className="bg-background">
-                                    <SelectValue placeholder="Select Source" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="in-stock">In Stock</SelectItem>
-                                    <SelectItem value="production">From Production</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {checkItems.map((item) => (
-                          <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20">
-                            <Label className="text-base">{item.label}</Label>
-                            <RadioGroup
-                              value={checklistValues[item.id]}
-                              onValueChange={(value) => handleChecklistChange(item.id, value)}
-                              className="flex gap-4"
-                            >
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="approve" id={`${item.id}-ok`} />
-                                <Label htmlFor={`${item.id}-ok`} className="text-green-600 cursor-pointer">
-                                  Approve
-                                </Label>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="reject" id={`${item.id}-no`} />
-                                <Label htmlFor={`${item.id}-no`} className="text-red-600 cursor-pointer">
-                                  Reject
-                                </Label>
-                              </div>
-                            </RadioGroup>
-                          </div>
-                        ))}
-                      </div>
-                      <DialogFooter>
-                        <Button
-                          onClick={handleConfirmCommitment}
-                          disabled={isConfirming}
-                          className="w-full"
-                          variant={Object.values(checklistValues).includes("reject") ? "destructive" : "default"}
-                        >
-                          {isConfirming
-                            ? "Processing..."
-                            : Object.values(checklistValues).includes("reject")
-                              ? "Reject & Save to History"
-                              : "Approve All & Go to Dispatch Material"}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </TableCell>
-                <TableCell className="font-medium">{order.doNumber || order.orderNo || "DO-XXX"}</TableCell>
-                <TableCell>{order.customerName || "Unknown"}</TableCell>
-                <TableCell>
-                  <span className="text-sm">
-                    {order.products?.length || 0} {order.products?.length === 1 ? "Product" : "Products"}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <Badge className="bg-green-100 text-green-700">Excellent</Badge>
-                </TableCell>
-                <TableCell>2 Days</TableCell>
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="ml-auto bg-transparent">
+                <Settings2 className="mr-2 h-4 w-4" />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[250px] max-h-[400px] overflow-y-auto">
+              <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {PAGE_COLUMNS.map((col) => (
+                <DropdownMenuCheckboxItem
+                  key={col.id}
+                  className="capitalize"
+                  checked={visibleColumns.includes(col.id)}
+                  onCheckedChange={(checked) => {
+                    setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
+                  }}
+                >
+                  {col.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
+              <TableRow>
+                <TableHead className="w-[80px]">Action</TableHead>
+                {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                  <TableHead key={col.id} className="whitespace-nowrap text-center">
+                    {col.label}
+                  </TableHead>
+                ))}
               </TableRow>
-              ))
-            ) : (
-                <TableRow>
-                    <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
-                        No orders pending for commitment review
-                    </TableCell>
-                </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+            </TableHeader>
+            <TableBody>
+              {filteredPendingOrders.length > 0 ? (
+                filteredPendingOrders.map((order: any, index: number) => {
+                   // Ensure rate arrays are handled if they exist in preApprovalProducts, else fallback to root props
+                   const prodNames = order.products?.map((p: any) => p.productName).join(", ") || "";
+                   const uoms = order.products?.map((p: any) => p.uom).join(", ") || "";
+                   const qtys = order.products?.map((p: any) => p.orderQty).join(", ") || "";
+                   const altUoms = order.products?.map((p: any) => p.altUom).join(", ") || "";
+                   const altQtys = order.products?.map((p: any) => p.altQty).join(", ") || "";
+                   
+                   const ratesLtr = order.preApprovalProducts?.map((p: any) => p.ratePerLtr).join(", ") || order.ratePerLtr || "—";
+                   const rates15Kg = order.preApprovalProducts?.map((p: any) => p.rateLtr).join(", ") || order.rateLtr || "—";
+
+                   const row = {
+                     orderNo: order.doNumber || order.orderNo || "DO-XXX",
+                     deliveryPurpose: order.orderPurpose || "—",
+                     customerType: order.customerType || "—",
+                     orderType: order.orderType || "—",
+                     soNo: order.soNumber || "—",
+                     partySoDate: order.soDate || "—",
+                     customerName: order.customerName || "—",
+                     // New Date Columns
+                     startDate: order.startDate || "—",
+                     endDate: order.endDate || "—",
+                     deliveryDate: order.deliveryDate || "—",
+                     
+                     // Rates
+                     oilType: order.preApprovalProducts?.map((p: any) => p.oilType).join(", ") || order.oilType || "—",
+                     ratePerLtr: ratesLtr,
+                     ratePer15Kg: rates15Kg,
+
+                     // Product Details
+                     productName: prodNames,
+                     uom: uoms,
+                     orderQty: qtys,
+                     altUom: altUoms,
+                     altQty: altQtys,
+
+                     // Extended Columns
+                     totalWithGst: order.totalWithGst || "—",
+                     transportType: order.transportType || "—",
+                     contactPerson: order.contactPerson || "—",
+                     whatsapp: order.whatsappNo || "—",
+                     address: order.customerAddress || "—",
+                     paymentTerms: order.paymentTerms || "—",
+                     advanceTaken: order.advancePaymentTaken || "—",
+                     advanceAmount: order.advanceAmount || "—",
+                     isBroker: order.isBrokerOrder || "—",
+                     brokerName: order.brokerName || "—",
+                     uploadSo: "so_document.pdf",
+                     
+                     status: "Excellent", // Badge fallback
+                   }
+
+                   return (
+                   <TableRow key={index}>
+                     <TableCell>
+                       <Dialog open={selectedOrder?.doNumber === order.doNumber} onOpenChange={(open) => {
+                           if (open) setSelectedOrder(order)
+                           else setSelectedOrder(null)
+                       }}>
+                         <DialogTrigger asChild>
+                           <Button size="sm" onClick={() => setSelectedOrder(order)}>Verify Order</Button>
+                         </DialogTrigger>
+                         <DialogContent className="max-w-xl">
+                           <DialogHeader>
+                             <DialogTitle>Verification Checklist: {selectedOrder?.soNumber || selectedOrder?.doNumber}</DialogTitle>
+                           </DialogHeader>
+                           <div className="grid gap-4 py-4">
+                             <div className="space-y-2 p-3 rounded-lg bg-muted/20">
+                                 <Label className="text-base font-semibold">Source of Material</Label>
+                                 <Select value={sourceOfMaterial} onValueChange={setSourceOfMaterial}>
+                                     <SelectTrigger className="bg-background">
+                                         <SelectValue placeholder="Select Source" />
+                                     </SelectTrigger>
+                                     <SelectContent>
+                                         <SelectItem value="in-stock">In Stock</SelectItem>
+                                         <SelectItem value="production">From Production</SelectItem>
+                                     </SelectContent>
+                                 </Select>
+                             </div>
+                             {checkItems.map((item) => (
+                               <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20">
+                                 <Label className="text-base">{item.label}</Label>
+                                 <RadioGroup
+                                   value={checklistValues[item.id]}
+                                   onValueChange={(value) => handleChecklistChange(item.id, value)}
+                                   className="flex gap-4"
+                                 >
+                                   <div className="flex items-center space-x-2">
+                                     <RadioGroupItem value="approve" id={`${item.id}-ok`} />
+                                     <Label htmlFor={`${item.id}-ok`} className="text-green-600 cursor-pointer">
+                                       Approve
+                                     </Label>
+                                   </div>
+                                   <div className="flex items-center space-x-2">
+                                     <RadioGroupItem value="reject" id={`${item.id}-no`} />
+                                     <Label htmlFor={`${item.id}-no`} className="text-red-600 cursor-pointer">
+                                       Reject
+                                     </Label>
+                                   </div>
+                                 </RadioGroup>
+                               </div>
+                             ))}
+                           </div>
+                           <DialogFooter>
+                             <Button
+                               onClick={handleConfirmCommitment}
+                               disabled={isConfirming}
+                               className="w-full"
+                               variant={Object.values(checklistValues).includes("reject") ? "destructive" : "default"}
+                             >
+                               {isConfirming
+                                 ? "Processing..."
+                                 : Object.values(checklistValues).includes("reject")
+                                   ? "Reject & Save to History"
+                                   : "Approve All & Go to Dispatch Material"}
+                             </Button>
+                           </DialogFooter>
+                         </DialogContent>
+                       </Dialog>
+                     </TableCell>
+                      {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                        <TableCell key={col.id} className="whitespace-nowrap text-center">
+                          {col.id === "status" ? (
+                             <div className="flex justify-center">
+                                <Badge className="bg-green-100 text-green-700">Excellent</Badge>
+                             </div>
+                          ) : row[col.id as keyof typeof row]}
+                        </TableCell>
+                      ))}
+                   </TableRow>
+                )})
+              ) : (
+                  <TableRow>
+                      <TableCell colSpan={visibleColumns.length + 1} className="text-center py-4 text-muted-foreground">
+                          No orders pending for commitment review
+                      </TableCell>
+                  </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Card>
+      </div>
     </WorkflowStageShell>
   )
 }

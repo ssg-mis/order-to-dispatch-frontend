@@ -16,23 +16,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 type ProductItem = {
   id: string
   productName: string
-  rateMaterial: string
   uom: string
   orderQty: string
   altUom: string
   altQty: string
-  totalWithGst: string
 }
 
 type PreApprovalProduct = {
   id: string
   oilType: string
-  rateLtr: string
-  uom: string
-  orderQty: string
-  altUom: string
-  altQty: string
-  totalWithGst: string
+  ratePerLtr: string
+  rateLtr: string // Used for Rate per 15KG
 }
 
 type OrderData = {
@@ -51,8 +45,6 @@ type OrderData = {
   deliveryAddress: string
   oilType: string
   rateLtr: string
-  rateMaterial: string
-  totalWithGst: string
   brokerName: string
   deliveryDate: string
   startDate: string
@@ -89,7 +81,7 @@ export default function OrderPunchPage() {
   const router = useRouter()
 
   const [products, setProducts] = useState<ProductItem[]>([
-    { id: "1", productName: "", rateMaterial: "", uom: "", orderQty: "", altUom: "", altQty: "", totalWithGst: "" },
+    { id: "1", productName: "", uom: "", orderQty: "", altUom: "", altQty: "" },
   ])
   const [customerType, setCustomerType] = useState<string>("")
   const [depoName, setDepoName] = useState<string>("")
@@ -108,15 +100,13 @@ export default function OrderPunchPage() {
   
   // Pre-Approval Products State
   const [preApprovalProducts, setPreApprovalProducts] = useState<PreApprovalProduct[]>([
-    { id: "1", oilType: "", rateLtr: "", uom: "", orderQty: "", altUom: "", altQty: "", totalWithGst: "" },
+    { id: "1", oilType: "", ratePerLtr: "", rateLtr: "" },
   ])
 
   // Legacy/Single states (kept if needed for compatibility, but mainly using the list now)
   const [oilType, setOilType] = useState<string>("")
   const [rateLtr, setRateLtr] = useState<string>("")
   
-  const [rateMaterial, setRateMaterial] = useState<string>("")
-  const [totalWithGst, setTotalWithGst] = useState<string>("")
   const [brokerName, setBrokerName] = useState<string>("")
   const [deliveryDate, setDeliveryDate] = useState<string>("") // Now acts as Actual Delivery Date
   const [startDate, setStartDate] = useState<string>("")
@@ -154,8 +144,6 @@ export default function OrderPunchPage() {
       setDeliveryAddress(data.deliveryAddress || "")
       setOilType(data.oilType)
       setRateLtr(data.rateLtr)
-      setRateMaterial(data.rateMaterial)
-      setTotalWithGst(data.totalWithGst)
       setBrokerName(data.brokerName)
       setDeliveryDate(data.deliveryDate)
       setStartDate(data.startDate || "")
@@ -173,12 +161,8 @@ export default function OrderPunchPage() {
          setPreApprovalProducts([{ 
            id: "1", 
            oilType: data.oilType, 
+           ratePerLtr: "",
            rateLtr: data.rateLtr, 
-           uom: "", 
-           orderQty: "", 
-           altUom: "", 
-           altQty: "",
-           totalWithGst: ""
           }])
       }
     }
@@ -227,7 +211,7 @@ export default function OrderPunchPage() {
   const generateDONumber = () => {
     const lastSequence = parseInt(localStorage.getItem("lastODSequence") || "0", 10)
     const newSequence = lastSequence + 1
-    const doNumber = `DO-${String(newSequence).padStart(3, "0")}A`
+    const doNumber = `DO-${String(newSequence).padStart(3, "0")}`
     localStorage.setItem("lastODSequence", newSequence.toString())
     return doNumber
   }
@@ -259,8 +243,6 @@ export default function OrderPunchPage() {
       deliveryAddress,
       oilType,
       rateLtr,
-      rateMaterial,
-      totalWithGst,
       brokerName,
       deliveryDate,
       startDate,
@@ -279,10 +261,10 @@ export default function OrderPunchPage() {
 
     // Validate based on Order Type
     if (orderType === "pre-approval") {
-      if (preApprovalProducts.some(p => !p.oilType || !p.rateLtr)) {
+      if (preApprovalProducts.some(p => !p.oilType || !p.rateLtr || !p.ratePerLtr)) {
          toast({
           title: "Validation Error",
-          description: "Please fill in all Pre-Approval product details (Oil Type and Rate).",
+          description: "Please fill in all Pre-Approval product details (Oil Type, Rate Per Ltr and Rate Per 15KG).",
           variant: "destructive",
         })
         return
@@ -311,27 +293,99 @@ export default function OrderPunchPage() {
     setIsSubmitting(true)
 
     try {
-      saveToLocalStorage()
+      // Generate common order object from form state
+      const commonOrderData = {
+          doNumber: generateDONumber(),
+          customerType,
+          depoName,
+          isBrokerOrder,
+          orderPurpose,
+          orderType,
+          advancePaymentTaken,
+          soNumber,
+          soDate,
+          customerName,
+          contactPerson,
+          whatsappNo,
+          customerAddress,
+          deliveryAddress,
+          oilType,
+          rateLtr,
+          brokerName,
+          deliveryDate,
+          startDate,
+          endDate,
+          paymentTerms,
+          transportType,
+          advanceAmount,
+          products: products.map(p => ({
+             ...p,
+             uom: p.uom || "Ltr",
+             altUom: p.altUom || "Kg"
+          })),
+          preApprovalProducts
+      }
 
+      // Update SO Sequence logic (moved from saveToLocalStorage to be more explicit here or keep generic helper if prefered, but local function is fine)
+      const currentSOSeq = parseInt(soNumber.split("-")[1] || "0", 10)
+      const lastStored = parseInt(localStorage.getItem("lastSOSequence") || "0", 10)
+      if (currentSOSeq > lastStored) {
+          localStorage.setItem("lastSOSequence", currentSOSeq.toString())
+      }
+
+      // Save logic based on type
       if (orderType === "regular") {
-        // For regular orders which skip Pre-Approval, pass data to Approval Of Order stage
-        const val = localStorage.getItem("orderData")
-        if (val) {
-           localStorage.setItem("commitmentReviewData", JSON.stringify({ orderData: JSON.parse(val) }))
+        const orderData = {
+           ...commonOrderData,
+           stage: "Approval Of Order",
+           status: "Pending",
         }
+
+        // Save History
+        const savedHistory = localStorage.getItem("workflowHistory")
+        const history = savedHistory ? JSON.parse(savedHistory) : []
+        history.push({
+           ...orderData,
+           timestamp: new Date().toISOString()
+        })
+        localStorage.setItem("workflowHistory", JSON.stringify(history))
+        
+        // Save current data and setup for Approval Page (Commitment/Approval)
+        localStorage.setItem("orderData", JSON.stringify(orderData))
+        
+        // Legacy support if Approval Page uses commitmentReviewData
+        localStorage.setItem("commitmentReviewData", JSON.stringify({ orderData }))
 
         toast({
           title: "Order Saved Successfully",
           description: "Order has been created and moved to Approval Of Order stage.",
         })
+        resetForm()
         setTimeout(() => {
           router.push("/approval-of-order")
         }, 1500)
+
       } else if (orderType === "pre-approval") {
+        const orderData = {
+           ...commonOrderData,
+           stage: "Pre-Approval",
+           status: "Pending",
+        }
+
+        const savedHistory = localStorage.getItem("workflowHistory")
+        const history = savedHistory ? JSON.parse(savedHistory) : []
+        history.push({
+           ...orderData,
+           timestamp: new Date().toISOString()
+        })
+        localStorage.setItem("workflowHistory", JSON.stringify(history))
+        localStorage.setItem("orderData", JSON.stringify(orderData))
+
         toast({
           title: "Order Saved Successfully",
           description: "Order has been created and moved to Pre-Approval stage.",
         })
+        resetForm()
         setTimeout(() => {
           router.push("/pre-approval")
         }, 1500)
@@ -344,7 +398,7 @@ export default function OrderPunchPage() {
   const addProduct = () => {
     setProducts([
       ...products,
-      { id: Math.random().toString(36).substr(2, 9), productName: "", rateMaterial: "", uom: "", orderQty: "", altUom: "", altQty: "", totalWithGst: "" },
+      { id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "" },
     ])
   }
 
@@ -358,23 +412,7 @@ export default function OrderPunchPage() {
     setProducts((prevProducts) => 
       prevProducts.map((p) => {
         if (p.id !== id) return p;
-        
-        const newProduct = { ...p, [field]: value };
-        
-        // Auto-calculate Total With GST if relevant fields change
-        if (field === "rateMaterial" || field === "orderQty") {
-          const rate = parseFloat(field === "rateMaterial" ? value : p.rateMaterial) || 0;
-          const qty = parseFloat(field === "orderQty" ? value : p.orderQty) || 0;
-          
-          if (rate > 0 && qty > 0) {
-            const total = (rate * qty) * 1.18;
-            newProduct.totalWithGst = total.toFixed(2);
-          } else {
-             newProduct.totalWithGst = "";
-          }
-        }
-        
-        return newProduct;
+        return { ...p, [field]: value };
       })
     );
   }
@@ -386,12 +424,8 @@ export default function OrderPunchPage() {
       { 
         id: Math.random().toString(36).substr(2, 9), 
         oilType: "", 
+        ratePerLtr: "", 
         rateLtr: "", 
-        uom: "", 
-        orderQty: "", 
-        altUom: "", 
-        altQty: "",
-        totalWithGst: "" 
       },
     ])
   }
@@ -406,25 +440,41 @@ export default function OrderPunchPage() {
     setPreApprovalProducts((prevProducts) => 
       prevProducts.map((p) => {
         if (p.id !== id) return p;
-
-        const newProduct = { ...p, [field]: value };
-
-        // Auto-calculate Total With GST if relevant fields change
-        if (field === "rateLtr" || field === "orderQty") {
-          const rate = parseFloat(field === "rateLtr" ? value : p.rateLtr) || 0;
-          const qty = parseFloat(field === "orderQty" ? value : p.orderQty) || 0;
-
-          if (rate > 0 && qty > 0) {
-            const total = (rate * qty) * 1.18;
-            newProduct.totalWithGst = total.toFixed(2);
-          } else {
-             newProduct.totalWithGst = "";
-          }
-        }
-
-        return newProduct;
+        return { ...p, [field]: value };
       })
     );
+  }
+
+  const resetForm = () => {
+    setCustomerType("")
+    setDepoName("")
+    setIsBrokerOrder("NO")
+    setOrderPurpose("")
+    setOrderType("")
+    setAdvancePaymentTaken("NO")
+    setSoDate("")
+    setCustomerName("")
+    setContactPerson("")
+    setWhatsappNo("")
+    setCustomerAddress("")
+    setDeliveryAddress("")
+    setSameAsCustomerAddress(false)
+    setOilType("")
+    setRateLtr("")
+    setBrokerName("")
+    setDeliveryDate("")
+    setStartDate("")
+    setEndDate("")
+    setPaymentTerms("")
+    setTransportType("")
+    setAdvanceAmount("")
+    setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "" }])
+    setPreApprovalProducts([{ id: Math.random().toString(36).substr(2, 9), oilType: "", ratePerLtr: "", rateLtr: "" }])
+    
+    // Simulate next SO Number
+    const lastSO = localStorage.getItem("lastSOSequence") || "0"
+    const nextSO = parseInt(lastSO) + 1
+    setSoNumber(`SO-${String(nextSO).padStart(3, "0")}`)
   }
 
   return (
@@ -490,7 +540,7 @@ export default function OrderPunchPage() {
                 </Select>
                 {orderType === "regular" && (
                   <p className="text-xs text-blue-600 mt-1">
-                    ℹ️ Regular orders will skip Pre-Approval and go directly to Commitment Review
+                    ℹ️ Regular orders will skip Pre-Approval and go directly to Approval Of Order
                   </p>
                 )}
               </div>
@@ -681,9 +731,8 @@ export default function OrderPunchPage() {
                   <div className="space-y-4">
                     {preApprovalProducts.map((item) => (
                       <div key={item.id} className="flex gap-4 items-center p-4 border rounded-lg bg-card">
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 flex-1">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
                           
-                          {/* Row 1 */}
                           <div className="space-y-1">
                             <Label className="text-xs text-muted-foreground">Oil Type</Label>
                             <Select 
@@ -704,66 +753,24 @@ export default function OrderPunchPage() {
                           </div>
 
                           <div className="space-y-1">
-                             <Label className="text-xs text-muted-foreground">Rate in Ltr</Label>
+                             <Label className="text-xs text-muted-foreground">Rate Per Ltr</Label>
+                             <Input
+                              type="number"
+                              placeholder="0.00"
+                              value={item.ratePerLtr}
+                              onChange={(e) => updatePreApprovalProduct(item.id, "ratePerLtr", e.target.value)}
+                              className="bg-background h-9"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                             <Label className="text-xs text-muted-foreground">Rate Per 15KG</Label>
                              <Input
                               type="number"
                               placeholder="0.00"
                               value={item.rateLtr}
                               onChange={(e) => updatePreApprovalProduct(item.id, "rateLtr", e.target.value)}
                               className="bg-background h-9"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                             <Label className="text-xs text-muted-foreground">UOM</Label>
-                             <Input
-                              value={item.uom}
-                              onChange={(e) => updatePreApprovalProduct(item.id, "uom", e.target.value)}
-                              placeholder="UOM"
-                              className="bg-background h-9"
-                            />
-                          </div>
-
-                          {/* Row 2 */}
-                          <div className="space-y-1">
-                             <Label className="text-xs text-muted-foreground">Order Qty</Label>
-                             <Input
-                              type="number"
-                              value={item.orderQty}
-                              onChange={(e) => updatePreApprovalProduct(item.id, "orderQty", e.target.value)}
-                              placeholder="0"
-                              className="bg-background h-9"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                             <Label className="text-xs text-muted-foreground">Alt UOM</Label>
-                             <Input
-                              value={item.altUom}
-                              onChange={(e) => updatePreApprovalProduct(item.id, "altUom", e.target.value)}
-                              placeholder="Alt UOM"
-                              className="bg-background h-9"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                             <Label className="text-xs text-muted-foreground">Alt Qty (Kg)</Label>
-                             <Input
-                              type="number"
-                              value={item.altQty}
-                              onChange={(e) => updatePreApprovalProduct(item.id, "altQty", e.target.value)}
-                              placeholder="0"
-                              className="bg-background h-9"
-                            />
-                          </div>
-
-                          <div className="space-y-1 md:col-span-3">
-                             <Label className="text-xs text-muted-foreground">Total Amount with GST (18%)</Label>
-                             <Input
-                              readOnly
-                              value={item.totalWithGst}
-                              placeholder="0.00"
-                              className="bg-muted h-9 font-semibold"
                             />
                           </div>
 
@@ -807,24 +814,12 @@ export default function OrderPunchPage() {
                       <div key={product.id} className="flex gap-4 items-center p-4 border rounded-lg bg-card">
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 flex-1">
                           
-                          {/* Row 1 */}
                           <div className="space-y-1">
                              <Label className="text-xs text-muted-foreground">Product Name</Label>
                              <Input
                               value={product.productName}
                               onChange={(e) => updateProduct(product.id, "productName", e.target.value)}
                               placeholder="Product name"
-                              className="bg-background h-9"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                             <Label className="text-xs text-muted-foreground">Rate Material</Label>
-                             <Input
-                              type="number"
-                              value={product.rateMaterial}
-                              onChange={(e) => updateProduct(product.id, "rateMaterial", e.target.value)}
-                              placeholder="0.00"
                               className="bg-background h-9"
                             />
                           </div>
@@ -839,7 +834,6 @@ export default function OrderPunchPage() {
                             />
                           </div>
 
-                          {/* Row 2 */}
                           <div className="space-y-1">
                              <Label className="text-xs text-muted-foreground">Order Qty</Label>
                              <Input
@@ -872,15 +866,6 @@ export default function OrderPunchPage() {
                             />
                           </div>
                           
-                          <div className="space-y-1 md:col-span-3">
-                             <Label className="text-xs text-muted-foreground">Total Amount with GST (18%)</Label>
-                             <Input
-                              readOnly
-                              value={product.totalWithGst}
-                              placeholder="0.00"
-                              className="bg-muted h-9 font-semibold"
-                            />
-                          </div>
                         </div>
 
                         {/* Action - Delete */}
@@ -900,7 +885,6 @@ export default function OrderPunchPage() {
                     ))}
                   </div>
                 </div>
-                /* ) - REMOVED CLOSING PAREN */
               )}
 
               {/* Legacy Oil Type View - removed for now as confusing with Depo logic

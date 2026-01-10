@@ -29,210 +29,108 @@ import {
 import { Settings2, Loader2 } from "lucide-react"
 import { useState, useEffect } from "react"
 
-const ALL_COLUMNS = [
-  { id: "orderNo", label: "DO Number" },
-  { id: "deliveryPurpose", label: "ORDER TYPE (DELIVERY PURPOSE)" },
-  { id: "customerType", label: "Customer Type" },
-  { id: "orderType", label: "ORDER TYPE" },
-  { id: "soNo", label: "SO No." },
-  { id: "partySoDate", label: "Party SO Date" },
-  { id: "customerName", label: "Customer Name" },
-  { id: "itemConfirm", label: "Item Confirm" },
-  { id: "productName", label: "Product Name" },
-  { id: "uom", label: "UOM" },
-  { id: "orderQty", label: "Order Quantity" },
-  { id: "altUom", label: "Alternate UOM" },
-  { id: "altQty", label: "Alternate Qty (Kg)" },
-  { id: "oilType", label: "Oil Type" },
-  { id: "ratePerLtr", label: "Rate Per Ltr" },
-  { id: "rateOfMaterial", label: "Rate Of Material" },
-  { id: "totalWithGst", label: "Total Amount With Gst" },
-  { id: "transportType", label: "Type Of Transporting" },
-  { id: "uploadSo", label: "Upload SO" },
-  { id: "contactPerson", label: "Customer Contact Person Name" },
-  { id: "whatsapp", label: "Customer Contact Person WhatsApp No." },
-  { id: "address", label: "Customer Address" },
-  { id: "paymentTerms", label: "Payments Terms" },
-  { id: "advanceTaken", label: "Advance Payment to Be Taken" },
-  { id: "advanceAmount", label: "Advance Amount" },
-  { id: "isBroker", label: "Is This Order Through Broker" },
-  { id: "brokerName", label: "Brocker Name (IF ORDER THROUGH BROCKER)" },
-  { id: "deliveryDate", label: "Expected Delivery Date" },
-]
 
-const DUMMY_ORDERS = [
-  {
-    doNumber: "DO-001",
-    orderPurpose: "Week On Week",
-    customerType: "Existing",
-    orderType: "Regular",
-    soNumber: "SO-101",
-    soDate: "2024-03-20",
-    customerName: "Tech Solutions Ltd",
-    itemConfirm: "YES",
-    products: [
-      { id: "p1", productName: "Industrial Oil A", uom: "Ltr", orderQty: "1000" },
-      { id: "p2", productName: "Lubricant B", uom: "Kg", orderQty: "500" }
-    ],
-    oilType: "Industrial",
-    rateMaterial: "₹50,000",
-    totalWithGst: "₹59,000",
-    transportType: "Company Vehicle",
-    contactPerson: "Alice Smith",
-    whatsappNo: "+91 9876543210",
-    customerAddress: "Sector 18, Gurgaon",
-    paymentTerms: "Net 30",
-    advancePaymentTaken: "NO",
-    isBrokerOrder: "NO",
-    deliveryDate: "2024-03-25"
-  },
-  {
-    doNumber: "DO-002",
-    orderPurpose: "Monthly Stock",
-    customerType: "New",
-    orderType: "Urgent",
-    soNumber: "SO-102",
-    soDate: "2024-03-21",
-    customerName: "Global Manufacturing",
-    itemConfirm: "YES",
-    products: [
-      { id: "p3", productName: "Hydraulic Fluid X", uom: "Ltr", orderQty: "2000" }
-    ],
-    oilType: "Hydraulic",
-    rateMaterial: "₹1,20,000",
-    totalWithGst: "₹1,41,600",
-    transportType: "Customer Vehicle",
-    contactPerson: "Bob Jones",
-    whatsappNo: "+91 9876543211",
-    customerAddress: "MIDC, Pune",
-    paymentTerms: "Advance",
-    advancePaymentTaken: "YES",
-    advanceAmount: "₹50,000",
-    isBrokerOrder: "NO",
-    deliveryDate: "2024-03-24"
-  },
-  {
-    doNumber: "DO-003",
-    orderPurpose: "Trial Order",
-    customerType: "New",
-    orderType: "Sample",
-    soNumber: "SO-103",
-    soDate: "2024-03-22",
-    customerName: "Sunrise Traders",
-    itemConfirm: "YES",
-    products: [
-      { id: "p4", productName: "Base Oil 500", uom: "Ltr", orderQty: "200" }
-    ],
-    oilType: "Base Oil",
-    rateMaterial: "₹15,000",
-    totalWithGst: "₹17,700",
-    transportType: "Third Party",
-    contactPerson: "Charlie Brown",
-    whatsappNo: "+91 9876543212",
-    customerAddress: "Okhla, Delhi",
-    paymentTerms: "Net 7",
-    advancePaymentTaken: "NO",
-    isBrokerOrder: "YES",
-    brokerName: "Ramesh Brokers",
-    deliveryDate: "2024-03-26"
-  },
-  {
-    doNumber: "DO-004",
-    orderPurpose: "Regular Stock",
-    customerType: "Existing",
-    orderType: "Regular",
-    soNumber: "SO-104",
-    soDate: "2024-03-22",
-    customerName: "Alpha Constructions",
-    itemConfirm: "YES",
-    products: [
-      { id: "p5", productName: "Gear Oil 90", uom: "Ltr", orderQty: "500" },
-      { id: "p6", productName: "Grease MP", uom: "Kg", orderQty: "100" }
-    ],
-    oilType: "Gear Oil",
-    rateMaterial: "₹45,000",
-    totalWithGst: "₹53,100",
-    transportType: "Company Vehicle",
-    contactPerson: "David Miller",
-    whatsappNo: "+91 9876543213",
-    customerAddress: "Noida, UP",
-    paymentTerms: "Net 45",
-    advancePaymentTaken: "NO",
-    isBrokerOrder: "NO",
-    deliveryDate: "2024-03-29"
-  },
-  {
-    doNumber: "DO-005",
-    orderPurpose: "Project Supply",
-    customerType: "Existing",
-    orderType: "Contract",
-    soNumber: "SO-105",
-    soDate: "2024-03-23",
-    customerName: "Mega Infrastructure",
-    itemConfirm: "YES",
-    products: [
-      { id: "p7", productName: "Transformer Oil", uom: "Ltr", orderQty: "5000" }
-    ],
-    oilType: "Transformer",
-    rateMaterial: "₹3,50,000",
-    totalWithGst: "₹4,13,000",
-    transportType: "Customer Vehicle",
-    contactPerson: "Eva Green",
-    whatsappNo: "+91 9876543214",
-    customerAddress: "Manesar, Haryana",
-    paymentTerms: "LC",
-    advancePaymentTaken: "NO",
-    isBrokerOrder: "NO",
-    deliveryDate: "2024-04-01"
-  }
-]
 
 export default function PreApprovalPage() {
   const { toast } = useToast()
   const router = useRouter()
+  const PAGE_COLUMNS = [
+    { id: "soNo", label: "SO No." },
+    { id: "deliveryPurpose", label: "Order Type (Delivery Purpose)" },
+    { id: "startDate", label: "Start Date" },
+    { id: "endDate", label: "End Date" },
+    { id: "deliveryDate", label: "Delivery Date" },
+    { id: "orderType", label: "Order Type" },
+    { id: "customerType", label: "Customer Type" },
+    { id: "partySoDate", label: "Party SO Date" },
+    { id: "customerName", label: "Customer Name" },
+    { id: "oilType", label: "Oil Type" },
+    { id: "ratePer15Kg", label: "Rate Per 15 kg" },
+    { id: "ratePerLtr", label: "Rate Per Ltr." }, // Aggregated
+    { id: "productName", label: "Product Name" },
+    { id: "totalWithGst", label: "Total Amount with GST" },
+    { id: "transportType", label: "Type of Transporting" },
+    { id: "contactPerson", label: "Customer Contact Person Name" },
+    { id: "whatsapp", label: "Customer Contact Person Whatsapp No." },
+    { id: "address", label: "Customer Address" },
+    { id: "paymentTerms", label: "Payment Terms" },
+    { id: "advanceTaken", label: "Advance Payment to be Taken" },
+    { id: "advanceAmount", label: "Advance Amount" },
+    { id: "isBroker", label: "Is this order Through Broker" },
+    { id: "brokerName", label: "Broker Name (If Order Through Broker)" },
+    { id: "uploadSo", label: "Upload SO." },
+  ]
+
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    "orderNo",
+    "soNo",
     "customerName",
-    "productName",
-    "totalWithGst",
+    "deliveryPurpose",
+    "deliveryDate",
+    "oilType",
+    "ratePer15Kg"
   ])
   const [isApproving, setIsApproving] = useState(false)
-  const [pendingOrders, setPendingOrders] = useState<any[]>(DUMMY_ORDERS)
+  const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [preApprovalData, setPreApprovalData] = useState<any>(null)
-  const [productRates, setProductRates] = useState<{ [key: string]: { rate: string; remark: string } }>({})
+  const [productRates, setProductRates] = useState<{ [key: string]: { skuName: string; approvalQty: string; rate: string; remark: string } }>({})
   const [overallRemark, setOverallRemark] = useState("")
 
   const [history, setHistory] = useState<any[]>([])
 
   useEffect(() => {
+    // 1. Load History
     const savedHistory = localStorage.getItem("workflowHistory")
     let historyData = []
     if (savedHistory) {
       historyData = JSON.parse(savedHistory)
-      const stageHistory = historyData.filter((item: any) => item.stage === "Pre-Approval")
+      const stageHistory = historyData
+        .filter((item: any) => item.stage === "Pre-Approval")
+        .map((item: any) => ({
+          ...item,
+          date: item.date || (item.timestamp ? new Date(item.timestamp).toLocaleDateString("en-GB") : "-"),
+          remarks: item.remarks || item.data?.overallRemark || "-"
+        }))
       setHistory(stageHistory)
     }
 
+    // 2. Load Persisted Pending Items
+    const savedPending = localStorage.getItem("preApprovalPendingItems")
+    let persistedPending = savedPending ? JSON.parse(savedPending) : []
+
+    // 3. Load New Incoming Data
     const savedData = localStorage.getItem("orderData")
     if (savedData) {
-      const data = JSON.parse(savedData)
-      // Check if order is already processed
-      const isProcessed = historyData.some(
-        (item: any) => item.stage === "Pre-Approval" && (item.orderNo === (data.doNumber || "DO-XXXA"))
-      )
+      try {
+        const data = JSON.parse(savedData)
+        // Strict check: Only load into this page if it's explicitly for Pre-Approval
+        if (data.stage === "Pre-Approval" || data.orderType === "pre-approval") {
+             // Check if order is already processed in history
+            const isProcessed = historyData.some(
+                (item: any) => item.stage === "Pre-Approval" && (item.orderNo === (data.doNumber || "DO-XXXA"))
+            )
 
-      if (!isProcessed) {
-        // Prevent duplicates
-        setPendingOrders(prev => {
-          if (prev.some(o => o.doNumber === data.doNumber)) return prev
-          return [data, ...prev]
-        })
-        console.log("[v0] Order data loaded from localStorage:", data)
-      } else {
-        console.log("[v0] Order already processed, skipping.")
+            if (!isProcessed) {
+                // Check if already in persisted list
+                const exists = persistedPending.some((o: any) => 
+                     (o.doNumber || o.orderNo) === (data.doNumber || data.orderNo)
+                )
+                
+                if (!exists) {
+                     persistedPending = [data, ...persistedPending]
+                     localStorage.setItem("preApprovalPendingItems", JSON.stringify(persistedPending))
+                     console.log("[Pre-Approval] Added new order to pending list:", data)
+                }
+            }
+        }
+      } catch (e) {
+        console.error("Failed to parse orderData", e)
       }
     }
 
+    // 4. Update State
+    setPendingOrders(persistedPending)
+
+    // 5. Load Pre-Approval Draft Data (if any)
     const savedPreApprovalData = localStorage.getItem("preApprovalData")
     if (savedPreApprovalData) {
       setPreApprovalData(JSON.parse(savedPreApprovalData))
@@ -259,6 +157,8 @@ export default function PreApprovalPage() {
         status: "Completed",
         processedBy: "Current User",
         timestamp: new Date().toISOString(),
+        date: new Date().toLocaleDateString("en-GB"),
+        remarks: overallRemark || "-",
         data: preApprovalSubmit,
         productCount: targetOrder?.products?.length || 0,
       }
@@ -277,8 +177,15 @@ export default function PreApprovalPage() {
       )
       
       // Update local state immediately
-      setHistory([...history, historyEntry])
-      setPendingOrders(prev => prev.filter(o => o.doNumber !== targetOrder.doNumber))
+      setHistory([...history.filter((h: any) => h.stage === "Pre-Approval"), historyEntry].map((item: any) => ({
+          ...item,
+          date: item.date || (item.timestamp ? new Date(item.timestamp).toLocaleDateString("en-GB") : "-"),
+          remarks: item.remarks || item.data?.overallRemark || "-"
+      })))
+      
+      const newPending = pendingOrders.filter(o => o.doNumber !== targetOrder.doNumber)
+      setPendingOrders(newPending)
+      localStorage.setItem("preApprovalPendingItems", JSON.stringify(newPending))
 
       toast({
         title: "Stage Completed",
@@ -369,7 +276,7 @@ export default function PreApprovalPage() {
             <DropdownMenuContent align="end" className="w-[250px] max-h-[400px] overflow-y-auto">
               <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {ALL_COLUMNS.map((col) => (
+              {PAGE_COLUMNS.map((col) => (
                 <DropdownMenuCheckboxItem
                   key={col.id}
                   className="capitalize"
@@ -385,45 +292,66 @@ export default function PreApprovalPage() {
           </DropdownMenu>
         </div>
 
-        <Card className="border-none shadow-sm overflow-x-auto">
+        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
           <Table>
-            <TableHeader className="bg-muted/30">
+            <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>
                 <TableHead className="w-[80px]">Action</TableHead>
-                {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                  <TableHead key={col.id} className="whitespace-nowrap">
+                {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                  <TableHead key={col.id} className="whitespace-nowrap text-center">
                     {col.label}
                   </TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredPendingOrders.map((rawOrder, i) => {
+              {filteredPendingOrders.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
+                    No Data pending for Pre Approval
+                  </TableCell>
+                </TableRow>
+              ) : filteredPendingOrders.map((rawOrder, i) => {
                 const row = {
-                   orderNo: rawOrder.doNumber || "DO-XXXA",
+                   orderNo: rawOrder.doNumber || rawOrder.orderNo || "DO-XXXA",
                    deliveryPurpose: rawOrder.orderPurpose || "Week On Week",
                    customerType: rawOrder.customerType || "Existing",
                    orderType: rawOrder.orderType || "Regular",
                    soNo: rawOrder.soNumber || "SO-882",
                    partySoDate: rawOrder.soDate || "2024-03-21",
                    customerName: rawOrder.customerName || "Acme Corp",
+                   // Handle new date fields
+                   startDate: rawOrder.startDate || "—",
+                   endDate: rawOrder.endDate || "—",
+                   deliveryDate: rawOrder.deliveryDate || "—",
+                   // Handle Rates Aggregation
+                   oilType: rawOrder.preApprovalProducts?.map((p: any) => p.oilType).join(", ") || rawOrder.oilType || "—",
+                   ratePerLtr: rawOrder.preApprovalProducts?.map((p: any) => p.ratePerLtr).join(", ") || rawOrder.ratePerLtr || "—",
+                   ratePer15Kg: rawOrder.preApprovalProducts?.map((p: any) => p.rateLtr).join(", ") || rawOrder.rateLtr || "—",
+                   
                    itemConfirm: rawOrder.itemConfirm?.toUpperCase() || "YES",
-                   products: rawOrder.products || [],
-                   oilType: rawOrder.oilType || "Palm Oil",
-                   ratePerLtr: "₹95",
-                   rateOfMaterial: rawOrder.rateMaterial || "₹42,500",
-                   totalWithGst: rawOrder.totalWithGst || "₹50,150",
-                   transportType: rawOrder.transportType || "Company Vehicle",
+                   productName: rawOrder.products?.map((p: any) => p.productName).join(", ") || "",
+                   uom: rawOrder.products?.map((p: any) => p.uom).join(", ") || "",
+                   orderQty: rawOrder.products?.map((p: any) => p.orderQty).join(", ") || "",
+                   altUom: rawOrder.products?.map((p: any) => p.altUom).join(", ") || "",
+                   altQty: rawOrder.products?.map((p: any) => p.altQty).join(", ") || "",
+                   
+                   // Extended Columns
+                   totalWithGst: rawOrder.totalWithGst || "—",
+                   transportType: rawOrder.transportType || "—",
+                   contactPerson: rawOrder.contactPerson || "—",
+                   whatsapp: rawOrder.whatsappNo || "—",
+                   address: rawOrder.customerAddress || "—",
+                   paymentTerms: rawOrder.paymentTerms || "—",
+                   advanceTaken: rawOrder.advancePaymentTaken || "—",
+                   advanceAmount: rawOrder.advanceAmount || "—",
+                   isBroker: rawOrder.isBrokerOrder || "—",
+                   brokerName: rawOrder.brokerName || "—",
                    uploadSo: "so_document.pdf",
-                   contactPerson: rawOrder.contactPerson || "John Doe",
-                   whatsapp: rawOrder.whatsappNo || "+91 9876543210",
-                   address: rawOrder.customerAddress || "123 Business Park, Mumbai",
-                   paymentTerms: rawOrder.paymentTerms || "Net 30",
-                   advanceTaken: rawOrder.advancePaymentTaken || "YES",
-                   advanceAmount: rawOrder.advanceAmount || "₹15,000",
-                   isBroker: rawOrder.isBrokerOrder || "NO",
-                   brokerName: rawOrder.brokerName || "-",
-                   deliveryDate: rawOrder.deliveryDate || "2024-03-28",
+                   
+                   products: (rawOrder.preApprovalProducts && rawOrder.preApprovalProducts.length > 0) 
+                             ? rawOrder.preApprovalProducts 
+                             : (rawOrder.products || []),
                  }
 
                 return (
@@ -442,47 +370,77 @@ export default function PreApprovalPage() {
                         </DialogHeader>
                         <div className="grid gap-6 py-4">
                           <div className="space-y-4">
-                            <div className="grid grid-cols-3 gap-4 font-semibold text-sm text-muted-foreground px-1 pb-2 border-b">
-                              <div>Product Name</div>
-                              <div>Required Rate</div>
-                              <div>Remark</div>
-                            </div>
                             {row.products && row.products.length > 0 ? (
                               row.products.map((product: any) => (
-                                <div key={product.id} className="grid grid-cols-3 gap-4 items-start">
-                                  <div className="pt-2">
-                                    <span className="font-medium">{product.productName || "Product"}</span>
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                      UOM: {product.uom} | Qty: {product.orderQty}
+                                <div key={product.id} className="border p-4 rounded-lg bg-muted/20">
+                                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                                    <div className="space-y-2 pb-1.5">
+                                      <Label className="text-xs font-medium text-muted-foreground">Oil Type</Label>
+                                      <p className="text-sm font-bold text-primary">
+                                        {product.oilType || product.productName || "—"}
+                                      </p>
+                                    </div>
+                                    
+                                    <div className="space-y-1.5">
+                                      <Label className="text-xs font-medium text-muted-foreground">SKU Name</Label>
+                                      <Input
+                                        className="h-9 bg-background"
+                                        placeholder="Enter SKU"
+                                        value={productRates[product.id]?.skuName || ""}
+                                        onChange={(e) =>
+                                          setProductRates({
+                                            ...productRates,
+                                            [product.id]: {
+                                              ...productRates[product.id],
+                                              skuName: e.target.value,
+                                            },
+                                          })
+                                        }
+                                      />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                      <Label className="text-xs font-medium text-muted-foreground">Approval Qty</Label>
+                                      <Input
+                                        className="h-9 bg-background"
+                                        type="number"
+                                        placeholder="-505-"
+                                        value={productRates[product.id]?.approvalQty || ""}
+                                        onChange={(e) =>
+                                          setProductRates({
+                                            ...productRates,
+                                            [product.id]: {
+                                              ...productRates[product.id],
+                                              approvalQty: e.target.value,
+                                            },
+                                          })
+                                        }
+                                      />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                      <Label className="text-xs font-medium text-muted-foreground">Required Rate</Label>
+                                      <Input
+                                        className={`h-9 bg-background ${
+                                          (parseFloat(productRates[product.id]?.rate || "0") < parseFloat(productRates[product.id]?.approvalQty || "0")) && productRates[product.id]?.rate
+                                            ? "text-red-600" 
+                                            : ""
+                                        }`}
+                                        type="number"
+                                        placeholder="Rate"
+                                        value={productRates[product.id]?.rate || ""}
+                                        onChange={(e) =>
+                                          setProductRates({
+                                            ...productRates,
+                                            [product.id]: {
+                                              ...productRates[product.id],
+                                              rate: e.target.value,
+                                            },
+                                          })
+                                        }
+                                      />
                                     </div>
                                   </div>
-                                  <Input
-                                    type="number"
-                                    placeholder="Enter Rate"
-                                    value={productRates[product.id]?.rate || ""}
-                                    onChange={(e) =>
-                                      setProductRates({
-                                        ...productRates,
-                                        [product.id]: {
-                                          ...productRates[product.id],
-                                          rate: e.target.value,
-                                        },
-                                      })
-                                    }
-                                  />
-                                  <Input
-                                    placeholder="Add Remark"
-                                    value={productRates[product.id]?.remark || ""}
-                                    onChange={(e) =>
-                                      setProductRates({
-                                        ...productRates,
-                                        [product.id]: {
-                                          ...productRates[product.id],
-                                          remark: e.target.value,
-                                        },
-                                      })
-                                    }
-                                  />
                                 </div>
                               ))
                             ) : (
@@ -498,29 +456,31 @@ export default function PreApprovalPage() {
                             />
                           </div>
                         </div>
-                        <DialogFooter>
-                          <Button variant="ghost" className="mr-auto">
-                            Reject Order
-                          </Button>
-                          <Button onClick={() => handleApprove(rawOrder)} disabled={isApproving}>
-                             {isApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                             {isApproving ? "Processing..." : "Submit Pre-Approval"}
-                          </Button>
-                        </DialogFooter>
+                          <DialogFooter>
+                            <Button variant="ghost" className="mr-auto">
+                              Reject Order
+                            </Button>
+                            {(() => {
+                               const isValid = row.products?.every((p: any) => {
+                                   const rate = parseFloat(productRates[p.id]?.rate || "0")
+                                   const approval = parseFloat(productRates[p.id]?.approvalQty || "0")
+                                   return rate >= approval && rate > 0
+                               })
+                               
+                               return (
+                                <Button onClick={() => handleApprove(rawOrder)} disabled={isApproving || !isValid}>
+                                    {isApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    {isApproving ? "Processing..." : "Submit Pre-Approval"}
+                                </Button>
+                               )
+                            })()}
+                          </DialogFooter>
                       </DialogContent>
                     </Dialog>
                   </TableCell>
-                  {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                    <TableCell key={col.id} className="whitespace-nowrap">
-                      {col.id === "productName" ? (
-                        <div className="text-sm">
-                          {row.products?.map((p: any) => (
-                            <div key={p.id}>{p.productName}</div>
-                          ))}
-                        </div>
-                      ) : (
-                        row[col.id as keyof typeof row]
-                      )}
+                  {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                    <TableCell key={col.id} className="whitespace-nowrap text-center">
+                      {row[col.id as keyof typeof row]}
                     </TableCell>
                   ))}
                 </TableRow>

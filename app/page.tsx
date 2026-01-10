@@ -144,17 +144,17 @@ export default function Dashboard() {
              <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                    {pipelineData.map((item, i) => (
-                      <div key={i} className="flex flex-col p-5 rounded-xl border border-transparent bg-slate-50/50 hover:bg-white hover:shadow-md transition-all group">
-                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-4 ${item.color.replace('bg-', 'bg-').replace('500', '100')} ${item.color.replace('bg-', 'text-').replace('500', '600')}`}>
-                            <item.icon className="h-5 w-5" />
+                      <div key={i} className="flex flex-col p-5 rounded-2xl border border-slate-100 border-b-[4px] bg-white hover:border-b-primary/50 hover:border-b-[6px] hover:-translate-y-2 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-300 group cursor-pointer relative overflow-hidden">
+                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110 shadow-sm ${item.color.replace('bg-', 'bg-').replace('500', '100')} ${item.color.replace('bg-', 'text-').replace('500', '600')}`}>
+                            <item.icon className="h-6 w-6" />
                          </div>
-                         <div className="mb-2">
-                             <p className="text-sm font-medium text-slate-500">{item.title}</p>
-                             <p className="text-2xl font-bold text-slate-900">{item.count}</p>
+                         <div className="mb-2 relative z-10">
+                             <p className="text-sm font-semibold text-slate-500">{item.title}</p>
+                             <p className="text-3xl font-extrabold text-slate-900 tracking-tight">{item.count}</p>
                          </div>
-                         <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-auto">
+                         <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mt-auto shadow-inner">
                             <div 
-                              className={`h-full ${item.color} rounded-full`}
+                              className={`h-full ${item.color} rounded-full shadow-[0_2px_4px_rgba(0,0,0,0.1)]`}
                               style={{ width: `${metrics.total ? (item.count / metrics.total) * 100 : 0}%` }}
                             />
                          </div>
@@ -165,37 +165,43 @@ export default function Dashboard() {
            </Card>
 
            {/* Recent Transactions */}
-           <Card className="shadow-sm border rounded-xl overflow-hidden">
-             <CardHeader className="flex flex-row items-center justify-between py-5 bg-muted/10 border-b">
-                <CardTitle className="text-lg font-semibold">Recent Activity</CardTitle>
-                <Button variant="ghost" size="icon" className="h-9 w-9"><MoreHorizontal className="h-5 w-5" /></Button>
+           <Card className="shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 border-b-[6px] rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300">
+             <CardHeader className="flex flex-row items-center justify-between py-6 px-6 bg-gradient-to-b from-white to-slate-50/50 border-b">
+                <CardTitle className="text-xl font-bold text-slate-800">Recent Activity</CardTitle>
+                <Button variant="outline" size="icon" className="h-9 w-9 bg-white shadow-sm border-b-[3px] active:border-b active:translate-y-[2px] transition-all"><MoreHorizontal className="h-5 w-5" /></Button>
              </CardHeader>
              <div className="p-0">
                <Table>
                   <TableHeader>
-                     <TableRow className="bg-muted/5">
-                        <TableHead className="w-[140px] text-sm font-semibold h-12">Order ID</TableHead>
-                        <TableHead className="text-sm font-semibold">Stage</TableHead>
-                        <TableHead className="text-sm font-semibold">Status</TableHead>
-                        <TableHead className="text-right text-sm font-semibold">Time</TableHead>
+                     <TableRow className="bg-slate-50/50 hover:bg-slate-50">
+                        <TableHead className="w-[140px] text-xs uppercase tracking-wider font-bold text-slate-500 h-10 text-center">Order ID</TableHead>
+                        <TableHead className="text-xs uppercase tracking-wider font-bold text-slate-500 text-center">Stage</TableHead>
+                        <TableHead className="text-xs uppercase tracking-wider font-bold text-slate-500 text-center">Status</TableHead>
+                        <TableHead className="text-right text-xs uppercase tracking-wider font-bold text-slate-500">Time</TableHead>
                      </TableRow>
                   </TableHeader>
                   <TableBody>
                      {recentActivity.map((item, i) => (
-                        <TableRow key={i} className="group cursor-pointer hover:bg-blue-50/50 transition-colors h-14">
-                           <TableCell className="font-mono text-sm font-medium text-slate-900">{item.doNumber || item.orderNo}</TableCell>
-                           <TableCell className="text-base text-slate-600 group-hover:text-slate-900 transition-colors">{item.stage}</TableCell>
-                           <TableCell>
-                              <StatusBadge status={item.status} />
+                        <TableRow key={i} className="group cursor-pointer hover:bg-slate-50 transition-all h-16 border-b border-slate-100 last:border-0 relative">
+                           <TableCell className="font-mono text-sm font-semibold text-slate-700 relative z-10 group-hover:text-primary transition-colors text-center">
+                              <span className="bg-slate-100 px-2 py-1 rounded-md border border-slate-200 group-hover:border-primary/20 group-hover:bg-primary/5 transition-colors">
+                                 {item.doNumber || item.orderNo}
+                              </span>
                            </TableCell>
-                           <TableCell className="text-right text-sm text-slate-500">
+                           <TableCell className="text-sm font-medium text-slate-600 group-hover:text-slate-900 transition-colors relative z-10 text-center">{item.stage}</TableCell>
+                           <TableCell className="relative z-10 text-center">
+                              <div className="flex justify-center">
+                                 <StatusBadge status={item.status} />
+                              </div>
+                           </TableCell>
+                           <TableCell className="text-right text-sm text-slate-500 relative z-10 font-medium">
                               {new Date(item.timestamp || item.date).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}
                            </TableCell>
                         </TableRow>
                      ))}
                      {recentActivity.length === 0 && (
                         <TableRow>
-                           <TableCell colSpan={4} className="text-center py-8 text-base text-muted-foreground">No recent data</TableCell>
+                           <TableCell colSpan={4} className="text-center py-10 text-base text-muted-foreground">No recent data</TableCell>
                         </TableRow>
                      )}
                   </TableBody>
@@ -208,23 +214,26 @@ export default function Dashboard() {
         {/* Sidebar */}
         <div className="space-y-8">
            {/* Action Items */}
-           <Card className="shadow-sm border rounded-xl overflow-hidden">
-              <CardHeader className="pb-4 border-b bg-muted/10">
-                 <CardTitle className="text-lg font-semibold flex items-center gap-3">
+           <Card className="shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 border-b-[6px] rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300">
+              <CardHeader className="pb-4 border-b bg-gradient-to-b from-white to-slate-50/50">
+                 <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-800">
                     Pending Actions 
-                    {actionItems.length > 0 && <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full border border-orange-200">{actionItems.reduce((a,b)=>a+b.count,0)}</span>}
+                    {actionItems.length > 0 && <span className="bg-orange-500 text-white shadow-md text-xs px-2.5 py-0.5 rounded-full animate-pulse">{actionItems.reduce((a,b)=>a+b.count,0)}</span>}
                  </CardTitle>
               </CardHeader>
               <ScrollArea className="h-[400px]">
-                 <div className="p-2">
+                 <div className="p-3">
                     {actionItems.map((item, i) => (
-                       <div key={i} className="flex items-center justify-between p-4 mb-2 hover:bg-slate-50 hover:shadow-sm rounded-lg border border-transparent hover:border-slate-100 transition-all cursor-pointer group">
+                       <div key={i} className="flex items-center justify-between p-4 mb-3 bg-white rounded-xl border border-slate-100 border-b-[3px] shadow-sm hover:border-b-[5px] hover:-translate-y-1 hover:shadow-md hover:border-primary/30 transition-all duration-200 cursor-pointer group">
                           <div>
-                             <p className="text-base font-semibold text-slate-800">{item.label}</p>
-                             <p className="text-sm text-slate-500 mt-1">{item.count} orders waiting</p>
+                             <p className="text-base font-bold text-slate-700 group-hover:text-primary transition-colors">{item.label}</p>
+                             <div className="flex items-center gap-2 mt-1">
+                                <span className="h-1.5 w-1.5 rounded-full bg-orange-400"></span>
+                                <p className="text-sm text-slate-500 font-medium">{item.count} orders waiting</p>
+                             </div>
                           </div>
-                          <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-colors">
-                            <ArrowRight className="h-4 w-4" />
+                          <div className="h-10 w-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-primary group-hover:text-white group-hover:shadow-lg transition-all duration-300">
+                            <ArrowRight className="h-5 w-5 transform group-hover:translate-x-0.5" />
                           </div>
                        </div>
                     ))}
@@ -238,17 +247,37 @@ export default function Dashboard() {
            </Card>
 
            {/* Quick Stats / System Health */}
-           <Card className="shadow-sm border rounded-xl bg-slate-50/50">
-              <CardContent className="pt-8">
+           <Card className="shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 border-b-[6px] rounded-2xl bg-white hover:shadow-xl transition-all duration-300">
+              <CardContent className="pt-8 px-6">
                  <div className="flex items-center justify-between mb-6">
-                    <span className="text-base font-medium text-slate-600">System Status</span>
-                    <Badge variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-200 px-3 py-1 text-sm">Operational</Badge>
+                    <span className="text-lg font-bold text-slate-700">System Status</span>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 shadow-sm">
+                        <span className="relative flex h-2.5 w-2.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                        </span>
+                        <span className="text-xs font-bold uppercase tracking-wider">Operational</span>
+                    </div>
                  </div>
                  <Separator className="my-6" />
-                 <div className="text-sm text-slate-500 space-y-3">
-                    <p className="flex justify-between"><span>Database Connection</span> <span className="text-slate-900 font-medium">Stable</span></p>
-                    <p className="flex justify-between"><span>Last Sync</span> <span className="text-slate-900 font-medium">Just now</span></p>
-                    <p className="flex justify-between"><span>Server Load</span> <span className="text-slate-900 font-medium">12%</span></p>
+                 <div className="text-sm text-slate-500 space-y-4">
+                    <p className="flex justify-between items-center group p-2 hover:bg-slate-50 rounded-lg transition-colors cursor-default">
+                        <span className="font-medium">Database Connection</span> 
+                        <span className="text-slate-900 font-bold bg-green-100 px-2 py-0.5 rounded text-green-700 text-xs">Stable</span>
+                    </p>
+                    <p className="flex justify-between items-center group p-2 hover:bg-slate-50 rounded-lg transition-colors cursor-default">
+                        <span className="font-medium">Last Sync</span> 
+                        <span className="text-slate-900 font-bold">Just now</span>
+                    </p>
+                    <div className="flex justify-between items-center group p-2 hover:bg-slate-50 rounded-lg transition-colors cursor-default">
+                        <span className="font-medium">Server Load</span> 
+                        <div className="flex items-center gap-2">
+                             <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                 <div className="h-full bg-blue-500 w-[12%] rounded-full"></div>
+                             </div>
+                             <span className="text-slate-900 font-bold">12%</span>
+                        </div>
+                    </div>
                  </div>
               </CardContent>
            </Card>
@@ -263,11 +292,12 @@ export default function Dashboard() {
 
 function MetricCard({ title, value, icon: Icon, highlight = false, alert = false }: any) {
    return (
-      <Card className="shadow-sm border rounded-xl hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-default group">
-         <CardContent className="p-8">
-            <div className="flex items-center justify-between space-y-0 pb-4">
-               <p className="text-base font-semibold text-slate-500 group-hover:text-slate-700 transition-colors">{title}</p>
-               <div className={`p-2 rounded-lg ${alert ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-600 group-hover:bg-primary/10 group-hover:text-primary'} transition-colors`}>
+      <Card className="shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 border-b-[6px] rounded-2xl hover:shadow-[0_20px_50px_rgb(0,0,0,0.1)] hover:-translate-y-2 hover:border-b-primary/50 transition-all duration-300 cursor-default group relative overflow-hidden bg-gradient-to-br from-white to-slate-50/50">
+          <div className="absolute inset-x-0 bottom-0 h-1.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity blur-sm" />
+         <CardContent className="p-5 md:p-6 relative z-10">
+            <div className="flex items-center justify-between space-y-0 pb-6">
+               <p className="text-sm uppercase tracking-wider font-bold text-slate-500 group-hover:text-primary transition-colors">{title}</p>
+               <div className={`p-3 rounded-xl shadow-sm border-b-[3px] ${alert ? 'bg-red-50 text-red-600 border-red-100' : 'bg-white text-slate-600 border-slate-100 group-hover:bg-primary group-hover:text-white group-hover:border-primary/50 group-hover:shadow-lg'} transition-all duration-300 group-hover:scale-110`}>
                  <Icon className="h-6 w-6" />
                </div>
             </div>

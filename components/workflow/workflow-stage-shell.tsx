@@ -20,6 +20,8 @@ interface WorkflowStageShellProps {
   historyContent?: React.ReactNode
   partyNames?: string[]
   onFilterChange?: (filters: { status: string; startDate: string; endDate: string; partyName: string }) => void
+  remarksColName?: string
+  showStatusFilter?: boolean
 }
 
 export function WorkflowStageShell({
@@ -31,6 +33,8 @@ export function WorkflowStageShell({
   historyContent,
   partyNames = [],
   onFilterChange,
+  remarksColName,
+  showStatusFilter = false,
 }: WorkflowStageShellProps) {
   const [filters, setFilters] = React.useState({
       status: "",
@@ -48,11 +52,11 @@ export function WorkflowStageShell({
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 space-y-3 max-w-7xl mx-auto">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
-          <p className="text-muted-foreground">{description}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+          <p className="text-sm text-muted-foreground">{description}</p>
         </div>
         <Badge variant="outline" className="px-4 py-1 text-sm bg-primary/5 text-primary border-primary/20">
           {pendingCount} Pending Items
@@ -60,26 +64,26 @@ export function WorkflowStageShell({
       </div>
 
       <Tabs defaultValue="pending" className="w-full">
-        <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-4 bg-muted/50 p-1 rounded-lg">
-          <TabsTrigger value="pending" className="rounded-md">
+        <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-2 bg-muted/50 p-1 rounded-lg h-9">
+          <TabsTrigger value="pending" className="rounded-md text-xs py-1">
             Pending Tasks
           </TabsTrigger>
-          <TabsTrigger value="history" className="rounded-md">
+          <TabsTrigger value="history" className="rounded-md text-xs py-1">
             Stage History
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pending" className="space-y-4">
-          <div className="flex flex-col gap-4 bg-card p-4 rounded-xl border shadow-sm">
-            <div className="flex items-center gap-4">
+        <TabsContent value="pending" className="space-y-2">
+          <div className="flex flex-col gap-2 bg-card p-3 rounded-xl border shadow-sm">
+            <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search DO Number, Customer..." className="pl-9 bg-transparent" />
+                <Input placeholder="Search DO Number, Customer..." className="pl-9 bg-transparent h-9" />
               </div>
-              <Button variant="outline" size="icon" className="bg-transparent">
+              <Button variant="outline" size="icon" className="bg-transparent h-9 w-9">
                 <Filter className="h-4 w-4" />
               </Button>
-              <Button variant="outline" size="icon" className="bg-transparent" onClick={() => {
+              <Button variant="outline" size="icon" className="bg-transparent h-9 w-9" onClick={() => {
                   const reset = { status: "", startDate: "", endDate: "", partyName: "" };
                   setFilters(reset);
                   if (onFilterChange) onFilterChange(reset);
@@ -89,27 +93,29 @@ export function WorkflowStageShell({
             </div>
             
             {/* Extended Filters */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className={`grid grid-cols-1 gap-2 ${showStatusFilter ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
                {/* Status Select */}
-               <div className="space-y-2">
-                 <Label className="text-xs font-medium text-muted-foreground">Status</Label>
-                 <Select value={filters.status} onValueChange={(val) => updateFilter("status", val)}>
-                    <SelectTrigger className="w-full h-10 bg-background px-3 text-sm">
-                       <SelectValue placeholder="Select Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                       <SelectItem value="on-time">On Time</SelectItem>
-                       <SelectItem value="expire">Expire</SelectItem>
-                    </SelectContent>
-                 </Select>
-               </div>
+               {showStatusFilter && (
+                 <div className="space-y-1">
+                   <Label className="text-xs font-medium text-muted-foreground">Status</Label>
+                   <Select value={filters.status} onValueChange={(val) => updateFilter("status", val)}>
+                      <SelectTrigger className="w-full h-8 bg-background px-3 text-sm">
+                         <SelectValue placeholder="Select Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                         <SelectItem value="on-time">On Time</SelectItem>
+                         <SelectItem value="expire">Expire</SelectItem>
+                      </SelectContent>
+                   </Select>
+                 </div>
+               )}
                
                {/* Start Date */}
-               <div className="space-y-2">
+               <div className="space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground">Start Date</Label>
                   <Input 
                      type="date" 
-                     className="w-full h-10 bg-background px-3 text-sm block" 
+                     className="w-full h-8 bg-background px-3 text-sm block" 
                      placeholder="Start Date" 
                      value={filters.startDate}
                      onChange={(e) => updateFilter("startDate", e.target.value)}
@@ -117,11 +123,11 @@ export function WorkflowStageShell({
                </div>
                
                {/* End Date */}
-               <div className="space-y-2">
+               <div className="space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground">End Date</Label>
                   <Input 
                      type="date" 
-                     className="w-full h-10 bg-background px-3 text-sm block" 
+                     className="w-full h-8 bg-background px-3 text-sm block" 
                      placeholder="End Date" 
                      value={filters.endDate}
                      onChange={(e) => updateFilter("endDate", e.target.value)}
@@ -129,10 +135,10 @@ export function WorkflowStageShell({
                </div>
                
                {/* Party Name Select */}
-               <div className="space-y-2">
+               <div className="space-y-1">
                  <Label className="text-xs font-medium text-muted-foreground">Party Name</Label>
                  <Select value={filters.partyName} onValueChange={(val) => updateFilter("partyName", val)}>
-                    <SelectTrigger className="w-full h-10 bg-background px-3 text-sm">
+                    <SelectTrigger className="w-full h-8 bg-background px-3 text-sm">
                        <SelectValue placeholder="Select Party Name" />
                     </SelectTrigger>
                     <SelectContent>
@@ -155,13 +161,13 @@ export function WorkflowStageShell({
             <Card className="border-none shadow-sm overflow-hidden">
               {historyData && historyData.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm table-fixed">
                     <thead className="bg-muted/30 border-b">
                       <tr>
-                        <th className="px-4 py-3 text-left font-semibold">Date</th>
-                        <th className="px-4 py-3 text-left font-semibold">Stage</th>
-                        <th className="px-4 py-3 text-left font-semibold">Status</th>
-                        <th className="px-4 py-3 text-left font-semibold">Remarks</th>
+                        <th className="px-4 py-3 text-left font-semibold w-1/4">Date</th>
+                        <th className="px-4 py-3 text-left font-semibold w-1/4">Stage</th>
+                        <th className="px-4 py-3 text-left font-semibold w-1/4">Status</th>
+                        <th className="px-4 py-3 text-left font-semibold w-1/4">{remarksColName || "Remarks"}</th>
                       </tr>
                     </thead>
                     <tbody>

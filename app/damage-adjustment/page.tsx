@@ -19,7 +19,9 @@ import {
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Upload } from "lucide-react"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Upload, Settings2 } from "lucide-react"
+import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 
 export default function DamageAdjustmentPage() {
   const router = useRouter()
@@ -27,6 +29,11 @@ export default function DamageAdjustmentPage() {
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    "orderNo",
+    "customerName",
+    "status",
+  ])
   const [adjustmentData, setAdjustmentData] = useState({
     status: "",
     creditNoteDate: "",
@@ -51,7 +58,10 @@ export default function DamageAdjustmentPage() {
         (item: any) => item.stage === "Material Receipt" && item.status === "Damaged"
       ).filter(
         (item: any) => 
-          !completed.some((completedItem: any) => completedItem.doNumber === item.doNumber)
+          !completed.some((completedItem: any) => 
+            (completedItem.doNumber && item.doNumber && completedItem.doNumber === item.doNumber) ||
+            (completedItem.orderNo && item.orderNo && completedItem.orderNo === item.orderNo)
+          )
       )
       setPendingOrders(pending)
     }
@@ -154,157 +164,226 @@ export default function DamageAdjustmentPage() {
       description="Process credit notes and adjustments for damaged goods."
       pendingCount={filteredPendingOrders.length}
       historyData={historyOrders.map((order) => ({
-        date: new Date(order.adjustmentData?.adjustedAt || new Date()).toLocaleDateString(),
+        date: new Date(order.adjustmentData?.adjustedAt || new Date()).toLocaleDateString("en-GB"),
         stage: "Damage Adjustment",
         status: "Adjusted",
         remarks: `Note: ${order.adjustmentData?.creditNoteNo || "-"}`,
       }))}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
+      remarksColName="Credit Note"
     >
-      <Card className="border-none shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader className="bg-muted/30">
-            <TableRow>
-              <TableHead>Action</TableHead>
-              <TableHead>Order No</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Damage SKU</TableHead>
-              <TableHead>Damage Qty</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredPendingOrders.length > 0 ? (
-              filteredPendingOrders.map((order, index) => (
-                <TableRow key={index}>
-                  <TableCell>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button size="sm">Adjust</Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                        <DialogHeader>
-                          <DialogTitle>Damage Adjustment: {order.orderNo}</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="space-y-2">
-                            <Label>Status</Label>
-                            <Select
-                              value={adjustmentData.status}
-                              onValueChange={(value) => setAdjustmentData({ ...adjustmentData, status: value })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select status" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="credit_note">Credit Note Issued</SelectItem>
-                                <SelectItem value="replacement">Replacement Sent</SelectItem>
-                                <SelectItem value="waived">Amount Waived</SelectItem>
-                                <SelectItem value="pending">Pending Investigation</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label>Credit Note Date</Label>
-                              <Input
-                                type="date"
-                                value={adjustmentData.creditNoteDate}
-                                onChange={(e) => setAdjustmentData({ ...adjustmentData, creditNoteDate: e.target.value })}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Credit Note No</Label>
-                              <Input
-                                value={adjustmentData.creditNoteNo}
-                                onChange={(e) => setAdjustmentData({ ...adjustmentData, creditNoteNo: e.target.value })}
-                                placeholder="Enter credit note no"
-                              />
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Upload Credit Note Copy</Label>
-                            <div className="border-2 border-dashed rounded-lg p-4 text-center">
-                              <Input
-                                type="file"
-                                accept=".pdf,.jpg,.png"
-                                onChange={(e) => {
-                                  if (e.target.files?.[0]) {
-                                    setAdjustmentData({ ...adjustmentData, creditNoteCopy: e.target.files[0] })
-                                  }
-                                }}
-                                className="hidden"
-                                id="creditnote-upload"
-                              />
-                              <label htmlFor="creditnote-upload" className="cursor-pointer">
-                                <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
-                                <p className="text-sm text-muted-foreground">
-                                  {adjustmentData.creditNoteCopy ? adjustmentData.creditNoteCopy.name : "Upload credit note"}
-                                </p>
-                              </label>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-3 gap-4">
-                            <div className="space-y-2">
-                              <Label>Credit Qty</Label>
-                              <Input
-                                type="number"
-                                value={adjustmentData.creditQty}
-                                onChange={(e) => setAdjustmentData({ ...adjustmentData, creditQty: e.target.value })}
-                                placeholder="Qty"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Credit Amount</Label>
-                              <Input
-                                type="number"
-                                value={adjustmentData.creditAmount}
-                                onChange={(e) => setAdjustmentData({ ...adjustmentData, creditAmount: e.target.value })}
-                                placeholder="Amount"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Net Balance</Label>
-                              <Input
-                                type="number"
-                                value={adjustmentData.netBalance}
-                                onChange={(e) => setAdjustmentData({ ...adjustmentData, netBalance: e.target.value })}
-                                placeholder="Balance"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button
-                            onClick={() => handleSubmit(order)}
-                            disabled={!adjustmentData.status || isProcessing}
-                          >
-                            {isProcessing ? "Processing..." : "Submit Adjustment"}
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </TableCell>
-                  <TableCell className="font-medium">{order.orderNo}</TableCell>
-                  <TableCell>{order.customerName}</TableCell>
-                  <TableCell>{order.receiptData?.damageSku || "—"}</TableCell>
-                  <TableCell>{order.receiptData?.damageQty || "—"}</TableCell>
-                  <TableCell>
-                    <Badge className="bg-red-100 text-red-700">Damaged</Badge>
+      <div className="space-y-4">
+        <div className="flex justify-end gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="bg-transparent">
+                <Settings2 className="mr-2 h-4 w-4" />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[250px] max-h-[400px] overflow-y-auto">
+              <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {ALL_COLUMNS.map((col) => (
+                <DropdownMenuCheckboxItem
+                  key={col.id}
+                  className="capitalize"
+                  checked={visibleColumns.includes(col.id)}
+                  onCheckedChange={(checked) => {
+                    setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
+                  }}
+                >
+                  {col.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
+              <TableRow>
+                <TableHead className="w-[80px]">Action</TableHead>
+                {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                  <TableHead key={col.id} className="whitespace-nowrap">
+                    {col.label}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredPendingOrders.length > 0 ? (
+                    filteredPendingOrders.map((order, index) => {
+                        const internalOrder = order.data?.orderData || order;
+                        const preApproval = order.data?.preApprovalData || internalOrder.preApprovalData || {};
+
+                        const row = {
+                          orderNo: internalOrder.doNumber || internalOrder.orderNo || "DO-XXX",
+                          deliveryPurpose: internalOrder.orderPurpose || "—",
+                          customerType: internalOrder.customerType || "—",
+                          orderType: internalOrder.orderType || "—",
+                          soNo: internalOrder.soNumber || "—",
+                          partySoDate: internalOrder.soDate || "—",
+                          customerName: internalOrder.customerName || "—",
+                          itemConfirm: internalOrder.itemConfirm || "—",
+                          productName: internalOrder.products?.map((p: any) => p.productName).join(", ") || "",
+                          uom: internalOrder.products?.map((p: any) => p.uom).join(", ") || "",
+                          orderQty: internalOrder.products?.map((p: any) => p.orderQty).join(", ") || "",
+                          altUom: internalOrder.products?.map((p: any) => p.altUom).join(", ") || "",
+                          altQty: internalOrder.products?.map((p: any) => p.altQty).join(", ") || "",
+                          oilType: internalOrder.oilType || "—",
+                          ratePerLtr: internalOrder.ratePerLtr || "—",
+                          rateOfMaterial: internalOrder.rateMaterial || "—",
+                          totalWithGst: internalOrder.totalWithGst || "—",
+                          transportType: internalOrder.dispatchData?.transportType || "—",
+                          uploadSo: "so_document.pdf",
+                          contactPerson: internalOrder.contactPerson || "—",
+                          whatsapp: internalOrder.whatsappNo || "—",
+                          address: internalOrder.customerAddress || "—",
+                          paymentTerms: internalOrder.paymentTerms || "—",
+                          advanceTaken: internalOrder.advancePaymentTaken || "—",
+                          advanceAmount: internalOrder.advanceAmount || "—",
+                          isBroker: internalOrder.isBrokerOrder || "—",
+                          brokerName: internalOrder.brokerName || "—",
+                          deliveryDate: internalOrder.deliveryDate || "—",
+                          qtyToDispatch: internalOrder.dispatchData?.qtyToDispatch || "—",
+                          deliveryFrom: internalOrder.deliveryData?.deliveryFrom || "—",
+                          status: "Damaged", // Special handling for badge
+                        }
+
+                   return (
+                   <TableRow key={index}>
+                     <TableCell>
+                       <Dialog>
+                         <DialogTrigger asChild>
+                           <Button size="sm">Adjust</Button>
+                         </DialogTrigger>
+                         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                           <DialogHeader>
+                             <DialogTitle>Damage Adjustment: {order.orderNo}</DialogTitle>
+                           </DialogHeader>
+                           <div className="space-y-4 py-4">
+                             <div className="space-y-2">
+                               <Label>Status</Label>
+                               <Select
+                                 value={adjustmentData.status}
+                                 onValueChange={(value) => setAdjustmentData({ ...adjustmentData, status: value })}
+                               >
+                                 <SelectTrigger>
+                                   <SelectValue placeholder="Select status" />
+                                 </SelectTrigger>
+                                 <SelectContent>
+                                   <SelectItem value="credit_note">Credit Note Issued</SelectItem>
+                                   <SelectItem value="replacement">Replacement Sent</SelectItem>
+                                   <SelectItem value="waived">Amount Waived</SelectItem>
+                                   <SelectItem value="pending">Pending Investigation</SelectItem>
+                                 </SelectContent>
+                               </Select>
+                             </div>
+                             <div className="grid grid-cols-2 gap-4">
+                               <div className="space-y-2">
+                                 <Label>Credit Note Date</Label>
+                                 <Input
+                                   type="date"
+                                   value={adjustmentData.creditNoteDate}
+                                   onChange={(e) => setAdjustmentData({ ...adjustmentData, creditNoteDate: e.target.value })}
+                                 />
+                               </div>
+                               <div className="space-y-2">
+                                 <Label>Credit Note No</Label>
+                                 <Input
+                                   value={adjustmentData.creditNoteNo}
+                                   onChange={(e) => setAdjustmentData({ ...adjustmentData, creditNoteNo: e.target.value })}
+                                   placeholder="Enter credit note no"
+                                 />
+                               </div>
+                             </div>
+                             <div className="space-y-2">
+                               <Label>Upload Credit Note Copy</Label>
+                               <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                                 <Input
+                                   type="file"
+                                   accept=".pdf,.jpg,.png"
+                                   onChange={(e) => {
+                                     if (e.target.files?.[0]) {
+                                       setAdjustmentData({ ...adjustmentData, creditNoteCopy: e.target.files[0] })
+                                     }
+                                   }}
+                                   className="hidden"
+                                   id="creditnote-upload"
+                                 />
+                                 <label htmlFor="creditnote-upload" className="cursor-pointer">
+                                   <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+                                   <p className="text-sm text-muted-foreground">
+                                     {adjustmentData.creditNoteCopy ? adjustmentData.creditNoteCopy.name : "Upload credit note"}
+                                   </p>
+                                 </label>
+                               </div>
+                             </div>
+                             <div className="grid grid-cols-3 gap-4">
+                               <div className="space-y-2">
+                                 <Label>Credit Qty</Label>
+                                 <Input
+                                   type="number"
+                                   value={adjustmentData.creditQty}
+                                   onChange={(e) => setAdjustmentData({ ...adjustmentData, creditQty: e.target.value })}
+                                   placeholder="Qty"
+                                 />
+                               </div>
+                               <div className="space-y-2">
+                                 <Label>Credit Amount</Label>
+                                 <Input
+                                   type="number"
+                                   value={adjustmentData.creditAmount}
+                                   onChange={(e) => setAdjustmentData({ ...adjustmentData, creditAmount: e.target.value })}
+                                   placeholder="Amount"
+                                 />
+                               </div>
+                               <div className="space-y-2">
+                                 <Label>Net Balance</Label>
+                                 <Input
+                                   type="number"
+                                   value={adjustmentData.netBalance}
+                                   onChange={(e) => setAdjustmentData({ ...adjustmentData, netBalance: e.target.value })}
+                                   placeholder="Balance"
+                                 />
+                               </div>
+                             </div>
+                           </div>
+                           <DialogFooter>
+                             <Button
+                               onClick={() => handleSubmit(order)}
+                               disabled={!adjustmentData.status || isProcessing}
+                             >
+                               {isProcessing ? "Processing..." : "Submit Adjustment"}
+                             </Button>
+                           </DialogFooter>
+                         </DialogContent>
+                       </Dialog>
+                     </TableCell>
+                     {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                       <TableCell key={col.id} className="whitespace-nowrap">
+                         {col.id === "status" ? (
+                            <Badge className="bg-red-100 text-red-700">Damaged</Badge>
+                         ) : row[col.id as keyof typeof row]}
+                       </TableCell>
+                     ))}
+                   </TableRow>
+                   )
+                })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
+                    No orders pending for damage adjustment
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                  No orders pending for damage adjustment
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+              )}
+            </TableBody>
+          </Table>
+        </Card>
+      </div>
     </WorkflowStageShell>
   )
 }

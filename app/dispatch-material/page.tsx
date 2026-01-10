@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Settings2 } from "lucide-react"
 
 export default function DispatchMaterialPage() {
   const router = useRouter()
@@ -27,7 +29,54 @@ export default function DispatchMaterialPage() {
     packagingComplete: false,
     labelsAttached: false,
   })
-  const [dispatchDetails, setDispatchDetails] = useState<Record<string, { qty: string, transportType: string }>>({})
+  const [dispatchDetails, setDispatchDetails] = useState<Record<string, { qty: string, transportType?: string, deliveryFrom?: string }>>({})
+
+  const PAGE_COLUMNS = [
+    { id: "orderNo", label: "DO Number" },
+    { id: "customerName", label: "Customer Name" },
+    { id: "productName", label: "Products Name" },
+    { id: "transportType", label: "Type of Transporting" },
+    { id: "qtyDispatch", label: "Qty to be Dispatch" },
+    { id: "deliveryFrom", label: "Delivery From" },
+    { id: "status", label: "Status" },
+    
+    // Requested Options
+    { id: "soNo", label: "SO No." },
+    { id: "deliveryPurpose", label: "Order Type (Delivery Purpose)" },
+    { id: "startDate", label: "Start Date" },
+    { id: "endDate", label: "End Date" },
+    { id: "deliveryDate", label: "Delivery Date" },
+    { id: "orderType", label: "Order Type" },
+    { id: "customerType", label: "Customer Type" },
+    { id: "partySoDate", label: "Party SO Date" },
+    { id: "oilType", label: "Oil Type" },
+    { id: "ratePer15Kg", label: "Rate Per 15 kg" },
+    { id: "ratePerLtr", label: "Rate Per Ltr" },
+    { id: "totalWithGst", label: "Total Amount with GST" },
+    { id: "contactPerson", label: "Customer Contact Person Name" },
+    { id: "whatsapp", label: "Customer Contact Person Whatsapp No." },
+    { id: "address", label: "Customer Address" },
+    { id: "paymentTerms", label: "Payment Terms" },
+    { id: "advanceTaken", label: "Advance Payment to be Taken" },
+    { id: "advanceAmount", label: "Advance Amount" },
+    { id: "isBroker", label: "Is this order Through Broker" },
+    { id: "brokerName", label: "Broker Name (If Order Through Broker)" },
+    { id: "uploadSo", label: "Upload SO" },
+    { id: "skuName", label: "SKU Name" },
+    { id: "approvalQty", label: "Approval Qty" },
+    { id: "skuRates", label: "Take Required Rates of Each Item" },
+    { id: "remark", label: "Remark" },
+  ]
+
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    "orderNo",
+    "customerName",
+    "productName",
+    "transportType",
+    "qtyDispatch",
+    "deliveryFrom",
+    "status",
+  ])
 
   useEffect(() => {
     const savedHistory = localStorage.getItem("workflowHistory")
@@ -44,7 +93,11 @@ export default function DispatchMaterialPage() {
         (item: any) => item.stage === "Approval Of Order" && item.status === "Approved"
       ).filter(
         (item: any) => 
-          !completed.some((completedItem: any) => completedItem.doNumber === item.doNumber)
+          !completed.some((completedItem: any) => 
+            (completedItem.doNumber && item.doNumber && completedItem.doNumber === item.doNumber) ||
+            (completedItem.orderNo && item.orderNo && completedItem.orderNo === item.orderNo) ||
+            (completedItem.doNumber === `DO-${item.orderNo}`)
+          )
       )
       setPendingOrders(pending)
     }
@@ -86,17 +139,32 @@ export default function DispatchMaterialPage() {
         // User requested distinct format "DO-001". Since we don't have a counter, we'll try to use orderNo if it looks like an ID, else "DO-" + orderNo
         
         const finalDoNumber = existingDoNumber || (order.orderNo?.startsWith("DO-") ? order.orderNo : `DO-${order.orderNo}`);
+        
+        // Extract values reliably
+        const qtyVal = dispatchDetails[order.doNumber || order.orderNo]?.qty || "";
+        const deliveryVal = dispatchDetails[order.doNumber || order.orderNo]?.deliveryFrom || order.deliveryData?.deliveryFrom || order.data?.orderData?.deliveryData?.deliveryFrom || "";
+        const transportVal = order.transportType || order.data?.orderData?.transportType || "";
 
         return {
           ...order,
           doNumber: finalDoNumber, // Ensure this property is set for future stages
-          stage: "Dispatch Planning",
+          stage: "Dispatch Material",
           status: "Completed",
+          
+          // Save at top level for easier access
+          qtyToDispatch: qtyVal,
+          deliveryFrom: deliveryVal,
+          qtytobedispatched: qtyVal, // Redundant key for compatibility
+          dispatchfrom: deliveryVal, // Redundant key for compatibility
+
           dispatchData: {
             ...dispatchData,
             dispatchedAt: new Date().toISOString(),
-            qtyToDispatch: dispatchDetails[order.doNumber || order.orderNo]?.qty || "",
-            transportType: dispatchDetails[order.doNumber || order.orderNo]?.transportType || "",
+            qtyToDispatch: qtyVal,
+            // store the selected source (In Stock/Production)
+            deliveryFrom: deliveryVal,
+            // store the actual transport type (Self/Others)
+            transportType: transportVal,
           },
         }
       })
@@ -118,7 +186,7 @@ export default function DispatchMaterialPage() {
 
       toast({
         title: "Materials Dispatched",
-        description: `${updatedOrders.length} orders moved to Vehicle Details stage.`,
+        description: `${updatedOrders.length} orders moved to Actual Dispatch stage.`,
       })
 
       setTimeout(() => {
@@ -200,8 +268,34 @@ export default function DispatchMaterialPage() {
       }))}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
+      showStatusFilter={true}
     >
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="bg-transparent">
+              <Settings2 className="mr-2 h-4 w-4" />
+              Columns
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-[250px] max-h-[400px] overflow-y-auto">
+            <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {PAGE_COLUMNS.map((col) => (
+              <DropdownMenuCheckboxItem
+                key={col.id}
+                className="capitalize"
+                checked={visibleColumns.includes(col.id)}
+                onCheckedChange={(checked) => {
+                  setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
+                }}
+              >
+                {col.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <Button
           onClick={handleBulkDispatch}
           disabled={selectedOrders.length === 0 || isProcessing}
@@ -210,94 +304,143 @@ export default function DispatchMaterialPage() {
         </Button>
       </div>
 
-      <Card className="border-none shadow-sm overflow-hidden">
+      <Card className="border-none shadow-sm overflow-hidden overflow-auto max-h-[600px]">
         <Table>
-          <TableHeader className="bg-muted/30">
+          <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
             <TableRow>
-              <TableHead className="w-12">
+              <TableHead className="w-12 text-center">
                 <Checkbox
                   checked={filteredPendingOrders.length > 0 && selectedOrders.length === filteredPendingOrders.length}
                   onCheckedChange={toggleSelectAll}
                   aria-label="Select all"
                 />
               </TableHead>
-              <TableHead>DO Number</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Products</TableHead>
-              <TableHead className="w-[150px]">Qty to be Dispatch</TableHead>
-              <TableHead className="w-[200px]">Type of Transporting</TableHead>
-              <TableHead>Delivery From</TableHead>
-              <TableHead>Status</TableHead>
+              {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                <TableHead key={col.id} className="whitespace-nowrap text-center">
+                  {col.label}
+                </TableHead>
+              ))}
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredPendingOrders.length > 0 ? (
-              filteredPendingOrders.map((order, index) => (
-                <TableRow key={index}>
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedOrders.includes(order.doNumber || order.orderNo)}
-                      onCheckedChange={() => toggleSelectOrder(order.doNumber || order.orderNo)}
-                      aria-label={`Select order ${order.doNumber || order.orderNo}`}
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium">{order.doNumber || order.orderNo}</TableCell>
-                  <TableCell>{order.customerName}</TableCell>
-                  <TableCell>{order.productCount} Products</TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      placeholder="Qty"
-                      className="h-8"
-                      value={dispatchDetails[order.doNumber || order.orderNo]?.qty || ""}
-                      onChange={(e) =>
-                        setDispatchDetails((prev) => ({
-                          ...prev,
-                          [order.doNumber || order.orderNo]: {
-                             ...prev[order.doNumber || order.orderNo],
-                             qty: e.target.value
-                          }
-                        }))
-                      }
-                      disabled={!selectedOrders.includes(order.doNumber || order.orderNo)}
-                    />
-                  </TableCell>
-                   <TableCell>
-                    <Select
-                      value={dispatchDetails[order.doNumber || order.orderNo]?.transportType || ""}
-                      onValueChange={(val) =>
-                        setDispatchDetails((prev) => ({
-                          ...prev,
-                          [order.doNumber || order.orderNo]: {
-                             ...prev[order.doNumber || order.orderNo],
-                             transportType: val
-                          }
-                        }))
-                      }
-                      disabled={!selectedOrders.includes(order.doNumber || order.orderNo)}
-                    >
-                      <SelectTrigger className="h-8">
-                        <SelectValue placeholder="Select" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="In Stocl">In Stock</SelectItem>
-                        <SelectItem value="Production">Production</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    {order.deliveryData?.deliveryFrom === "in-stock"
-                      ? "In Stock"
-                      : order.deliveryData?.deliveryFrom === "production"
-                        ? "From Production"
-                        : "—"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className="bg-orange-100 text-orange-700">Pending Dispatch</Badge>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
+                filteredPendingOrders.map((order, index) => {
+                  // Map Data
+                   // Safe extraction of nested order data if it exists (from Approval stage history)
+                   const internalOrder = order.data?.orderData || order;
+                   const preApproval = order.data?.preApprovalData || internalOrder.preApprovalData || {};
+                   const productRates = preApproval.productRates || {};
+                   
+                   const prodNames = internalOrder.products?.map((p: any) => p.productName).filter(Boolean).join(" | ") || 
+                                     internalOrder.preApprovalProducts?.map((p: any) => p.oilType).filter(Boolean).join(" | ") || 
+                                     "";
+                   const ratesLtr = internalOrder.preApprovalProducts?.map((p: any) => p.ratePerLtr).join(", ") || internalOrder.ratePerLtr || "—";
+                   const rates15Kg = internalOrder.preApprovalProducts?.map((p: any) => p.rateLtr).join(", ") || internalOrder.rateLtr || "—";
+                   const oilTypes = internalOrder.preApprovalProducts?.map((p: any) => p.oilType).join(", ") || internalOrder.oilType || "—";
+                   
+                   // SKU/Rates from productRates map
+                   const skuNames = Object.values(productRates).map((p: any) => p.skuName).filter(Boolean).join(", ") || "—";
+                   // Only show approval quantities if they were explicitly set during Pre-Approval
+                   const approvalQtys = Object.values(productRates).map((p: any) => p.approvalQty).filter(Boolean).join(", ") || "—";
+                   const reqRates = Object.values(productRates).map((p: any) => p.rate).filter(Boolean).join(", ") || "—";
+                   
+                     const row = {
+                      orderNo: internalOrder.doNumber || internalOrder.orderNo,
+                      customerName: internalOrder.customerName,
+                      productName: prodNames, // Always show names, not count
+                      transportType: internalOrder.transportType || "—",
+                      status: "Pending Dispatch", // Special handling
+                     
+                     soNo: internalOrder.soNumber || "—",
+                     deliveryPurpose: internalOrder.orderPurpose || "—",
+                     startDate: internalOrder.startDate || "—",
+                     endDate: internalOrder.endDate || "—",
+                     deliveryDate: internalOrder.deliveryDate || "—",
+                     orderType: internalOrder.orderType || "—",
+                     customerType: internalOrder.customerType || "—",
+                     partySoDate: internalOrder.soDate || "—",
+                     oilType: oilTypes,
+                     ratePer15Kg: rates15Kg,
+                     ratePerLtr: ratesLtr,
+                     totalWithGst: internalOrder.totalWithGst || "—",
+                     contactPerson: internalOrder.contactPerson || "—",
+                     whatsapp: internalOrder.whatsappNo || "—",
+                     address: internalOrder.customerAddress || "—",
+                     paymentTerms: internalOrder.paymentTerms || "—",
+                     advanceTaken: internalOrder.advancePaymentTaken || "—",
+                     advanceAmount: internalOrder.advanceAmount || "—",
+                     isBroker: internalOrder.isBrokerOrder || "—",
+                     brokerName: internalOrder.brokerName || "—",
+                     uploadSo: "so_document.pdf",
+                     skuName: skuNames,
+                     approvalQty: approvalQtys,
+                     skuRates: reqRates,
+                     remark: order.remarks || internalOrder.preApprovalRemark || preApproval.overallRemark || "—",
+                  }
+                  
+                  return (
+                  <TableRow key={index}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedOrders.includes(order.doNumber || order.orderNo)}
+                        onCheckedChange={() => toggleSelectOrder(order.doNumber || order.orderNo)}
+                        aria-label={`Select order ${order.doNumber || order.orderNo}`}
+                      />
+                    </TableCell>
+                    
+                    {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                      <TableCell key={col.id} className="whitespace-nowrap text-center">
+                        {col.id === "status" ? (
+                           <div className="flex justify-center">
+                             <Badge className="bg-orange-100 text-orange-700">Pending Dispatch</Badge>
+                           </div>
+                        ) : col.id === "qtyDispatch" ? (
+                           <Input
+                            type="number"
+                            placeholder="Qty"
+                            className="h-8 w-[100px] mx-auto"
+                            value={dispatchDetails[order.doNumber || order.orderNo]?.qty || ""}
+                            onChange={(e) =>
+                              setDispatchDetails((prev) => ({
+                                ...prev,
+                                [order.doNumber || order.orderNo]: {
+                                   ...prev[order.doNumber || order.orderNo],
+                                   qty: e.target.value
+                                }
+                              }))
+                            }
+                            disabled={!selectedOrders.includes(order.doNumber || order.orderNo)}
+                          />
+                        ) : col.id === "deliveryFrom" ? (
+                           <Select
+                            value={dispatchDetails[order.doNumber || order.orderNo]?.deliveryFrom || order.deliveryData?.deliveryFrom || order.data?.orderData?.deliveryData?.deliveryFrom || ""}
+                            onValueChange={(val) =>
+                              setDispatchDetails((prev) => ({
+                                ...prev,
+                                [order.doNumber || order.orderNo]: {
+                                   ...prev[order.doNumber || order.orderNo],
+                                   deliveryFrom: val
+                                }
+                              }))
+                            }
+                            disabled={!selectedOrders.includes(order.doNumber || order.orderNo)}
+                          >
+                            <SelectTrigger className="h-8 w-[130px] mx-auto">
+                              <SelectValue placeholder="Select" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="in-stock">In Stock</SelectItem>
+                              <SelectItem value="production">Production</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                           row[col.id as keyof typeof row]
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                )})
+              ) : (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                   No orders pending for dispatch
