@@ -122,50 +122,14 @@ export default function OrderPunchPage() {
     const lastSO = localStorage.getItem("lastSOSequence") || "0"
     const nextSO = parseInt(lastSO) + 1
     // Ideally we won't increment until save, but for display we show next potential
-    setSoNumber(`SO-${String(nextSO).padStart(3, "0")}`)
+    setSoNumber(`DO-${String(nextSO).padStart(3, "0")}`)
   }, [])
 
+  // Initial SO Number Logic
   useEffect(() => {
-    const savedData = localStorage.getItem("orderData")
-    if (savedData) {
-      const data: OrderData = JSON.parse(savedData)
-      setCustomerType(data.customerType)
-      setDepoName(data.depoName || "")
-      setIsBrokerOrder(data.isBrokerOrder)
-      setOrderPurpose(data.orderPurpose)
-      setOrderType(data.orderType)
-      setAdvancePaymentTaken(data.advancePaymentTaken)
-      // setSoNumber(data.soNumber) // Keep auto-generated for new punches unless editing logic is added
-      setSoDate(data.soDate)
-      setCustomerName(data.customerName)
-      setContactPerson(data.contactPerson)
-      setWhatsappNo(data.whatsappNo)
-      setCustomerAddress(data.customerAddress)
-      setDeliveryAddress(data.deliveryAddress || "")
-      setOilType(data.oilType)
-      setRateLtr(data.rateLtr)
-      setBrokerName(data.brokerName)
-      setDeliveryDate(data.deliveryDate)
-      setStartDate(data.startDate || "")
-      setEndDate(data.endDate || "")
-      setPaymentTerms(data.paymentTerms)
-      setTransportType(data.transportType)
-      setAdvanceAmount(data.advanceAmount)
-       if (data.products.length > 0) {
-        setProducts(data.products)
-      }
-      if (data.preApprovalProducts && data.preApprovalProducts.length > 0) {
-        setPreApprovalProducts(data.preApprovalProducts)
-      } else if (data.oilType || data.rateLtr) {
-        // Fallback for migrated data
-         setPreApprovalProducts([{ 
-           id: "1", 
-           oilType: data.oilType, 
-           ratePerLtr: "",
-           rateLtr: data.rateLtr, 
-          }])
-      }
-    }
+    const lastSO = localStorage.getItem("lastSOSequence") || "0"
+    const nextSO = parseInt(lastSO) + 1
+    setSoNumber(`DO-${String(nextSO).padStart(3, "0")}`)
   }, [])
 
   // Customer Auto-fill Effect
@@ -471,10 +435,11 @@ export default function OrderPunchPage() {
     setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "" }])
     setPreApprovalProducts([{ id: Math.random().toString(36).substr(2, 9), oilType: "", ratePerLtr: "", rateLtr: "" }])
     
+
     // Simulate next SO Number
     const lastSO = localStorage.getItem("lastSOSequence") || "0"
     const nextSO = parseInt(lastSO) + 1
-    setSoNumber(`SO-${String(nextSO).padStart(3, "0")}`)
+    setSoNumber(`DO-${String(nextSO).padStart(3, "0")}`)
   }
 
   return (
@@ -499,10 +464,10 @@ export default function OrderPunchPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* SO Number - Reordered to Top */}
               <div className="space-y-2">
-                <Label htmlFor="soNumber">SO Number</Label>
+                <Label htmlFor="soNumber">DO Number</Label>
                 <Input
                   id="soNumber"
-                  placeholder="SO Number"
+                  placeholder="DO Number"
                   value={soNumber}
                   readOnly // Auto-filled
                   className="bg-muted"
@@ -510,7 +475,7 @@ export default function OrderPunchPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="soDate">SO Date</Label>
+                <Label htmlFor="soDate">DO Date</Label>
                 <Input id="soDate" type="date" value={soDate} onChange={(e) => setSoDate(e.target.value)} />
               </div>
 

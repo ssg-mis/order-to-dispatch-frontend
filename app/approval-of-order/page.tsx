@@ -22,14 +22,14 @@ export default function CommitmentReviewPage() {
   const [isConfirming, setIsConfirming] = useState(false)
   const PAGE_COLUMNS = [
     { id: "orderNo", label: "DO Number" },
-    { id: "soNo", label: "SO No." },
+    { id: "soNo", label: "DO No." },
     { id: "deliveryPurpose", label: "Order Type (Delivery Purpose)" },
     { id: "startDate", label: "Start Date" },
     { id: "endDate", label: "End Date" },
     { id: "deliveryDate", label: "Delivery Date" },
     { id: "orderType", label: "Order Type" },
     { id: "customerType", label: "Customer Type" },
-    { id: "partySoDate", label: "Party SO Date" },
+    { id: "partySoDate", label: "Party DO Date" },
     { id: "customerName", label: "Customer Name" },
     { id: "oilType", label: "Oil Type" },
     { id: "ratePer15Kg", label: "Rate Per 15 kg" },
@@ -49,7 +49,7 @@ export default function CommitmentReviewPage() {
     { id: "advanceAmount", label: "Advance Amount" },
     { id: "isBroker", label: "Is this order Through Broker" },
     { id: "brokerName", label: "Broker Name (If Order Through Broker)" },
-    { id: "uploadSo", label: "Upload SO." },
+    { id: "uploadSo", label: "Upload DO." },
     { id: "status", label: "Status" },
   ]
 
@@ -498,7 +498,7 @@ export default function CommitmentReviewPage() {
                      advanceAmount: order.advanceAmount || "—",
                      isBroker: order.isBrokerOrder || "—",
                      brokerName: order.brokerName || "—",
-                     uploadSo: "so_document.pdf",
+                     uploadSo: "do_document.pdf",
                      
                      status: "Excellent", // Badge fallback
                    }
@@ -518,7 +518,7 @@ export default function CommitmentReviewPage() {
                              <DialogTitle>Verification Checklist: {selectedOrder?.soNumber || selectedOrder?.doNumber}</DialogTitle>
                            </DialogHeader>
                            <div className="grid gap-4 py-4">
-                             <div className="space-y-2 p-3 rounded-lg bg-muted/20">
+                             {/* <div className="space-y-2 p-3 rounded-lg bg-muted/20">
                                  <Label className="text-base font-semibold">Source of Material</Label>
                                  <Select value={sourceOfMaterial} onValueChange={setSourceOfMaterial}>
                                      <SelectTrigger className="bg-background">
@@ -529,7 +529,7 @@ export default function CommitmentReviewPage() {
                                          <SelectItem value="production">From Production</SelectItem>
                                      </SelectContent>
                                  </Select>
-                             </div>
+                             </div> */}
                              {checkItems.map((item) => (
                                <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20">
                                  <Label className="text-base">{item.label}</Label>

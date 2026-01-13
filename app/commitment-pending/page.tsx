@@ -137,7 +137,7 @@ export default function CommitmentPendingPage() {
                 <p className="text-lg font-bold">{pendingOrder?.orderData?.customerName || "N/A"}</p>
               </div>
               <div>
-                <p className="text-sm font-semibold text-muted-foreground">SO Number</p>
+                <p className="text-sm font-semibold text-muted-foreground">DO Number</p>
                 <p className="text-lg font-bold">{pendingOrder?.orderData?.soNumber || "N/A"}</p>
               </div>
               <div>

@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useEffect, useState, useMemo } from "react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { 
   Package, 
   Clock, 
@@ -12,314 +12,1026 @@ import {
   MoreHorizontal,
   FileBarChart,
   Truck,
-  Activity
+  Activity,
+  User,
+  ShieldCheck,
+  FileText,
+  FileCheck,
+  LogOut,
+  ChevronRight,
+  History,
+  AlertTriangle,
+  XCircle,
+  BarChart3,
+  Calendar,
+  Layers,
+  Zap,
+  Filter,
+  ChevronDown
 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  LineChart, 
+  Line, 
+  Cell,
+  AreaChart,
+  Area
+} from 'recharts'
+import { useRouter } from "next/navigation"
 
-// --- Types & Helpers ---
-type OrderStatus = "In Progress" | "Completed" | "Approved" | "Damaged" | "Delivered"
+// --- Constants ---
 
-const getOrderState = (lastStage: string, lastStatus: string): OrderStatus => {
-  if (lastStage === "Damage Adjustment") return "Damaged"
-  if (lastStage === "Material Receipt" && lastStatus === "Delivered") return "Delivered"
-  if (lastStage === "Material Receipt" && lastStatus === "Damaged") return "Damaged"
-  return "In Progress"
+const STAGES = [
+  { id: "Order Punch", label: "Order Punch", icon: FileBarChart, color: "text-blue-600", bg: "bg-blue-50", url: "/order-punch" },
+  { id: "Pre-Approval", label: "Pre Approval", icon: ShieldCheck, color: "text-indigo-600", bg: "bg-indigo-50", url: "/pre-approval" }, // Mapping "Pre-Approval" to "Pre Approval"
+  { id: "Approval Of Order", label: "Approval of Order", icon: FileCheck, color: "text-violet-600", bg: "bg-violet-50", url: "/approval-of-order" },
+  { id: "Dispatch Planning", label: "Dispatch Planning", icon: Box, color: "text-purple-600", bg: "bg-purple-50", url: "/dispatch-material" },
+  { id: "Actual Dispatch", label: "Actual Dispatch", icon: Send, color: "text-fuchsia-600", bg: "bg-fuchsia-50", url: "/actual-dispatch" },
+  { id: "Vehicle Details", label: "Vehicle Details", icon: Car, color: "text-pink-600", bg: "bg-pink-50", url: "/vehicle-details" },
+  { id: "Material Load", label: "Material Load", icon: Truck, color: "text-rose-600", bg: "bg-rose-50", url: "/material-load" },
+  { id: "Security Approval", label: "Security Guard Approval", icon: ShieldCheck, color: "text-orange-600", bg: "bg-orange-50", url: "/security-approval" },
+  { id: "Make Invoice", label: "Invoice (Proforma)", icon: FileText, color: "text-amber-600", bg: "bg-amber-50", url: "/make-invoice" },
+  { id: "Check Invoice", label: "Check Invoice", icon: CheckCircle2, color: "text-yellow-600", bg: "bg-yellow-50", url: "/check-invoice" },
+  { id: "Gate Out", label: "Gate Out", icon: LogOut, color: "text-lime-600", bg: "bg-lime-50", url: "/gate-out" },
+  { id: "Material Receipt", label: "Confirm Material Receipt", icon: Package, color: "text-emerald-600", bg: "bg-emerald-50", url: "/material-receipt" },
+  { id: "Damage Adjustment", label: "Damage Adjustment", icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50", url: "/damage-adjustment" },
+  { id: "Final Delivery", label: "Final Delivery", icon: CheckCircle2, color: "text-green-600", bg: "bg-green-50", url: "/" }
+]
+
+// Icons were missing from my import, let's add them
+import { Package as Box, Send, Car } from "lucide-react"
+
+const ROLES = [
+  { id: "admin", label: "Admin", description: "Full visibility and control" },
+  { id: "approver", label: "Approver", description: "Pre-approvals & Order approvals" },
+  { id: "dispatcher", label: "Dispatcher", description: "Planning, Logistics & Loading" },
+  { id: "security", label: "Security", description: "Gate Entry & Exit" },
+  { id: "finance", label: "Finance", description: "Invoicing & Payments" }
+]
+
+const ROLE_STAGE_MAPPING: Record<string, string[]> = {
+  admin: STAGES.map(s => s.id),
+  approver: ["Pre-Approval", "Approval Of Order"],
+  dispatcher: ["Dispatch Planning", "Actual Dispatch", "Vehicle Details", "Material Load"],
+  security: ["Security Approval", "Gate Out"],
+  finance: ["Make Invoice", "Check Invoice"]
 }
 
-export default function Dashboard() {
-  const [metrics, setMetrics] = useState({
-    total: 0,
-    active: 0,
-    completed: 0,
-    damaged: 0
-  })
-  
-  const [pipelineData, setPipelineData] = useState([
-    { title: "Approvals & Entry", count: 0, color: "bg-blue-500", icon: FileBarChart },
-    { title: "Dispatch & Loading", count: 0, color: "bg-orange-500", icon: Truck },
-    { title: "Invoice & Gate", count: 0, color: "bg-indigo-500", icon: CheckCircle2 },
-    { title: "Final Delivery", count: 0, color: "bg-emerald-500", icon: Package }
-  ])
+// --- Dashboard Component ---
 
-  const [recentActivity, setRecentActivity] = useState<any[]>([])
-  const [actionItems, setActionItems] = useState<any[]>([])
+export default function Dashboard() {
+  const router = useRouter()
+  const [role, setRole] = useState("admin")
+  const [timeRange, setTimeRange] = useState("today") 
+  const [history, setHistory] = useState<any[]>([])
+  const [lastSync, setLastSync] = useState(new Date())
+  const [isPendingDialogOpen, setIsPendingDialogOpen] = useState(false)
 
   useEffect(() => {
-    const rawHistory = localStorage.getItem("workflowHistory")
-    if (!rawHistory) return;
+    const loadData = () => {
+        try {
+            const rawHistory = localStorage.getItem("workflowHistory")
+            if (rawHistory) {
+                setHistory(JSON.parse(rawHistory))
+            }
+            // Load User Role
+            const storedRole = localStorage.getItem("userRole")
+            if (storedRole) {
+                setRole(storedRole)
+            }
+        } catch (error) {
+            console.error("Failed to parse data:", error)
+        }
+    }
 
-    const history = JSON.parse(rawHistory)
-    const latestOrderMap = new Map()
+    loadData() // Initial load
+
+    const interval = setInterval(() => {
+        loadData()
+        setLastSync(new Date())
+    }, 5000) // Polling every 5s for "Real-time" feel
     
-    // Group by Order ID to find latest state
+    return () => clearInterval(interval)
+  }, [])
+
+  // Process Data
+  const stats = useMemo(() => {
+    const normalize = (str: string) => (str || "").toLowerCase().replace(/[^a-z0-9]/g, "")
+    const getOrderId = (e: any) => e.soNumber || e.doNumber || e.orderNo
+
+    const latestOrderMap = new Map()
     history.forEach((entry: any) => {
-       const id = entry.doNumber || entry.orderNo
-       if (!id) return
-       latestOrderMap.set(id, entry)
+        const id = entry.doNumber || entry.orderNo
+        if (!id) return
+        const existing = latestOrderMap.get(id)
+        if (!existing || new Date(entry.timestamp || entry.date) > new Date(existing.timestamp || existing.date)) {
+            // Preserve orderType from existing entry if missing in new entry
+            const preservedType = entry.orderType || existing?.orderType
+            latestOrderMap.set(id, { ...entry, orderType: preservedType })
+        } else if (existing && !existing.orderType && entry.orderType) {
+            // If existing is newer but missing type, and older entry has it, update existing
+             latestOrderMap.set(id, { ...existing, orderType: entry.orderType })
+        }
     })
 
     const uniqueOrders = Array.from(latestOrderMap.values())
-
-    let active = 0, completed = 0, damaged = 0
-    let s1 = 0, s2 = 0, s3 = 0, s4 = 0 // Stage counters
-
-    const actions: any[] = []
-
-    uniqueOrders.forEach((order: any) => {
-      const state = getOrderState(order.stage, order.status)
-      if (state === "In Progress") active++
-      if (state === "Delivered") completed++
-      if (state === "Damaged") damaged++
-
-      const s = order.stage
-      if (["Order Punch", "Pre-Approval", "Approval Of Order"].includes(s)) s1++
-      else if (["Dispatch Planning", "Actual Dispatch", "Vehicle Details", "Material Load"].includes(s)) s2++
-      else if (["Security Approval", "Make Invoice", "Check Invoice", "Gate Out"].includes(s)) s3++
-      else if (["Material Receipt", "Damage Adjustment", "Confirm Material Receipt"].includes(s)) s4++
-
-      if (order.status === "Completed" || order.status === "Approved") {
-         if (s === "Order Punch") actions.push({ label: "Review Pre-Approval", id: order.orderNo })
-         else if (s === "Pre-Approval") actions.push({ label: "Approve Order", id: order.doNumber || order.orderNo })
-         else if (s === "Approval Of Order") actions.push({ label: "Plan Dispatch", id: order.doNumber })
-         else if (s === "Material Load") actions.push({ label: "Security Check", id: order.doNumber })
-         else if (s === "Security Approval") actions.push({ label: "Generate Invoice", id: order.doNumber })
-         else if (s === "Make Invoice") actions.push({ label: "Check Invoice", id: order.doNumber })
-         else if (s === "Gate Out") actions.push({ label: "Confirm Receipt", id: order.doNumber })
-      }
+    
+    // Filter by time range
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay())
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    
+    const timeFilteredOrders = uniqueOrders.filter((order: any) => {
+        const date = new Date(order.timestamp || order.date)
+        if (timeRange === "today") return date >= startOfToday
+        if (timeRange === "week") return date >= startOfWeek
+        return date >= startOfMonth
     })
 
-    setMetrics({ total: uniqueOrders.length, active, completed, damaged })
-    setPipelineData([
-      { title: "Approvals & Entry", count: s1, color: "bg-blue-500", icon: FileBarChart },
-      { title: "Dispatch & Loading", count: s2, color: "bg-amber-500", icon: Truck },
-      { title: "Invoice & Gate", count: s3, color: "bg-indigo-500", icon: Activity },
-      { title: "Final Delivery", count: s4, color: "bg-emerald-500", icon: CheckCircle2 }
-    ])
-    setRecentActivity([...history].reverse().slice(0, 10))
-    
-    const actionGroups = actions.reduce((acc: any, curr) => {
-        acc[curr.label] = (acc[curr.label] || 0) + 1
-        return acc
-    }, {})
-    
-    setActionItems(Object.entries(actionGroups).map(([label, count]) => ({ label, count })).sort((a: any, b: any) => b.count - a.count))
+    // Global stats (All Time)
+    const completedOrdersIds = new Set(
+        history.filter(e => 
+            (normalize(e.stage) === "materialreceipt" || normalize(e.stage) === "damageadjustment") && 
+            ["completed", "approved", "delivered", "ready"].includes((e.status || "").toLowerCase())
+        ).map(getOrderId)
+    )
 
-  }, [])
+    const completed = completedOrdersIds.size
+    const pendingOrdersList = uniqueOrders.filter((o: any) => {
+        const id = getOrderId(o)
+        const isCompleted = completedOrdersIds.has(id)
+        const isCancelled = ["cancelled", "rejected"].includes((o.status || "").toLowerCase())
+        return !isCompleted && !isCancelled
+    })
+    const active = pendingOrdersList.length
+    const cancelled = uniqueOrders.filter((o: any) => ["cancelled", "rejected"].includes((o.status || "").toLowerCase())).length
+    
+    // Delayed logic: > 24 hours in same stage
+    const delayed = uniqueOrders.filter((o: any) => {
+        const lastUpdate = new Date(o.timestamp || o.date)
+        const diffHours = (now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60)
+        return diffHours > 24 && o.status !== "Delivered"
+    }).length
+
+    // Stage breakdown with real-ish data
+    const initialStageCounts = STAGES.map((s, idx) => {
+        const targetId = normalize(s.id)
+        
+        const isInRange = (dateStr: string) => {
+            const date = new Date(dateStr)
+            if (timeRange === "today") return date >= startOfToday
+            if (timeRange === "week") return date >= startOfWeek
+            return date >= startOfMonth
+        }
+
+        // 1. All records that COMPLETED this stage
+        const completionsThisStage = history.filter(e => 
+            normalize(e.stage) === targetId && ["completed", "approved", "ready"].includes((e.status || "").toLowerCase())
+        )
+
+        // SUCCESS: Finished this stage in the time range
+        const successCount = new Set(completionsThisStage.filter(e => isInRange(e.timestamp || e.date)).map(getOrderId)).size
+        
+        // PENDING: Finished trigger stages but not this stage
+        let pendingCount = 0
+        if (s.id === "Order Punch") {
+            pendingCount = 0
+        } else {
+            const triggerIds = [normalize(STAGES[idx - 1]?.id)]
+            if (targetId === "approvaloforder") triggerIds.push("orderpunch")
+            if (targetId === "actualdispatch") triggerIds.push("dispatchmaterial", "dispatchplanning")
+            if (targetId === "materialload") triggerIds.push("vehicledetails", "actualdispatch")
+
+            const finishedTrigger = history.filter(e => 
+                triggerIds.includes(normalize(e.stage)) && ["completed", "approved", "ready"].includes((e.status || "").toLowerCase())
+            )
+
+            const pendingIds = new Set()
+            finishedTrigger.forEach(t => {
+                const id = getOrderId(t)
+                const isFinished = completionsThisStage.some(c => getOrderId(c) === id)
+                
+                let skip = false
+                const type = (t.orderType || "").toLowerCase()
+                if (targetId === "preapproval" && !type.includes("pre")) skip = true
+                if (targetId === "approvaloforder" && normalize(t.stage) === "orderpunch" && type.includes("pre")) skip = true
+
+                if (!isFinished && !skip) pendingIds.add(id)
+            })
+            pendingCount = pendingIds.size
+        }
+
+        let breakdown = null
+        if (s.id === "Order Punch") {
+            const lowerType = (o: any) => (o.orderType || "").toLowerCase()
+            const preCount = timeFilteredOrders.filter(o => lowerType(o).includes("pre") && lowerType(o).includes("approval")).length
+            const regCount = timeFilteredOrders.filter(o => lowerType(o) === "regular").length
+            breakdown = { label1: "Pre-Approval", value1: preCount, label2: "Regular", value2: regCount, total: timeFilteredOrders.length }
+        }
+
+        const overdue = uniqueOrders.filter((o: any) => {
+            if (normalize(o.stage) !== targetId) return false
+            const hours = (now.getTime() - new Date(o.timestamp || o.date).getTime()) / 3600000
+            return hours > 48
+        }).length
+
+        return { ...s, count: pendingCount, pending: pendingCount, completed: successCount, overdue, breakdown }
+    })
+
+    const stageCounts = initialStageCounts.map(s => {
+        if (s.id === "Final Delivery") {
+            const receipt = initialStageCounts.find(sc => sc.id === "Material Receipt")
+            const damage = initialStageCounts.find(sc => sc.id === "Damage Adjustment")
+            return {
+                ...s,
+                completed: (receipt?.completed || 0) + (damage?.completed || 0)
+            }
+        }
+        return s
+    })
+
+    // ... (rest of logic) ...
+
+// ...
+
+function StageCard({ stage, totalOrders, onClick }: any) {
+    const percentage = totalOrders > 0 ? Math.round((stage.count / totalOrders) * 100) : 0
+    const totalInStage = stage.count 
+
+    return (
+        <div 
+            onClick={onClick}
+            className="flex flex-col p-6 rounded-3xl border-2 border-slate-50 bg-white hover:border-primary/20 hover:shadow-xl transition-all duration-300 group cursor-pointer relative overflow-hidden active:scale-95 h-full justify-between"
+        >
+            <div className="flex justify-between items-start mb-4">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 group-hover:scale-110 ${stage.bg} ${stage.color} shadow-sm`}>
+                    <stage.icon className="h-6 w-6" />
+                </div>
+                {stage.overdue > 0 && (
+                    <Badge variant="destructive" className="rounded-full px-2 py-0.5 h-6 text-[10px] flex items-center gap-1 animate-pulse">
+                         <AlertCircle className="h-3 w-3" /> {stage.overdue}
+                    </Badge>
+                )}
+            </div>
+            
+            <div className="mb-6 relative z-10 flex flex-col items-center text-center space-y-2">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400 group-hover:text-primary/80 transition-colors w-full">{stage.label}</p>
+                <div className="flex items-center justify-center">
+                    <h3 className="text-4xl font-black text-slate-800 tracking-tighter">
+                        {stage.breakdown ? stage.breakdown.total : stage.count}
+                    </h3>
+                </div>
+            </div>
+
+            <div className="mt-auto space-y-2">
+                <div className="flex justify-around items-center bg-slate-50 rounded-lg p-2 border border-slate-100">
+                    {stage.breakdown ? (
+                        <>
+                             <div className="flex flex-col items-center">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">{stage.breakdown.label1}</span>
+                                <span className="text-sm font-black text-indigo-600">{stage.breakdown.value1}</span>
+                             </div>
+                             <div className="h-6 w-px bg-slate-200"></div>
+                             <div className="flex flex-col items-center">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">{stage.breakdown.label2}</span>
+                                <span className="text-sm font-black text-blue-600">{stage.breakdown.value2}</span>
+                             </div>
+                        </>
+                    ) : (
+                        <>
+                             <div className="flex flex-col items-center">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Success</span>
+                                <span className="text-sm font-black text-emerald-500">{stage.completed}</span>
+                             </div>
+                             <div className="h-6 w-px bg-slate-200"></div>
+                             <div className="flex flex-col items-center">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Total</span>
+                                <span className="text-sm font-black text-blue-500">{totalInStage}</span>
+                             </div>
+                        </>
+                    )}
+                </div>
+
+            </div>
+        </div>
+    )
+}
+
+    // Today's Activity Snapshot
+    const activityToday = history.filter(h => {
+        const d = new Date(h.timestamp || h.date)
+        return d.toDateString() === now.toDateString()
+    })
+    
+    const createdToday = activityToday.filter(h => h.stage === "Order Punch").length
+    const dispatchedToday = activityToday.filter(h => h.stage === "Actual Dispatch").length
+    const invoicedToday = activityToday.filter(h => h.stage === "Make Invoice").length
+    const deliveredToday = activityToday.filter(h => h.status === "Delivered").length
+
+    // Attention Needed Items
+    const attentionItems = uniqueOrders
+        .filter(o => o.status === "Rejected" || o.status === "Damaged" || ((now.getTime() - new Date(o.timestamp || o.date).getTime()) / 3600000 > 12 && o.status !== "Delivered"))
+        .sort((a, b) => new Date(a.timestamp || a.date).getTime() - new Date(b.timestamp || b.date).getTime())
+        .slice(0, 10)
+
+    // Recent orders tracker
+    const recentOrders = uniqueOrders
+        .sort((a, b) => new Date(b.timestamp || b.date).getTime() - new Date(a.timestamp || a.date).getTime())
+        .slice(0, 8)
+
+    // Chart Data
+    const chartData = stageCounts.map(s => ({ name: s.label, count: s.count }))
+    
+    // Timeline Data (Weekly Mon-Sun)
+    const currentDay = now.getDay()
+    const diffToMonday = currentDay === 0 ? 6 : currentDay - 1
+    const monday = new Date(now)
+    monday.setDate(now.getDate() - diffToMonday)
+    
+    const weeklyData = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(monday)
+        d.setDate(monday.getDate() + i)
+        const dayStr = d.toLocaleDateString('en-US', { weekday: 'short' })
+        const dateStr = d.toDateString()
+        const count = history.filter(h => 
+            normalize(h.stage) === "orderpunch" && 
+            new Date(h.timestamp || h.date).toDateString() === dateStr
+        ).length
+        return { name: dayStr, count }
+    })
+
+    return {
+        total: timeFilteredOrders.length,
+        active,
+        completed,
+        delayed,
+        cancelled,
+        stageCounts,
+        attentionItems,
+        recentOrders,
+        createdToday,
+        dispatchedToday,
+        invoicedToday,
+        deliveredToday,
+        chartData,
+        timelineData: weeklyData,
+        pendingOrdersList
+    }
+  }, [history, timeRange])
+
+  // Component logic
+  const visibleStages = useMemo(() => {
+    const IMPORTANT_STAGES = [
+        "Order Punch", 
+        "Actual Dispatch", 
+        "Material Load", 
+        "Material Receipt", 
+        "Damage Adjustment"
+    ]
+    return stats.stageCounts.filter(s => 
+        ROLE_STAGE_MAPPING[role].includes(s.id) && IMPORTANT_STAGES.includes(s.id)
+    )
+  }, [role, stats.stageCounts])
 
   return (
-    <div className="p-10 max-w-[1800px] mx-auto min-h-screen bg-transparent">
+    <div className="p-8 max-w-[1600px] mx-auto min-h-screen space-y-8 animate-in fade-in duration-700">
       
-      {/* Header */}
-      <div className="flex items-center justify-between mb-10">
+      {/* Header with Role & Time Controls */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
-          <p className="text-base text-muted-foreground mt-1">
-            Overview for {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-4xl font-black tracking-tight text-slate-900">
+               Dashboard
+            </h1>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-100/50">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Live Status</span>
+            </div>
+          </div>
+          <p className="text-base text-slate-500 font-medium flex items-center gap-2">
+            OMS Enterprise Operational Overview
+            <span className="h-4 w-px bg-slate-200 mx-1" />
+            <span className="text-slate-400 text-sm">Last Synced: {lastSync.toLocaleTimeString()}</span>
           </p>
         </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid gap-6 md:grid-cols-4 mb-10">
-        <MetricCard title="Total Volume" value={metrics.total} icon={Package} />
-        <MetricCard title="Active Orders" value={metrics.active} icon={Clock} highlight />
-        <MetricCard title="Fulfilled" value={metrics.completed} icon={CheckCircle2} />
-        <MetricCard title="Attention Needed" value={metrics.damaged} icon={AlertCircle} alert />
-      </div>
-
-      <div className="grid gap-10 grid-cols-1 lg:grid-cols-3">
         
-        {/* Main Feed */}
-        <div className="lg:col-span-2 space-y-10">
-           
-           {/* Pipeline Snapshot */}
-           <Card className="shadow-sm border rounded-xl overflow-hidden">
-             <CardHeader className="pb-4 border-b bg-muted/10">
-                <CardTitle className="text-lg font-semibold">Live Pipeline</CardTitle>
-             </CardHeader>
-             <CardContent className="pt-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                   {pipelineData.map((item, i) => (
-                      <div key={i} className="flex flex-col p-5 rounded-2xl border border-slate-100 border-b-[4px] bg-white hover:border-b-primary/50 hover:border-b-[6px] hover:-translate-y-2 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-300 group cursor-pointer relative overflow-hidden">
-                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110 shadow-sm ${item.color.replace('bg-', 'bg-').replace('500', '100')} ${item.color.replace('bg-', 'text-').replace('500', '600')}`}>
-                            <item.icon className="h-6 w-6" />
-                         </div>
-                         <div className="mb-2 relative z-10">
-                             <p className="text-sm font-semibold text-slate-500">{item.title}</p>
-                             <p className="text-3xl font-extrabold text-slate-900 tracking-tight">{item.count}</p>
-                         </div>
-                         <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mt-auto shadow-inner">
-                            <div 
-                              className={`h-full ${item.color} rounded-full shadow-[0_2px_4px_rgba(0,0,0,0.1)]`}
-                              style={{ width: `${metrics.total ? (item.count / metrics.total) * 100 : 0}%` }}
-                            />
-                         </div>
-                      </div>
-                   ))}
+        <div className="flex items-center gap-4 group cursor-pointer self-start md:self-center">
+            <div className="flex flex-col items-end text-right hidden sm:flex">
+                <span className="text-base font-black text-slate-900 capitalize tracking-tight leading-none">
+                    {role || "Administrator"}
+                </span>
+            </div>
+            <div className="relative">
+                <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center group-hover:bg-white group-hover:shadow-lg group-hover:border-primary/20 transition-all duration-300">
+                    <User className="h-6 w-6 text-slate-400 group-hover:text-primary transition-colors" />
                 </div>
-             </CardContent>
-           </Card>
-
-           {/* Recent Transactions */}
-           <Card className="shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 border-b-[6px] rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300">
-             <CardHeader className="flex flex-row items-center justify-between py-6 px-6 bg-gradient-to-b from-white to-slate-50/50 border-b">
-                <CardTitle className="text-xl font-bold text-slate-800">Recent Activity</CardTitle>
-                <Button variant="outline" size="icon" className="h-9 w-9 bg-white shadow-sm border-b-[3px] active:border-b active:translate-y-[2px] transition-all"><MoreHorizontal className="h-5 w-5" /></Button>
-             </CardHeader>
-             <div className="p-0">
-               <Table>
-                  <TableHeader>
-                     <TableRow className="bg-slate-50/50 hover:bg-slate-50">
-                        <TableHead className="w-[140px] text-xs uppercase tracking-wider font-bold text-slate-500 h-10 text-center">Order ID</TableHead>
-                        <TableHead className="text-xs uppercase tracking-wider font-bold text-slate-500 text-center">Stage</TableHead>
-                        <TableHead className="text-xs uppercase tracking-wider font-bold text-slate-500 text-center">Status</TableHead>
-                        <TableHead className="text-right text-xs uppercase tracking-wider font-bold text-slate-500">Time</TableHead>
-                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                     {recentActivity.map((item, i) => (
-                        <TableRow key={i} className="group cursor-pointer hover:bg-slate-50 transition-all h-16 border-b border-slate-100 last:border-0 relative">
-                           <TableCell className="font-mono text-sm font-semibold text-slate-700 relative z-10 group-hover:text-primary transition-colors text-center">
-                              <span className="bg-slate-100 px-2 py-1 rounded-md border border-slate-200 group-hover:border-primary/20 group-hover:bg-primary/5 transition-colors">
-                                 {item.doNumber || item.orderNo}
-                              </span>
-                           </TableCell>
-                           <TableCell className="text-sm font-medium text-slate-600 group-hover:text-slate-900 transition-colors relative z-10 text-center">{item.stage}</TableCell>
-                           <TableCell className="relative z-10 text-center">
-                              <div className="flex justify-center">
-                                 <StatusBadge status={item.status} />
-                              </div>
-                           </TableCell>
-                           <TableCell className="text-right text-sm text-slate-500 relative z-10 font-medium">
-                              {new Date(item.timestamp || item.date).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}
-                           </TableCell>
-                        </TableRow>
-                     ))}
-                     {recentActivity.length === 0 && (
-                        <TableRow>
-                           <TableCell colSpan={4} className="text-center py-10 text-base text-muted-foreground">No recent data</TableCell>
-                        </TableRow>
-                     )}
-                  </TableBody>
-               </Table>
-             </div>
-           </Card>
-
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full shadow-sm" />
+            </div>
         </div>
+      </div>
 
-        {/* Sidebar */}
-        <div className="space-y-8">
-           {/* Action Items */}
-           <Card className="shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 border-b-[6px] rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300">
-              <CardHeader className="pb-4 border-b bg-gradient-to-b from-white to-slate-50/50">
-                 <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-800">
-                    Pending Actions 
-                    {actionItems.length > 0 && <span className="bg-orange-500 text-white shadow-md text-xs px-2.5 py-0.5 rounded-full animate-pulse">{actionItems.reduce((a,b)=>a+b.count,0)}</span>}
-                 </CardTitle>
-              </CardHeader>
-              <ScrollArea className="h-[400px]">
-                 <div className="p-3">
-                    {actionItems.map((item, i) => (
-                       <div key={i} className="flex items-center justify-between p-4 mb-3 bg-white rounded-xl border border-slate-100 border-b-[3px] shadow-sm hover:border-b-[5px] hover:-translate-y-1 hover:shadow-md hover:border-primary/30 transition-all duration-200 cursor-pointer group">
-                          <div>
-                             <p className="text-base font-bold text-slate-700 group-hover:text-primary transition-colors">{item.label}</p>
-                             <div className="flex items-center gap-2 mt-1">
-                                <span className="h-1.5 w-1.5 rounded-full bg-orange-400"></span>
-                                <p className="text-sm text-slate-500 font-medium">{item.count} orders waiting</p>
-                             </div>
-                          </div>
-                          <div className="h-10 w-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-primary group-hover:text-white group-hover:shadow-lg transition-all duration-300">
-                            <ArrowRight className="h-5 w-5 transform group-hover:translate-x-0.5" />
-                          </div>
-                       </div>
-                    ))}
-                    {actionItems.length === 0 && (
-                       <div className="p-10 text-center text-sm text-muted-foreground">
-                          All caught up! No actions pending.
-                       </div>
-                    )}
-                 </div>
-              </ScrollArea>
-           </Card>
+      {/* Top KPI Cards (Global Metrics) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+        <KPIBox 
+            title="Total Orders" 
+            value={stats.total} 
+            icon={Package} 
+            color="indigo" 
+            trend="Total"
+        />
+        <KPIBox 
+            title="Active Orders" 
+            value={stats.active} 
+            icon={Activity} 
+            color="amber" 
+            trend="In Progress"
+        />
+        <KPIBox 
+            title="Completed" 
+            value={stats.completed} 
+            icon={CheckCircle2} 
+            color="emerald" 
+            trend="Fulfilled"
+        />
+        <KPIBox 
+            title="Delayed / Attention" 
+            value={stats.delayed} 
+            icon={AlertTriangle} 
+            color="rose" 
+            trend="Review SLA"
+            alert={stats.delayed > 0}
+        />
+        <KPIBox 
+            title="Rejected" 
+            value={stats.cancelled} 
+            icon={XCircle} 
+            color="slate" 
+            trend="Failed"
+        />
+      </div>
 
-           {/* Quick Stats / System Health */}
-           <Card className="shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 border-b-[6px] rounded-2xl bg-white hover:shadow-xl transition-all duration-300">
-              <CardContent className="pt-8 px-6">
-                 <div className="flex items-center justify-between mb-6">
-                    <span className="text-lg font-bold text-slate-700">System Status</span>
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 shadow-sm">
-                        <span className="relative flex h-2.5 w-2.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                        </span>
-                        <span className="text-xs font-bold uppercase tracking-wider">Operational</span>
-                    </div>
-                 </div>
-                 <Separator className="my-6" />
-                 <div className="text-sm text-slate-500 space-y-4">
-                    <p className="flex justify-between items-center group p-2 hover:bg-slate-50 rounded-lg transition-colors cursor-default">
-                        <span className="font-medium">Database Connection</span> 
-                        <span className="text-slate-900 font-bold bg-green-100 px-2 py-0.5 rounded text-green-700 text-xs">Stable</span>
-                    </p>
-                    <p className="flex justify-between items-center group p-2 hover:bg-slate-50 rounded-lg transition-colors cursor-default">
-                        <span className="font-medium">Last Sync</span> 
-                        <span className="text-slate-900 font-bold">Just now</span>
-                    </p>
-                    <div className="flex justify-between items-center group p-2 hover:bg-slate-50 rounded-lg transition-colors cursor-default">
-                        <span className="font-medium">Server Load</span> 
-                        <div className="flex items-center gap-2">
-                             <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                 <div className="h-full bg-blue-500 w-[12%] rounded-full"></div>
-                             </div>
-                             <span className="text-slate-900 font-bold">12%</span>
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        {/* Stage-Wise Pipeline Overview (Column Span 12) */}
+        <Card className="lg:col-span-12 shadow-xl border-none rounded-2xl overflow-hidden bg-white/70 backdrop-blur-xl border border-white/20">
+            <CardHeader className="border-b bg-slate-50/50 flex flex-row items-center justify-between py-4 px-6">
+                <div>
+                    <CardTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <Layers className="h-5 w-5 text-primary" />
+                        Order Overview
+                    </CardTitle>
+                </div>
+                <div className="flex gap-2 items-center">
+                    <Tabs value={timeRange} onValueChange={setTimeRange} className="w-auto">
+                        <TabsList className="bg-slate-200/50 backdrop-blur-md h-10 p-1 gap-1 rounded-xl border border-slate-300/50 shadow-inner">
+                            <TabsTrigger 
+                                value="today" 
+                                className="rounded-lg px-4 text-[10px] font-black uppercase tracking-[0.15em] h-8 transition-all duration-300 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-lg data-[state=active]:scale-105 active:scale-95 text-slate-500 hover:text-slate-900"
+                            >
+                                Today
+                            </TabsTrigger>
+                            <TabsTrigger 
+                                value="week" 
+                                className="rounded-lg px-4 text-[10px] font-black uppercase tracking-[0.15em] h-8 transition-all duration-300 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-lg data-[state=active]:scale-105 active:scale-95 text-slate-500 hover:text-slate-900"
+                            >
+                                This Week
+                            </TabsTrigger>
+                            <TabsTrigger 
+                                value="month" 
+                                className="rounded-lg px-4 text-[10px] font-black uppercase tracking-[0.15em] h-8 transition-all duration-300 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-lg data-[state=active]:scale-105 active:scale-95 text-slate-500 hover:text-slate-900"
+                            >
+                                Month
+                            </TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                </div>
+            </CardHeader>
+            <CardContent className="p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {/* Pending Order Card */}
+                        <div 
+                            onClick={() => setIsPendingDialogOpen(true)}
+                            className="bg-amber-50/50 rounded-2xl p-5 border border-amber-100 flex flex-col justify-between hover:shadow-lg transition-all cursor-pointer min-h-[160px]"
+                        >
+                            <div className="flex justify-between items-start">
+                                <div className="p-2.5 bg-white rounded-xl shadow-sm border border-amber-200">
+                                    <Activity className="h-5 w-5 text-amber-600" />
+                                </div>
+                                <Badge variant="outline" className="text-[10px] font-black uppercase text-amber-700 bg-amber-100/50 border-amber-200">Live Status</Badge>
+                            </div>
+                            <div>
+                                <h4 className="text-4xl font-black text-slate-800 tracking-tighter">{stats.active}</h4>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Pending Orders</p>
+                            </div>
+                        </div>
+
+                        {/* Complete Order Card */}
+                        <div className="bg-emerald-50/50 rounded-2xl p-5 border border-emerald-100 flex flex-col justify-between hover:shadow-lg transition-all cursor-default min-h-[160px]">
+                            <div className="flex justify-between items-start">
+                                <div className="p-2.5 bg-white rounded-xl shadow-sm border border-emerald-200">
+                                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                                </div>
+                                <Badge variant="outline" className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-100/50 border-emerald-200">Success</Badge>
+                            </div>
+                            <div>
+                                <h4 className="text-4xl font-black text-slate-800 tracking-tighter">{stats.completed}</h4>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Complete Orders</p>
+                            </div>
+                        </div>
+
+                        {/* Dispatch Planning Card */}
+                        <div className="bg-indigo-50/50 rounded-2xl p-5 border border-indigo-100 flex flex-col justify-between hover:shadow-lg transition-all cursor-default min-h-[160px]">
+                            <div className="flex justify-between items-start">
+                                <div className="p-2.5 bg-white rounded-xl shadow-sm border border-indigo-200">
+                                    <Layers className="h-5 w-5 text-indigo-600" />
+                                </div>
+                                <div className="flex flex-col gap-1 items-end">
+                                    <span className="text-[9px] font-black text-indigo-500 uppercase">Planning Stage</span>
+                                </div>
+                            </div>
+                            <div className="flex items-end justify-between">
+                                <div>
+                                    <h4 className="text-4xl font-black text-slate-800 tracking-tighter">
+                                        {(stats.stageCounts.find(s => s.id === "Dispatch Planning")?.pending || 0) + (stats.stageCounts.find(s => s.id === "Dispatch Planning")?.completed || 0)}
+                                    </h4>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Dispatch Planning</p>
+                                </div>
+                                <div className="flex flex-col gap-1 mb-1">
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                        <span className="text-[10px] font-bold text-slate-500">P: {stats.stageCounts.find(s => s.id === "Dispatch Planning")?.pending || 0}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                        <span className="text-[10px] font-bold text-slate-500">C: {stats.stageCounts.find(s => s.id === "Dispatch Planning")?.completed || 0}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Damages Card */}
+                        <div className="bg-rose-50/50 rounded-2xl p-5 border border-rose-100 flex flex-col justify-between hover:shadow-lg transition-all cursor-default min-h-[160px]">
+                            <div className="flex justify-between items-start">
+                                <div className="p-2.5 bg-white rounded-xl shadow-sm border border-rose-200">
+                                    <AlertTriangle className="h-5 w-5 text-rose-600" />
+                                </div>
+                                <Badge variant="destructive" className="text-[10px] font-black uppercase bg-rose-500 hover:bg-rose-600">Critical</Badge>
+                            </div>
+                            <div>
+                                <h4 className="text-4xl font-black text-slate-800 tracking-tighter">
+                                    {stats.stageCounts.find(s => s.id === "Damage Adjustment")?.count || 0}
+                                </h4>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Damages (Count)</p>
+                            </div>
+                        </div>
+
+                        {/* Payments Card */}
+                        <div className="bg-violet-50/50 rounded-2xl p-5 border border-violet-100 flex flex-col justify-between hover:shadow-lg transition-all cursor-default min-h-[160px]">
+                            <div className="flex justify-between items-start">
+                                <div className="p-2.5 bg-white rounded-xl shadow-sm border border-violet-200">
+                                    <FileText className="h-5 w-5 text-violet-600" />
+                                </div>
+                                <Badge variant="outline" className="text-[10px] font-black uppercase text-violet-700 bg-violet-100/50 border-violet-200 px-2 py-0.5">Finance</Badge>
+                            </div>
+                            <div>
+                                <h4 className="text-4xl font-black text-slate-800 tracking-tighter">
+                                    {stats.stageCounts.find(s => s.id === "Make Invoice")?.completed || 0}
+                                </h4>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Total Invoices</p>
+                            </div>
                         </div>
                     </div>
-                 </div>
-              </CardContent>
-           </Card>
+
+                    {/* System Pending Table Section */}
+                    <div className="lg:col-span-4 bg-slate-50/50 rounded-2xl border border-slate-200 overflow-hidden flex flex-col">
+                        <div className="bg-slate-100/80 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
+                            <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider">System Stage Overview</span>
+                        </div>
+                        <ScrollArea className="h-[340px]">
+                            <Table>
+                                <TableHeader className="bg-white/50 sticky top-0 z-10 backdrop-blur-sm">
+                                    <TableRow className="hover:bg-transparent border-b border-slate-200">
+                                        <TableHead className="h-8 text-[10px] font-black uppercase text-slate-500 py-0 pl-4">Stage Name</TableHead>
+                                        <TableHead className="h-8 text-[10px] font-black uppercase text-amber-600 py-0 text-center">Pending</TableHead>
+                                        <TableHead className="h-8 text-[10px] font-black uppercase text-emerald-600 py-0 text-right pr-4">Done</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {stats.stageCounts.map((s, i) => (
+                                        <TableRow key={i} className="hover:bg-white/80 transition-colors border-b border-slate-100/50">
+                                            <TableCell className="py-2 pl-4 text-[11px] font-bold text-slate-600">{s.label}</TableCell>
+                                            <TableCell className="py-2 text-center text-[11px] font-black text-amber-600 bg-amber-50/30">{s.pending}</TableCell>
+                                            <TableCell className="py-2 text-right pr-4 text-[11px] font-black text-emerald-600 bg-emerald-50/30">{s.completed}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </ScrollArea>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+
+        {/* Live Order Tracker */}
+        <Card className="lg:col-span-12 shadow-xl border-none rounded-2xl overflow-hidden bg-white">
+            <CardHeader className="border-b pt-3 pb-5 px-8 flex flex-row items-center justify-between">
+                <div>
+                   <CardTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                     <Zap className="h-5 w-5 text-amber-500" /> Live Order Journey Tracker
+                   </CardTitle>
+                </div>
+            </CardHeader>
+            <ScrollArea className="h-[350px]">
+                <div className="p-0">
+                    <Table>
+                        <TableHeader className="bg-slate-50/50">
+                            <TableRow>
+                                <TableHead className="pl-8 font-bold text-slate-600">DO Number</TableHead>
+                                <TableHead className="font-bold text-slate-600">Current Stage</TableHead>
+                                <TableHead className="font-bold text-slate-600">Progress</TableHead>
+                                <TableHead className="pr-8 text-right font-bold text-slate-600">Last Active</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stats.recentOrders.map((order, i) => {
+                                const stageIndex = STAGES.findIndex(s => s.id === order.stage)
+                                const progress = Math.round(((stageIndex + 1) / STAGES.length) * 100)
+                                return (
+                                    <TableRow key={i} className="group hover:bg-slate-50/80 transition-all border-b border-slate-50">
+                                        <TableCell className="pl-8 py-5">
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-slate-800">{order.soNumber || order.doNumber || order.orderNo}</span>
+                                                <span className="text-xs text-slate-400 font-medium">{order.customerName || "N/A"}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-2">
+                                                <div className={`h-2 w-2 rounded-full animate-pulse bg-emerald-500`} />
+                                                <span className="font-semibold text-slate-700">{order.stage}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="w-[200px]">
+                                            <div className="space-y-1.5">
+                                                <div className="flex justify-between items-center text-[10px] uppercase font-bold text-slate-500">
+                                                    <span>{progress}% Completed</span>
+                                                </div>
+                                                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                                                    <div 
+                                                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-1000"
+                                                        style={{ width: `${progress}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="pr-8 text-right">
+                                            <span className="text-sm font-medium text-slate-500">
+                                                {formatTime(order.timestamp || order.date)}
+                                            </span>
+                                        </TableCell>
+                                    </TableRow>
+                                )
+                            })}
+                            {stats.recentOrders.length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="text-center py-20 text-slate-400 font-medium">
+                                        No active orders found
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            </ScrollArea>
+        </Card>
+
+
+        {/* Today's Activity Snapshot & Charts */}
+        <div className="lg:col-span-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            {/* Snapshot */}
+            <Card className="shadow-xl border-none rounded-2xl overflow-hidden bg-white/40 backdrop-blur-md border border-white/20">
+                <CardHeader className="py-6 px-8">
+                    <CardTitle className="text-xl font-bold flex items-center gap-2">
+                        <Calendar className="h-5 w-5 text-primary" /> Today's Activity Snapshot
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="p-8 pt-0">
+                    <div className="grid grid-cols-2 gap-4">
+                        <ActivitySmallBox label="Created" count={stats.createdToday} icon={Plus} color="blue" />
+                        <ActivitySmallBox label="Dispatched" count={stats.dispatchedToday} icon={Send} color="amber" />
+                        <ActivitySmallBox label="Invoiced" count={stats.invoicedToday} icon={FileText} color="purple" />
+                        <ActivitySmallBox label="Delivered" count={stats.deliveredToday} icon={CheckCircle2} color="emerald" />
+                    </div>
+                    
+
+                </CardContent>
+            </Card>
+
+            {/* Performance Charts */}
+            <Card className="shadow-xl border-none rounded-2xl overflow-hidden bg-white">
+                <CardHeader className="py-6 px-8 flex flex-row items-center justify-between">
+                    <CardTitle className="text-xl font-bold flex items-center gap-2">
+                        <BarChart3 className="h-5 w-5 text-primary" /> Weekly View
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 h-[250px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={stats.timelineData} margin={{ left: 25, right: 25, top: 10, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis 
+                                dataKey="name" 
+                                axisLine={false} 
+                                tickLine={false} 
+                                tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 600}} 
+                                dy={10}
+                                interval={0}
+                                padding={{ left: 10, right: 10 }}
+                            />
+                            <YAxis hide domain={[0, 'auto']} />
+                            <Tooltip 
+                                contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold'}}
+                            />
+                            <Area 
+                                type="monotone" 
+                                dataKey="count" 
+                                stroke="#3b82f6" 
+                                strokeWidth={4}
+                                fillOpacity={1} 
+                                fill="url(#colorCount)" 
+                                animationDuration={2000}
+                             />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+
         </div>
 
       </div>
+
+      {/* Pending Orders List Popup */}
+      <Dialog open={isPendingDialogOpen} onOpenChange={setIsPendingDialogOpen}>
+        <DialogContent className="max-w-[750px] p-0 overflow-hidden rounded-3xl border border-blue-100 shadow-2xl bg-white">
+            <DialogHeader className="p-6 pb-4 flex flex-row items-center justify-between border-b border-blue-50 bg-slate-50/30">
+                <div className="space-y-1">
+                    <DialogTitle className="text-xl font-black text-slate-900 flex items-center gap-3 tracking-tight">
+                        <div className="p-2 bg-primary rounded-xl shadow-lg shadow-primary/20">
+                            <Activity className="h-4 w-4 text-white" />
+                        </div>
+                        Pending Orders
+                    </DialogTitle>
+                </div>
+                <div className="flex items-center gap-4 mr-4">
+                    <div className="px-4 py-2 rounded-2xl bg-blue-50/50 border border-blue-100/50 flex items-center gap-3">
+                         <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest leading-none">Total Active</span>
+                            <span className="text-lg font-black text-primary leading-none mt-1">{stats.pendingOrdersList.length}</span>
+                         </div>
+                         <Package className="h-4 w-4 text-primary/60" />
+                    </div>
+                </div>
+            </DialogHeader>
+
+            <div className="p-0">
+                <ScrollArea className="h-[350px]">
+                    <div className="w-full">
+                        <Table>
+                            <TableHeader className="bg-blue-50/30 sticky top-0 z-10 backdrop-blur-sm">
+                                <TableRow className="border-b border-blue-100/30">
+                                    <TableHead className="pl-6 py-3 text-[9px] font-black uppercase text-blue-600/60 tracking-wider w-1/3">Order Number</TableHead>
+                                    <TableHead className="py-3 text-[9px] font-black uppercase text-blue-600/60 tracking-wider w-1/3 text-center">Customer Name</TableHead>
+                                    <TableHead className="pr-6 py-3 text-[9px] font-black uppercase text-blue-600/60 tracking-wider text-right w-1/3">Current Stage</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stats.pendingOrdersList.map((order: any, i: number) => {
+                                    const stageInfo = STAGES.find(s => s.id === order.stage) || STAGES[0]
+                                    // Priorities SO Number for consistent format
+                                    const displayOrderNo = order.soNumber || order.doNumber || order.orderNo || "N/A"
+                                    
+                                    return (
+                                        <TableRow 
+                                            key={i} 
+                                            className="group hover:bg-blue-50/20 transition-all border-b border-slate-50/50 cursor-pointer"
+                                            onClick={() => {
+                                                const stageUrl = STAGES.find(s => s.id === order.stage)?.url || "/"
+                                                router.push(stageUrl)
+                                                setIsPendingDialogOpen(false)
+                                            }}
+                                        >
+                                            <TableCell className="pl-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="font-extrabold text-slate-950 text-[13px] tracking-tight group-hover:text-primary transition-colors">{displayOrderNo}</span>
+                                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Registered Order</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="py-4 text-center">
+                                                <span className="text-[13px] text-slate-700 font-bold tracking-tight">{order.customerName || "External Client"}</span>
+                                            </TableCell>
+                                            <TableCell className="pr-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${stageInfo.color.replace('text-', 'bg-')} shadow-[0_0_6px_rgba(59,130,246,0.2)]`} />
+                                                    <span className={`${stageInfo.color} font-black text-[9px] uppercase tracking-wider`}>
+                                                        {order.stage}
+                                                    </span>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )
+                                })}
+                                {stats.pendingOrdersList.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="text-center py-20">
+                                            <div className="flex flex-col items-center gap-3 opacity-20">
+                                                <Package className="h-10 w-10 text-blue-200" />
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No Active Orders</p>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </ScrollArea>
+            </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className="flex items-center justify-center pt-12 border-t border-slate-100 opacity-100">
+           <p className="text-[10px] font-black text-slate-1000 uppercase tracking-[0.5em] hover:text-primary transition-colors cursor-default">
+             Powered by Botivate
+           </p>
+      </div>
+
     </div>
   )
 }
 
-// --- Components ---
+// --- Sub-components ---
 
-function MetricCard({ title, value, icon: Icon, highlight = false, alert = false }: any) {
-   return (
-      <Card className="shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 border-b-[6px] rounded-2xl hover:shadow-[0_20px_50px_rgb(0,0,0,0.1)] hover:-translate-y-2 hover:border-b-primary/50 transition-all duration-300 cursor-default group relative overflow-hidden bg-gradient-to-br from-white to-slate-50/50">
-          <div className="absolute inset-x-0 bottom-0 h-1.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity blur-sm" />
-         <CardContent className="p-5 md:p-6 relative z-10">
-            <div className="flex items-center justify-between space-y-0 pb-6">
-               <p className="text-sm uppercase tracking-wider font-bold text-slate-500 group-hover:text-primary transition-colors">{title}</p>
-               <div className={`p-3 rounded-xl shadow-sm border-b-[3px] ${alert ? 'bg-red-50 text-red-600 border-red-100' : 'bg-white text-slate-600 border-slate-100 group-hover:bg-primary group-hover:text-white group-hover:border-primary/50 group-hover:shadow-lg'} transition-all duration-300 group-hover:scale-110`}>
-                 <Icon className="h-6 w-6" />
-               </div>
-            </div>
-            <div className="flex items-baseline gap-3">
-               <div className={`text-4xl font-extrabold tracking-tight ${alert ? 'text-red-700' : 'text-slate-900'}`}>{value}</div>
-               {highlight && (
-                   <span className="text-sm text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full flex items-center">
-                      <TrendingUp className="h-3 w-3 mr-1" /> +4.2%
-                   </span>
-               )}
-            </div>
-         </CardContent>
-      </Card>
-   )
+function KPIBox({ title, value, icon: Icon, color, trend, active = false, alert = false, onClick }: any) {
+    const colorMap: any = {
+        indigo: "text-indigo-600 bg-indigo-50/50 border-indigo-100",
+        amber: "text-amber-600 bg-amber-50/50 border-amber-100",
+        emerald: "text-emerald-600 bg-emerald-50/50 border-emerald-100",
+        rose: "text-rose-600 bg-rose-50/50 border-rose-100",
+        slate: "text-slate-600 bg-slate-50/50 border-slate-100"
+    }
+
+    return (
+        <Card 
+            onClick={onClick}
+            className={`group relative overflow-hidden border border-slate-200 shadow-sm rounded-2xl transition-all duration-300 hover:shadow-xl hover:border-primary/20 cursor-pointer bg-white/50 backdrop-blur-sm ${active ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+        >
+            <CardContent className="p-4">
+                <div className="flex justify-between items-start mb-3">
+                    <div className={`p-2.5 rounded-xl ${colorMap[color]} border transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-3`}>
+                        <Icon className="h-5 w-5" />
+                    </div>
+                    <div className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${alert ? 'bg-rose-500 text-white animate-pulse' : 'bg-slate-100 text-slate-500'}`}>
+                        {trend}
+                    </div>
+                </div>
+                <div className="space-y-1">
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none">{value}</h3>
+                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 group-hover:text-primary transition-colors">{title}</p>
+                </div>
+                
+                {/* Subtle Background Accent */}
+                <div className={`absolute -right-4 -bottom-4 w-24 h-24 rounded-full opacity-[0.03] group-hover:opacity-[0.08] transition-opacity duration-500 ${colorMap[color].split(' ')[1]}`} />
+            </CardContent>
+        </Card>
+    )
 }
 
-function StatusBadge({ status }: { status: string }) {
-   if (status === "Completed" || status === "Approved") {
-      return <Badge variant="outline" className="px-3 py-1 text-sm font-medium text-emerald-700 bg-emerald-50 border-emerald-200">Approved</Badge>
-   } 
-   if (status === "Rejected" || status === "Damaged") {
-      return <Badge variant="outline" className="px-3 py-1 text-sm font-medium text-red-700 bg-red-50 border-red-200">{status}</Badge>
-   }
-   return <Badge variant="secondary" className="px-3 py-1 text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200">{status}</Badge>
+function StageCard({ stage, totalOrders, onClick }: any) {
+    const percentage = totalOrders > 0 ? Math.round((stage.count / totalOrders) * 100) : 0
+    const pendingCount = stage.count
+    const successCount = stage.completed
+    const grandTotal = pendingCount + successCount
+
+    return (
+        <div 
+            onClick={onClick}
+            className="flex flex-col p-4 rounded-2xl border-2 border-slate-50 bg-white hover:border-primary/20 hover:shadow-xl transition-all duration-300 group cursor-pointer relative overflow-hidden active:scale-95 h-full justify-between"
+        >
+            <div className="flex justify-between items-start mb-2">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 group-hover:scale-110 ${stage.bg} ${stage.color} shadow-sm`}>
+                    <stage.icon className="h-6 w-6" />
+                </div>
+                {stage.overdue > 0 && (
+                    <Badge variant="destructive" className="rounded-full px-2 py-0.5 h-6 text-[10px] flex items-center gap-1 animate-pulse">
+                         <AlertCircle className="h-3 w-3" /> {stage.overdue}
+                    </Badge>
+                )}
+            </div>
+            
+            <div className="mb-2 relative z-10 flex flex-col items-center text-center space-y-2">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400 group-hover:text-primary/80 transition-colors w-full">{stage.label}</p>
+                <div className="flex items-center justify-center">
+                    <h3 className="text-4xl font-black text-slate-800 tracking-tighter">
+                        {stage.breakdown ? stage.breakdown.total : grandTotal}
+                    </h3>
+                </div>
+            </div>
+
+            <div className="mt-auto space-y-2">
+                <div className="flex justify-around items-center bg-slate-50 rounded-lg p-2 border border-slate-100">
+                    {stage.breakdown ? (
+                        <>
+                             <div className="flex flex-col items-center">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">{stage.breakdown.label1}</span>
+                                <span className="text-sm font-black text-indigo-600">{stage.breakdown.value1}</span>
+                             </div>
+                             <div className="h-6 w-px bg-slate-200"></div>
+                             <div className="flex flex-col items-center">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">{stage.breakdown.label2}</span>
+                                <span className="text-sm font-black text-blue-600">{stage.breakdown.value2}</span>
+                             </div>
+                        </>
+                    ) : (
+                        <>
+                             <div className="flex flex-col items-center">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Success</span>
+                                <span className="text-sm font-black text-emerald-500">{successCount}</span>
+                             </div>
+                             <div className="h-6 w-px bg-slate-200"></div>
+                             <div className="flex flex-col items-center">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Pending</span>
+                                <span className="text-sm font-black text-amber-500">{pendingCount}</span>
+                             </div>
+                        </>
+                    )}
+                </div>
+
+            </div>
+        </div>
+    )
 }
+
+function ActivitySmallBox({ label, count, icon: Icon, color }: any) {
+    const colors: any = {
+        blue: "text-blue-600 bg-blue-50",
+        amber: "text-amber-600 bg-amber-50",
+        purple: "text-purple-600 bg-purple-50",
+        emerald: "text-emerald-600 bg-emerald-50"
+    }
+
+    return (
+        <div className="flex items-center gap-4 p-4 rounded-2xl bg-white border border-slate-50 shadow-sm hover:shadow-md transition-all cursor-default group">
+            <div className={`h-10 w-10 flex items-center justify-center rounded-xl shadow-inner group-hover:scale-110 transition-transform ${colors[color]}`}>
+                <Icon className="h-5 w-5" />
+            </div>
+            <div>
+                <p className="text-xl font-black text-slate-800">{count}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+            </div>
+        </div>
+    )
+}
+
+// --- Helpers ---
+
+const formatTime = (isoString?: string) => {
+    if (!isoString) return "N/A"
+    const date = new Date(isoString)
+    const diff = (new Date().getTime() - date.getTime()) / 60000 // minutes
+    
+    if (diff < 1) return "Just now"
+    if (diff < 60) return `${Math.floor(diff)}m ago`
+    if (diff < 1440) return `${Math.floor(diff/60)}h ago`
+    return date.toLocaleDateString()
+}
+
+const calculateDelay = (isoString?: string) => {
+    if (!isoString) return "0h"
+    const date = new Date(isoString)
+    const hours = (new Date().getTime() - date.getTime()) / 3600000
+    if (hours < 1) return `${Math.floor(hours * 60)}m`
+    return `${Math.floor(hours)}h`
+}
+
+import { Plus } from "lucide-react"

@@ -35,14 +35,14 @@ export default function PreApprovalPage() {
   const { toast } = useToast()
   const router = useRouter()
   const PAGE_COLUMNS = [
-    { id: "soNo", label: "SO No." },
+    { id: "soNo", label: "DO No." },
     { id: "deliveryPurpose", label: "Order Type (Delivery Purpose)" },
     { id: "startDate", label: "Start Date" },
     { id: "endDate", label: "End Date" },
     { id: "deliveryDate", label: "Delivery Date" },
     { id: "orderType", label: "Order Type" },
     { id: "customerType", label: "Customer Type" },
-    { id: "partySoDate", label: "Party SO Date" },
+    { id: "partySoDate", label: "Party DO Date" },
     { id: "customerName", label: "Customer Name" },
     { id: "oilType", label: "Oil Type" },
     { id: "ratePer15Kg", label: "Rate Per 15 kg" },
@@ -58,7 +58,7 @@ export default function PreApprovalPage() {
     { id: "advanceAmount", label: "Advance Amount" },
     { id: "isBroker", label: "Is this order Through Broker" },
     { id: "brokerName", label: "Broker Name (If Order Through Broker)" },
-    { id: "uploadSo", label: "Upload SO." },
+    { id: "uploadSo", label: "Upload DO." },
   ]
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
@@ -317,7 +317,7 @@ export default function PreApprovalPage() {
                    deliveryPurpose: rawOrder.orderPurpose || "Week On Week",
                    customerType: rawOrder.customerType || "Existing",
                    orderType: rawOrder.orderType || "Regular",
-                   soNo: rawOrder.soNumber || "SO-882",
+                   soNo: rawOrder.soNumber || "DO-882",
                    partySoDate: rawOrder.soDate || "2024-03-21",
                    customerName: rawOrder.customerName || "Acme Corp",
                    // Handle new date fields

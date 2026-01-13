@@ -27,14 +27,14 @@ export default function ActualDispatchPage() {
     { id: "status", label: "Status" },
 
     // Requested Options
-    { id: "soNo", label: "SO No." },
+    { id: "soNo", label: "DO No." },
     { id: "deliveryPurpose", label: "Order Type (Delivery Purpose)" },
     { id: "startDate", label: "Start Date" },
     { id: "endDate", label: "End Date" },
     { id: "deliveryDate", label: "Delivery Date" },
     { id: "orderType", label: "Order Type" },
     { id: "customerType", label: "Customer Type" },
-    { id: "partySoDate", label: "Party SO Date" },
+    { id: "partySoDate", label: "Party DO Date" },
     { id: "oilType", label: "Oil Type" },
     { id: "ratePer15Kg", label: "Rate Per 15 kg" }, 
     { id: "ratePerLtr", label: "Rate Per Ltr." }, // Aggregated
@@ -48,7 +48,7 @@ export default function ActualDispatchPage() {
     { id: "advanceAmount", label: "Advance Amount" },
     { id: "isBroker", label: "Is this order Through Broker" },
     { id: "brokerName", label: "Broker Name (If Order Through Broker)" },
-    { id: "uploadSo", label: "Upload SO" },
+    { id: "uploadSo", label: "Upload DO" },
     { id: "skuName", label: "SKU Name" },
     { id: "approvalQty", label: "Approval Qty" },
     { id: "skuRates", label: "Take Required Rates of Each Item" },
@@ -336,7 +336,7 @@ export default function ActualDispatchPage() {
                        advanceAmount: order.advanceAmount || "—",
                        isBroker: order.isBrokerOrder || "—",
                        brokerName: order.brokerName || "—",
-                       uploadSo: "so_document.pdf",
+                       uploadSo: "do_document.pdf",
                        
                        skuName: skuNames,
                        approvalQty: approvalQtys,
