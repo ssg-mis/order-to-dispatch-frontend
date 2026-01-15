@@ -38,6 +38,7 @@ export default function ActualDispatchPage() {
     { id: "oilType", label: "Oil Type" },
     { id: "ratePer15Kg", label: "Rate Per 15 kg" }, 
     { id: "ratePerLtr", label: "Rate Per Ltr." }, // Aggregated
+    { id: "rate", label: "Rate" },
     { id: "totalWithGst", label: "Total Amount with GST" },
     { id: "transportType", label: "Type of Transporting" },
     { id: "contactPerson", label: "Customer Contact Person Name" },
@@ -383,6 +384,7 @@ export default function ActualDispatchPage() {
                        customerName: order.customerName || "—",
                        qtyToDispatch: qtyVal,
                        deliveryFrom: deliveryFromDisplay,
+                       rate: p?.rate || "—",
                        status: "Pending Confirmation",
 
                        soNo: order.soNumber || "—",

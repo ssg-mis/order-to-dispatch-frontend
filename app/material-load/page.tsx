@@ -350,9 +350,9 @@ export default function MaterialLoadPage() {
                   <DialogDescription className="text-slate-500 mt-1.5">Enter common loading details for all selected items.</DialogDescription>
                 </DialogHeader>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 shadow-sm mt-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm mt-4">
                     <Label className="text-[10px] font-bold uppercase tracking-wider text-blue-600/70 block px-1 mb-3">Selected Items ({selectedItems.length})</Label>
-                    <div className="max-h-[200px] overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pr-2 scrollbar-hide">
+                    <div className="max-h-[200px] overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 pr-2 scrollbar-hide">
                         {selectedItems.map((item, idx) => (
                             <div key={idx} className="bg-white p-3 border border-slate-200 rounded-xl shadow-sm flex flex-col gap-1.5 relative overflow-hidden group hover:border-blue-200 transition-all">
                                 <div className="absolute top-0 right-0 py-0.5 px-2 bg-slate-50 border-l border-b border-slate-100 rounded-bl-lg">

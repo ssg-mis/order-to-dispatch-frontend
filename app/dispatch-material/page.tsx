@@ -52,6 +52,7 @@ export default function DispatchMaterialPage() {
     { id: "oilType", label: "Oil Type" },
     { id: "ratePer15Kg", label: "Rate Per 15 kg" },
     { id: "ratePerLtr", label: "Rate Per Ltr" },
+    { id: "rate", label: "Rate" },
     { id: "totalWithGst", label: "Total Amount with GST" },
     { id: "contactPerson", label: "Customer Contact Person Name" },
     { id: "whatsapp", label: "Customer Contact Person Whatsapp No." },
@@ -385,6 +386,7 @@ export default function DispatchMaterialPage() {
                       customerName: internalOrder.customerName,
                       productName: prodName, 
                       transportType: internalOrder.transportType || "—",
+                      rate: p?.rate || "—",
                       status: "Pending Dispatch", 
                      
                      soNo: internalOrder.soNumber || "—",

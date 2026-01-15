@@ -21,6 +21,7 @@ type ProductItem = {
   orderQty: string
   altUom: string
   altQty: string
+  rate: string
 }
 
 type PreApprovalProduct = {
@@ -85,7 +86,7 @@ export default function OrderPunchPage() {
   const router = useRouter()
 
   const [products, setProducts] = useState<ProductItem[]>([
-    { id: "1", productName: "", uom: "", orderQty: "", altUom: "", altQty: "" },
+    { id: "1", productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "" },
   ])
   const [customerType, setCustomerType] = useState<string>("")
   const [depoName, setDepoName] = useState<string>("")
@@ -336,7 +337,7 @@ export default function OrderPunchPage() {
   const addProduct = () => {
     setProducts([
       ...products,
-      { id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "" },
+      { id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "" },
     ])
   }
 
@@ -406,7 +407,7 @@ export default function OrderPunchPage() {
     setPaymentTerms("")
     setTransportType("")
     setAdvanceAmount("")
-    setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "" }])
+    setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "" }])
     setPreApprovalProducts([{ id: Math.random().toString(36).substr(2, 9), oilType: "", ratePerLtr: "", rateLtr: "" }])
     
 
@@ -757,7 +758,7 @@ export default function OrderPunchPage() {
                          <div className="absolute top-2 left-4 text-[10px] font-bold text-blue-500/80 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest">
                              Product {idx + 1}
                          </div>
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1">
+                        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 flex-1">
                           
                           <div className="space-y-1.5 flex-1">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Name</Label>
@@ -787,6 +788,17 @@ export default function OrderPunchPage() {
                               onChange={(e) => updateProduct(product.id, "orderQty", e.target.value)}
                               placeholder="0"
                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 flex-1">
+                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rate Of Material</Label>
+                             <Input
+                              type="number"
+                              value={product.rate}
+                              onChange={(e) => updateProduct(product.id, "rate", e.target.value)}
+                              placeholder="0.00"
+                              className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600"
                             />
                           </div>
 
@@ -905,8 +917,8 @@ export default function OrderPunchPage() {
                     <SelectValue placeholder="Select transport" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="self">Self</SelectItem>
-                    <SelectItem value="others">Others</SelectItem>
+                    <SelectItem value="self">FOR</SelectItem>
+                    <SelectItem value="others">EX-Depot</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

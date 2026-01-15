@@ -361,6 +361,7 @@ export default function VehicleDetailsPage() {
                       oilType: oilType,
                       ratePerLtr: rateLtr,
                       ratePer15Kg: rate15Kg,
+                      rate: p?.rate || "—",
                       transportType: order.dispatchData?.transportType || "—",
                       deliveryDate: order.deliveryDate || "—",
                       qtyToDispatch: order.dispatchData?.qtyToDispatch || "—",

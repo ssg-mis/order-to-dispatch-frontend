@@ -12,6 +12,7 @@ export const ALL_WORKFLOW_COLUMNS = [
   { id: "orderQty", label: "Order Quantity" },
   { id: "altUom", label: "Alternate UOM" },
   { id: "altQty", label: "Alternate Qty (Kg)" },
+  { id: "rate", label: "Rate" },
   { id: "oilType", label: "Oil Type" },
   { id: "ratePerLtr", label: "Rate Per Ltr" },
   { id: "ratePer15Kg", label: "Rate Per 15 kg" },

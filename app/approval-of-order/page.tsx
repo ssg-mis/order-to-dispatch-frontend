@@ -41,6 +41,7 @@ export default function CommitmentReviewPage() {
     { id: "orderQty", label: "Order Quantity" },
     { id: "altUom", label: "Alt UOM" },
     { id: "altQty", label: "Alt Qty (Kg)" },
+    { id: "rate", label: "Rate" },
     { id: "totalWithGst", label: "Total Amount with GST" },
     { id: "transportType", label: "Type of Transporting" },
     { id: "contactPerson", label: "Customer Contact Person Name" },
@@ -58,6 +59,8 @@ export default function CommitmentReviewPage() {
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
     "orderNo",
     "customerName",
+    "productName",
+    "rate",
     "status",
   ])
   
@@ -522,10 +525,10 @@ export default function CommitmentReviewPage() {
                 </DialogHeader>
 
                 {/* Selected Items Detail Section */}
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 shadow-sm mt-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm mt-4">
                     <div className="space-y-3">
                         <Label className="text-[10px] font-bold uppercase tracking-wider text-blue-600/70 block px-1">Selected Items ({selectedItems.length})</Label>
-                        <div className="max-h-[300px] overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pr-2 scrollbar-hide">
+                        <div className="max-h-[300px] overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 pr-2 scrollbar-hide">
                             {selectedItems.map((item, idx) => (
                                 <div key={idx} className="bg-white p-3 border border-slate-200 rounded-xl shadow-sm flex flex-col gap-1.5 relative overflow-hidden group hover:border-blue-200 transition-all">
                                     <div className="absolute top-0 right-0 py-0.5 px-2 bg-slate-50 border-l border-b border-slate-100 rounded-bl-lg">
@@ -672,6 +675,7 @@ export default function CommitmentReviewPage() {
                      orderQty: p?.orderQty !== undefined ? p?.orderQty : "—",
                      altUom: p?.altUom || "—",
                      altQty: p?.altQty !== undefined ? p?.altQty : "—",
+                     rate: p?.rate || "—",
 
                      // Extended Columns
                      totalWithGst: order.totalWithGst || "—",
