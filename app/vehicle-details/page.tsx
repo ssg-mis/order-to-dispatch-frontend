@@ -23,6 +23,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { Settings2, Truck } from "lucide-react"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { Checkbox } from "@/components/ui/checkbox"
+import { vehicleDetailsApi } from "@/lib/api-service"
 
 export default function VehicleDetailsPage() {
   const router = useRouter()
@@ -37,35 +38,68 @@ export default function VehicleDetailsPage() {
   const [vehicleData, setVehicleData] = useState({
     checkStatus: "",
     remarks: "",
+    fitness: "",
+    insurance: "",
+    tax_copy: "",
+    polution: "",
+    permit1: "",
+    permit2_out_state: "",
   })
 
   const [history, setHistory] = useState<any[]>([])
   const [selectedItems, setSelectedItems] = useState<any[]>([])
 
-  useEffect(() => {
-    const savedHistory = localStorage.getItem("workflowHistory")
-    if (savedHistory) {
-      const historyData = JSON.parse(savedHistory)
+  // Fetch pending vehicle details from backend
+  const fetchPendingVehicleDetails = async () => {
+    try {
+      console.log('[VEHICLE] Fetching pending vehicle details from API...');
+      const response = await vehicleDetailsApi.getPending({ limit: 1000 });
+      console.log('[VEHICLE] API Response:', response);
       
-      const completed = historyData.filter(
-        (item: any) => item.stage === "Vehicle Details" && item.status === "Completed"
-      )
-
-      const pending = historyData.filter(
-        (item: any) => item.stage === "Actual Dispatch" && item.status === "Completed"
-      )
-      setPendingOrders(pending)
-
-      const stageHistory = historyData
-        .filter((item: any) => item.stage === "Vehicle Details")
-        .map((item: any) => ({
-           ...item,
-           date: item.date || (item.timestamp ? new Date(item.timestamp).toLocaleDateString("en-GB") : "-"),
-           remarks: item.remarks || item.vehicleData?.remarks || "-"
-        }))
-      setHistory(stageHistory)
+      if (response.success && response.data.vehicleDetails) {
+        setPendingOrders(response.data.vehicleDetails);
+        console.log('[VEHICLE] Loaded', response.data.vehicleDetails.length, 'pending vehicle details');
+      }
+    } catch (error: any) {
+      console.error("[VEHICLE] Failed to fetch pending vehicle details:", error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to load pending vehicle details",
+        variant: "destructive",
+      });
+      setPendingOrders([]); // Clear on error - don't use cache
     }
-  }, [])
+  };
+
+  // Fetch vehicle details history from backend
+  const fetchVehicleDetailsHistory = async () => {
+    try {
+      const response = await vehicleDetailsApi.getHistory({ limit: 1000 });
+      
+      if (response.success && response.data.vehicleDetails) {
+        const mappedHistory = response.data.vehicleDetails.map((record: any) => ({
+          orderNo: record.so_no,
+          doNumber: record.d_sr_number,
+          customerName: record.party_name,
+          stage: "Vehicle Details",
+          status: "Completed" as const,
+          processedBy: "System",
+          timestamp: record.actual_2,
+          date: record.actual_2 ? new Date(record.actual_2).toLocaleDateString("en-GB") : "-",
+          remarks: record.remarks || "-",
+        }));
+        setHistory(mappedHistory);
+      }
+    } catch (error: any) {
+      console.error("[VEHICLE] Failed to fetch history:", error);
+      setHistory([]); // Clear on error - don't use cache
+    }
+  };
+
+  useEffect(() => {
+    fetchPendingVehicleDetails();
+    fetchVehicleDetailsHistory();
+  }, []);
 
   /* Filter logic */
   const [filterValues, setFilterValues] = useState({
@@ -77,8 +111,8 @@ export default function VehicleDetailsPage() {
 
   const filteredPendingOrders = pendingOrders.filter(order => {
       let matches = true
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) matches = false
-      const orderDateStr = order.actualDispatchData?.confirmedAt || order.timestamp
+      if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) matches = false
+      const orderDateStr = order.timestamp
       if (orderDateStr) {
           const orderDate = new Date(orderDateStr)
           if (filterValues.startDate && orderDate < new Date(filterValues.startDate)) matches = false
@@ -86,79 +120,29 @@ export default function VehicleDetailsPage() {
       }
       return matches
   })
-  // Flatten orders for table display
+  
+  // Map backend data to display format
   const displayRows = useMemo(() => {
-    const rows: any[] = []
-    const processed = new Set<string>();
-
-    filteredPendingOrders.forEach((order) => {
-      const internalOrder = order.data?.orderData || order;
-      const orderId = order.doNumber || order.orderNo;
-      
-      if (order.data?.productInfo) {
-          const p = order.data.productInfo;
-          const pName = p.productName || p.oilType;
-          const pId = p.id || pName || 'no-id';
-          const pk = `${orderId}-${pId}`;
-
-          if (processed.has(pk)) return;
-
-          // Check if THIS specific product is already in history
-          const isDone = history.some(h => 
-            (h.orderNo === orderId) && 
-            (h.data?.orderData?._product?.productName === pName || h.data?.orderData?._product?.oilType === pName)
-          );
-          if (!isDone) {
-            rows.push({ ...order, _product: p });
-            processed.add(pk);
-          }
-          return;
-      }
-
-      let products = internalOrder.products || [];
-      const preAppProducts = internalOrder.preApprovalProducts || [];
-      const allProds = products.length > 0 ? products : preAppProducts;
-
-      if (!allProds || allProds.length === 0) {
-        const pk = `${orderId}-null`;
-        if (processed.has(pk)) return;
-
-        const isDone = history.some(h => 
-            (h.orderNo === orderId) && h._product === null
-        );
-        if (!isDone) {
-          rows.push({ ...order, _product: null });
-          processed.add(pk);
-        }
-      } else {
-        allProds.forEach((prod: any) => {
-          const pName = prod.productName || prod.oilType;
-          const pId = prod.id || pName || 'no-id';
-          const pk = `${orderId}-${pId}`;
-
-          if (processed.has(pk)) return;
-
-          const isDone = history.some(h => 
-            (h.orderNo === orderId) && 
-            (h.data?.orderData?._product?.productName === pName || h.data?.orderData?._product?.oilType === pName)
-          );
-
-          if (!isDone) {
-            rows.push({ ...order, _product: prod });
-            processed.add(pk);
-          }
-        });
-      }
-    })
-    return rows
-  }, [filteredPendingOrders, history])
+    return filteredPendingOrders.map((record: any) => ({
+      id: record.id, // Keep DB ID for submission
+      doNumber: record.d_sr_number,
+      orderNo: record.so_no,
+      customerName: record.party_name,
+      productName: record.product_name,
+      qtyToDispatch: record.qty_to_be_dispatched,
+      transportType: record.type_of_transporting,
+      deliveryFrom: record.dispatch_from,
+      timestamp: record.timestamp,
+      status: "Awaiting Vehicle",
+    }))
+  }, [filteredPendingOrders])
 
   const toggleSelectItem = (item: any) => {
-    const key = `${item.doNumber || item.orderNo}-${item._product?.id || item._product?.productName || 'no-id'}`
-    const isSelected = selectedItems.some(i => `${i.doNumber || i.orderNo}-${i._product?.id || i._product?.productName || 'no-id'}` === key)
+    const key = `${item.id}`
+    const isSelected = selectedItems.some(i => i.id === item.id)
     
     if (isSelected) {
-      setSelectedItems(prev => prev.filter(i => `${i.doNumber || i.orderNo}-${i._product?.id || i._product?.productName || 'no-id'}` !== key))
+      setSelectedItems(prev => prev.filter(i => i.id !== item.id))
     } else {
       setSelectedItems(prev => [...prev, item])
     }
@@ -176,49 +160,97 @@ export default function VehicleDetailsPage() {
     if (selectedItems.length === 0) return
     setIsProcessing(true)
     try {
-      const savedHistory = localStorage.getItem("workflowHistory")
-      const historyList = savedHistory ? JSON.parse(savedHistory) : []
+      const successfulSubmissions: any[] = []
+      const failedSubmissions: any[] = []
 
-      selectedItems.forEach((item) => {
-        const historyEntry = {
-          ...item,
-          orderNo: item.orderNo || item.doNumber || "DO-XXX",
-          stage: "Vehicle Details",
-          status: "Completed",
-          processedBy: "Current User",
-          timestamp: new Date().toISOString(),
-          date: new Date().toLocaleDateString("en-GB"),
-          remarks: vehicleData.remarks || "-",
-          vehicleData: { ...vehicleData, assignedAt: new Date().toISOString() },
-          data: {
-              ...(item.data || {}),
-              orderData: {
-                  ...(item.data?.orderData || item),
-                  products: item.orderType === "regular" ? [item._product] : [],
-                  preApprovalProducts: item.orderType !== "regular" ? [item._product] : []
-              }
+      // Submit each item to backend API
+      for (const item of selectedItems) {
+        const recordId = item.id; // Use the lift_receiving_confirmation table ID
+        
+        try {
+          if (recordId) {
+            const submitData = {
+              check_status: vehicleData.checkStatus,
+              remarks: vehicleData.remarks,
+              fitness: vehicleData.fitness || "pending",
+              insurance: vehicleData.insurance || "pending",
+              tax_copy: vehicleData.tax_copy || "pending",
+              polution: vehicleData.polution || "pending",
+              permit1: vehicleData.permit1 || "pending",
+              permit2_out_state: vehicleData.permit2_out_state || "pending",
+            };
+
+            console.log('[VEHICLE] Submitting vehicle details for ID:', recordId, submitData);
+            const response = await vehicleDetailsApi.submit(recordId, submitData);
+            console.log('[VEHICLE] API Response:', response);
+            
+            if (response.success) {
+              successfulSubmissions.push({ item, response });
+            } else {
+              failedSubmissions.push({ item, error: response.message || 'Unknown error' });
+            }
+          } else {
+            console.warn('[VEHICLE] Skipping - no record ID found for:', item);
+            failedSubmissions.push({ item, error: 'No record ID found' });
           }
+        } catch (error: any) {
+          console.error('[VEHICLE] Failed to submit vehicle details:', error);
+          failedSubmissions.push({ item, error: error?.message || error?.toString() || 'Unknown error' });
         }
-        historyList.push(historyEntry)
-      })
+      }
 
-      localStorage.setItem("workflowHistory", JSON.stringify(historyList))
-      
+      // Show results
+      if (successfulSubmissions.length > 0) {
+        toast({
+          title: "Vehicle Assigned",
+          description: `${successfulSubmissions.length} vehicle assignment(s) completed successfully.`,
+        });
+
+        // Clear selections and form
+        setSelectedItems([]);
+        setVehicleData({
+          checkStatus: "",
+          remarks: "",
+          fitness: "",
+          insurance: "",
+          tax_copy: "",
+          polution: "",
+          permit1: "",
+          permit2_out_state: "",
+        });
+
+        // Refresh data from backend
+        await fetchPendingVehicleDetails();
+        await fetchVehicleDetailsHistory();
+
+        // Navigate to next stage after delay
+        setTimeout(() => {
+          router.push("/material-load")
+        }, 1500)
+      }
+
+      if (failedSubmissions.length > 0) {
+        console.error('[VEHICLE] Failed submissions:', failedSubmissions);
+        toast({
+          title: "Some Assignments Failed",
+          description: `${failedSubmissions.length} assignment(s) failed. Check console for details.`,
+          variant: "destructive",
+        })
+      }
+    } catch (error: any) {
+      console.error('[VEHICLE] Unexpected error:', error);
       toast({
-        title: "Vehicle Assigned",
-        description: `${selectedItems.length} items moved to Material Load stage.`,
-      })
-
-      setTimeout(() => {
-        router.push("/material-load")
-      }, 1500)
+        title: "Error",
+        description: error?.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
     } finally {
       setIsProcessing(false)
     }
   }
 
   /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
 
   return (
     <WorkflowStageShell
@@ -249,17 +281,17 @@ export default function VehicleDetailsPage() {
                         {selectedItems.map((item, idx) => (
                             <div key={idx} className="bg-white p-3 border border-slate-200 rounded-xl shadow-sm flex flex-col gap-1.5 relative overflow-hidden group hover:border-blue-200 transition-all">
                                 <div className="absolute top-0 right-0 py-0.5 px-2 bg-slate-50 border-l border-b border-slate-100 rounded-bl-lg">
-                                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{item.orderType || "—"}</span>
+                                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{item.doNumber || "—"}</span>
                                 </div>
                                 <div className="flex flex-col">
-                                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">DO-No: {item.doNumber || item.orderNo}</span>
+                                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">DO-No: {item.orderNo}</span>
                                    <h4 className="text-xs font-bold text-slate-800 leading-tight truncate pr-16">{item.customerName || "—"}</h4>
                                 </div>
                                 <div className="pt-2 border-t border-slate-50 mt-0.5">
                                    <div className="flex items-center gap-1.5">
                                       <div className="w-1 h-1 rounded-full bg-blue-500" />
                                       <span className="text-xs font-bold text-blue-600 truncate">
-                                        {item._product?.productName || item._product?.oilType || "—"}
+                                        {item.productName || "—"}
                                       </span>
                                    </div>
                                 </div>
@@ -345,34 +377,12 @@ export default function VehicleDetailsPage() {
             <TableBody>
               {displayRows.length > 0 ? (
                 displayRows.map((item, index) => {
-                    const order = item;
-                    const p = order._product;
-                    const rowKey = `${order.doNumber || order.orderNo}-${p?.id || p?.productName || 'no-id'}`;
+                    const rowKey = `${item.id}`;
                     
-                    const prodName = p?.productName || p?.oilType || "—";
-                    const rateLtr = p?.ratePerLtr || p?.rateLtr || order.ratePerLtr || "—";
-                    const rate15Kg = p?.ratePer15Kg || p?.rateLtr || order.rateLtr || "—";
-                    const oilType = p?.oilType || order.oilType || "—";
-
-                    const row = {
-                      orderNo: order.doNumber || order.orderNo || "DO-XXX",
-                      customerName: order.customerName || "—",
-                      productName: prodName,
-                      oilType: oilType,
-                      ratePerLtr: rateLtr,
-                      ratePer15Kg: rate15Kg,
-                      rate: p?.rate || "—",
-                      transportType: order.dispatchData?.transportType || "—",
-                      deliveryDate: order.deliveryDate || "—",
-                      qtyToDispatch: order.dispatchData?.qtyToDispatch || "—",
-                      deliveryFrom: order.deliveryData?.deliveryFrom || "—",
-                      status: "Awaiting Vehicle",
-                    }
-
-                   return (
-                   <TableRow key={rowKey} className={selectedItems.some(i => `${i.doNumber || i.orderNo}-${i._product?.id || i._product?.productName || 'no-id'}` === rowKey) ? "bg-purple-50/50" : ""}>
+                    return (
+                   <TableRow key={rowKey} className={selectedItems.some(i => i.id === item.id) ? "bg-purple-50/50" : ""}>
                       <TableCell className="text-center">
-                        <Checkbox checked={selectedItems.some(i => `${i.doNumber || i.orderNo}-${i._product?.id || i._product?.productName || 'no-id'}` === rowKey)} onCheckedChange={() => toggleSelectItem(item)} />
+                        <Checkbox checked={selectedItems.some(i => i.id === item.id)} onCheckedChange={() => toggleSelectItem(item)} />
                       </TableCell>
                       {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
                         <TableCell key={col.id} className="whitespace-nowrap text-center text-xs">
@@ -380,7 +390,7 @@ export default function VehicleDetailsPage() {
                              <div className="flex justify-center">
                                 <Badge className="bg-purple-100 text-purple-700">Awaiting Vehicle</Badge>
                              </div>
-                          ) : (row as any)[col.id] || "—"}
+                          ) : (item as any)[col.id] || "—"}
                         </TableCell>
                       ))}
                    </TableRow>

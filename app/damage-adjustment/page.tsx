@@ -18,10 +18,11 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Textarea } from "@/components/ui/textarea"
 import { Upload, Settings2 } from "lucide-react"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
+import { damageAdjustmentApi } from "@/lib/api-service"
 
 export default function DamageAdjustmentPage() {
   const router = useRouter()
@@ -35,76 +36,98 @@ export default function DamageAdjustmentPage() {
     "status",
   ])
   const [adjustmentData, setAdjustmentData] = useState({
-    status: "",
     creditNoteDate: "",
     creditNoteNo: "",
-    creditNoteCopy: null as File | null,
-    creditQty: "",
-    creditAmount: "",
+    creditNoteQty: "",
+    creditNoteAmount: "",
     netBalance: "",
+    creditNoteCopy: null as File | null,
+    remarks: "",
   })
 
-  useEffect(() => {
-    const savedHistory = localStorage.getItem("workflowHistory")
-    if (savedHistory) {
-      const history = JSON.parse(savedHistory)
-      
-      const completed = history.filter(
-        (item: any) => item.stage === "Damage Adjustment" && item.status === "Adjusted"
-      )
-      setHistoryOrders(completed)
-
-      const pending = history.filter(
-        (item: any) => item.stage === "Material Receipt" && item.status === "Damaged"
-      ).filter(
-        (item: any) => 
-          !completed.some((completedItem: any) => 
-            (completedItem.doNumber && item.doNumber && completedItem.doNumber === item.doNumber) ||
-            (completedItem.orderNo && item.orderNo && completedItem.orderNo === item.orderNo)
-          )
-      )
-      setPendingOrders(pending)
+  // Fetch Pending
+  const fetchPending = async () => {
+    try {
+      const response = await damageAdjustmentApi.getPending({ limit: 1000 });
+      if (response.success && response.data.orders) {
+        setPendingOrders(response.data.orders);
+      }
+    } catch (error) {
+      console.error("Failed to fetch pending damage adjustments:", error);
     }
+  }
+
+  // Fetch History
+  const fetchHistory = async () => {
+    try {
+        const response = await damageAdjustmentApi.getHistory({ limit: 1000 });
+        if (response.success && response.data.orders) {
+          setHistoryOrders(response.data.orders);
+        }
+    } catch (error) {
+        console.error("Failed to fetch history:", error);
+    }
+  }
+
+  useEffect(() => {
+    fetchPending();
+    fetchHistory();
   }, [])
 
   const handleSubmit = async (order: any) => {
     setIsProcessing(true)
     try {
-      const updatedOrder = {
-        ...order,
-        stage: "Damage Adjustment",
-        status: "Adjusted",
-        adjustmentData: {
-          ...adjustmentData,
-          adjustedAt: new Date().toISOString(),
-        },
+      const submitData = {
+        credit_note_date: adjustmentData.creditNoteDate,
+        credit_note_no: adjustmentData.creditNoteNo,
+        credit_note_qty: adjustmentData.creditNoteQty,
+        credit_note_amount: adjustmentData.creditNoteAmount,
+        net_banalce: adjustmentData.netBalance,
+        credit_note_copy: adjustmentData.creditNoteCopy ? adjustmentData.creditNoteCopy.name : null,
+        status_2: "Closed",
+        remarks_3: adjustmentData.remarks || null // Using remarks_3 for consistency if needed, though status_2 is main
+      };
+
+      const response = await damageAdjustmentApi.submit(order.id, submitData);
+
+      if (response.success) {
+        toast({
+          title: "Adjustment Processed",
+          description: "Order workflow completed successfully!",
+        })
+        
+        await fetchPending();
+        await fetchHistory();
+        
+        // Reset form
+        setAdjustmentData({
+            creditNoteDate: "",
+            creditNoteNo: "",
+            creditNoteQty: "",
+            creditNoteAmount: "",
+            netBalance: "",
+            creditNoteCopy: null,
+            remarks: "",
+        });
+
+      } else {
+         throw new Error(response.message || "Failed to submit");
       }
 
-      const savedHistory = localStorage.getItem("workflowHistory")
-      const history = savedHistory ? JSON.parse(savedHistory) : []
-      history.push(updatedOrder)
-      localStorage.setItem("workflowHistory", JSON.stringify(history))
-
-      // Update local state immediately
-      const newPending = pendingOrders.filter(o => o.doNumber !== order.doNumber)
-      setPendingOrders(newPending)
-      setHistoryOrders((prev) => [...prev, updatedOrder])
-
+    } catch (error: any) {
+      console.error("Submit error:", error);
       toast({
-        title: "Damage Adjusted",
-        description: "Order adjustment completed and saved to history.",
+        title: "Error",
+        description: error.message || "Something went wrong",
+        variant: "destructive",
       })
-
-      setTimeout(() => {
-        router.push("/")
-      }, 1500)
     } finally {
       setIsProcessing(false)
     }
   }
 
   /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
       status: "",
@@ -113,16 +136,14 @@ export default function DamageAdjustmentPage() {
       partyName: ""
   })
 
+  // Filter logic...
   const filteredPendingOrders = pendingOrders.filter(order => {
       let matches = true
-      
-      // Filter by Party Name
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
-          matches = false
-      }
+      // Party Name
+      if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) matches = false
 
-      // Filter by Date Range
-      const orderDateStr = order.adjustmentData?.adjustedAt || order.receiptData?.receivedAt || order.timestamp
+      // Date Range
+      const orderDateStr = order.timestamp || order.actual_9
       if (orderDateStr) {
           const orderDate = new Date(orderDateStr)
           if (filterValues.startDate) {
@@ -136,25 +157,6 @@ export default function DamageAdjustmentPage() {
               if (orderDate > end) matches = false
           }
       }
-
-      // Filter by Status (On Time / Expire)
-      if (filterValues.status) {
-          const today = new Date()
-          today.setHours(0, 0, 0, 0)
-          const targetDateStr = order.deliveryDate || order.timestamp
-          if (targetDateStr) {
-             const targetDate = new Date(targetDateStr)
-             
-             if (filterValues.status === "expire") {
-                 if (targetDate < today) matches = true
-                 else matches = false
-             } else if (filterValues.status === "on-time") {
-                 if (targetDate >= today) matches = true
-                 else matches = false
-             }
-          }
-      }
-
       return matches
   })
 
@@ -164,14 +166,14 @@ export default function DamageAdjustmentPage() {
       description="Process credit notes and adjustments for damaged goods."
       pendingCount={filteredPendingOrders.length}
       historyData={historyOrders.map((order) => ({
-        date: new Date(order.adjustmentData?.adjustedAt || new Date()).toLocaleDateString("en-GB"),
+        date: order.actual_9 ? new Date(order.actual_9).toLocaleDateString("en-GB") : "-",
         stage: "Damage Adjustment",
-        status: "Adjusted",
-        remarks: `Note: ${order.adjustmentData?.creditNoteNo || "-"}`,
+        status: order.status_2 || "Closed",
+        remarks: order.credit_note_no ? `CN: ${order.credit_note_no}` : "Adjusted",
       }))}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
-      remarksColName="Credit Note"
+      remarksColName="Adjustment"
     >
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
@@ -207,7 +209,7 @@ export default function DamageAdjustmentPage() {
               <TableRow>
                 <TableHead className="w-[80px]">Action</TableHead>
                 {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                  <TableHead key={col.id} className="whitespace-nowrap">
+                  <TableHead key={col.id} className="whitespace-nowrap text-center">
                     {col.label}
                   </TableHead>
                 ))}
@@ -215,73 +217,40 @@ export default function DamageAdjustmentPage() {
             </TableHeader>
             <TableBody>
               {filteredPendingOrders.length > 0 ? (
-                    filteredPendingOrders.map((order, index) => {
-                        const internalOrder = order.data?.orderData || order;
-                        const preApproval = order.data?.preApprovalData || internalOrder.preApprovalData || {};
-
-                        const row = {
-                          orderNo: internalOrder.doNumber || internalOrder.orderNo || "DO-XXX",
-                          deliveryPurpose: internalOrder.orderPurpose || "—",
-                          customerType: internalOrder.customerType || "—",
-                          orderType: internalOrder.orderType || "—",
-                          soNo: internalOrder.soNumber || "—",
-                          partySoDate: internalOrder.soDate || "—",
-                          customerName: internalOrder.customerName || "—",
-                          itemConfirm: internalOrder.itemConfirm || "—",
-                          productName: internalOrder.products?.map((p: any) => p.productName).join(", ") || "",
-                          uom: internalOrder.products?.map((p: any) => p.uom).join(", ") || "",
-                          orderQty: internalOrder.products?.map((p: any) => p.orderQty).join(", ") || "",
-                          altUom: internalOrder.products?.map((p: any) => p.altUom).join(", ") || "",
-                          altQty: internalOrder.products?.map((p: any) => p.altQty).join(", ") || "",
-                          oilType: internalOrder.oilType || "—",
-                          ratePerLtr: internalOrder.ratePerLtr || "—",
-                          rateOfMaterial: internalOrder.rateMaterial || "—",
-                          totalWithGst: internalOrder.totalWithGst || "—",
-                          transportType: internalOrder.dispatchData?.transportType || "—",
-                          uploadSo: "so_document.pdf",
-                          contactPerson: internalOrder.contactPerson || "—",
-                          whatsapp: internalOrder.whatsappNo || "—",
-                          address: internalOrder.customerAddress || "—",
-                          paymentTerms: internalOrder.paymentTerms || "—",
-                          advanceTaken: internalOrder.advancePaymentTaken || "—",
-                          advanceAmount: internalOrder.advanceAmount || "—",
-                          isBroker: internalOrder.isBrokerOrder || "—",
-                          brokerName: internalOrder.brokerName || "—",
-                          deliveryDate: internalOrder.deliveryDate || "—",
-                          qtyToDispatch: internalOrder.dispatchData?.qtyToDispatch || "—",
-                          deliveryFrom: internalOrder.deliveryData?.deliveryFrom || "—",
-                          status: "Damaged", // Special handling for badge
-                        }
+                filteredPendingOrders.map((order, index) => {
+                   const row: any = {
+                       orderNo: order.so_no || "—",
+                       doNumber: order.d_sr_number || "—",
+                       customerName: order.party_name || "—",
+                       productName: order.product_name || "—",
+                       qtyToDispatch: order.qty_to_be_dispatched || "—",
+                       deliveryFrom: order.dispatch_from || "—",
+                       transportType: order.type_of_transporting || "—",
+                       status: "Pending Adjustment",
+                       invoiceNo: order.invoice_no || "—",
+                       invoiceDate: order.invoice_date || "—",
+                       billAmount: order.bill_amount || "—",
+                   }
 
                    return (
                    <TableRow key={index}>
-                     <TableCell>
+                     <TableCell className="text-center">
                        <Dialog>
                          <DialogTrigger asChild>
-                           <Button size="sm">Adjust</Button>
+                           <Button size="sm">Process Adjustment</Button>
                          </DialogTrigger>
                          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                            <DialogHeader>
-                             <DialogTitle>Damage Adjustment: {order.orderNo}</DialogTitle>
+                             <DialogTitle>Damage Adjustment: {row.doNumber}</DialogTitle>
                            </DialogHeader>
                            <div className="space-y-4 py-4">
-                             <div className="space-y-2">
-                               <Label>Status</Label>
-                               <Select
-                                 value={adjustmentData.status}
-                                 onValueChange={(value) => setAdjustmentData({ ...adjustmentData, status: value })}
-                               >
-                                 <SelectTrigger>
-                                   <SelectValue placeholder="Select status" />
-                                 </SelectTrigger>
-                                 <SelectContent>
-                                   <SelectItem value="credit_note">Credit Note Issued</SelectItem>
-                                   <SelectItem value="replacement">Replacement Sent</SelectItem>
-                                   <SelectItem value="waived">Amount Waived</SelectItem>
-                                   <SelectItem value="pending">Pending Investigation</SelectItem>
-                                 </SelectContent>
-                               </Select>
+                             <div className="bg-red-50 p-4 rounded-md text-sm text-red-800 mb-4">
+                               <p className="font-medium">Reported Damage:</p>
+                               <p>SKU: {order.sku || "N/A"}</p>
+                               <p>Qty: {order.damage_qty || "N/A"}</p>
+                               <p>Status: {order.damage_status || "Damaged"}</p>
                              </div>
+
                              <div className="grid grid-cols-2 gap-4">
                                <div className="space-y-2">
                                  <Label>Credit Note Date</Label>
@@ -296,80 +265,94 @@ export default function DamageAdjustmentPage() {
                                  <Input
                                    value={adjustmentData.creditNoteNo}
                                    onChange={(e) => setAdjustmentData({ ...adjustmentData, creditNoteNo: e.target.value })}
-                                   placeholder="Enter credit note no"
+                                   placeholder="CN-XXX"
                                  />
                                </div>
                              </div>
+
+                             <div className="grid grid-cols-2 gap-4">
+                               <div className="space-y-2">
+                                 <Label>Credit Note Qty</Label>
+                                 <Input
+                                   type="number"
+                                   value={adjustmentData.creditNoteQty}
+                                   onChange={(e) => setAdjustmentData({ ...adjustmentData, creditNoteQty: e.target.value })}
+                                   placeholder="0.00"
+                                 />
+                               </div>
+                               <div className="space-y-2">
+                                 <Label>Credit Note Amount</Label>
+                                 <Input
+                                   type="number"
+                                   value={adjustmentData.creditNoteAmount}
+                                   onChange={(e) => setAdjustmentData({ ...adjustmentData, creditNoteAmount: e.target.value })}
+                                   placeholder="₹ 0.00"
+                                 />
+                               </div>
+                             </div>
+
                              <div className="space-y-2">
-                               <Label>Upload Credit Note Copy</Label>
+                               <Label>Net Balance</Label>
+                               <Input
+                                 type="number"
+                                 value={adjustmentData.netBalance}
+                                 onChange={(e) => setAdjustmentData({ ...adjustmentData, netBalance: e.target.value })}
+                                 placeholder="₹ 0.00"
+                               />
+                             </div>
+
+                             <div className="space-y-2">
+                               <Label>Credit Note Copy</Label>
                                <div className="border-2 border-dashed rounded-lg p-4 text-center">
-                                 <Input
-                                   type="file"
-                                   accept=".pdf,.jpg,.png"
-                                   onChange={(e) => {
-                                     if (e.target.files?.[0]) {
-                                       setAdjustmentData({ ...adjustmentData, creditNoteCopy: e.target.files[0] })
-                                     }
-                                   }}
-                                   className="hidden"
-                                   id="creditnote-upload"
-                                 />
-                                 <label htmlFor="creditnote-upload" className="cursor-pointer">
-                                   <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
-                                   <p className="text-sm text-muted-foreground">
-                                     {adjustmentData.creditNoteCopy ? adjustmentData.creditNoteCopy.name : "Upload credit note"}
-                                   </p>
-                                 </label>
+                                   <Input
+                                     type="file"
+                                     accept="application/pdf,image/*"
+                                     onChange={(e) => {
+                                       if (e.target.files?.[0]) {
+                                         setAdjustmentData({ ...adjustmentData, creditNoteCopy: e.target.files[0] })
+                                       }
+                                     }}
+                                     className="hidden"
+                                     id="cn-upload"
+                                   />
+                                   <label htmlFor="cn-upload" className="cursor-pointer">
+                                       <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+                                       <span className="text-xs text-muted-foreground">
+                                           {adjustmentData.creditNoteCopy ? adjustmentData.creditNoteCopy.name : "Upload Copy"}
+                                       </span>
+                                   </label>
                                </div>
                              </div>
-                             <div className="grid grid-cols-3 gap-4">
-                               <div className="space-y-2">
-                                 <Label>Credit Qty</Label>
-                                 <Input
-                                   type="number"
-                                   value={adjustmentData.creditQty}
-                                   onChange={(e) => setAdjustmentData({ ...adjustmentData, creditQty: e.target.value })}
-                                   placeholder="Qty"
-                                 />
-                               </div>
-                               <div className="space-y-2">
-                                 <Label>Credit Amount</Label>
-                                 <Input
-                                   type="number"
-                                   value={adjustmentData.creditAmount}
-                                   onChange={(e) => setAdjustmentData({ ...adjustmentData, creditAmount: e.target.value })}
-                                   placeholder="Amount"
-                                 />
-                               </div>
-                               <div className="space-y-2">
-                                 <Label>Net Balance</Label>
-                                 <Input
-                                   type="number"
-                                   value={adjustmentData.netBalance}
-                                   onChange={(e) => setAdjustmentData({ ...adjustmentData, netBalance: e.target.value })}
-                                   placeholder="Balance"
-                                 />
-                               </div>
+
+                             <div className="space-y-2">
+                               <Label>Remarks</Label>
+                               <Textarea
+                                 value={adjustmentData.remarks}
+                                 onChange={(e) => setAdjustmentData({ ...adjustmentData, remarks: e.target.value })}
+                                 placeholder="Enter remarks"
+                               />
                              </div>
                            </div>
                            <DialogFooter>
                              <Button
                                onClick={() => handleSubmit(order)}
-                               disabled={!adjustmentData.status || isProcessing}
+                               disabled={!adjustmentData.creditNoteDate || isProcessing}
                              >
-                               {isProcessing ? "Processing..." : "Submit Adjustment"}
+                               {isProcessing ? "Processing..." : "Complete Order"}
                              </Button>
                            </DialogFooter>
                          </DialogContent>
                        </Dialog>
                      </TableCell>
                      {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                       <TableCell key={col.id} className="whitespace-nowrap">
-                         {col.id === "status" ? (
-                            <Badge className="bg-red-100 text-red-700">Damaged</Badge>
-                         ) : row[col.id as keyof typeof row]}
-                       </TableCell>
-                     ))}
+                        <TableCell key={col.id} className="whitespace-nowrap text-center">
+                          {col.id === "status" ? (
+                             <div className="flex justify-center">
+                                <Badge variant="destructive">Pending Adjustment</Badge>
+                             </div>
+                          ) : row[col.id as keyof typeof row] || "—"}
+                        </TableCell>
+                      ))}
                    </TableRow>
                    )
                 })

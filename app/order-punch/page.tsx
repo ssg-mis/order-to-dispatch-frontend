@@ -94,7 +94,6 @@ export default function OrderPunchPage() {
   const [orderPurpose, setOrderPurpose] = useState<string>("")
   const [orderType, setOrderType] = useState<string>("")
   const [advancePaymentTaken, setAdvancePaymentTaken] = useState<string>("NO")
-  const [soNumber, setSoNumber] = useState<string>("")
   const [soDate, setSoDate] = useState<string>("")
   const [customerName, setCustomerName] = useState<string>("")
   const [contactPerson, setContactPerson] = useState<string>("")
@@ -120,22 +119,6 @@ export default function OrderPunchPage() {
   const [transportType, setTransportType] = useState<string>("")
   const [advanceAmount, setAdvanceAmount] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // Auto-fill SO Number on mount
-  useEffect(() => {
-    // Basic logic to simulate SO Number generation
-    const lastSO = localStorage.getItem("lastSOSequence") || "0"
-    const nextSO = parseInt(lastSO) + 1
-    // Ideally we won't increment until save, but for display we show next potential
-    setSoNumber(`DO-${String(nextSO).padStart(3, "0")}`)
-  }, [])
-
-  // Initial SO Number Logic
-  useEffect(() => {
-    const lastSO = localStorage.getItem("lastSOSequence") || "0"
-    const nextSO = parseInt(lastSO) + 1
-    setSoNumber(`DO-${String(nextSO).padStart(3, "0")}`)
-  }, [])
 
   // Customer Auto-fill Effect
   useEffect(() => {
@@ -177,53 +160,7 @@ export default function OrderPunchPage() {
     }
   }, [sameAsCustomerAddress, customerAddress])
 
-  const generateDONumber = () => {
-    const lastSequence = parseInt(localStorage.getItem("lastODSequence") || "0", 10)
-    const newSequence = lastSequence + 1
-    const doNumber = `DO-${String(newSequence).padStart(3, "0")}`
-    localStorage.setItem("lastODSequence", newSequence.toString())
-    return doNumber
-  }
 
-  const saveToLocalStorage = () => {
-    const doNumber = generateDONumber()
-    
-    // Update SO Sequence
-    const currentSOSeq = parseInt(soNumber.split("-")[1] || "0", 10)
-    const lastStored = parseInt(localStorage.getItem("lastSOSequence") || "0", 10)
-    if (currentSOSeq > lastStored) {
-       localStorage.setItem("lastSOSequence", currentSOSeq.toString())
-    }
-
-    const orderData: OrderData = {
-      doNumber,
-      customerType,
-      depoName,
-      isBrokerOrder,
-      orderPurpose,
-      orderType,
-      advancePaymentTaken,
-      soNumber,
-      soDate,
-      customerName,
-      contactPerson,
-      whatsappNo,
-      customerAddress,
-      deliveryAddress,
-      oilType,
-      rateLtr,
-      brokerName,
-      deliveryDate,
-      startDate,
-      endDate,
-      paymentTerms,
-      transportType,
-      advanceAmount,
-      products,
-      preApprovalProducts,
-    }
-    localStorage.setItem("orderData", JSON.stringify(orderData))
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -262,18 +199,71 @@ export default function OrderPunchPage() {
     setIsSubmitting(true)
 
     try {
-      // Generate common order object from form state
-      const commonOrderData = {
-          doNumber: generateDONumber(),
+      // Prepare data for backend API
+      const customerNameValue = customerType === "existing" ? (MOCK_CUSTOMERS[customerName]?.name || customerName) : customerName
+      
+      // Prepare common order data
+      const orderData: any = {
+        customer_name: customerNameValue,
+        order_type: orderType,
+        customer_type: customerType,
+        order_type_delivery_purpose: orderPurpose,
+        start_date: startDate || null,
+        end_date: endDate || null,
+        delivery_date: deliveryDate || null,
+        party_so_date: soDate || null,
+        customer_contact_person_name: contactPerson || null,
+        customer_contact_person_whatsapp_no: whatsappNo || null,
+        customer_address: customerAddress || null,
+        payment_terms: paymentTerms || null,
+        advance_payment_to_be_taken: advancePaymentTaken === "YES",
+        advance_amount: advanceAmount ? parseFloat(advanceAmount) : null,
+        is_order_through_broker: isBrokerOrder === "YES",
+        broker_name: brokerName || null,
+        type_of_transporting: transportType || null,
+        remark: null,
+      }
+
+      // Add products array for backend
+      if (orderType === "regular" && products.length > 0) {
+        orderData.products = products.map(p => ({
+          product_name: p.productName,
+          uom: p.uom || "Ltr",
+          order_quantity: p.orderQty ? parseFloat(p.orderQty) : null,
+          rate_of_material: p.rate ? parseFloat(p.rate) : null,
+          alternate_uom: p.altUom || "Kg",
+          alternate_qty_kg: p.altQty ? parseFloat(p.altQty) : null,
+        }))
+      } else if (orderType === "pre-approval" && preApprovalProducts.length > 0) {
+        orderData.products = preApprovalProducts.map(p => ({
+          product_name: p.oilType, // Using oil type as product name for pre-approval
+          oil_type: p.oilType,
+          rate_per_ltr: p.ratePerLtr ? parseFloat(p.ratePerLtr) : null,
+          rate_per_15kg: p.rateLtr ? parseFloat(p.rateLtr) : null,
+        }))
+      }
+
+      // Import API service
+      const { orderApi } = await import('@/lib/api-service')
+      
+      // Call backend API
+      const response = await orderApi.create(orderData)
+
+      if (response.success) {
+        const backendOrderNo = response.data.order_no
+
+        // Prepare order entry for localStorage (for compatibility with existing workflow)
+        const orderEntry = {
+          doNumber: backendOrderNo, // Use backend-generated order number
           customerType,
           depoName,
           isBrokerOrder,
           orderPurpose,
           orderType,
           advancePaymentTaken,
-          soNumber,
+          soNumber: backendOrderNo, // Use generated order number
           soDate,
-          customerName: customerType === "existing" ? (MOCK_CUSTOMERS[customerName]?.name || customerName) : customerName,
+          customerName: customerNameValue,
           contactPerson,
           whatsappNo,
           customerAddress,
@@ -292,43 +282,47 @@ export default function OrderPunchPage() {
              uom: p.uom || "Ltr",
              altUom: p.altUom || "Kg"
           })),
-          preApprovalProducts
-      }
-
-      // Update SO Sequence logic (moved from saveToLocalStorage to be more explicit here or keep generic helper if prefered, but local function is fine)
-      const currentSOSeq = parseInt(soNumber.split("-")[1] || "0", 10)
-      const lastStored = parseInt(localStorage.getItem("lastSOSequence") || "0", 10)
-      if (currentSOSeq > lastStored) {
-          localStorage.setItem("lastSOSequence", currentSOSeq.toString())
-      }
-
-      // Save logic based on type
-      
-      const orderEntry = {
-          ...commonOrderData,
+          preApprovalProducts,
           stage: orderType === "regular" ? "Approval Of Order" : "Pre-Approval",
           status: "Pending" as const,
           timestamp: new Date().toISOString(),
           orderType: orderType as "regular" | "pre-approval"
+        }
+
+        // Save workflow history
+        const { saveWorkflowHistory } = await import('@/lib/storage-utils')
+        saveWorkflowHistory(orderEntry)
+        
+        // Keep legacy keys for compatibility
+        localStorage.setItem("orderData", JSON.stringify(orderEntry))
+        if (orderType === "regular") {
+            localStorage.setItem("commitmentReviewData", JSON.stringify({ orderData: orderEntry }))
+        }
+
+        // Show success message with prominently displayed order number
+        toast({
+            title: "✅ Order Created Successfully!",
+            description: `Order Number: ${backendOrderNo}`,
+            duration: 5000,
+        })
+        
+        // Show additional alert for emphasis
+        alert(`Order created successfully!\n\nOrder Number: ${backendOrderNo}\n\nThis order has been saved to the database.`)
+        
+        resetForm()
+        
+        setTimeout(() => {
+            router.push(orderType === "regular" ? "/approval-of-order" : "/pre-approval")
+        }, 1500)
       }
 
-      saveWorkflowHistory(orderEntry)
-      
-      // Keep legacy keys for now to avoid breaking other pages immediately
-      localStorage.setItem("orderData", JSON.stringify(orderEntry))
-      if (orderType === "regular") {
-          localStorage.setItem("commitmentReviewData", JSON.stringify({ orderData: orderEntry }))
-      }
-
+    } catch (error: any) {
+      console.error('Error submitting order:', error)
       toast({
-          title: "Order Saved Successfully",
-          description: `Order has been created and moved to ${orderEntry.stage} stage.`,
+        title: "Error Saving Order",
+        description: error.message || "Failed to save order to database. Please try again.",
+        variant: "destructive",
       })
-      resetForm()
-      setTimeout(() => {
-          router.push(orderType === "regular" ? "/approval-of-order" : "/pre-approval")
-      }, 1500)
-
     } finally {
       setIsSubmitting(false)
     }
@@ -409,12 +403,6 @@ export default function OrderPunchPage() {
     setAdvanceAmount("")
     setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "" }])
     setPreApprovalProducts([{ id: Math.random().toString(36).substr(2, 9), oilType: "", ratePerLtr: "", rateLtr: "" }])
-    
-
-    // Simulate next SO Number
-    const lastSO = localStorage.getItem("lastSOSequence") || "0"
-    const nextSO = parseInt(lastSO) + 1
-    setSoNumber(`DO-${String(nextSO).padStart(3, "0")}`)
   }
 
   return (
@@ -437,18 +425,7 @@ export default function OrderPunchPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* SO Number - Reordered to Top */}
-              <div className="space-y-2">
-                <Label htmlFor="soNumber">DO Number</Label>
-                <Input
-                  id="soNumber"
-                  placeholder="DO Number"
-                  value={soNumber}
-                  readOnly // Auto-filled
-                  className="bg-muted"
-                />
-              </div>
-
+              {/* DO Number is now auto-generated by database trigger */}
               <div className="space-y-2">
                 <Label htmlFor="soDate">DO Date</Label>
                 <Input id="soDate" type="date" value={soDate} onChange={(e) => setSoDate(e.target.value)} />

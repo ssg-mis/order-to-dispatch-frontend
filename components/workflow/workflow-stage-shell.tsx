@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Search, Filter, RotateCcw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
+import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
+import { Separator } from "@/components/ui/separator"
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -52,16 +54,21 @@ export function WorkflowStageShell({
   }
 
   return (
-    <div className="p-4 space-y-3 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-          <p className="text-sm text-muted-foreground">{description}</p>
+    <SidebarInset>
+      <div className="p-6 space-y-4 w-full">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="h-6" />
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+              <p className="text-sm text-muted-foreground">{description}</p>
+            </div>
+          </div>
+          <Badge variant="outline" className="px-4 py-1 text-sm bg-primary/5 text-primary border-primary/20">
+            {pendingCount} Pending Items
+          </Badge>
         </div>
-        <Badge variant="outline" className="px-4 py-1 text-sm bg-primary/5 text-primary border-primary/20">
-          {pendingCount} Pending Items
-        </Badge>
-      </div>
 
       <Tabs defaultValue="pending" className="w-full">
         <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-2 bg-muted/50 p-1 rounded-lg h-9">
@@ -200,6 +207,7 @@ export function WorkflowStageShell({
           )}
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </SidebarInset>
   )
 }

@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Settings2 } from "lucide-react"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
+import { materialLoadApi } from "@/lib/api-service"
 
 export default function MaterialLoadPage() {
   const router = useRouter()
@@ -56,25 +57,59 @@ export default function MaterialLoadPage() {
     vehicleNoPlateImage: "",
   })
 
-  useEffect(() => {
-    const savedHistory = localStorage.getItem("workflowHistory")
-    if (savedHistory) {
-      const history = JSON.parse(savedHistory)
+  // Fetch pending material loads from backend
+  const fetchPendingMaterialLoads = async () => {
+    try {
+      console.log('[MATERIAL LOAD] Fetching pending material loads from API...');
+      const response = await materialLoadApi.getPending({ limit: 1000 });
+      console.log('[MATERIAL LOAD] API Response:', response);
       
-      const completed = history.filter(
-        (item: any) => item.stage === "Material Load" && item.status === "Completed"
-      )
-      setHistoryOrders(completed)
-
-      const pending = history.filter(
-        (item: any) => item.stage === "Vehicle Details" && item.status === "Completed"
-      )
-      setPendingOrders(pending)
+      if (response.success && response.data.materialLoads) {
+        setPendingOrders(response.data.materialLoads);
+        console.log('[MATERIAL LOAD] Loaded', response.data.materialLoads.length, 'pending material loads');
+      }
+    } catch (error: any) {
+      console.error("[MATERIAL LOAD] Failed to fetch pending material loads:", error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to load pending material loads",
+        variant: "destructive",
+      });
+      setPendingOrders([]);
     }
-  }, [])
+  };
 
+  // Fetch material load history from backend
+  const fetchMaterialLoadHistory = async () => {
+    try {
+      const response = await materialLoadApi.getHistory({ limit: 1000 });
+      
+      if (response.success && response.data.materialLoads) {
+        const mappedHistory = response.data.materialLoads.map((record: any) => ({
+          orderNo: record.so_no,
+          doNumber: record.d_sr_number,
+          customerName: record.party_name,
+          stage: "Material Load",
+          status: "Completed" as const,
+          processedBy: "System",
+          timestamp: record.actual_3,
+          date: record.actual_3 ? new Date(record.actual_3).toLocaleDateString("en-GB") : "-",
+          remarks: `NET: ${record.net_weight || 0}kg`,
+        }));
+        setHistoryOrders(mappedHistory);
+      }
+    } catch (error: any) {
+      console.error("[MATERIAL LOAD] Failed to fetch history:", error);
+      setHistoryOrders([]);
+    }
+  };
 
+  useEffect(() => {
+    fetchPendingMaterialLoads();
+    fetchMaterialLoadHistory();
+  }, []);
 
+  // Auto-calculate packing weights
   useEffect(() => {
     const netPacking = parseFloat(loadData.netWeightPacking) || 0
     const otherPacking = parseFloat(loadData.otherItemWeight) || 0
@@ -86,6 +121,7 @@ export default function MaterialLoadPage() {
     }))
   }, [loadData.netWeightPacking, loadData.otherItemWeight])
 
+  // Auto-calculate difference
   useEffect(() => {
     const dharamWeight = parseFloat(loadData.dharamkataWeight) || 0
     const grossPacking = parseFloat(loadData.grossWeightPacking) || 0
@@ -97,96 +133,110 @@ export default function MaterialLoadPage() {
     }))
   }, [loadData.dharamkataWeight, loadData.grossWeightPacking])
 
-  const handleSubmit = async (item: any) => {
-    setIsProcessing(true)
-    try {
-      const updatedOrder = {
-        ...item,
-        stage: "Material Load",
-        status: "Completed",
-        _product: item._product,
-        loadData: {
-          ...loadData,
-          completedAt: new Date().toISOString(),
-        },
-        data: {
-          ...(item.data || {}),
-          orderData: {
-            ...(item.data?.orderData || item),
-            products: item.orderType === "regular" ? [item._product] : [],
-            preApprovalProducts: item.orderType !== "regular" ? [item._product] : []
-          }
-        }
-      }
-
-      const savedHistory = localStorage.getItem("workflowHistory")
-      const history = savedHistory ? JSON.parse(savedHistory) : []
-      history.push(updatedOrder)
-      localStorage.setItem("workflowHistory", JSON.stringify(history))
-
-      // Update local state immediately
-      setPendingOrders(prev => prev.filter(o => (o.doNumber || o.orderNo) !== (item.doNumber || item.orderNo)))
-      setHistoryOrders((prev) => [...prev, updatedOrder])
-
-      toast({
-        title: "Material Loaded",
-        description: "Order moved to Security Approval stage.",
-      })
-
-      setTimeout(() => {
-        router.push("/security-approval")
-      }, 1500)
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
   const handleBulkSubmit = async () => {
     setIsProcessing(true)
     try {
-      const updatedEntries = selectedItems.map((item) => ({
-        ...item,
-        stage: "Material Load",
-        status: "Completed",
-        _product: item._product,
-        loadData: {
-          ...loadData,
-          completedAt: new Date().toISOString(),
-        },
-        data: {
-          ...(item.data || {}),
-          orderData: {
-            ...(item.data?.orderData || item),
-            products: item.orderType === "regular" ? [item._product] : [],
-            preApprovalProducts: item.orderType !== "regular" ? [item._product] : []
+      const successfulSubmissions: any[] = []
+      const failedSubmissions: any[] = []
+
+      // Submit each item to backend API
+      for (const item of selectedItems) {
+        const recordId = item.id; // Use the lift_receiving_confirmation table ID
+        
+        try {
+          if (recordId) {
+            const submitData = {
+              actual_qty: parseFloat(loadData.actualQty) || null,
+              weightment_slip_copy: loadData.weightmentSlip || null,
+              rst_no: loadData.rstNo || null,
+              gross_weight: parseFloat(loadData.grossWeight) || null,
+              tare_weight: parseFloat(loadData.tareWeight) || null,
+              net_weight: parseFloat(loadData.netWeight) || parseFloat(loadData.grossWeightPacking) || null,
+              transporter_name: loadData.transporterName || null,
+              reason_of_difference_in_weight_if_any_speacefic: loadData.reason || null,
+              truck_no: loadData.truckNo || null,
+              vehicle_no_plate_image: loadData.vehicleNoPlateImage || null,
+            };
+
+            console.log('[MATERIAL LOAD] Submitting material load for ID:', recordId, submitData);
+            const response = await materialLoadApi.submit(recordId, submitData);
+            console.log('[MATERIAL LOAD] API Response:', response);
+            
+            if (response.success) {
+              successfulSubmissions.push({ item, response });
+            } else {
+              failedSubmissions.push({ item, error: response.message || 'Unknown error' });
+            }
+          } else {
+            console.warn('[MATERIAL LOAD] Skipping - no record ID found for:', item);
+            failedSubmissions.push({ item, error: 'No record ID found' });
           }
+        } catch (error: any) {
+          console.error('[MATERIAL LOAD] Failed to submit material load:', error);
+          failedSubmissions.push({ item, error: error?.message || error?.toString() || 'Unknown error' });
         }
-      }))
+      }
 
-      const savedHistory = localStorage.getItem("workflowHistory")
-      const history = savedHistory ? JSON.parse(savedHistory) : []
-      history.push(...updatedEntries)
-      localStorage.setItem("workflowHistory", JSON.stringify(history))
+      // Show results
+      if (successfulSubmissions.length > 0) {
+        toast({
+          title: "Material Loaded",
+          description: `${successfulSubmissions.length} material load(s) completed successfully.`,
+        });
 
-      // Update local state
-      setHistoryOrders((prev) => [...prev, ...updatedEntries])
-      setSelectedItems([])
+        // Clear selections and form
+        setSelectedItems([]);
+        setLoadData({
+          actualQty: "",
+          weightmentSlip: "",
+          rstNo: "",
+          grossWeight: "",
+          tareWeight: "",
+          netWeight: "",
+          totalWeight: "",
+          grossWeightPacking: "",
+          netWeightPacking: "",
+          otherItemWeight: "",
+          dharamkataWeight: "",
+          differanceWeight: "",
+          transporterName: "",
+          reason: "",
+          truckNo: "",
+          vehicleNoPlateImage: "",
+        });
 
+        // Refresh data from backend
+        await fetchPendingMaterialLoads();
+        await fetchMaterialLoadHistory();
+
+        // Navigate to next stage after delay
+        setTimeout(() => {
+          router.push("/security-approval")
+        }, 1500)
+      }
+
+      if (failedSubmissions.length > 0) {
+        console.error('[MATERIAL LOAD] Failed submissions:', failedSubmissions);
+        toast({
+          title: "Some Loads Failed",
+          description: `${failedSubmissions.length} load(s) failed. Check console for details.`,
+          variant: "destructive",
+        })
+      }
+    } catch (error: any) {
+      console.error('[MATERIAL LOAD] Unexpected error:', error);
       toast({
-        title: "Bulk Material Loaded",
-        description: `${updatedEntries.length} items processed and moved to Security Approval.`,
-      })
-
-      setTimeout(() => {
-        router.push("/security-approval")
-      }, 1500)
+        title: "Error",
+        description: error?.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
     } finally {
       setIsProcessing(false)
     }
   }
 
   /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
       status: "",
@@ -197,10 +247,10 @@ export default function MaterialLoadPage() {
 
   // Selection Logic
   const toggleSelectItem = (item: any) => {
-    const itemKey = `${item.doNumber || item.orderNo}-${item._product?.productName || item._product?.oilType || 'no-prod'}`;
+    const itemKey = `${item.id}`;
     setSelectedItems((prev) =>
-      prev.some((i) => `${i.doNumber || i.orderNo}-${i._product?.productName || i._product?.oilType || 'no-prod'}` === itemKey)
-        ? prev.filter((i) => `${i.doNumber || i.orderNo}-${i._product?.productName || i._product?.oilType || 'no-prod'}` !== itemKey)
+      prev.some((i) => i.id === item.id)
+        ? prev.filter((i) => i.id !== item.id)
         : [...prev, item]
     )
   }
@@ -217,12 +267,12 @@ export default function MaterialLoadPage() {
       let matches = true
       
       // Filter by Party Name
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
+      if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) {
           matches = false
       }
 
       // Filter by Date Range
-      const orderDateStr = order.loadData?.completedAt || order.vehicleData?.assignedAt || order.timestamp
+      const orderDateStr = order.timestamp
       if (orderDateStr) {
           const orderDate = new Date(orderDateStr)
           if (filterValues.startDate) {
@@ -237,73 +287,31 @@ export default function MaterialLoadPage() {
           }
       }
 
-      // Filter by Status (On Time / Expire)
-      if (filterValues.status) {
-          const today = new Date()
-          today.setHours(0, 0, 0, 0)
-          const targetDateStr = order.deliveryDate || order.timestamp
-          if (targetDateStr) {
-             const targetDate = new Date(targetDateStr)
-             
-             if (filterValues.status === "expire") {
-                 if (targetDate < today) matches = true
-                 else matches = false
-             } else if (filterValues.status === "on-time") {
-                 if (targetDate >= today) matches = true
-                 else matches = false
-             }
-          }
-      }
-
       return matches
   })
 
-  // Flatten orders for table display - each product/oil type is a row
+  // Map backend data to display format
   const displayRows = useMemo(() => {
-    const rows: any[] = []
-    filteredPendingOrders.forEach((order) => {
-       const internalOrder = order.data?.orderData || order;
-       const products = (internalOrder.preApprovalProducts?.length > 0)
-         ? internalOrder.preApprovalProducts
-         : ((internalOrder.products?.length > 0)
-           ? internalOrder.products
-           : (internalOrder.orderData?.products || []));
-
-       if (!products || products.length === 0) {
-         // Check if this "null product" entry exists in history
-         const isDone = historyOrders.some(h => 
-           (h.orderNo === (order.doNumber || order.orderNo)) && h._product === null
-         );
-         if (!isDone) rows.push({ ...order, _product: null })
-       } else {
-         products.forEach((prod: any) => {
-           // Track by product name/type
-           const pName = prod.productName || prod.oilType;
-           const isDone = historyOrders.some(h => 
-             (h.orderNo === (order.doNumber || order.orderNo)) && 
-             (h.data?.orderData?._product?.productName === pName || h.data?.orderData?._product?.oilType === pName)
-           );
-
-           if (!isDone) {
-             rows.push({ ...order, _product: prod })
-           }
-         });
-       }
-    })
-    return rows
-  }, [filteredPendingOrders, historyOrders])
+    return filteredPendingOrders.map((record: any) => ({
+      id: record.id, // Keep DB ID for submission
+      doNumber: record.d_sr_number,
+      orderNo: record.so_no,
+      customerName: record.party_name,
+      productName: record.product_name,
+      qtyToDispatch: record.qty_to_be_dispatched,
+      transportType: record.type_of_transporting,
+      deliveryFrom: record.dispatch_from,
+      timestamp: record.timestamp,
+      status: "Ready to Load",
+    }))
+  }, [filteredPendingOrders])
 
   return (
     <WorkflowStageShell
       title="Stage 7: Material Load"
       description="Record material loading details and weights."
       pendingCount={displayRows.length}
-      historyData={historyOrders.map((order) => ({
-        date: new Date(order.loadData?.completedAt || new Date()).toLocaleDateString("en-GB"),
-        stage: "Material Load",
-        status: "Completed",
-        remarks: `NET: ${order.loadData?.netWeight}kg`,
-      }))}
+      historyData={historyOrders}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
       remarksColName="Weight Details"
@@ -356,17 +364,17 @@ export default function MaterialLoadPage() {
                         {selectedItems.map((item, idx) => (
                             <div key={idx} className="bg-white p-3 border border-slate-200 rounded-xl shadow-sm flex flex-col gap-1.5 relative overflow-hidden group hover:border-blue-200 transition-all">
                                 <div className="absolute top-0 right-0 py-0.5 px-2 bg-slate-50 border-l border-b border-slate-100 rounded-bl-lg">
-                                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{item.orderType || "—"}</span>
+                                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{item.doNumber || "—"}</span>
                                 </div>
                                 <div className="flex flex-col">
-                                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">DO-No: {item.doNumber || item.orderNo}</span>
+                                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">DO-No: {item.orderNo}</span>
                                    <h4 className="text-xs font-bold text-slate-800 leading-tight truncate pr-16">{item.customerName || "—"}</h4>
                                 </div>
                                 <div className="pt-2 border-t border-slate-50 mt-0.5">
                                    <div className="flex items-center gap-1.5">
                                       <div className="w-1 h-1 rounded-full bg-blue-500" />
                                       <span className="text-xs font-bold text-blue-600 truncate">
-                                        {item._product?.productName || item._product?.oilType || "—"}
+                                        {item.productName || "—"}
                                       </span>
                                    </div>
                                 </div>
@@ -420,22 +428,22 @@ export default function MaterialLoadPage() {
                         />
                       </div>
                       <div className="space-y-2">
+                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Gross Weight</Label>
+                        <Input
+                          type="number"
+                          value={loadData.grossWeight || ""}
+                          onChange={(e) => setLoadData(prev => ({ ...prev, grossWeight: e.target.value }))}
+                          placeholder="Gross"
+                          className="bg-white border-slate-200 h-10"
+                        />
+                      </div>
+                      <div className="space-y-2">
                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Tare Weight</Label>
                         <Input
                           type="number"
                           value={loadData.tareWeight || ""}
                           onChange={(e) => setLoadData(prev => ({ ...prev, tareWeight: e.target.value }))}
                           placeholder="Tare"
-                          className="bg-white border-slate-200 h-10"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Total Weight</Label>
-                        <Input
-                          type="number"
-                          value={loadData.totalWeight || ""}
-                          onChange={(e) => setLoadData(prev => ({ ...prev, totalWeight: e.target.value }))}
-                          placeholder="Total"
                           className="bg-white border-slate-200 h-10"
                         />
                       </div>
@@ -523,7 +531,7 @@ export default function MaterialLoadPage() {
                     </div>
                   </div>
 
-                  {/* Verification Artifacts Section - PRESERVED */}
+                  {/* Verification Artifacts Section */}
                   <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 shadow-sm">
                     <h3 className="text-sm font-bold text-slate-800 mb-4 px-1 flex items-center gap-2">
                       <div className="w-1 h-4 bg-slate-600 rounded-full" />
@@ -574,51 +582,8 @@ export default function MaterialLoadPage() {
             <TableBody>
               {displayRows.length > 0 ? (
                 displayRows.map((item: any, index: number) => {
-                   const order = item;
-                   const p = order._product;
-                   const rowKey = `${order.doNumber || order.orderNo}-${p?.productName || p?.oilType || 'no-prod'}`;
-                   
-                   const prodName = p?.productName || p?.oilType || "—";
-                   const rateLtr = p?.ratePerLtr || p?.rateLtr || order.ratePerLtr || "—";
-                   const rate15Kg = p?.ratePer15Kg || p?.rateLtr || order.rateLtr || "—";
-                   const oilType = p?.oilType || order.oilType || "—";
-
-                   const row: any = {
-                     orderNo: order.doNumber || order.orderNo || "DO-XXX",
-                     deliveryPurpose: order.orderPurpose || "—",
-                     customerType: order.customerType || "—",
-                     orderType: order.orderType || "—",
-                     soNo: order.soNumber || "—",
-                     partySoDate: order.soDate || order.partySoDate || "—",
-                     customerName: order.customerName || "—",
-                     itemConfirm: order.itemConfirm || "—",
-                     productName: prodName,
-                     uom: p?.uom || "—",
-                     orderQty: p?.orderQty || p?.approvalQty || "—",
-                     altUom: p?.altUom || "—",
-                     altQty: p?.altQty || "—",
-                     oilType: oilType,
-                     ratePerLtr: rateLtr,
-                     ratePer15Kg: rate15Kg,
-                     rateOfMaterial: order.rateMaterial || "—",
-                     totalWithGst: order.totalWithGst || "—",
-                     transportType: order.dispatchData?.transportType || "—",
-                     uploadSo: "so_document.pdf",
-                     contactPerson: order.contactPerson || "—",
-                     whatsapp: order.whatsappNo || "—",
-                     address: order.customerAddress || "—",
-                     paymentTerms: order.paymentTerms || "—",
-                     advanceTaken: order.advancePaymentTaken || "—",
-                     advanceAmount: order.advanceAmount || "—",
-                     isBroker: order.isBrokerOrder || "—",
-                     brokerName: order.brokerName || "—",
-                     deliveryDate: order.deliveryDate || "—",
-                     qtyToDispatch: order.dispatchData?.qtyToDispatch || "—",
-                     deliveryFrom: order.deliveryData?.deliveryFrom || "—",
-                     status: "Ready to Load",
-                   }
-
-                   const isSelected = selectedItems.some(i => `${i.doNumber || i.orderNo}-${i._product?.productName || i._product?.oilType || 'no-prod'}` === rowKey);
+                   const rowKey = `${item.id}`;
+                   const isSelected = selectedItems.some(i => i.id === item.id);
 
                    return (
                    <TableRow key={`${index}-${rowKey}`} className={isSelected ? "bg-blue-50/50" : ""}>
@@ -629,12 +594,12 @@ export default function MaterialLoadPage() {
                         />
                      </TableCell>
                      {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                       <TableCell key={col.id} className="whitespace-nowrap text-center">
+                       <TableCell key={col.id} className="whitespace-nowrap text-center text-xs">
                          {col.id === "status" ? (
                             <div className="flex justify-center">
                                <Badge className="bg-indigo-100 text-indigo-700">Ready to Load</Badge>
                             </div>
-                         ) : row[col.id as keyof typeof row] || "—"}
+                         ) : (item as any)[col.id] || "—"}
                        </TableCell>
                      ))}
                    </TableRow>

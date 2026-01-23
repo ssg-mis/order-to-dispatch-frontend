@@ -23,6 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Upload, Settings2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
+import { confirmMaterialReceiptApi } from "@/lib/api-service"
 
 export default function MaterialReceiptPage() {
   const router = useRouter()
@@ -45,78 +46,98 @@ export default function MaterialReceiptPage() {
     remarks: "",
   })
 
-  useEffect(() => {
-    const savedHistory = localStorage.getItem("workflowHistory")
-    if (savedHistory) {
-      const history = JSON.parse(savedHistory)
-      
-      const completed = history.filter(
-        (item: any) => item.stage === "Material Receipt" && (item.status === "Delivered" || item.status === "Damaged")
-      )
-      setHistoryOrders(completed)
-
-      const pending = history.filter(
-        (item: any) => item.stage === "Gate Out" && item.status === "Completed"
-      ).filter(
-        (item: any) => 
-          !completed.some((completedItem: any) => 
-            (completedItem.doNumber && item.doNumber && completedItem.doNumber === item.doNumber) ||
-            (completedItem.orderNo && item.orderNo && completedItem.orderNo === item.orderNo)
-          )
-      )
-      setPendingOrders(pending)
+  // Fetch Pending
+  const fetchPending = async () => {
+    try {
+      const response = await confirmMaterialReceiptApi.getPending({ limit: 1000 });
+      if (response.success && response.data.orders) {
+        setPendingOrders(response.data.orders);
+      }
+    } catch (error) {
+      console.error("Failed to fetch pending material receipts:", error);
     }
+  }
+
+  // Fetch History
+  const fetchHistory = async () => {
+    try {
+        const response = await confirmMaterialReceiptApi.getHistory({ limit: 1000 });
+        if (response.success && response.data.orders) {
+          setHistoryOrders(response.data.orders);
+        }
+    } catch (error) {
+        console.error("Failed to fetch history:", error);
+    }
+  }
+
+  useEffect(() => {
+    fetchPending();
+    fetchHistory();
   }, [])
 
   const handleSubmit = async (order: any) => {
     setIsProcessing(true)
     try {
-      const updatedOrder = {
-        ...order,
-        stage: "Material Receipt",
-        status: receiptData.hasDamage === "yes" ? "Damaged" : "Delivered",
-        receiptData: {
-          ...receiptData,
-          receivedAt: new Date().toISOString(),
-        },
-      }
+      const submitData = {
+        material_received_date: receiptData.receivedDate,
+        damage_status: receiptData.hasDamage === "yes" ? "Damaged" : "Delivered",
+        received_image_proof: receiptData.receivedProof ? receiptData.receivedProof.name : null,
+        sku: receiptData.hasDamage === "yes" ? receiptData.damageSku : null,
+        damage_qty: receiptData.hasDamage === "yes" ? receiptData.damageQty : null,
+        damage_image: (receiptData.hasDamage === "yes" && receiptData.damageImage) ? receiptData.damageImage.name : null,
+        remarks_3: receiptData.remarks || null
+      };
 
-      const savedHistory = localStorage.getItem("workflowHistory")
-      const history = savedHistory ? JSON.parse(savedHistory) : []
-      history.push(updatedOrder)
-      localStorage.setItem("workflowHistory", JSON.stringify(history))
-      localStorage.setItem("currentOrderData", JSON.stringify(updatedOrder))
+      const response = await confirmMaterialReceiptApi.submit(order.id, submitData);
 
-      // Update local state immediately
-      const newPending = pendingOrders.filter(o => o.doNumber !== order.doNumber)
-      setPendingOrders(newPending)
-      setHistoryOrders((prev) => [...prev, updatedOrder])
+      if (response.success) {
+        if (receiptData.hasDamage === "yes") {
+            toast({
+              title: "Material Received with Damage",
+              description: "Order moved to Damage Adjustment stage.",
+              variant: "destructive",
+            })
+            // setTimeout(() => router.push("/damage-adjustment"), 1500)
+          } else {
+            toast({
+              title: "Material Received",
+              description: "Order completed successfully!",
+            })
+            // setTimeout(() => router.push("/"), 1500)
+          }
+        
+        await fetchPending();
+        await fetchHistory();
+        
+        // Reset form
+        setReceiptData({
+            receivedDate: "",
+            hasDamage: "no",
+            damageSku: "",
+            damageQty: "",
+            damageImage: null,
+            receivedProof: null,
+            remarks: "",
+        });
 
-      if (receiptData.hasDamage === "yes") {
-        toast({
-          title: "Material Received with Damage",
-          description: "Order moved to Damage Adjustment stage.",
-          variant: "destructive",
-        })
-        setTimeout(() => {
-          router.push("/damage-adjustment")
-        }, 1500)
       } else {
-        toast({
-          title: "Material Received",
-          description: "Order completed successfully!",
-        })
-        setTimeout(() => {
-          router.push("/")
-        }, 1500)
+         throw new Error(response.message || "Failed to submit");
       }
+
+    } catch (error: any) {
+      console.error("Submit error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Something went wrong",
+        variant: "destructive",
+      })
     } finally {
       setIsProcessing(false)
     }
   }
 
   /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
       status: "",
@@ -129,12 +150,12 @@ export default function MaterialReceiptPage() {
       let matches = true
       
       // Filter by Party Name
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
+      if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) {
           matches = false
       }
 
       // Filter by Date Range
-      const orderDateStr = order.receiptData?.receivedAt || order.gateOutData?.gateOutTime || order.timestamp
+      const orderDateStr = order.timestamp || order.actual_8
       if (orderDateStr) {
           const orderDate = new Date(orderDateStr)
           if (filterValues.startDate) {
@@ -149,24 +170,6 @@ export default function MaterialReceiptPage() {
           }
       }
 
-      // Filter by Status (On Time / Expire)
-      if (filterValues.status) {
-          const today = new Date()
-          today.setHours(0, 0, 0, 0)
-          const targetDateStr = order.deliveryDate || order.timestamp
-          if (targetDateStr) {
-             const targetDate = new Date(targetDateStr)
-             
-             if (filterValues.status === "expire") {
-                 if (targetDate < today) matches = true
-                 else matches = false
-             } else if (filterValues.status === "on-time") {
-                 if (targetDate >= today) matches = true
-                 else matches = false
-             }
-          }
-      }
-
       return matches
   })
 
@@ -176,10 +179,10 @@ export default function MaterialReceiptPage() {
       description="Confirm material receipt and report any damages."
       pendingCount={filteredPendingOrders.length}
       historyData={historyOrders.map((order) => ({
-        date: new Date(order.receiptData?.receivedAt || new Date()).toLocaleDateString("en-GB"),
+        date: order.actual_8 ? new Date(order.actual_8).toLocaleDateString("en-GB") : "-",
         stage: "Material Receipt",
-        status: order.status,
-        remarks: order.receiptData?.hasDamage === "yes" ? `Damaged: ${order.receiptData.damageQty}` : "Received OK",
+        status: order.damage_status || "Completed",
+        remarks: order.damage_status === "Damaged" ? `Damaged: ${order.damage_qty}` : "Received OK",
       }))}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
@@ -227,56 +230,21 @@ export default function MaterialReceiptPage() {
             </TableHeader>
             <TableBody>
               {filteredPendingOrders.length > 0 ? (
-                    filteredPendingOrders.map((order, index) => {
-                        const internalOrder = order.data?.orderData || order;
-                        const preApproval = order.data?.preApprovalData || internalOrder.preApprovalData || {};
-
-                        const prodNames = internalOrder.products?.map((p: any) => p.productName).join(", ") || 
-                                          internalOrder.preApprovalProducts?.map((p: any) => p.oilType).join(", ") || 
-                                          "";
-                        const uoms = internalOrder.products?.map((p: any) => p.uom).join(", ") || "";
-                        const qtys = internalOrder.products?.map((p: any) => p.orderQty).join(", ") || "";
-                        const altUoms = internalOrder.products?.map((p: any) => p.altUom).join(", ") || "";
-                        const altQtys = internalOrder.products?.map((p: any) => p.altQty).join(", ") || "";
-                        
-                        const ratesLtr = internalOrder.preApprovalProducts?.map((p: any) => p.ratePerLtr).join(", ") || internalOrder.ratePerLtr || "—";
-                        const rates15Kg = internalOrder.preApprovalProducts?.map((p: any) => p.rateLtr).join(", ") || internalOrder.rateLtr || "—";
-                        const oilTypes = internalOrder.preApprovalProducts?.map((p: any) => p.oilType).join(", ") || internalOrder.oilType || "—";
-
-                        const row = {
-                          orderNo: internalOrder.doNumber || internalOrder.orderNo || "DO-XXX",
-                          deliveryPurpose: internalOrder.orderPurpose || "—",
-                          customerType: internalOrder.customerType || "—",
-                          orderType: internalOrder.orderType || "—",
-                          soNo: internalOrder.soNumber || "—",
-                          partySoDate: internalOrder.soDate || "—",
-                          customerName: internalOrder.customerName || "—",
-                          itemConfirm: internalOrder.itemConfirm || "—",
-                          productName: prodNames,
-                          uom: uoms,
-                          orderQty: qtys,
-                          altUom: altUoms,
-                          altQty: altQtys,
-                          oilType: oilTypes,
-                          ratePerLtr: ratesLtr,
-                          ratePer15Kg: rates15Kg,
-                          rateOfMaterial: internalOrder.rateMaterial || "—",
-                          totalWithGst: internalOrder.totalWithGst || "—",
-                          transportType: internalOrder.dispatchData?.transportType || "—",
-                          uploadSo: "so_document.pdf",
-                          contactPerson: internalOrder.contactPerson || "—",
-                          whatsapp: internalOrder.whatsappNo || "—",
-                          address: internalOrder.customerAddress || "—",
-                          paymentTerms: internalOrder.paymentTerms || "—",
-                          advanceTaken: internalOrder.advancePaymentTaken || "—",
-                          advanceAmount: internalOrder.advanceAmount || "—",
-                          isBroker: internalOrder.isBrokerOrder || "—",
-                          brokerName: internalOrder.brokerName || "—",
-                          deliveryDate: internalOrder.deliveryDate || "—",
-                          qtyToDispatch: internalOrder.dispatchData?.qtyToDispatch || "—",
-                          deliveryFrom: internalOrder.deliveryData?.deliveryFrom || "—",
-                          status: "In Transit", // Special handling for badge
-                        }
+                filteredPendingOrders.map((order, index) => {
+                   const row: any = {
+                       orderNo: order.so_no || "—",
+                       doNumber: order.d_sr_number || "—",
+                       customerName: order.party_name || "—",
+                       productName: order.product_name || "—",
+                       qtyToDispatch: order.qty_to_be_dispatched || "—",
+                       deliveryFrom: order.dispatch_from || "—",
+                       transportType: order.type_of_transporting || "—",
+                       status: "In Transit",
+                       
+                       invoiceNo: order.invoice_no || "—",
+                       invoiceDate: order.invoice_date || "—",
+                       billAmount: order.bill_amount || "—",
+                   }
 
                    return (
                    <TableRow key={index}>
@@ -287,7 +255,7 @@ export default function MaterialReceiptPage() {
                          </DialogTrigger>
                          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                            <DialogHeader>
-                             <DialogTitle>Material Receipt: {order.orderNo}</DialogTitle>
+                             <DialogTitle>Material Receipt: {row.doNumber}</DialogTitle>
                            </DialogHeader>
                            <div className="space-y-4 py-4">
                              <div className="space-y-2">
@@ -339,30 +307,50 @@ export default function MaterialReceiptPage() {
                                  </div>
                                  <div className="space-y-2">
                                    <Label>Damage Image</Label>
-                                   <Input
-                                     type="file"
-                                     accept="image/*"
-                                     onChange={(e) => {
-                                       if (e.target.files?.[0]) {
-                                         setReceiptData({ ...receiptData, damageImage: e.target.files[0] })
-                                       }
-                                     }}
-                                   />
+                                   <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                                       <Input
+                                         type="file"
+                                         accept="image/*"
+                                         onChange={(e) => {
+                                           if (e.target.files?.[0]) {
+                                             setReceiptData({ ...receiptData, damageImage: e.target.files[0] })
+                                           }
+                                         }}
+                                         className="hidden"
+                                         id="damage-upload"
+                                       />
+                                       <label htmlFor="damage-upload" className="cursor-pointer">
+                                           <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+                                           <span className="text-xs text-muted-foreground">
+                                               {receiptData.damageImage ? receiptData.damageImage.name : "Upload Damage Image"}
+                                           </span>
+                                       </label>
+                                   </div>
                                  </div>
                                </>
                              )}
 
                              <div className="space-y-2">
                                <Label>Received Image (Proof)</Label>
-                               <Input
-                                 type="file"
-                                 accept="image/*,.pdf"
-                                 onChange={(e) => {
-                                   if (e.target.files?.[0]) {
-                                     setReceiptData({ ...receiptData, receivedProof: e.target.files[0] })
-                                   }
-                                 }}
-                               />
+                               <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                                   <Input
+                                     type="file"
+                                     accept="image/*,.pdf"
+                                     onChange={(e) => {
+                                       if (e.target.files?.[0]) {
+                                         setReceiptData({ ...receiptData, receivedProof: e.target.files[0] })
+                                       }
+                                     }}
+                                     className="hidden"
+                                     id="proof-upload"
+                                   />
+                                   <label htmlFor="proof-upload" className="cursor-pointer">
+                                       <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+                                       <span className="text-xs text-muted-foreground">
+                                           {receiptData.receivedProof ? receiptData.receivedProof.name : "Upload Proof"}
+                                       </span>
+                                   </label>
+                               </div>
                              </div>
 
                              <div className="space-y-2">
@@ -392,7 +380,7 @@ export default function MaterialReceiptPage() {
                              <div className="flex justify-center">
                                 <Badge className="bg-sky-100 text-sky-700">In Transit</Badge>
                              </div>
-                          ) : row[col.id as keyof typeof row]}
+                          ) : row[col.id as keyof typeof row] || "—"}
                         </TableCell>
                       ))}
                    </TableRow>

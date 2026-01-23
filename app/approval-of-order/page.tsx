@@ -14,8 +14,9 @@ import { useState, useEffect, useMemo } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Settings2, CheckCircle2 } from "lucide-react"
+import { Settings2, CheckCircle2, Loader2 } from "lucide-react"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
+import { approvalApi } from "@/lib/api-service"
 
 
 export default function CommitmentReviewPage() {
@@ -65,6 +66,7 @@ export default function CommitmentReviewPage() {
   ])
   
   // State for list of orders
+  const [isLoading, setIsLoading] = useState(true)
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [selectedOrder, setSelectedOrder] = useState<any>(null) // For the dialog interaction
   const [sourceOfMaterial, setSourceOfMaterial] = useState<string>("in-stock")
@@ -80,139 +82,126 @@ export default function CommitmentReviewPage() {
 
   const [history, setHistory] = useState<any[]>([])
 
-  useEffect(() => {
-    // 1. Load History
-    const savedHistory = localStorage.getItem("workflowHistory")
-    let historyData = []
-    if (savedHistory) {
-      historyData = JSON.parse(savedHistory)
-      // Filter for both old and new stage names to keep history visible
-      const stageHistory = historyData.filter((item: any) => 
-          item.stage === "Commitment Review" || item.stage === "Approval Of Order"
-      )
-      
-      // Map history to match Shell expectations (date, remarks)
-      // Create a map of Pre-Approval remarks for fallback
-      const preApprovalMap = new Map();
-      historyData.forEach((h: any) => {
-          if (h.stage === "Pre-Approval" && h.orderNo) {
-             preApprovalMap.set(h.orderNo, h.data?.overallRemark || h.data?.preApprovalData?.overallRemark);
-          }
-      });
+  // Map backend data (snake_case) to frontend format (camelCase)
+  const mapBackendOrderToFrontend = (backendOrder: any) => {
+    return {
+      id: backendOrder.id,
+      doNumber: backendOrder.order_no,
+      orderNo: backendOrder.order_no,
+      customerName: backendOrder.customer_name,
+      orderType: backendOrder.order_type,
+      customerType: backendOrder.customer_type,
+      orderPurpose: backendOrder.order_type_delivery_purpose,
+      deliveryDate: backendOrder.delivery_date,
+      startDate: backendOrder.start_date,
+      endDate: backendOrder.end_date,
+      soDate: backendOrder.party_so_date,
+      partySoDate: backendOrder.party_so_date,
+      contactPerson: backendOrder.customer_contact_person_name,
+      whatsappNo: backendOrder.customer_contact_person_whatsapp_no,
+      customerAddress: backendOrder.customer_address,
+      paymentTerms: backendOrder.payment_terms,
+      advancePaymentTaken: backendOrder.advance_payment_to_be_taken,
+      advanceAmount: backendOrder.advance_amount,
+      isBrokerOrder: backendOrder.is_order_through_broker,
+      brokerName: backendOrder.broker_name,
+      transportType: backendOrder.type_of_transporting,
+      totalWithGst: backendOrder.total_amount_with_gst,
+      serial: backendOrder.serial,
+      // Product info (for individual row from DB)
+      products: [{
+        _pid: `${backendOrder.id}-${backendOrder.serial}`,
+        id: backendOrder.id,
+        productName: backendOrder.product_name,
+        oilType: backendOrder.oil_type,
+        uom: backendOrder.uom,
+        orderQty: backendOrder.order_quantity,
+        altUom: backendOrder.alternate_uom,
+        altQty: backendOrder.alternate_qty_kg,
+        ratePerLtr: backendOrder.rate_per_ltr,
+        rateLtr: backendOrder.rate_per_15kg,
+        rate: backendOrder.rate_of_material,
+      }],
+      // Keep approval-specific fields
+      rateIsRightly: backendOrder.rate_is_rightly_as_per_current_market_rate,
+      weDealInSku: backendOrder.we_are_dealing_in_ordered_sku,
+      creditStatus: backendOrder.party_credit_status,
+      dispatchConfirmed: backendOrder.dispatch_date_confirmed,
+      overallStatus: backendOrder.overall_status_of_order,
+      customerConfirmation: backendOrder.order_confirmation_with_customer,
+    };
+  };
 
-      const formattedHistory = stageHistory.map((item: any) => {
-          let remark = item.remarks;
-          if (!remark || remark === "-") {
-              remark = preApprovalMap.get(item.orderNo) || "Verified"; 
-          }
-          return {
-            ...item,
-            stage: "Approval Of Order", // Force display name update
-            date: item.date || (item.timestamp ? new Date(item.timestamp).toLocaleDateString("en-GB") : "-"),
-            remarks: remark
-          }
-      })
-      setHistory(formattedHistory)
-    }
+  // Fetch pending approvals from backend
+  const fetchPendingApprovals = async () => {
+    try {
+      setIsLoading(true);
+      const response = await approvalApi.getPending({ limit: 1000 });
       
-      // LOGIC: Collect all products that reached Pre-Approval Completed
-      // And subtract those that reached Approval Of Order Completed
-      const ordersInPreApproval = historyData.filter((h: any) => h.stage === "Pre-Approval" && h.status === "Completed");
-      const itemsInApproval = historyData.filter((h: any) => (h.stage === "Approval Of Order" || h.stage === "Commitment Review") && (h.status === "Approved" || h.status === "Rejected"));
-
-      const pendingFromHistory: any[] = [];
-      
-      ordersInPreApproval.forEach((entry: any) => {
-          const rawOrder = entry.data?.orderData || entry.data || entry;
-          const orderNo = entry.orderNo || entry.doNumber;
-          
-          // Get all products in this order
-          const products = rawOrder.products || rawOrder.preApprovalProducts || [];
-          const preApprovalProducts = rawOrder.preApprovalProducts || [];
-          
-          // Filter products that aren't done yet
-          const remainingProducts = products.filter((p: any) => {
-              const pName = p.productName || p.oilType;
-              return !itemsInApproval.some((h: any) => 
-                  (h.orderNo === orderNo) && 
-                  (h.data?.orderData?._product?.productName === pName || h.data?.orderData?._product?.oilType === pName)
-              );
-          });
-
-          const remainingPreApp = preApprovalProducts.filter((p: any) => {
-              const pName = p.productName || p.oilType;
-              return !itemsInApproval.some((h: any) => 
-                  (h.orderNo === orderNo) && 
-                  (h.data?.orderData?._product?.productName === pName || h.data?.orderData?._product?.oilType === pName)
-              );
-          });
-
-          if (remainingProducts.length > 0 || remainingPreApp.length > 0 || (products.length === 0 && preApprovalProducts.length === 0)) {
-              const orderData = {
-                  ...rawOrder,
-                  products: remainingProducts,
-                  preApprovalProducts: remainingPreApp,
-                  preApprovalData: entry.data
-              }
-              if (entry.data?.overallRemark) {
-                  orderData.preApprovalRemark = entry.data.overallRemark;
-              }
-              pendingFromHistory.push(orderData);
-          }
-      });
-      
-      // Also handle manually added Pending entries
-      historyData.forEach((entry: any) => {
-          if (entry.stage === "Approval Of Order" && entry.status === "Pending") {
-              const exists = pendingFromHistory.some(o => (o.doNumber || o.orderNo) === (entry.doNumber || entry.orderNo));
-              if (!exists) pendingFromHistory.push(entry);
-          }
-      });
-      
-      // 2. Load Persisted Pending Items (for Direct Regular Orders)
-      const savedPending = localStorage.getItem("approvalPendingItems")
-      let persistedPending = savedPending ? JSON.parse(savedPending) : []
-
-      // 3. Load New Incoming Data (Regular Order Handoff)
-      const savedOrderData = localStorage.getItem("orderData")
-      if (savedOrderData) {
-        try {
-            const data = JSON.parse(savedOrderData)
-            // Only add if it's meant for this stage and strictly Pending (Regular Order)
-            if (data.stage === "Approval Of Order" && data.status === "Pending") {
-                // Check if already processed in history
-                const isProcessed = historyData.some(
-                    (item: any) => item.stage === "Approval Of Order" && (item.orderNo === (data.doNumber || "DO-XXX"))
-                )
-                
-                if (!isProcessed) {
-                     // Check if already in persisted list
-                     const exists = persistedPending.some((o: any) => 
-                         (o.doNumber || o.orderNo) === (data.doNumber || data.orderNo)
-                     )
-                     if (!exists) {
-                         persistedPending = [data, ...persistedPending]
-                         localStorage.setItem("approvalPendingItems", JSON.stringify(persistedPending))
-                     }
-                }
-            }
-        } catch(e) {}
+      if (response.success && response.data.orders) {
+        const mappedOrders = response.data.orders.map(mapBackendOrderToFrontend);
+        setPendingOrders(mappedOrders);
       }
-
-      // 4. Merge history pending and direct persisted pending
-      const mergedPending = [...pendingFromHistory]
+    } catch (error: any) {
+      console.error("Failed to fetch pending approvals:", error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to load pending approvals from server",
+        variant: "destructive",
+      });
       
-      persistedPending.forEach((item: any) => {
-          const exists = mergedPending.some(o => (o.doNumber || o.orderNo) === (item.doNumber || item.orderNo))
-          if (!exists) {
-              mergedPending.push(item)
-          }
-      })
-      
-      // Sort by recency
-      // mergedPending.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      // Fallback to localStorage if API fails
+      const savedPending = localStorage.getItem("approvalPendingItems");
+      if (savedPending) {
+        setPendingOrders(JSON.parse(savedPending));
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      setPendingOrders(mergedPending)
+  // Fetch approval history from backend
+  const fetchHistory = async () => {
+    try {
+      const response = await approvalApi.getHistory({ limit: 1000 });
+      
+      if (response.success && response.data.orders) {
+        const mappedHistory = response.data.orders.map((order: any) => ({
+          orderNo: order.order_no,
+          customerName: order.customer_name,
+          stage: "Approval Of Order",
+          status: "Completed" as const,
+          processedBy: "System",
+          timestamp: order.actual_2,
+          date: order.actual_2 ? new Date(order.actual_2).toLocaleDateString("en-GB") : "-",
+          remarks: order.remark || "-",
+        }));
+        setHistory(mappedHistory);
+      }
+    } catch (error: any) {
+      console.error("Failed to fetch history:", error);
+      
+      // Fallback to localStorage
+      const savedHistory = localStorage.getItem("workflowHistory");
+      if (savedHistory) {
+        const historyData = JSON.parse(savedHistory);
+        const stageHistory = historyData
+          .filter((item: any) => item.stage === "Approval Of Order" || item.stage === "Commitment Review")
+          .map((item: any) => ({
+            ...item,
+            stage: "Approval Of Order",
+            date: item.date || (item.timestamp ? new Date(item.timestamp).toLocaleDateString("en-GB") : "-"),
+            remarks: item.remarks || "-"
+          }));
+        setHistory(stageHistory);
+      }
+    }
+  };
+
+  useEffect(() => {
+    // Fetch data from backend
+    fetchPendingApprovals();
+    fetchHistory();
   }, [])
 
   const checkItems = [
@@ -239,10 +228,22 @@ export default function CommitmentReviewPage() {
       const hasRejection = Object.values(checklistValues).includes("reject")
       const timestamp = new Date().toISOString()
       
+      const successfulApprovals: any[] = []
+      const failedApprovals: any[] = []
+      
       // Process each selected item individually
       for (const item of selectedItems) {
         const orderIdentifier = item.doNumber || item.soNumber || item.orderNo || "ORD-XXX";
         const productName = item._product?.productName || item._product?.oilType || "Unknown";
+        const product = item._product || item.products?.[0];
+
+        console.log('[APPROVAL] Processing item:', {
+          orderIdentifier,
+          productName,
+          productId: product?.id,
+          hasRejection,
+          checklistValues
+        });
 
         // Create a focused order object with ONLY the approved/rejected product
         const focusedOrderData = {
@@ -252,6 +253,42 @@ export default function CommitmentReviewPage() {
             _product: item._product // keep for reference
         };
 
+        // Try submitting to backend API
+        try {
+          if (product?.id && !hasRejection) {
+            // Prepare approval data for backend
+            // Convert to boolean values for boolean columns in database
+            const approvalData = {
+              rate_is_rightly_as_per_current_market_rate: checklistValues.rate === "approve",
+              we_are_dealing_in_ordered_sku: checklistValues.sku === "approve",
+              party_credit_status: checklistValues.credit === "approve" ? "Good" : "Poor",
+              dispatch_date_confirmed: checklistValues.dispatch === "approve",
+              overall_status_of_order: checklistValues.overall === "approve" ? "Approved" : "Rejected",
+              order_confirmation_with_customer: checklistValues.confirm === "approve",
+            };
+
+            console.log('[APPROVAL] Submitting to API:', {
+              productId: product.id,
+              approvalData
+            });
+
+            // Call backend API to submit approval
+            const response = await approvalApi.submit(product.id, approvalData);
+            console.log('[APPROVAL] API Response:', response);
+            successfulApprovals.push(item);
+          } else {
+            console.warn('[APPROVAL] Skipping API submission:', {
+              productId: product?.id,
+              hasRejection,
+              reason: !product?.id ? 'Missing product ID' : 'Has rejection'
+            });
+          }
+        } catch (error: any) {
+          console.error(`[APPROVAL] Failed to submit approval for ${orderIdentifier}:`, error);
+          failedApprovals.push({ item, error: error?.message || "Unknown error" });
+        }
+
+        // Save to local history for tracking (both success and failure cases)
         if (hasRejection) {
           const historyEntry = {
             orderNo: orderIdentifier,
@@ -299,51 +336,34 @@ export default function CommitmentReviewPage() {
         }
       }
 
-      // Update persisted list by REMOVING only the selected products, not the whole order
-      const savedPending = localStorage.getItem("approvalPendingItems")
-      if (savedPending) {
-         const list = JSON.parse(savedPending)
-         
-         const updatedList = list.map((o: any) => {
-             const oId = o.doNumber || o.orderNo;
-             const itemsForThisOrder = selectedItems.filter(item => (item.doNumber || item.orderNo) === oId);
-             
-             if (itemsForThisOrder.length === 0) return o;
-             
-             // Use a composite key for matching products to remove
-             const processedKeys = new Set(itemsForThisOrder.map(item => 
-                 `${item._product?.productName || item._product?.oilType}-${item._product?.uom || '—'}-${item._product?.orderQty || '—'}`
-             ));
-             
-             const remainingProducts = (o.products || []).filter((p: any) => {
-                 const pKey = `${p.productName || p.oilType}-${p.uom || '—'}-${p.orderQty || '—'}`;
-                 return !processedKeys.has(pKey);
-             });
-             
-             const remainingPreAppProducts = (o.preApprovalProducts || []).filter((p: any) => {
-                 const pKey = `${p.productName || p.oilType}-${p.uom || '—'}-${p.orderQty || '—'}`;
-                 return !processedKeys.has(pKey);
-             });
-             
-             return {
-                 ...o,
-                 products: remainingProducts,
-                 preApprovalProducts: remainingPreAppProducts
-             };
-         }).filter((o: any) => {
-             // Keep the order if it still has products or if it's a special type
-             return (o.products?.length > 0 || o.preApprovalProducts?.length > 0);
-         });
-
-         localStorage.setItem("approvalPendingItems", JSON.stringify(updatedList))
-         setPendingOrders(updatedList)
+      // Show results
+      if (successfulApprovals.length > 0) {
+        toast({
+          title: hasRejection ? "Orders Rejected" : "Approvals Submitted",
+          description: `${successfulApprovals.length} item(s) have been processed successfully.`,
+          variant: hasRejection ? "destructive" : "default",
+        })
+        
+        // Refresh data from backend
+        await fetchPendingApprovals()
+        await fetchHistory()
+      }
+      
+      if (failedApprovals.length > 0) {
+        toast({
+          title: "Some Approvals Failed",
+          description: `${failedApprovals.length} approval(s) failed. Please try again.`,
+          variant: "destructive",
+        })
       }
 
-      toast({
-        title: hasRejection ? "Orders Rejected" : "Commitment Verified",
-        description: `${selectedItems.length} items have been processed.`,
-        variant: hasRejection ? "destructive" : "default",
-      })
+      if (successfulApprovals.length === 0 && failedApprovals.length === 0) {
+        toast({
+          title: hasRejection ? "Orders Rejected" : "Commitment Verified",
+          description: `${selectedItems.length} items have been processed.`,
+          variant: hasRejection ? "destructive" : "default",
+        })
+      }
 
       if (pendingOrders.length <= selectedItems.length) {
            setTimeout(() => {
@@ -644,7 +664,16 @@ export default function CommitmentReviewPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayRows.length > 0 ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8">
+                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>Loading pending approvals...</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : displayRows.length > 0 ? (
                 displayRows.map((order: any, index: number) => {
                    const p = order._product;
                    

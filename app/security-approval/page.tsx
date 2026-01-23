@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input"
 import { Upload, X, Plus, Settings2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
+import { securityGuardApprovalApi } from "@/lib/api-service"
 
 export default function SecurityApprovalPage() {
   const router = useRouter()
@@ -38,6 +39,7 @@ export default function SecurityApprovalPage() {
   ])
   const [selectedItems, setSelectedItems] = useState<any[]>([])
   const [uploadData, setUploadData] = useState({
+    biltyNo: "",
     biltyImage: null as File | null,
     vehicleImages: [] as File[],
     checklist: {
@@ -49,112 +51,149 @@ export default function SecurityApprovalPage() {
     }
   })
 
-  useEffect(() => {
-    const savedHistory = localStorage.getItem("workflowHistory")
-    if (savedHistory) {
-      const history = JSON.parse(savedHistory)
-      
-      const completed = history.filter(
-        (item: any) => item.stage === "Security Approval" && item.status === "Completed"
-      )
-      setHistoryOrders(completed)
-
-      const pending = history.filter(
-        (item: any) => item.stage === "Material Load" && item.status === "Completed"
-      )
-      setPendingOrders(pending)
-    }
-  }, [])
-
-  const handleSubmit = async (item: any) => {
-    setIsProcessing(true)
+  // Fetch pending security approvals from backend
+  const fetchPendingApprovals = async () => {
     try {
-      const updatedOrder = {
-        ...item,
-        stage: "Security Approval",
-        _product: item._product,
-        securityData: {
-          biltyUploaded: !!uploadData.biltyImage,
-          vehicleImagesCount: uploadData.vehicleImages.length,
-          checklist: uploadData.checklist,
-          approvedAt: new Date().toISOString(),
-        },
-        data: {
-          ...(item.data || {}),
-          orderData: {
-            ...(item.data?.orderData || item),
-            products: item.orderType === "regular" ? [item._product] : [],
-            preApprovalProducts: item.orderType !== "regular" ? [item._product] : []
-          }
-        }
+      console.log('[SECURITY] Fetching pending approvals from API...');
+      const response = await securityGuardApprovalApi.getPending({ limit: 1000 });
+      console.log('[SECURITY] API Response:', response);
+      
+      if (response.success && response.data.approvals) {
+        setPendingOrders(response.data.approvals);
+        console.log('[SECURITY] Loaded', response.data.approvals.length, 'pending approvals');
       }
-
-      const savedHistory = localStorage.getItem("workflowHistory")
-      const history = savedHistory ? JSON.parse(savedHistory) : []
-      history.push(updatedOrder)
-      localStorage.setItem("workflowHistory", JSON.stringify(history))
-
-      setHistoryOrders((prev) => [...prev, updatedOrder])
-
+    } catch (error: any) {
+      console.error("[SECURITY] Failed to fetch pending approvals:", error);
       toast({
-        title: "Security Approved",
-        description: "Order moved to Make Invoice stage.",
-      })
-
-      setTimeout(() => {
-        router.push("/make-invoice")
-      }, 1500)
-    } finally {
-      setIsProcessing(false)
+        title: "Error",
+        description: error?.message || "Failed to load pending approvals",
+        variant: "destructive",
+      });
+      setPendingOrders([]);
     }
-  }
+  };
+
+  // Fetch security approval history from backend
+  const fetchApprovalHistory = async () => {
+    try {
+      const response = await securityGuardApprovalApi.getHistory({ limit: 1000 });
+      
+      if (response.success && response.data.approvals) {
+        const mappedHistory = response.data.approvals.map((record: any) => ({
+          orderNo: record.so_no,
+          doNumber: record.d_sr_number,
+          customerName: record.party_name,
+          stage: "Security Approval",
+          status: "Completed" as const,
+          processedBy: "System",
+          timestamp: record.actual_4,
+          date: record.actual_4 ? new Date(record.actual_4).toLocaleDateString("en-GB") : "-",
+          remarks: record.bilty_no || "-",
+        }));
+        setHistoryOrders(mappedHistory);
+      }
+    } catch (error: any) {
+      console.error("[SECURITY] Failed to fetch history:", error);
+      setHistoryOrders([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchPendingApprovals();
+    fetchApprovalHistory();
+  }, []);
 
   const handleBulkSubmit = async () => {
     setIsProcessing(true)
     try {
-      const updatedEntries = selectedItems.map((item) => ({
-        ...item,
-        stage: "Security Approval",
-        _product: item._product,
-        securityData: {
-          biltyUploaded: !!uploadData.biltyImage,
-          vehicleImagesCount: uploadData.vehicleImages.length,
-          checklist: uploadData.checklist,
-          approvedAt: new Date().toISOString(),
-        },
-        data: {
-          ...(item.data || {}),
-          orderData: {
-            ...(item.data?.orderData || item),
-            products: item.orderType === "regular" ? [item._product] : [],
-            preApprovalProducts: item.orderType !== "regular" ? [item._product] : []
+      const successfulSubmissions: any[] = []
+      const failedSubmissions: any[] = []
+
+      // Submit each item to backend API
+      for (const item of selectedItems) {
+        const recordId = item.id; // Use the lift_receiving_confirmation table ID
+        
+        try {
+          if (recordId) {
+            const submitData = {
+              bilty_no: uploadData.biltyNo || null,
+              bilty_image: uploadData.biltyImage?.name || null,
+              vehicle_image_attachemrnt: uploadData.vehicleImages.length > 0 ? uploadData.vehicleImages.map(f => f.name).join(',') : null,
+            };
+
+            console.log('[SECURITY] Submitting approval for ID:', recordId, submitData);
+            const response = await securityGuardApprovalApi.submit(recordId, submitData);
+            console.log('[SECURITY] API Response:', response);
+            
+            if (response.success) {
+              successfulSubmissions.push({ item, response });
+            } else {
+              failedSubmissions.push({ item, error: response.message || 'Unknown error' });
+            }
+          } else {
+            console.warn('[SECURITY] Skipping - no record ID found for:', item);
+            failedSubmissions.push({ item, error: 'No record ID found' });
           }
+        } catch (error: any) {
+          console.error('[SECURITY] Failed to submit approval:', error);
+          failedSubmissions.push({ item, error: error?.message || error?.toString() || 'Unknown error' });
         }
-      }))
+      }
 
-      const savedHistory = localStorage.getItem("workflowHistory")
-      const history = savedHistory ? JSON.parse(savedHistory) : []
-      history.push(...updatedEntries)
-      localStorage.setItem("workflowHistory", JSON.stringify(history))
+      // Show results
+      if (successfulSubmissions.length > 0) {
+        toast({
+          title: "Security Approved",
+          description: `${successfulSubmissions.length} approval(s) completed successfully.`,
+        });
 
-      setHistoryOrders((prev) => [...prev, ...updatedEntries])
-      setSelectedItems([])
+        // Clear selections and form
+        setSelectedItems([]);
+        setUploadData({
+          biltyNo: "",
+          biltyImage: null,
+          vehicleImages: [],
+          checklist: {
+            mallLoad: false,
+            qtyMatch: false,
+            gaadiCovered: false,
+            image: false,
+            driverCond: false,
+          }
+        });
 
+        // Refresh data from backend
+        await fetchPendingApprovals();
+        await fetchApprovalHistory();
+
+        // Navigate to next stage after delay
+        setTimeout(() => {
+          router.push("/make-invoice")
+        }, 1500)
+      }
+
+      if (failedSubmissions.length > 0) {
+        console.error('[SECURITY] Failed submissions:', failedSubmissions);
+        toast({
+          title: "Some Approvals Failed",
+          description: `${failedSubmissions.length} approval(s) failed. Check console for details.`,
+          variant: "destructive",
+        })
+      }
+    } catch (error: any) {
+      console.error('[SECURITY] Unexpected error:', error);
       toast({
-        title: "Bulk Security Approved",
-        description: `${updatedEntries.length} items processed and moved to Make Invoice.`,
-      })
-
-      setTimeout(() => {
-        router.push("/make-invoice")
-      }, 1500)
+        title: "Error",
+        description: error?.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
     } finally {
       setIsProcessing(false)
     }
   }
 
   /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
       status: "",
@@ -165,10 +204,10 @@ export default function SecurityApprovalPage() {
 
   // Selection Logic
   const toggleSelectItem = (item: any) => {
-    const itemKey = `${item.doNumber || item.orderNo}-${item._product?.productName || item._product?.oilType || 'no-prod'}`;
+    const itemKey = `${item.id}`;
     setSelectedItems((prev) =>
-      prev.some((i) => `${i.doNumber || i.orderNo}-${i._product?.productName || i._product?.oilType || 'no-prod'}` === itemKey)
-        ? prev.filter((i) => `${i.doNumber || i.orderNo}-${i._product?.productName || i._product?.oilType || 'no-prod'}` !== itemKey)
+      prev.some((i) => i.id === item.id)
+        ? prev.filter((i) => i.id !== item.id)
         : [...prev, item]
     )
   }
@@ -185,12 +224,12 @@ export default function SecurityApprovalPage() {
       let matches = true
       
       // Filter by Party Name
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
+      if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) {
           matches = false
       }
 
       // Filter by Date Range
-      const orderDateStr = order.securityData?.approvedAt || order.loadData?.completedAt || order.timestamp
+      const orderDateStr = order.timestamp
       if (orderDateStr) {
           const orderDate = new Date(orderDateStr)
           if (filterValues.startDate) {
@@ -205,73 +244,31 @@ export default function SecurityApprovalPage() {
           }
       }
 
-      // Filter by Status (On Time / Expire)
-      if (filterValues.status) {
-          const today = new Date()
-          today.setHours(0, 0, 0, 0)
-          const targetDateStr = order.deliveryDate || order.timestamp
-          if (targetDateStr) {
-             const targetDate = new Date(targetDateStr)
-             
-             if (filterValues.status === "expire") {
-                 if (targetDate < today) matches = true
-                 else matches = false
-             } else if (filterValues.status === "on-time") {
-                 if (targetDate >= today) matches = true
-                 else matches = false
-             }
-          }
-      }
-
       return matches
   })
 
-  // Flatten orders for table display - each product/oil type is a row
+  // Map backend data to display format
   const displayRows = useMemo(() => {
-    const rows: any[] = []
-    filteredPendingOrders.forEach((order) => {
-       const internalOrder = order.data?.orderData || order;
-       const products = (internalOrder.preApprovalProducts?.length > 0)
-         ? internalOrder.preApprovalProducts
-         : ((internalOrder.products?.length > 0)
-           ? internalOrder.products
-           : (internalOrder.orderData?.products || []));
-
-       if (!products || products.length === 0) {
-         // Check if this "null product" entry exists in history
-         const isDone = historyOrders.some(h => 
-           (h.orderNo === (order.doNumber || order.orderNo)) && h._product === null
-         );
-         if (!isDone) rows.push({ ...order, _product: null })
-       } else {
-         products.forEach((prod: any) => {
-           // Track by product name/type
-           const pName = prod.productName || prod.oilType;
-           const isDone = historyOrders.some(h => 
-             (h.doNumber === (order.doNumber || order.orderNo) || h.orderNo === (order.doNumber || order.orderNo)) && 
-             (h.data?.orderData?._product?.productName === pName || h.data?.orderData?._product?.oilType === pName)
-           );
-
-           if (!isDone) {
-             rows.push({ ...order, _product: prod })
-           }
-         });
-       }
-    })
-    return rows
-  }, [filteredPendingOrders, historyOrders])
+    return filteredPendingOrders.map((record: any) => ({
+      id: record.id, // Keep DB ID for submission
+      doNumber: record.d_sr_number,
+      orderNo: record.so_no,
+      customerName: record.party_name,
+      productName: record.product_name,
+      qtyToDispatch: record.qty_to_be_dispatched,
+      transportType: record.type_of_transporting,
+      deliveryFrom: record.dispatch_from,
+      timestamp: record.timestamp,
+      status: "Pending Security",
+    }))
+  }, [filteredPendingOrders])
 
   return (
     <WorkflowStageShell
       title="Stage 8: Security Guard Approval"
       description="Upload bilty and vehicle images for security verification."
       pendingCount={displayRows.length}
-      historyData={historyOrders.map((order) => ({
-        date: new Date(order.securityData?.approvedAt || new Date()).toLocaleDateString("en-GB"),
-        stage: "Security Approval",
-        status: "Completed",
-        remarks: `${order.securityData?.vehicleImagesCount} Images`,
-      }))}
+      historyData={historyOrders}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
       remarksColName="Attachments"
@@ -324,17 +321,17 @@ export default function SecurityApprovalPage() {
                         {selectedItems.map((item, idx) => (
                             <div key={idx} className="bg-white p-3 border border-slate-200 rounded-xl shadow-sm flex flex-col gap-1.5 relative overflow-hidden group hover:border-blue-200 transition-all">
                                 <div className="absolute top-0 right-0 py-0.5 px-2 bg-slate-50 border-l border-b border-slate-100 rounded-bl-lg">
-                                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{item.orderType || "—"}</span>
+                                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{item.doNumber || "—"}</span>
                                 </div>
                                 <div className="flex flex-col">
-                                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">DO-No: {item.doNumber || item.orderNo}</span>
+                                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">DO-No: {item.orderNo}</span>
                                    <h4 className="text-xs font-bold text-slate-800 leading-tight truncate pr-16">{item.customerName || "—"}</h4>
                                 </div>
                                 <div className="pt-2 border-t border-slate-50 mt-0.5">
                                    <div className="flex items-center gap-1.5">
                                       <div className="w-1 h-1 rounded-full bg-blue-500" />
                                       <span className="text-xs font-bold text-blue-600 truncate">
-                                        {item._product?.productName || item._product?.oilType || "—"}
+                                        {item.productName || "—"}
                                       </span>
                                    </div>
                                 </div>
@@ -347,9 +344,18 @@ export default function SecurityApprovalPage() {
                   <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
                     <h3 className="text-sm font-bold text-slate-800 px-1 flex items-center gap-2 uppercase tracking-tight">
                       <div className="w-1.5 h-4 bg-blue-600 rounded-full" />
-                      Document Verification
+Document Verification
                     </h3>
                     <div className="space-y-4">
+                       <div className="space-y-2">
+                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Bilty Number</Label>
+                         <Input
+                           value={uploadData.biltyNo}
+                           onChange={(e) => setUploadData({ ...uploadData, biltyNo: e.target.value })}
+                           placeholder="Enter Bilty Number"
+                           className="bg-white"
+                         />
+                       </div>
                        <div className="space-y-2">
                          <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Bilty Image (Scanned Copy)</Label>
                          <Input
@@ -501,51 +507,8 @@ export default function SecurityApprovalPage() {
             <TableBody>
               {displayRows.length > 0 ? (
                 displayRows.map((item: any, index: number) => {
-                   const order = item;
-                   const p = order._product;
-                   const rowKey = `${order.doNumber || order.orderNo}-${p?.productName || p?.oilType || 'no-prod'}`;
-                   
-                   const prodName = p?.productName || p?.oilType || "—";
-                   const rateLtr = p?.ratePerLtr || p?.rateLtr || order.ratePerLtr || "—";
-                   const rate15Kg = p?.ratePer15Kg || p?.rateLtr || order.rateLtr || "—";
-                   const oilType = p?.oilType || order.oilType || "—";
-
-                   const row: any = {
-                     orderNo: order.doNumber || order.orderNo || "DO-XXX",
-                     deliveryPurpose: order.orderPurpose || order.deliveryPurpose || "—",
-                     customerType: order.customerType || "—",
-                     orderType: order.orderType || "—",
-                     soNo: order.soNumber || "—",
-                     partySoDate: order.soDate || order.partySoDate || "—",
-                     customerName: order.customerName || "—",
-                     itemConfirm: order.itemConfirm || "—",
-                     productName: prodName,
-                     uom: p?.uom || "—",
-                     orderQty: p?.orderQty || p?.approvalQty || "—",
-                     altUom: p?.altUom || "—",
-                     altQty: p?.altQty || "—",
-                     oilType: oilType,
-                     ratePerLtr: rateLtr,
-                     ratePer15Kg: rate15Kg,
-                     rateOfMaterial: order.rateMaterial || "—",
-                     totalWithGst: order.totalWithGst || "—",
-                     transportType: order.dispatchData?.transportType || order.transportType || "—",
-                     uploadSo: "so_document.pdf",
-                     contactPerson: order.customerPerson || order.contactPerson || "—",
-                     whatsapp: order.whatsappNo || "—",
-                     address: order.customerAddress || "—",
-                     paymentTerms: order.paymentTerms || "—",
-                     advanceTaken: order.advancePaymentTaken || "—",
-                     advanceAmount: order.advanceAmount || "—",
-                     isBroker: order.isBrokerOrder || "—",
-                     brokerName: order.brokerName || "—",
-                     deliveryDate: order.deliveryDate || "—",
-                     qtyToDispatch: order.dispatchData?.qtyToDispatch || "—",
-                     deliveryFrom: order.deliveryData?.deliveryFrom || "—",
-                     status: "Pending Security",
-                   }
-
-                   const isSelected = selectedItems.some(i => `${i.doNumber || i.orderNo}-${i._product?.productName || i._product?.oilType || 'no-prod'}` === rowKey);
+                   const rowKey = `${item.id}`;
+                   const isSelected = selectedItems.some(i => i.id === item.id);
 
                    return (
                    <TableRow key={`${index}-${rowKey}`} className={isSelected ? "bg-blue-50/50" : ""}>
@@ -556,12 +519,12 @@ export default function SecurityApprovalPage() {
                         />
                      </TableCell>
                      {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                       <TableCell key={col.id} className="whitespace-nowrap text-center">
+                       <TableCell key={col.id} className="whitespace-nowrap text-center text-xs">
                          {col.id === "status" ? (
                             <div className="flex justify-center">
                                <Badge className="bg-amber-100 text-amber-700">Pending Security</Badge>
                             </div>
-                         ) : row[col.id as keyof typeof row] || "—"}
+                         ) : (item as any)[col.id] || "—"}
                        </TableCell>
                      ))}
                    </TableRow>

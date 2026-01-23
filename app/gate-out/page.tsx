@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Upload, Settings2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
+import { gateOutApi } from "@/lib/api-service"
 
 export default function GateOutPage() {
   const router = useRouter()
@@ -39,69 +40,82 @@ export default function GateOutPage() {
     gateOutTime: "",
   })
 
-  useEffect(() => {
-    const savedHistory = localStorage.getItem("workflowHistory")
-    if (savedHistory) {
-      const history = JSON.parse(savedHistory)
-      
-      const completed = history.filter(
-        (item: any) => item.stage === "Gate Out" && item.status === "Completed"
-      )
-      setHistoryOrders(completed)
-
-      const pending = history.filter(
-        (item: any) => item.stage === "Check Invoice" && item.status === "Completed"
-      ).filter(
-        (item: any) => 
-          !completed.some((completedItem: any) => 
-            (completedItem.doNumber && item.doNumber && completedItem.doNumber === item.doNumber) ||
-            (completedItem.orderNo && item.orderNo && completedItem.orderNo === item.orderNo)
-          )
-      )
-      setPendingOrders(pending)
+  // Fetch Pending
+  const fetchPending = async () => {
+    try {
+      const response = await gateOutApi.getPending({ limit: 1000 });
+      if (response.success && response.data.orders) {
+        setPendingOrders(response.data.orders);
+      }
+    } catch (error) {
+      console.error("Failed to fetch pending gate out:", error);
     }
+  }
+
+  // Fetch History
+  const fetchHistory = async () => {
+    try {
+        const response = await gateOutApi.getHistory({ limit: 1000 });
+        if (response.success && response.data.orders) {
+          setHistoryOrders(response.data.orders);
+        }
+    } catch (error) {
+        console.error("Failed to fetch history:", error);
+    }
+  }
+
+  useEffect(() => {
+    fetchPending();
+    fetchHistory();
   }, [])
 
   const handleSubmit = async (order: any) => {
     setIsProcessing(true)
     try {
-      const updatedOrder = {
-        ...order,
-        stage: "Gate Out",
-        status: "Completed",
-        gateOutData: {
-          gateOutTime: gateOutData.gateOutTime || new Date().toISOString(),
-          gatePassUploaded: !!gateOutData.gatePassFile,
-          vehicleImageUploaded: !!gateOutData.vehicleLoadedImage,
-        },
+      // In a real app, we would upload files first and get URLs
+      // For now, we'll just simulate passing file names if present
+      const submitData = {
+        gate_pass: gateOutData.gatePassFile ? gateOutData.gatePassFile.name : null,
+        vehicle_image: gateOutData.vehicleLoadedImage ? gateOutData.vehicleLoadedImage.name : null,
+        // gateOutTime will be set by server timestamp
+      };
+
+      const response = await gateOutApi.submit(order.id, submitData);
+
+      if (response.success) {
+        toast({
+            title: "Gate Out Completed",
+            description: "Order moved to Material Receipt stage.",
+        })
+        
+        await fetchPending();
+        await fetchHistory();
+        
+        // Reset form
+        setGateOutData({ gatePassFile: null, vehicleLoadedImage: null, gateOutTime: "" });
+
+        // If you want to navigate away, un-comment this:
+        // setTimeout(() => {
+        //   router.push("/material-receipt")
+        // }, 1500)
+      } else {
+         throw new Error(response.message || "Failed to submit");
       }
 
-      const savedHistory = localStorage.getItem("workflowHistory")
-      const history = savedHistory ? JSON.parse(savedHistory) : []
-      history.push(updatedOrder)
-      localStorage.setItem("workflowHistory", JSON.stringify(history))
-      localStorage.setItem("currentOrderData", JSON.stringify(updatedOrder))
-
-      // Update local state immediately
-      const newPending = pendingOrders.filter(o => o.doNumber !== order.doNumber)
-      setPendingOrders(newPending)
-      setHistoryOrders((prev) => [...prev, updatedOrder])
-
+    } catch (error: any) {
+      console.error("Submit error:", error);
       toast({
-        title: "Gate Out Completed",
-        description: "Order moved to Material Receipt stage.",
+        title: "Error",
+        description: error.message || "Something went wrong",
+        variant: "destructive",
       })
-
-      setTimeout(() => {
-        router.push("/material-receipt")
-      }, 1500)
     } finally {
       setIsProcessing(false)
     }
   }
 
   /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
       status: "",
@@ -114,12 +128,13 @@ export default function GateOutPage() {
       let matches = true
       
       // Filter by Party Name
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
+      if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) {
           matches = false
       }
 
       // Filter by Date Range
-      const orderDateStr = order.gateOutData?.gateOutTime || order.checkInvoiceData?.checkedAt || order.timestamp
+      // using timestamp or actual_6 date
+      const orderDateStr = order.timestamp || order.actual_6
       if (orderDateStr) {
           const orderDate = new Date(orderDateStr)
           if (filterValues.startDate) {
@@ -134,24 +149,6 @@ export default function GateOutPage() {
           }
       }
 
-      // Filter by Status (On Time / Expire)
-      if (filterValues.status) {
-          const today = new Date()
-          today.setHours(0, 0, 0, 0)
-          const targetDateStr = order.deliveryDate || order.timestamp
-          if (targetDateStr) {
-             const targetDate = new Date(targetDateStr)
-             
-             if (filterValues.status === "expire") {
-                 if (targetDate < today) matches = true
-                 else matches = false
-             } else if (filterValues.status === "on-time") {
-                 if (targetDate >= today) matches = true
-                 else matches = false
-             }
-          }
-      }
-
       return matches
   })
 
@@ -161,10 +158,10 @@ export default function GateOutPage() {
       description="Record gate out details and upload gate pass."
       pendingCount={filteredPendingOrders.length}
       historyData={historyOrders.map((order) => ({
-        date: new Date(order.gateOutData?.gateOutTime || new Date()).toLocaleDateString("en-GB"),
+        date: order.actual_7 ? new Date(order.actual_7).toLocaleDateString("en-GB") : "-",
         stage: "Gate Out",
         status: "Completed",
-        remarks: order.gateOutData?.gatePassUploaded ? "Pass Uploaded" : "-",
+        remarks: order.gate_pass_copy ? "Pass Uploaded" : "-",
       }))}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
@@ -213,55 +210,30 @@ export default function GateOutPage() {
             <TableBody>
               {filteredPendingOrders.length > 0 ? (
                 filteredPendingOrders.map((order, index) => {
-                   // Safe extraction of nested order data if it exists
-                   const internalOrder = order.data?.orderData || order;
-                   const preApproval = order.data?.preApprovalData || internalOrder.preApprovalData || {};
-                   
-                   const prodNames = internalOrder.products?.map((p: any) => p.productName).join(", ") || 
-                                     internalOrder.preApprovalProducts?.map((p: any) => p.oilType).join(", ") || 
-                                     "";
-                   const uoms = internalOrder.products?.map((p: any) => p.uom).join(", ") || "";
-                   const qtys = internalOrder.products?.map((p: any) => p.orderQty).join(", ") || "";
-                   const altUoms = internalOrder.products?.map((p: any) => p.altUom).join(", ") || "";
-                   const altQtys = internalOrder.products?.map((p: any) => p.altQty).join(", ") || "";
-                   
-                   const ratesLtr = internalOrder.preApprovalProducts?.map((p: any) => p.ratePerLtr).join(", ") || internalOrder.ratePerLtr || "—";
-                   const rates15Kg = internalOrder.preApprovalProducts?.map((p: any) => p.rateLtr).join(", ") || internalOrder.rateLtr || "—";
-                   const oilTypes = internalOrder.preApprovalProducts?.map((p: any) => p.oilType).join(", ") || internalOrder.oilType || "—";
-
-                   const row = {
-                     orderNo: internalOrder.doNumber || internalOrder.orderNo || "DO-XXX",
-                     deliveryPurpose: internalOrder.orderPurpose || "—",
-                     customerType: internalOrder.customerType || "—",
-                     orderType: internalOrder.orderType || "—",
-                     soNo: internalOrder.soNumber || "—",
-                     partySoDate: internalOrder.soDate || "—",
-                     customerName: internalOrder.customerName || "—",
-                     itemConfirm: internalOrder.itemConfirm || "—",
-                     productName: prodNames,
-                     uom: uoms,
-                     orderQty: qtys,
-                     altUom: altUoms,
-                     altQty: altQtys,
-                     oilType: oilTypes,
-                     ratePerLtr: ratesLtr,
-                     ratePer15Kg: rates15Kg,
-                     rateOfMaterial: internalOrder.rateMaterial || "—",
-                     totalWithGst: internalOrder.totalWithGst || "—",
-                     transportType: internalOrder.dispatchData?.transportType || "—",
-                     uploadSo: "so_document.pdf",
-                     contactPerson: internalOrder.contactPerson || "—",
-                     whatsapp: internalOrder.whatsappNo || "—",
-                     address: internalOrder.customerAddress || "—",
-                     paymentTerms: internalOrder.paymentTerms || "—",
-                     advanceTaken: internalOrder.advancePaymentTaken || "—",
-                     advanceAmount: internalOrder.advanceAmount || "—",
-                     isBroker: internalOrder.isBrokerOrder || "—",
-                     brokerName: internalOrder.brokerName || "—",
-                     deliveryDate: internalOrder.deliveryDate || "—",
-                     qtyToDispatch: internalOrder.dispatchData?.qtyToDispatch || "—",
-                     deliveryFrom: internalOrder.deliveryData?.deliveryFrom || "—",
-                     status: "Ready for Gate Out", // Special handling for badge
+                   // Map backend data to display row
+                   const row: any = {
+                       orderNo: order.so_no || "—",
+                       doNumber: order.d_sr_number || "—",
+                       customerName: order.party_name || "—",
+                       productName: order.product_name || "—",
+                       qtyToDispatch: order.qty_to_be_dispatched || "—",
+                       deliveryFrom: order.dispatch_from || "—",
+                       transportType: order.type_of_transporting || "—",
+                       status: "Ready for Gate Out",
+                       
+                       // invoice fields might be relevant
+                       invoiceNo: order.invoice_no || "—",
+                       invoiceDate: order.invoice_date || "—",
+                       billAmount: order.bill_amount || "—",
+                       
+                       // driver details
+                       vehicleNo: order.truck_no || "—",
+                       driverName: "—", // Driver details not available in this stage
+                       
+                       // vehicle weights
+                       grossWeight: order.gross_weight || "—",
+                       tareWeight: order.tare_weight || "—",
+                       netWeight: order.net_weight || "—",
                    }
 
                    return (
@@ -273,9 +245,10 @@ export default function GateOutPage() {
                          </DialogTrigger>
                          <DialogContent className="max-w-lg">
                            <DialogHeader>
-                             <DialogTitle>Gate Out: {order.orderNo}</DialogTitle>
+                             <DialogTitle>Gate Out: {row.doNumber}</DialogTitle>
                            </DialogHeader>
                            <div className="space-y-4 py-4">
+                             {/*
                              <div className="space-y-2">
                                <Label>Gate Out Time</Label>
                                <Input
@@ -284,6 +257,7 @@ export default function GateOutPage() {
                                  onChange={(e) => setGateOutData({ ...gateOutData, gateOutTime: e.target.value })}
                                />
                              </div>
+                             */}
                              <div className="space-y-2">
                                <Label>Upload Gate Pass</Label>
                                <div className="border-2 border-dashed rounded-lg p-6 text-center">
@@ -343,7 +317,7 @@ export default function GateOutPage() {
                              <div className="flex justify-center">
                                 <Badge className="bg-rose-100 text-rose-700">Ready for Gate Out</Badge>
                              </div>
-                          ) : row[col.id as keyof typeof row]}
+                          ) : row[col.id as keyof typeof row] || "—"}
                         </TableCell>
                       ))}
                    </TableRow>

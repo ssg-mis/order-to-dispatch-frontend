@@ -47,6 +47,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
+import { preApprovalApi } from "@/lib/api-service"
 
 
 
@@ -89,6 +90,7 @@ export default function PreApprovalPage() {
     "ratePer15Kg"
   ])
   const [isApproving, setIsApproving] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [preApprovalData, setPreApprovalData] = useState<any>(null)
   const [productRates, setProductRates] = useState<{ [key: string]: { skuName: string; approvalQty: string; rate: string; remark: string } }>({})
@@ -105,159 +107,179 @@ export default function PreApprovalPage() {
   const [skuSearch, setSkuSearch] = useState("")
 
 
-  useEffect(() => {
-    // 1. Load History
-    const savedHistory = localStorage.getItem("workflowHistory")
-    let historyData = []
-    if (savedHistory) {
-      historyData = JSON.parse(savedHistory)
-      const stageHistory = historyData
-        .filter((item: any) => item.stage === "Pre-Approval")
-        .map((item: any) => ({
-          ...item,
-          date: item.date || (item.timestamp ? new Date(item.timestamp).toLocaleDateString("en-GB") : "-"),
-          remarks: item.remarks || item.data?.overallRemark || "-"
-        }))
-      setHistory(stageHistory)
-    }
+  // Map backend data (snake_case) to frontend format (camelCase)
+  const mapBackendOrderToFrontend = (backendOrder: any) => {
+    return {
+      id: backendOrder.id,
+      doNumber: backendOrder.order_no,
+      orderNo: backendOrder.order_no,
+      customerName: backendOrder.customer_name,
+      orderType: backendOrder.order_type,
+      customerType: backendOrder.customer_type,
+      orderPurpose: backendOrder.order_type_delivery_purpose,
+      deliveryDate: backendOrder.delivery_date,
+      startDate: backendOrder.start_date,
+      endDate: backendOrder.end_date,
+      soDate: backendOrder.party_so_date,
+      contactPerson: backendOrder.customer_contact_person_name,
+      whatsappNo: backendOrder.customer_contact_person_whatsapp_no,
+      customerAddress: backendOrder.customer_address,
+      paymentTerms: backendOrder.payment_terms,
+      advancePaymentTaken: backendOrder.advance_payment_to_be_taken,
+      advanceAmount: backendOrder.advance_amount,
+      isBrokerOrder: backendOrder.is_order_through_broker,
+      brokerName: backendOrder.broker_name,
+      transportType: backendOrder.type_of_transporting,
+      totalWithGst: backendOrder.total_with_gst,
+      // Product info (for individual row from DB)
+      preApprovalProducts: [{
+        _pid: `${backendOrder.id}-${backendOrder.order_no}`,
+        id: backendOrder.id,
+        productName: backendOrder.product_name,
+        oilType: backendOrder.oil_type,
+        uom: backendOrder.uom,
+        orderQty: backendOrder.order_quantity,
+        altUom: backendOrder.alternate_uom,
+        altQty: backendOrder.alternate_qty_kg,
+        ratePerLtr: backendOrder.rate_per_ltr,
+        rateLtr: backendOrder.rate_per_15kg,
+        skuName: backendOrder.sku_name,
+        approvalQty: backendOrder.approval_qty,
+      }]
+    };
+  };
 
-    // 2. Load Persisted Pending Items
-    const savedPending = localStorage.getItem("preApprovalPendingItems")
-    let persistedPending = savedPending ? JSON.parse(savedPending) : []
-
-    // Ensure all products have stable IDs for React keys and state tracking
-    persistedPending = persistedPending.map((order: any) => {
-      const products = order.preApprovalProducts || order.products || [];
-      const updatedProducts = products.map((p: any, idx: number) => ({
-        ...p,
-        _pid: p._pid || p.id || `p-${idx}-${Date.now()}` // Fallback to index only if truly new
-      }));
-      return { 
-        ...order, 
-        [order.preApprovalProducts ? 'preApprovalProducts' : 'products']: updatedProducts 
-      };
-    });
-
-    // 3. Load New Incoming Data
-    const savedData = localStorage.getItem("orderData")
-    if (savedData) {
-      try {
-        const data = JSON.parse(savedData)
-        if (data.stage === "Pre-Approval" || data.orderType === "pre-approval") {
-             const isProcessed = historyData.some(
-                 (item: any) => item.stage === "Pre-Approval" && (item.orderNo === (data.doNumber || "DO-XXX"))
-             )
-
-             if (!isProcessed) {
-                const exists = persistedPending.some((o: any) => 
-                     (o.doNumber || o.orderNo) === (data.doNumber || data.orderNo)
-                )
-                
-                if (!exists) {
-                     // Inject IDs into the new order too
-                     const products = data.preApprovalProducts || data.products || [];
-                     data.preApprovalProducts = products.map((p: any, idx: number) => ({
-                       ...p,
-                       _pid: `p-${idx}-${Date.now()}`
-                     }));
-                     persistedPending = [data, ...persistedPending]
-                     localStorage.setItem("preApprovalPendingItems", JSON.stringify(persistedPending))
-                }
-             }
-        }
-      } catch (e) {
-        console.error("Failed to parse orderData", e)
+  // Fetch pending orders from backend
+  const fetchPendingOrders = async () => {
+    try {
+      setIsLoading(true);
+      const response = await preApprovalApi.getPending({ limit: 1000 });
+      
+      if (response.success && response.data.orders) {
+        const mappedOrders = response.data.orders.map(mapBackendOrderToFrontend);
+        setPendingOrders(mappedOrders);
       }
+    } catch (error: any) {
+      console.error("Failed to fetch pending orders:", error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to load pending orders from server",
+        variant: "destructive",
+      });
+      setPendingOrders([]); // Clear on error - don't use cache
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    // 4. Update State
-    setPendingOrders(persistedPending)
+  // Fetch history from backend
+  const fetchHistory = async () => {
+    try {
+      const response = await preApprovalApi.getHistory({ limit: 1000 });
+      
+      if (response.success && response.data.orders) {
+        const mappedHistory = response.data.orders.map((order: any) => ({
+          orderNo: order.order_no,
+          customerName: order.customer_name,
+          stage: "Pre-Approval",
+          status: "Completed" as const,
+          processedBy: "System",
+          timestamp: order.actual_1,
+          date: order.actual_1 ? new Date(order.actual_1).toLocaleDateString("en-GB") : "-",
+          remarks: order.remark || "-",
+        }));
+        setHistory(mappedHistory);
+      }
+    } catch (error: any) {
+      console.error("Failed to fetch history:", error);
+      setHistory([]); // Clear on error - don't use cache
+    }
+  };
 
-    // 5. Load Pre-Approval Draft Data (if any)
-    const savedPreApprovalData = localStorage.getItem("preApprovalData")
+  useEffect(() => {
+    // Fetch data from backend
+    fetchPendingOrders();
+    fetchHistory();
+    
+    // Load Pre-Approval Draft Data (if any)
+    const savedPreApprovalData = localStorage.getItem("preApprovalData");
     if (savedPreApprovalData) {
-      setPreApprovalData(JSON.parse(savedPreApprovalData))
+      setPreApprovalData(JSON.parse(savedPreApprovalData));
     }
   }, [])
 
   const handleApprove = async (itemsToApprove: any[]) => {
     setIsApproving(true)
     try {
-      const historyEntries: any[] = []
+      const successfulApprovals: any[] = []
+      const failedApprovals: any[] = []
       
-      const newPending = [...pendingOrders]
-
-      itemsToApprove.forEach((item) => {
-
-        // Create a clean version of the order with ONLY the processed product
-        // This ensures the next stage only sees what was actually approved here
-        const processedOrder = {
-          ...item,
-          products: [item._product],
-          preApprovalProducts: [item._product]
-        }
-
-        const preApprovalSubmit = {
-          ...preApprovalData,
-          orderData: processedOrder,
-          productRates,
-          overallRemark,
-          approvedAt: new Date().toISOString(),
-          status: "approved",
-        }
-        
-        const historyEntry = {
-          orderNo: item._displayDo,
-          customerName: item.customerName || "Unknown",
-          stage: "Pre-Approval",
-          status: "Completed" as const,
-          processedBy: "Current User",
-          timestamp: new Date().toISOString(),
-          remarks: overallRemark || "-",
-          data: preApprovalSubmit,
-          orderType: item.orderType || "pre-approval"
-        }
-        
-        historyEntries.push(historyEntry)
-        saveWorkflowHistory(historyEntry)
-
-        // Find the parent order in newPending and remove the product
-        const parentIdx = newPending.findIndex(o => (o.doNumber || o.orderNo) === (item.doNumber || item.orderNo))
-        if (parentIdx !== -1) {
-          const o = newPending[parentIdx]
-          const isPreApp = o.preApprovalProducts && o.preApprovalProducts.length > 0
-          const productsKey = isPreApp ? 'preApprovalProducts' : 'products'
-          const products = o[productsKey] || []
+      // Submit each approval to backend
+      for (const item of itemsToApprove) {
+        try {
+          const product = item._product
+          const productKey = item._rowKey
+          const rateData = productRates[productKey]
           
-          // Use stable _pid for precise removal
-          const updatedProducts = products.filter((p: any) => p._pid !== item._product?._pid);
-          
-          if (updatedProducts.length === 0) {
-            newPending.splice(parentIdx, 1)
-          } else {
-            newPending[parentIdx] = { ...o, [productsKey]: updatedProducts }
+          // Prepare submission data
+          const submissionData = {
+            sku_name: rateData?.skuName,
+            approval_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
+            rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : null,
+            remark: overallRemark || null,
           }
+          
+          // Call backend API to submit pre-approval
+          await preApprovalApi.submit(product.id, submissionData)
+          
+          successfulApprovals.push(item)
+          
+          // Also save to workflow history for local tracking
+          const historyEntry = {
+            orderNo: item._displayDo,
+            customerName: item.customerName || "Unknown",
+            stage: "Pre-Approval",
+            status: "Completed" as const,
+            processedBy: "Current User",
+            timestamp: new Date().toISOString(),
+            remarks: overallRemark || "-",
+            orderType: item.orderType || "pre-approval"
+          }
+          saveWorkflowHistory(historyEntry)
+          
+        } catch (error: any) {
+          console.error(`Failed to approve order ${item._displayDo}:`, error)
+          failedApprovals.push({ item, error: error?.message || "Unknown error" })
         }
-      })
+      }
       
-      const updatedHistory = [...history.filter((h: any) => h.stage === "Pre-Approval"), ...historyEntries].map((item: any) => ({
-          ...item,
-          date: item.date || (item.timestamp ? new Date(item.timestamp).toLocaleDateString("en-GB") : "-"),
-          remarks: item.remarks || item.data?.overallRemark || "-"
-      }))
-      setHistory(updatedHistory)
+      // Show results
+      if (successfulApprovals.length > 0) {
+        toast({
+          title: "Approvals Submitted",
+          description: `${successfulApprovals.length} product(s) approved successfully.`,
+        })
+        
+        // Refresh data from backend
+        await fetchPendingOrders()
+        await fetchHistory()
+      }
       
-      setPendingOrders(newPending)
-      localStorage.setItem("preApprovalPendingItems", JSON.stringify(newPending))
+      if (failedApprovals.length > 0) {
+        toast({
+          title: "Some Approvals Failed",
+          description: `${failedApprovals.length} approval(s) failed. Please try again.`,
+          variant: "destructive",
+        })
+      }
+      
       setSelectedRows([])
       setIsBulkDialogOpen(false)
-
-      toast({
-        title: "Stage Completed",
-        description: `${itemsToApprove.length} product(s) moved to commitment.`,
-      })
+      setProductRates({})
+      setOverallRemark("")
       
-      if (newPending.length === 0) {
+      // Navigate if all pending items are processed
+      if (successfulApprovals.length > 0 && pendingOrders.length === successfulApprovals.length) {
         setTimeout(() => {
             router.push("/approval-of-order")
         }, 1500)
@@ -540,7 +562,16 @@ export default function PreApprovalPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayRows.length === 0 ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8">
+                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>Loading pending approvals...</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : displayRows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
                     No Data pending for Pre Approval

@@ -20,6 +20,8 @@ import {
   Car,
   Search,
   Send,
+  Settings2,
+  LogOut,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
 
@@ -34,6 +36,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarFooter,
 } from "@/components/ui/sidebar"
 
 const modules = [
@@ -53,6 +56,7 @@ const modules = [
   { title: "Gate Out", icon: Gate, url: "/gate-out" },
   { title: "Confirm Material Receipt", icon: FileSignature, url: "/material-receipt" },
   { title: "Damage Adjustment", icon: AlertCircle, url: "/damage-adjustment" },
+  { title: "Settings", icon: Settings2, url: "/settings" },
 
 ]
 
@@ -99,6 +103,27 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="border-t border-sidebar-border p-2">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Logout"
+              className="text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+              onClick={() => {
+                // Clear authentication data
+                localStorage.removeItem('user')
+                localStorage.removeItem('isAuthenticated')
+                console.log('User logged out')
+                // Redirect to login page
+                window.location.href = '/login'
+              }}
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )

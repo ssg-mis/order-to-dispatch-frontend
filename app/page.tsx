@@ -108,22 +108,33 @@ export default function Dashboard() {
   const [isDelayedDialogOpen, setIsDelayedDialogOpen] = useState(false)
   const [isRejectedDialogOpen, setIsRejectedDialogOpen] = useState(false)
   const [isTotalDialogOpen, setIsTotalDialogOpen] = useState(false)
+  const [backendData, setBackendData] = useState<any>(null)
 
   useEffect(() => {
     setIsMounted(true)
-    const loadData = () => {
+    
+    const loadData = async () => {
         try {
-            const rawHistory = localStorage.getItem("workflowHistory")
-            if (rawHistory) {
-                setHistory(JSON.parse(rawHistory))
+            // Fetch from backend API
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1'}/dashboard/overview`)
+            if (response.ok) {
+                const result = await response.json()
+                if (result.success) {
+                    setBackendData(result.data)
+                    
+                    // Transform backend data to history format for compatibility
+                    const transformedHistory = result.data.recentOrders || []
+                    setHistory(transformedHistory)
+                }
             }
-            // Load User Role
+            
+            // Load User Role from localStorage
             const storedRole = localStorage.getItem("userRole")
             if (storedRole) {
                 setRole(storedRole)
             }
         } catch (error) {
-            console.error("Failed to parse data:", error)
+            console.error("Failed to fetch dashboard data:", error)
         }
     }
 
@@ -139,209 +150,60 @@ export default function Dashboard() {
 
   // Process Data
   const stats = useMemo(() => {
-    const normalize = (str: string) => (str || "").toLowerCase().replace(/[^a-z0-9]/g, "")
-    const getOrderId = (e: any) => e.doNumber || e.orderNo || e.soNumber
-
-    // 1. Get Latest State for each unique Order
-    const latestOrderMap = new Map<string, any>()
-    
-    // Sort history by timestamp to ensure we process in order
-    const sortedHistory = [...history].sort((a, b) => 
-        new Date(a.timestamp || a.date).getTime() - new Date(b.timestamp || b.date).getTime()
-    )
-
-    sortedHistory.forEach((entry: any) => {
-        const id = getOrderId(entry)
-        if (!id) return
-        
-        const existing = latestOrderMap.get(id)
-        
-        // Merge entries: keep record of all critical fields
-        latestOrderMap.set(id, {
-            ...existing,
-            ...entry,
-            // Preserve specific fields that might be missing in update entries
-            orderType: entry.orderType || existing?.orderType || "regular",
-            customerName: entry.customerName || existing?.customerName,
-            soNumber: entry.soNumber || existing?.soNumber,
-            doNumber: entry.doNumber || existing?.doNumber,
-        })
-    })
-
-    const allUniqueOrders = Array.from(latestOrderMap.values())
-    
-    // Time Range Filtering
-    const now = new Date()
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay())
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    
-    const timeFilteredOrders = allUniqueOrders.filter((order: any) => {
-        const date = new Date(order.timestamp || order.date)
-        if (timeRange === "today") return date >= startOfToday
-        if (timeRange === "week") return date >= startOfWeek
-        return date >= startOfMonth
-    })
-
-    // Helper to determine exact current stage of an order
-    const getCurrentStageInfo = (order: any) => {
-        const stage = order.stage
-        const status = (order.status || "").toLowerCase()
-        const stageIdx = STAGES.findIndex(s => normalize(s.id) === normalize(stage))
-        
-        if (status === "pending") {
-            return { current: stage, next: null, isCompleted: false }
-        } else if (["completed", "approved", "ready", "delivered"].includes(status)) {
-            // If it's the last stage, it's fully completed
-            if (stageIdx === STAGES.length - 1 || normalize(stage) === "finaldelivery" || normalize(stage) === "materialreceipt") {
-                return { current: "Final Delivery", next: null, isCompleted: true }
-            }
-            
-            // Move to next logical stage
-            let nextIdx = stageIdx + 1
-            
-            // Skip Pre-Approval for regular orders
-            if (nextIdx < STAGES.length && STAGES[nextIdx].id === "Pre-Approval" && order.orderType === "regular") {
-                nextIdx++
-            }
-            
-            return { 
-                current: STAGES[nextIdx]?.id || "Final Delivery", 
-                next: null, 
-                isCompleted: nextIdx >= STAGES.length 
-            }
-        }
-        
-        return { current: stage, next: null, isCompleted: status === "rejected" || status === "cancelled" }
+    // If we have backend data, use it directly
+    if (backendData) {
+      return {
+        total: backendData.total || 0,
+        active: backendData.active || 0,
+        completed: backendData.completed || 0,
+        delayed: backendData.delayed || 0,
+        cancelled: backendData.cancelled || 0,
+        stageCounts: backendData.stageCounts || [],
+        attentionItems: backendData.attentionItems || [],
+        recentOrders: backendData.recentOrders || [],
+        createdToday: backendData.createdToday || 0,
+        dispatchedToday: backendData.dispatchedToday || 0,
+        invoicedToday: backendData.invoicedToday || 0,
+        deliveredToday: backendData.deliveredToday || 0,
+        chartData: (backendData.stageCounts || []).map((s: any) => ({ name: s.label, count: s.count })),
+        timelineData: [],  // Can be enhanced later
+        pendingOrdersList: backendData.recentOrders?.filter((o: any) => o.status === 'pending') || [],
+        completedOrdersList: backendData.recentOrders?.filter((o: any) => o.status === 'completed') || [],
+        dispatchPlanningList: [],
+        damagesOrdersList: [],
+        invoicesOrdersList: [],
+        delayedOrdersList: [],
+        cancelledOrdersList: [],
+        totalOrdersList: backendData.recentOrders || []
+      }
     }
 
-    // Calculate Global Totals
-    const activeOrders = timeFilteredOrders.filter(o => {
-        const info = getCurrentStageInfo(o)
-        const status = (o.status || "").toLowerCase()
-        return !info.isCompleted && status !== "rejected" && status !== "cancelled"
-    })
-
-    const completedOrders = timeFilteredOrders.filter(o => getCurrentStageInfo(o).isCompleted)
-    const cancelledOrders = timeFilteredOrders.filter(o => ["rejected", "cancelled"].includes((o.status || "").toLowerCase()))
-
-    // Stage Breakdown
-    const stageCounts = STAGES.map((s, idx) => {
-        const targetId = normalize(s.id)
-        
-        // Count how many orders are CURRENTLY in this stage
-        const ordersInThisStage = timeFilteredOrders.filter(o => {
-            const info = getCurrentStageInfo(o)
-            return normalize(info.current) === targetId && (o.status || "").toLowerCase() !== "rejected"
-        })
-
-        // Count how many orders COMPLETED this stage in history (within time range)
-        const completedInHistory = history.filter(e => {
-            const info = { date: new Date(e.timestamp || e.date) }
-            let isInRange = false
-            if (timeRange === "today") isInRange = info.date >= startOfToday
-            else if (timeRange === "week") isInRange = info.date >= startOfWeek
-            else isInRange = info.date >= startOfMonth
-
-            return normalize(e.stage) === targetId && 
-                  ["completed", "approved", "ready", "delivered"].includes((e.status || "").toLowerCase()) &&
-                  isInRange
-        })
-        const completedCount = new Set(completedInHistory.map(getOrderId)).size
-
-        // Overdue logic (> 48h in current stage)
-        const overdue = ordersInThisStage.filter(o => {
-            const hours = (now.getTime() - new Date(o.timestamp || o.date).getTime()) / 3600000
-            return hours > 48
-        }).length
-
-        // Special Breakdown for Order Punch
-        let breakdown = null
-        if (s.id === "Order Punch") {
-            const preCount = timeFilteredOrders.filter(o => (o.orderType || "").toLowerCase().includes("pre")).length
-            const regCount = timeFilteredOrders.filter(o => (o.orderType || "").toLowerCase() === "regular").length
-            breakdown = { label1: "Pre-Approval", value1: preCount, label2: "Regular", value2: regCount, total: timeFilteredOrders.length }
-        }
-
-        return {
-            ...s,
-            count: ordersInThisStage.length,
-            pending: ordersInThisStage.length,
-            completed: completedCount,
-            overdue,
-            breakdown
-        }
-    })
-
-    // Correct Final Delivery count based on completed orders
-    const finalDeliveryIdx = stageCounts.findIndex(s => s.id === "Final Delivery")
-    if (finalDeliveryIdx !== -1) {
-        stageCounts[finalDeliveryIdx].completed = completedOrders.length
-    }
-
-    // Recent Activity Snapshots
-    const activityToday = history.filter(h => {
-        const d = new Date(h.timestamp || h.date)
-        return d.toDateString() === now.toDateString()
-    })
-
-    const attentionItems = timeFilteredOrders
-        .filter(o => {
-            const status = (o.status || "").toLowerCase()
-            const hours = (now.getTime() - new Date(o.timestamp || o.date).getTime()) / 3600000
-            return status === "rejected" || status === "damaged" || (hours > 24 && !getCurrentStageInfo(o).isCompleted)
-        })
-        .sort((a, b) => new Date(a.timestamp || a.date).getTime() - new Date(b.timestamp || b.date).getTime())
-        .slice(0, 10)
-
-    const recentOrders = timeFilteredOrders
-        .sort((a, b) => new Date(b.timestamp || b.date).getTime() - new Date(a.timestamp || a.date).getTime())
-        .slice(0, 8)
-
-    // Timeline Data (Weekly Mon-Sun)
-    const currentDay = now.getDay()
-    const diffToMonday = currentDay === 0 ? 6 : currentDay - 1
-    const monday = new Date(now)
-    monday.setHours(0, 0, 0, 0)
-    monday.setDate(now.getDate() - diffToMonday)
-    
-    const weeklyData = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(monday)
-        d.setDate(monday.getDate() + i)
-        const dayStr = d.toLocaleDateString('en-US', { weekday: 'short' })
-        const dateStr = d.toDateString()
-        const count = history.filter(h => 
-            normalize(h.stage) === "orderpunch" && 
-            new Date(h.timestamp || h.date).toDateString() === dateStr
-        ).length
-        return { name: dayStr, count }
-    })
-
+    // Fallback to empty stats if no backend data yet
     return {
-        total: timeFilteredOrders.length,
-        active: activeOrders.length,
-        completed: completedOrders.length,
-        delayed: attentionItems.length,
-        cancelled: cancelledOrders.length,
-        stageCounts,
-        attentionItems,
-        recentOrders,
-        createdToday: activityToday.filter(h => normalize(h.stage) === "orderpunch").length,
-        dispatchedToday: activityToday.filter(h => normalize(h.stage) === "actualdispatch" && ["completed", "approved"].includes((h.status || "").toLowerCase())).length,
-        invoicedToday: activityToday.filter(h => normalize(h.stage) === "makeinvoice").length,
-        deliveredToday: activityToday.filter(h => (h.status || "").toLowerCase() === "delivered" || normalize(h.stage) === "materialreceipt").length,
-        chartData: stageCounts.map(s => ({ name: s.label, count: s.count })),
-        timelineData: weeklyData,
-        pendingOrdersList: activeOrders,
-        completedOrdersList: completedOrders,
-        dispatchPlanningList: activeOrders.filter(o => normalize(getCurrentStageInfo(o).current) === "dispatchplanning"),
-        damagesOrdersList: timeFilteredOrders.filter(o => (o.status || "").toLowerCase() === "damaged" || normalize(o.stage) === "damageadjustment"),
-        invoicesOrdersList: activeOrders.filter(o => ["makeinvoice", "checkinvoice"].includes(normalize(getCurrentStageInfo(o).current))),
-        delayedOrdersList: attentionItems,
-        cancelledOrdersList: cancelledOrders,
-        totalOrdersList: timeFilteredOrders
+      total: 0,
+      active: 0,
+      completed: 0,
+      delayed: 0,
+      cancelled: 0,
+      stageCounts: STAGES.map(s => ({ ...s, count: 0, pending: 0, completed: 0 })),
+      attentionItems: [],
+      recentOrders: [],
+      createdToday: 0,
+      dispatchedToday: 0,
+      invoicedToday: 0,
+      deliveredToday: 0,
+      chartData: [],
+      timelineData: [],
+      pendingOrdersList: [],
+      completedOrdersList: [],
+      dispatchPlanningList: [],
+      damagesOrdersList: [],
+      invoicesOrdersList: [],
+      delayedOrdersList: [],
+      cancelledOrdersList: [],
+      totalOrdersList: []
     }
-  }, [history, timeRange])
+  }, [backendData])
 
 
 

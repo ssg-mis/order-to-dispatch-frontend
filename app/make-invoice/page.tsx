@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { WorkflowStageShell } from "@/components/workflow/workflow-stage-shell"
@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Settings2 } from "lucide-react"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
+import { makeInvoiceApi } from "@/lib/api-service"
 
 export default function MakeInvoicePage() {
   const router = useRouter()
@@ -44,74 +45,95 @@ export default function MakeInvoicePage() {
     invoiceFile: null as File | null,
   })
 
-  useEffect(() => {
-    // ... existing useEffect logic ...
-    const savedHistory = localStorage.getItem("workflowHistory")
-    if (savedHistory) {
-      const history = JSON.parse(savedHistory)
-      
-      const completed = history.filter(
-        (item: any) => item.stage === "Make Invoice" && item.status === "Completed"
-      )
-      setHistoryOrders(completed)
-
-      const pending = history.filter(
-        (item: any) => item.stage === "Security Approval" && item.status === "Completed"
-      ).filter(
-        (item: any) => 
-          !completed.some((completedItem: any) => 
-            (completedItem.doNumber && item.doNumber && completedItem.doNumber === item.doNumber) ||
-            (completedItem.orderNo && item.orderNo && completedItem.orderNo === item.orderNo)
-          )
-      )
-      setPendingOrders(pending)
+  // Fetch pending invoices
+  const fetchPendingInvoices = async () => {
+    try {
+      const response = await makeInvoiceApi.getPending({ limit: 1000 });
+      if (response.success && response.data.invoices) {
+        setPendingOrders(response.data.invoices);
+      }
+    } catch (error: any) {
+      console.error("Failed to fetch pending invoices:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load pending invoices",
+        variant: "destructive",
+      });
     }
+  };
+
+  // Fetch history
+  const fetchInvoiceHistory = async () => {
+    try {
+      const response = await makeInvoiceApi.getHistory({ limit: 1000 });
+      if (response.success && response.data.invoices) {
+        setHistoryOrders(response.data.invoices);
+      }
+    } catch (error: any) {
+      console.error("Failed to fetch invoice history:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchPendingInvoices();
+    fetchInvoiceHistory();
   }, [])
 
   const handleSubmit = async (order: any) => {
     setIsProcessing(true)
     try {
-      const updatedOrder = {
-        ...order,
-        stage: "Make Invoice",
-        status: "Completed",
-        invoiceData: {
-          type: invoiceType,
-          invoiceNo: invoiceData.invoiceNo,
-          invoiceDate: invoiceType === 'independent' ? invoiceData.invoiceDate : null,
-          qty: invoiceData.qty,
-          billAmount: invoiceType === 'independent' ? invoiceData.billAmount : null,
-          invoiceUploaded: !!invoiceData.invoiceFile,
-          createdAt: new Date().toISOString(),
-        },
+      const submitData = {
+        bill_type: invoiceType,
+        invoice_no: invoiceData.invoiceNo,
+        invoice_date: invoiceType === 'independent' ? invoiceData.invoiceDate : null,
+        qty: invoiceData.qty || null,
+        bill_amount: invoiceType === 'independent' ? invoiceData.billAmount : null,
+        invoice_copy: invoiceData.invoiceFile ? invoiceData.invoiceFile.name : null,
+      };
+
+      const response = await makeInvoiceApi.submit(order.id, submitData);
+
+      if (response.success) {
+        toast({
+          title: "Invoice Created",
+          description: "Order moved to Check Invoice stage.",
+        })
+
+        // Refresh lists
+        await fetchPendingInvoices();
+        await fetchInvoiceHistory();
+
+        // Close dialog implicitly by re-fetching
+        // Reset form
+        setInvoiceData({
+            invoiceNo: "",
+            invoiceDate: new Date().toISOString().split('T')[0],
+            qty: "",
+            billAmount: "",
+            invoiceFile: null,
+        });
+        setInvoiceType("");
+
+        setTimeout(() => {
+          router.push("/check-invoice")
+        }, 1500)
+      } else {
+        throw new Error(response.message || "Submission failed");
       }
-
-      const savedHistory = localStorage.getItem("workflowHistory")
-      const history = savedHistory ? JSON.parse(savedHistory) : []
-      history.push(updatedOrder)
-      localStorage.setItem("workflowHistory", JSON.stringify(history))
-      localStorage.setItem("currentOrderData", JSON.stringify(updatedOrder))
-
-      // Update local state immediately
-      const newPending = pendingOrders.filter(o => o.doNumber !== order.doNumber)
-      setPendingOrders(newPending)
-      setHistoryOrders((prev) => [...prev, updatedOrder])
-
+    } catch (error: any) {
+      console.error("Submit error:", error);
       toast({
-        title: "Invoice Created",
-        description: "Order moved to Check Invoice stage.",
+        title: "Error",
+        description: error.message || "Failed to submit invoice",
+        variant: "destructive",
       })
-
-      setTimeout(() => {
-        router.push("/check-invoice")
-      }, 1500)
     } finally {
       setIsProcessing(false)
     }
   }
 
   /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
       status: "",
@@ -120,16 +142,17 @@ export default function MakeInvoicePage() {
       partyName: ""
   })
 
+  // Filter logic
   const filteredPendingOrders = pendingOrders.filter(order => {
       let matches = true
       
       // Filter by Party Name
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
+      if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) {
           matches = false
       }
 
       // Filter by Date Range
-      const orderDateStr = order.securityData?.approvedAt || order.loadData?.completedAt || order.timestamp
+      const orderDateStr = order.timestamp
       if (orderDateStr) {
           const orderDate = new Date(orderDateStr)
           if (filterValues.startDate) {
@@ -144,24 +167,6 @@ export default function MakeInvoicePage() {
           }
       }
 
-      // Filter by Status (On Time / Expire)
-      if (filterValues.status) {
-          const today = new Date()
-          today.setHours(0, 0, 0, 0)
-          const targetDateStr = order.deliveryDate || order.timestamp
-          if (targetDateStr) {
-             const targetDate = new Date(targetDateStr)
-             
-             if (filterValues.status === "expire") {
-                 if (targetDate < today) matches = true
-                 else matches = false
-             } else if (filterValues.status === "on-time") {
-                 if (targetDate >= today) matches = true
-                 else matches = false
-             }
-          }
-      }
-
       return matches
   })
 
@@ -171,10 +176,10 @@ export default function MakeInvoicePage() {
       description="Create proforma invoice for the order."
       pendingCount={filteredPendingOrders.length}
       historyData={historyOrders.map((order) => ({
-        date: new Date(order.invoiceData?.createdAt || new Date()).toLocaleDateString("en-GB"),
+        date: order.actual_5 ? new Date(order.actual_5).toLocaleDateString("en-GB") : "-",
         stage: "Make Invoice",
         status: "Completed",
-        remarks: order.invoiceData?.invoiceNo || "Generated",
+        remarks: order.invoice_no || "Generated",
       }))}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
@@ -223,49 +228,19 @@ export default function MakeInvoicePage() {
             <TableBody>
               {filteredPendingOrders.length > 0 ? (
                 filteredPendingOrders.map((order, index) => {
-                   const prodNames = order.products?.map((p: any) => p.productName).join(", ") || "";
-                   const uoms = order.products?.map((p: any) => p.uom).join(", ") || "";
-                   const qtys = order.products?.map((p: any) => p.orderQty).join(", ") || "";
-                   const altUoms = order.products?.map((p: any) => p.altUom).join(", ") || "";
-                   const altQtys = order.products?.map((p: any) => p.altQty).join(", ") || "";
-                   
-                   const ratesLtr = order.preApprovalProducts?.map((p: any) => p.ratePerLtr).join(", ") || order.ratePerLtr || "—";
-                   const rates15Kg = order.preApprovalProducts?.map((p: any) => p.rateLtr).join(", ") || order.rateLtr || "—";
-                   const oilTypes = order.preApprovalProducts?.map((p: any) => p.oilType).join(", ") || order.oilType || "—";
-
-                   const row = {
-                     orderNo: order.doNumber || order.orderNo || "DO-XXX",
-                     deliveryPurpose: order.orderPurpose || "—",
-                     customerType: order.customerType || "—",
-                     orderType: order.orderType || "—",
-                     soNo: order.soNumber || "—",
-                     partySoDate: order.soDate || "—",
-                     customerName: order.customerName || "—",
-                     itemConfirm: order.itemConfirm || "—",
-                     productName: prodNames,
-                     uom: uoms,
-                     orderQty: qtys,
-                     altUom: altUoms,
-                     altQty: altQtys,
-                     oilType: oilTypes,
-                     ratePerLtr: ratesLtr,
-                     ratePer15Kg: rates15Kg,
-                     rateOfMaterial: order.rateMaterial || "—",
-                     totalWithGst: order.totalWithGst || "—",
-                     transportType: order.dispatchData?.transportType || "—",
-                     uploadSo: "so_document.pdf",
-                     contactPerson: order.contactPerson || "—",
-                     whatsapp: order.whatsappNo || "—",
-                     address: order.customerAddress || "—",
-                     paymentTerms: order.paymentTerms || "—",
-                     advanceTaken: order.advancePaymentTaken || "—",
-                     advanceAmount: order.advanceAmount || "—",
-                     isBroker: order.isBrokerOrder || "—",
-                     brokerName: order.brokerName || "—",
-                     deliveryDate: order.deliveryDate || "—",
-                     qtyToDispatch: order.dispatchData?.qtyToDispatch || "—",
-                     deliveryFrom: order.deliveryData?.deliveryFrom || "—",
-                     status: "Pending Invoice", // Special handling for badge
+                   // Map backend data to display row
+                   const row: any = {
+                     orderNo: order.so_no || "—",
+                     doNumber: order.d_sr_number || "—",
+                     customerName: order.party_name || "—",
+                     productName: order.product_name || "—",
+                     qtyToDispatch: order.qty_to_be_dispatched || "—",
+                     deliveryFrom: order.dispatch_from || "—",
+                     transportType: order.type_of_transporting || "—",
+                     status: "Pending Invoice",
+                     // Add other fields from backend if available, or map existing ones
+                     customerAddress: order.customer_address || "—",
+                     paymentTerms: order.payment_terms || "—",
                    }
 
                    return (
@@ -277,12 +252,12 @@ export default function MakeInvoicePage() {
                          </DialogTrigger>
                          <DialogContent className="max-w-lg">
                            <DialogHeader>
-                             <DialogTitle>Make Invoice: {order.orderNo}</DialogTitle>
+                             <DialogTitle>Make Invoice: {row.doNumber}</DialogTitle>
                            </DialogHeader>
                            <div className="space-y-4 py-4">
                              
                              <div className="space-y-2">
-                                 <Label>Build Type</Label>
+                                 <Label>Bill Type</Label>
                                  <Select value={invoiceType} onValueChange={(val: any) => setInvoiceType(val)}>
                                    <SelectTrigger>
                                      <SelectValue placeholder="Select Type" />
@@ -330,7 +305,7 @@ export default function MakeInvoicePage() {
                                    <Input
                                        type="number" 
                                        value={invoiceData.billAmount} 
-                                       onChange={(e) => setInvoiceData({...invoiceData, billAmount: e.target.value})} 
+                                       onChange={(e) => setInvoiceData({...invoiceData, billAmount: e.target.value })} 
                                        placeholder="Enter Bill Amount"
                                    />
                                </div>
@@ -376,7 +351,7 @@ export default function MakeInvoicePage() {
                              <div className="flex justify-center">
                                 <Badge className="bg-cyan-100 text-cyan-700">Pending Invoice</Badge>
                              </div>
-                          ) : row[col.id as keyof typeof row]}
+                          ) : row[col.id as keyof typeof row] || "—"}
                         </TableCell>
                       ))}
                    </TableRow>

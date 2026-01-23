@@ -17,11 +17,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Settings2 } from "lucide-react"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
+import { checkInvoiceApi } from "@/lib/api-service"
 
 export default function CheckInvoicePage() {
   const router = useRouter()
@@ -35,79 +36,83 @@ export default function CheckInvoicePage() {
     "status",
   ])
   const [checkData, setCheckData] = useState({
-    status: "approve",
+    status: "",
     remarks: "",
   })
 
-  useEffect(() => {
-    const savedHistory = localStorage.getItem("workflowHistory")
-    if (savedHistory) {
-      const history = JSON.parse(savedHistory)
-      
-      const completed = history.filter(
-        (item: any) => item.stage === "Check Invoice" && item.status === "Completed"
-      )
-      setHistoryOrders(completed)
-
-      const pending = history.filter(
-        (item: any) => item.stage === "Make Invoice" && item.status === "Completed"
-      ).filter(
-        (item: any) => 
-          !completed.some((completedItem: any) => 
-            (completedItem.doNumber && item.doNumber && completedItem.doNumber === item.doNumber) ||
-            (completedItem.orderNo && item.orderNo && completedItem.orderNo === item.orderNo)
-          )
-      )
-      setPendingOrders(pending)
+  // Fetch Pending
+  const fetchPending = async () => {
+    try {
+      const response = await checkInvoiceApi.getPending({ limit: 1000 });
+      if (response.success && response.data.invoices) {
+        setPendingOrders(response.data.invoices);
+      }
+    } catch (error) {
+      console.error("Failed to fetch pending invoices:", error);
     }
+  }
+
+  // Fetch History
+  const fetchHistory = async () => {
+    try {
+        const response = await checkInvoiceApi.getHistory({ limit: 1000 });
+        if (response.success && response.data.invoices) {
+          setHistoryOrders(response.data.invoices);
+        }
+    } catch (error) {
+        console.error("Failed to fetch history:", error);
+    }
+  }
+
+  useEffect(() => {
+    fetchPending();
+    fetchHistory();
   }, [])
 
   const handleSubmit = async (order: any) => {
     setIsProcessing(true)
     try {
-      const updatedOrder = {
-        ...order,
-        stage: "Check Invoice",
-        status: checkData.status === "approve" ? "Completed" : "Rejected",
-        checkInvoiceData: {
-          ...checkData,
-          checkedAt: new Date().toISOString(),
-        },
-      }
+      const submitData = {
+        status_1: checkData.status,
+        remarks_2: checkData.remarks,
+      };
 
-      const savedHistory = localStorage.getItem("workflowHistory")
-      const history = savedHistory ? JSON.parse(savedHistory) : []
-      history.push(updatedOrder)
-      localStorage.setItem("workflowHistory", JSON.stringify(history))
-      localStorage.setItem("currentOrderData", JSON.stringify(updatedOrder))
+      const response = await checkInvoiceApi.submit(order.id, submitData);
 
-      // Update local state immediately
-      const newPending = pendingOrders.filter(o => o.doNumber !== order.doNumber)
-      setPendingOrders(newPending)
-      
-      if (checkData.status === "approve") {
-        setHistoryOrders((prev) => [...prev, updatedOrder])
+      if (response.success) {
         toast({
-          title: "Invoice Approved",
-          description: "Order moved to Gate Out stage.",
+            title: "Invoice Verified",
+            description: "Invoice has been checked and verified.",
         })
-        setTimeout(() => {
-          router.push("/gate-out")
-        }, 1500)
+        
+        await fetchPending();
+        await fetchHistory();
+        
+        // Reset form
+        setCheckData({ status: "", remarks: "" });
+
+        // If you want to navigate away, un-comment this:
+        // setTimeout(() => {
+        //   router.push("/gate-out")
+        // }, 1500)
       } else {
-        toast({
-          title: "Invoice Rejected",
-          description: "Order sent back for correction.",
-          variant: "destructive",
-        })
+         throw new Error(response.message || "Failed to submit");
       }
+
+    } catch (error: any) {
+      console.error("Submit error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Something went wrong",
+        variant: "destructive",
+      })
     } finally {
       setIsProcessing(false)
     }
   }
 
   /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
       status: "",
@@ -120,12 +125,13 @@ export default function CheckInvoicePage() {
       let matches = true
       
       // Filter by Party Name
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
+      if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) {
           matches = false
       }
 
       // Filter by Date Range
-      const orderDateStr = order.invoiceData?.createdAt || order.securityData?.approvedAt || order.timestamp
+      // using timestamp or planned_6 date
+      const orderDateStr = order.timestamp || order.planned_6
       if (orderDateStr) {
           const orderDate = new Date(orderDateStr)
           if (filterValues.startDate) {
@@ -140,24 +146,6 @@ export default function CheckInvoicePage() {
           }
       }
 
-      // Filter by Status (On Time / Expire)
-      if (filterValues.status) {
-          const today = new Date()
-          today.setHours(0, 0, 0, 0)
-          const targetDateStr = order.deliveryDate || order.timestamp
-          if (targetDateStr) {
-             const targetDate = new Date(targetDateStr)
-             
-             if (filterValues.status === "expire") {
-                 if (targetDate < today) matches = true
-                 else matches = false
-             } else if (filterValues.status === "on-time") {
-                 if (targetDate >= today) matches = true
-                 else matches = false
-             }
-          }
-      }
-
       return matches
   })
 
@@ -167,13 +155,14 @@ export default function CheckInvoicePage() {
       description="Review and verify invoice details."
       pendingCount={filteredPendingOrders.length}
       historyData={historyOrders.map((order) => ({
-        date: new Date(order.checkInvoiceData?.checkedAt || new Date()).toLocaleDateString("en-GB"),
+        date: order.actual_6 ? new Date(order.actual_6).toLocaleDateString("en-GB") : "-",
         stage: "Check Invoice",
-        status: order.checkInvoiceData?.status === "approve" ? "Approved" : "Rejected",
-        remarks: order.checkInvoiceData?.remarks || "-",
+        status: order.status_1 || "Verified",
+        remarks: order.remarks_2 || "-",
       }))}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
+      remarksColName="Verification Status"
     >
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
@@ -217,120 +206,88 @@ export default function CheckInvoicePage() {
             </TableHeader>
             <TableBody>
               {filteredPendingOrders.length > 0 ? (
-                   filteredPendingOrders.map((order, index) => {
-                      const internalOrder = order.data?.orderData || order;
-                      const preApproval = order.data?.preApprovalData || internalOrder.preApprovalData || {};
-
-                      const prodNames = internalOrder.products?.map((p: any) => p.productName).join(", ") || 
-                                        internalOrder.preApprovalProducts?.map((p: any) => p.oilType).join(", ") || 
-                                        "";
-                      const uoms = internalOrder.products?.map((p: any) => p.uom).join(", ") || "";
-                      const qtys = internalOrder.products?.map((p: any) => p.orderQty).join(", ") || "";
-                      const altUoms = internalOrder.products?.map((p: any) => p.altUom).join(", ") || "";
-                      const altQtys = internalOrder.products?.map((p: any) => p.altQty).join(", ") || "";
-                      
-                      const ratesLtr = internalOrder.preApprovalProducts?.map((p: any) => p.ratePerLtr).join(", ") || internalOrder.ratePerLtr || "—";
-                      const rates15Kg = internalOrder.preApprovalProducts?.map((p: any) => p.rateLtr).join(", ") || internalOrder.rateLtr || "—";
-                      const oilTypes = internalOrder.preApprovalProducts?.map((p: any) => p.oilType).join(", ") || internalOrder.oilType || "—";
-
-                      const row = {
-                        orderNo: internalOrder.doNumber || internalOrder.orderNo || "DO-XXX",
-                        deliveryPurpose: internalOrder.orderPurpose || "—",
-                        customerType: internalOrder.customerType || "—",
-                        orderType: internalOrder.orderType || "—",
-                        soNo: internalOrder.soNumber || "—",
-                        partySoDate: internalOrder.soDate || "—",
-                        customerName: internalOrder.customerName || "—",
-                        itemConfirm: internalOrder.itemConfirm || "—",
-                        productName: prodNames,
-                        uom: uoms,
-                        orderQty: qtys,
-                        altUom: altUoms,
-                        altQty: altQtys,
-                        oilType: oilTypes,
-                        ratePerLtr: ratesLtr,
-                        ratePer15Kg: rates15Kg,
-                        rateOfMaterial: internalOrder.rateMaterial || "—",
-                        totalWithGst: internalOrder.totalWithGst || "—",
-                        transportType: internalOrder.dispatchData?.transportType || "—",
-                        uploadSo: "so_document.pdf",
-                        contactPerson: internalOrder.contactPerson || "—",
-                        whatsapp: internalOrder.whatsappNo || "—",
-                        address: internalOrder.customerAddress || "—",
-                        paymentTerms: internalOrder.paymentTerms || "—",
-                        advanceTaken: internalOrder.advancePaymentTaken || "—",
-                        advanceAmount: internalOrder.advanceAmount || "—",
-                        isBroker: internalOrder.isBrokerOrder || "—",
-                        brokerName: internalOrder.brokerName || "—",
-                        deliveryDate: internalOrder.deliveryDate || "—",
-                        qtyToDispatch: internalOrder.dispatchData?.qtyToDispatch || "—",
-                        deliveryFrom: internalOrder.deliveryData?.deliveryFrom || "—",
-                        status: "Pending Review", // Special handling for badge
-                      }
+                filteredPendingOrders.map((order, index) => {
+                   // Map backend data to display row
+                   const row: any = {
+                       orderNo: order.so_no || "—",
+                       doNumber: order.d_sr_number || "—",
+                       customerName: order.party_name || "—",
+                       productName: order.product_name || "—",
+                       qtyToDispatch: order.qty_to_be_dispatched || "—",
+                       deliveryFrom: order.dispatch_from || "—",
+                       transportType: order.type_of_transporting || "—",
+                       status: "Pending Review",
+                       // invoice specific fields
+                       invoiceNo: order.invoice_no || "—",
+                       invoiceDate: order.invoice_date || "—",
+                       billAmount: order.bill_amount || "—",
+                       
+                       // extra fields if needed
+                       customerAddress: order.customer_address || "—",
+                       paymentTerms: order.payment_terms || "—",
+                   }
 
                    return (
                    <TableRow key={index}>
-                     <TableCell className="text-center">
+                     <TableCell>
                        <Dialog>
                          <DialogTrigger asChild>
-                           <Button size="sm">Check</Button>
+                           <Button size="sm">Verify Invoice</Button>
                          </DialogTrigger>
                          <DialogContent className="max-w-lg">
                            <DialogHeader>
-                             <DialogTitle>Check Invoice: {order.orderNo}</DialogTitle>
+                             <DialogTitle>Verify Invoice: {row.doNumber}</DialogTitle>
                            </DialogHeader>
                            <div className="space-y-4 py-4">
+                             <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <span className="font-semibold">Invoice No:</span> {row.invoiceNo}
+                                </div>
+                                <div>
+                                    <span className="font-semibold">Invoice Date:</span> {row.invoiceDate}
+                                </div>
+                                <div>
+                                    <span className="font-semibold">Bill Amount:</span> {row.billAmount}
+                                </div>
+                             </div>
+
                              <div className="space-y-2">
-                               <Label>Invoice Status</Label>
-                               <RadioGroup
+                               <Label>Verification Status</Label>
+                               <Input
                                  value={checkData.status}
-                                 onValueChange={(value) => setCheckData({ ...checkData, status: value })}
-                                 className="flex gap-4"
-                               >
-                                 <div className="flex items-center space-x-2">
-                                   <RadioGroupItem value="approve" id="approve" />
-                                   <Label htmlFor="approve" className="text-green-600 cursor-pointer">
-                                     Approve
-                                   </Label>
-                                 </div>
-                                 <div className="flex items-center space-x-2">
-                                   <RadioGroupItem value="reject" id="reject" />
-                                   <Label htmlFor="reject" className="text-red-600 cursor-pointer">
-                                     Reject
-                                   </Label>
-                                 </div>
-                               </RadioGroup>
+                                 onChange={(e) => setCheckData({ ...checkData, status: e.target.value })}
+                                 placeholder="e.g. Verified, Issues Found"
+                               />
                              </div>
                              <div className="space-y-2">
                                <Label>Remarks</Label>
                                <Textarea
                                  value={checkData.remarks}
                                  onChange={(e) => setCheckData({ ...checkData, remarks: e.target.value })}
-                                 placeholder="Enter any remarks..."
+                                 placeholder="Enter verification remarks..."
                                />
                              </div>
                            </div>
                            <DialogFooter>
                              <Button
                                onClick={() => handleSubmit(order)}
-                               disabled={isProcessing}
-                               variant={checkData.status === "reject" ? "destructive" : "default"}
+                               disabled={!checkData.status || isProcessing}
                              >
-                               {isProcessing ? "Processing..." : checkData.status === "approve" ? "Approve Invoice" : "Reject Invoice"}
+                               {isProcessing ? "Processing..." : "Submit Verification"}
                              </Button>
                            </DialogFooter>
                          </DialogContent>
                        </Dialog>
                      </TableCell>
                      {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                       <TableCell key={col.id} className="whitespace-nowrap text-center">
-                         {col.id === "status" ? (
-                            <div className="flex justify-center">
-                               <Badge className="bg-teal-100 text-teal-700">Pending Review</Badge>
-                            </div>
-                         ) : row[col.id as keyof typeof row]}
-                       </TableCell>
-                     ))}
+                        <TableCell key={col.id} className="whitespace-nowrap text-center">
+                          {col.id === "status" ? (
+                             <div className="flex justify-center">
+                                <Badge className="bg-yellow-100 text-yellow-700">Pending Review</Badge>
+                             </div>
+                          ) : row[col.id as keyof typeof row] || "—"}
+                        </TableCell>
+                      ))}
                    </TableRow>
                    )
                 })

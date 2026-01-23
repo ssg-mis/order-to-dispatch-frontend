@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Settings2 } from "lucide-react"
+import { actualDispatchApi } from "@/lib/api-service"
 
 export default function ActualDispatchPage() {
   const router = useRouter()
@@ -72,25 +73,42 @@ export default function ActualDispatchPage() {
     "status",
   ])
 
-  useEffect(() => {
-    const savedHistory = localStorage.getItem("workflowHistory")
-    if (savedHistory) {
-      const history = JSON.parse(savedHistory)
+  // Fetch data from backend API
+  const fetchPendingDispatches = async () => {
+    try {
+      console.log('[ACTUAL DISPATCH] Fetching pending from API...');
+      const response = await actualDispatchApi.getPending({ limit: 1000 });
+      console.log('[ACTUAL DISPATCH] API Response:', response);
       
-      const completed = history.filter(
-        (item: any) => item.stage === "Actual Dispatch" && item.status === "Completed"
-      )
-      setHistoryOrders(completed)
-      
-      const pending = history.filter(
-        (item: any) => (item.stage === "Dispatch Planning" || item.stage === "Dispatch Material") && 
-                       (item.status === "Completed" || item.status === "Approved")
-      )
-      
-      // Sort by newest
-      const sortedPending = pending.reverse();
-      setPendingOrders(sortedPending)
+      if (response.success && response.data.dispatches) {
+        setPendingOrders(response.data.dispatches);
+        console.log('[ACTUAL DISPATCH] Loaded', response.data.dispatches.length, 'pending dispatches');
+      }
+    } catch (error: any) {
+      console.error("[ACTUAL DISPATCH] Failed to fetch pending:", error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to load pending dispatches",
+        variant: "destructive",
+      });
     }
+  };
+
+  const fetchDispatchHistory = async () => {
+    try {
+      const response = await actualDispatchApi.getHistory({ limit: 1000 });
+      
+      if (response.success && response.data.dispatches) {
+        setHistoryOrders(response.data.dispatches);
+      }
+    } catch (error: any) {
+      console.error("[ACTUAL DISPATCH] Failed to fetch history:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchPendingDispatches();
+    fetchDispatchHistory();
   }, [])
 
   const toggleSelectAll = () => {
@@ -113,48 +131,87 @@ export default function ActualDispatchPage() {
   const handleBulkConfirm = async () => {
     setIsProcessing(true)
     try {
-      const savedHistory = localStorage.getItem("workflowHistory")
-      const history = savedHistory ? JSON.parse(savedHistory) : []
-
       const itemsToDispatch = displayRows.filter((row) =>
         selectedOrders.includes(`${row.doNumber || row.orderNo}-${row._product?.id || row._product?.productName || row._product?.oilType || 'no-id'}`)
       )
 
-      const updatedEntries = itemsToDispatch.map((item) => ({
-        ...item,
-        stage: "Actual Dispatch",
-        status: "Completed",
-        actualDispatchData: {
-          confirmedAt: new Date().toISOString(),
-          dispatchedQty: item.qtyToDispatch || item.dispatchData?.qtyToDispatch,
-          transportMode: item.transportType || item.dispatchData?.transportType
-        },
-        data: {
-            ...(item.data || {}),
-            orderData: {
-                ...(item.data?.orderData || item),
-                products: item.orderType === "regular" ? [item._product] : [],
-                preApprovalProducts: item.orderType !== "regular" ? [item._product] : []
+      if (itemsToDispatch.length === 0) {
+        toast({
+          title: "No Items Selected",
+          description: "Please select items to confirm",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const successfulDispatches: any[] = []
+      const failedDispatches: any[] = []
+
+      // Submit each item to backend API
+      for (const item of itemsToDispatch) {
+        const dsrNumber = item.d_sr_number; // DSR number from lift_receiving_confirmation
+
+        try {
+          if (dsrNumber) {
+            const dispatchData = {
+              product_name_1: item.product_name,
+              actual_qty_dispatch: item.qty_to_be_dispatched,
+            };
+
+            console.log('[ACTUAL DISPATCH] Submitting for DSR:', dsrNumber, dispatchData);
+            const response = await actualDispatchApi.submit(dsrNumber, dispatchData);
+            console.log('[ACTUAL DISPATCH] API Response:', response);
+            
+            if (response.success) {
+              successfulDispatches.push({ item, dsrNumber });
+            } else {
+              failedDispatches.push({ item, error: response.message || 'Unknown error' });
             }
+          } else {
+            console.warn('[ACTUAL DISPATCH] Skipping - no DSR number found for:', item);
+            failedDispatches.push({ item, error: 'No DSR number found' });
+          }
+        } catch (error: any) {
+          console.error('[ACTUAL DISPATCH] Failed to submit:', error);
+          failedDispatches.push({ item, error: error?.message || error?.toString() || 'Unknown error' });
         }
-      }))
+      }
 
-      // Update history
-      updatedEntries.forEach((entry) => history.push(entry))
-      localStorage.setItem("workflowHistory", JSON.stringify(history))
-      
-      // Update local state immediately
-      setHistoryOrders((prev) => [...prev, ...updatedEntries])
-      setSelectedOrders([])
+      // Show results
+      if (successfulDispatches.length > 0) {
+        toast({
+          title: "Dispatch Confirmed",
+          description: `${successfulDispatches.length} dispatch(es) confirmed successfully.`,
+        });
 
+        // Clear selections
+        setSelectedOrders([]);
+
+        // Refresh data from backend
+        await fetchPendingDispatches();
+        await fetchDispatchHistory();
+
+        // Navigate to vehicle details
+        setTimeout(() => {
+          router.push("/vehicle-details")
+        }, 1500)
+      }
+
+      if (failedDispatches.length > 0) {
+        console.error('[ACTUAL DISPATCH] Failed dispatches:', failedDispatches);
+        toast({
+          title: "Some Dispatches Failed",
+          description: `${failedDispatches.length} dispatch(es) failed. Check console for details.`,
+          variant: "destructive",
+        })
+      }
+    } catch (error: any) {
+      console.error('[ACTUAL DISPATCH] Unexpected error:', error);
       toast({
-        title: "Dispatch Confirmed",
-        description: `${updatedEntries.length} items moved to Vehicle Details stage.`,
-      })
-
-      setTimeout(() => {
-        router.push("/vehicle-details")
-      }, 1500)
+        title: "Error",
+        description: error?.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
     } finally {
       setIsProcessing(false)
     }
@@ -215,73 +272,22 @@ export default function ActualDispatchPage() {
       return matches
   })
 
-  // Flatten orders for table display
+  // Map backend data to display format
   const displayRows = useMemo(() => {
-    const rows: any[] = []
-    const processed = new Set<string>()
-
-    filteredPendingOrders.forEach((order) => {
-      const internalOrder = order.data?.orderData || order;
-      const orderId = order.doNumber || order.orderNo;
-      
-      // Try to get specific product from previous stage if available
-      if (order.data?.productInfo) {
-          const p = order.data.productInfo;
-          const pName = p.productName || p.oilType;
-          const pId = p.id || pName || 'no-id';
-          const pk = `${orderId}-${pId}`;
-
-          if (processed.has(pk)) return;
-
-          const isDone = historyOrders.some(h => 
-            (h.doNumber === orderId || h.orderNo === orderId) && 
-            (h._product?.productName === pName || h._product?.oilType === pName)
-          );
-          if (!isDone) {
-            rows.push({ ...order, _product: p });
-            processed.add(pk);
-          }
-          return;
-      }
-
-      let products = internalOrder.products || [];
-      const preAppProducts = internalOrder.preApprovalProducts || [];
-      const allProds = products.length > 0 ? products : preAppProducts;
-
-      if (!allProds || allProds.length === 0) {
-        const pk = `${orderId}-null`;
-        if (processed.has(pk)) return;
-
-        const isDone = historyOrders.some(h => 
-          (h.doNumber === orderId || h.orderNo === orderId) && 
-          h._product === null
-        );
-        if (!isDone) {
-          rows.push({ ...order, _product: null })
-          processed.add(pk);
-        }
-      } else {
-        allProds.forEach((prod: any) => {
-          const pName = prod.productName || prod.oilType;
-          const pId = prod.id || pName || 'no-id';
-          const pk = `${orderId}-${pId}`;
-
-          if (processed.has(pk)) return;
-
-          const isDone = historyOrders.some(h => 
-            (h.doNumber === orderId || h.orderNo === orderId) && 
-            (h._product?.productName === pName || h._product?.oilType === pName)
-          );
-
-          if (!isDone) {
-            rows.push({ ...order, _product: prod });
-            processed.add(pk);
-          }
-        });
-      }
-    })
-    return rows
-  }, [filteredPendingOrders, historyOrders])
+    return filteredPendingOrders.map((order: any) => ({
+      ...order,
+      doNumber: order.so_no,
+      orderNo: order.so_no,
+      customerName: order.party_name,
+      qtyToDispatch: order.qty_to_be_dispatched,
+      deliveryFrom: order.dispatch_from,
+      transportType: order.type_of_transporting,
+      _product: {
+        id: order.d_sr_number,
+        productName: order.product_name,
+      },
+    }))
+  }, [filteredPendingOrders])
 
   return (
     <WorkflowStageShell
