@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Save, FileUp, Plus, Trash2 } from "lucide-react"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 import { useToast } from "@/hooks/use-toast"
 import { customerApi } from "@/lib/api-service"
 
@@ -392,9 +393,12 @@ export default function OrderPunchPage() {
   return (
     <div className="p-6 max-w-full space-y-6">
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Stage 1: Order Punch</h1>
-          <p className="text-muted-foreground">Create a new order with customer and product details.</p>
+        <div className="flex items-center gap-3">
+          <SidebarTrigger className="-ml-1" />
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Stage 1: Order Punch</h1>
+            <p className="text-muted-foreground">Create a new order with customer and product details.</p>
+          </div>
         </div>
         <Button variant="outline" className="gap-2 bg-transparent">
           <FileUp className="h-4 w-4" /> Import

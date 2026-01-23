@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { 
   Package, 
@@ -228,6 +229,7 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-8">
         <div>
           <div className="flex items-center gap-3 mb-2">
+            <SidebarTrigger className="-ml-1" />
             <h1 className="text-4xl font-black tracking-tight text-slate-900">
                Dashboard
             </h1>
