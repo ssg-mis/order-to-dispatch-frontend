@@ -30,7 +30,7 @@ import { Badge } from "@/components/ui/badge"
 import { Settings2, Loader2 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
-import { SKU_MASTER } from "@/lib/master-data"
+import { skuApi, preApprovalApi } from "@/lib/api-service"
 import { Check, ChevronsUpDown, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -47,7 +47,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
-import { preApprovalApi } from "@/lib/api-service"
 
 
 
@@ -66,7 +65,7 @@ export default function PreApprovalPage() {
     { id: "customerName", label: "Customer Name" },
     { id: "oilType", label: "Oil Type" },
     { id: "ratePer15Kg", label: "Rate Per 15 kg" },
-    { id: "ratePerLtr", label: "Rate Per Ltr." }, // Aggregated
+    { id: "ratePerLtr", label: "Rate Per Ltr." },
     { id: "productName", label: "Product Name" },
     { id: "totalWithGst", label: "Total Amount with GST" },
     { id: "transportType", label: "Type of Transporting" },
@@ -99,12 +98,34 @@ export default function PreApprovalPage() {
   const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false)
 
   const [history, setHistory] = useState<any[]>([])
-  const [skuMaster] = useState<string[]>(() => 
-    SKU_MASTER
-      .filter(sku => sku.status === "Active")
-      .map(sku => sku.skuName)
-  )
+  
+  // SKU State
+  const [skuMaster, setSkuMaster] = useState<string[]>([])
   const [skuSearch, setSkuSearch] = useState("")
+
+  // Fetch SKUs
+  useEffect(() => {
+    const fetchSkus = async () => {
+      try {
+        const response = await skuApi.getAll()
+        if (response.success && Array.isArray(response.data)) {
+          // Map to just names or keep full objects if more info needed later
+          // Currently the UI seems to just list names in the command list
+          setSkuMaster(response.data.map((sku: any) => sku.sku_name))
+        }
+      } catch (error) {
+        console.error("Failed to fetch SKUs:", error)
+        toast({
+          title: "Warning",
+          description: "Failed to load SKU list. Please try refeshing.",
+          variant: "destructive",
+        })
+      }
+    }
+    
+    fetchSkus()
+  }, [])
+
 
 
   // Map backend data (snake_case) to frontend format (camelCase)

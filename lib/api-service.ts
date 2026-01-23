@@ -804,6 +804,51 @@ export const userApi = {
   },
 };
 
+/**
+ * Customer API
+ */
+export const customerApi = {
+  /**
+   * Get all customers
+   */
+  getAll: async (): Promise<ApiResponse> => {
+    return request('/customers');
+  },
+
+  /**
+   * Get customer by ID
+   */
+  getById: async (id: number): Promise<ApiResponse> => {
+    return request(`/customers/${id}`);
+  },
+
+  /**
+   * Get customer by name
+   */
+  getByName: async (name: string): Promise<ApiResponse> => {
+    return request(`/customers/name/${encodeURIComponent(name)}`);
+  },
+};
+
+/**
+ * SKU API
+ */
+export const skuApi = {
+  /**
+   * Get all SKUs
+   */
+  getAll: async (): Promise<ApiResponse> => {
+    return request('/skus');
+  },
+
+  /**
+   * Get SKU by ID
+   */
+  getById: async (id: number): Promise<ApiResponse> => {
+    return request(`/skus/${id}`);
+  },
+};
+
 export default {
   order: orderApi,
   preApproval: preApprovalApi,
@@ -819,4 +864,6 @@ export default {
   confirmMaterialReceipt: confirmMaterialReceiptApi,
   damageAdjustment: damageAdjustmentApi,
   user: userApi,
+  customer: customerApi,
+  sku: skuApi,
 };

@@ -11,8 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Save, FileUp, Plus, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { saveWorkflowHistory } from "@/lib/storage-utils"
+import { customerApi } from "@/lib/api-service"
 
 type ProductItem = {
   id: string
@@ -31,59 +30,33 @@ type PreApprovalProduct = {
   rateLtr: string // Used for Rate per 15KG
 }
 
-type OrderData = {
-  customerType: string
-  depoName: string
-  isBrokerOrder: string
-  orderPurpose: string
-  orderType: string
-  advancePaymentTaken: string
-  soNumber: string
-  soDate: string
-  customerName: string
-  contactPerson: string
-  whatsappNo: string
-  customerAddress: string
-  deliveryAddress: string
-  oilType: string
-  rateLtr: string
-  brokerName: string
-  deliveryDate: string
-  startDate: string
-  endDate: string
-  paymentTerms: string
-  transportType: string
-  advanceAmount: string
-  products: ProductItem[]
-  preApprovalProducts?: PreApprovalProduct[]
-  doNumber?: string
-}
-
-// Mock customer data for auto-fill
-const MOCK_CUSTOMERS: Record<string, { name: string; contactPerson: string; whatsappNo: string; address: string }> = {
-  cust1: {
-    name: "Acme Corp",
-    contactPerson: "Jane Doe",
-    whatsappNo: "+91 9876543210",
-    address: "123 Industrial Area, Sector 5, Mumbai",
-  },
-  cust2: {
-    name: "Global Industries",
-    contactPerson: "John Smith",
-    whatsappNo: "+91 9876543211",
-    address: "456 Tech Park, Phase 2, Pune",
-  },
-  cust3: {
-    name: "Zenith Supply",
-    contactPerson: "Alice Johnson",
-    whatsappNo: "+91 9876543212",
-    address: "789 Commerce Zone, Hyderabad",
-  },
-}
-
 export default function OrderPunchPage() {
   const { toast } = useToast()
   const router = useRouter()
+
+  // New state for customers
+  const [customers, setCustomers] = useState<any[]>([])
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false)
+
+  // Function to fetch customers - declared before useEffect
+  const fetchCustomers = async () => {
+    try {
+      setIsLoadingCustomers(true)
+      const response = await customerApi.getAll()
+      if (response.success) {
+        setCustomers(response.data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch customers:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load customer list",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingCustomers(false)
+    }
+  }
 
   const [products, setProducts] = useState<ProductItem[]>([
     { id: "1", productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "" },
@@ -107,12 +80,12 @@ export default function OrderPunchPage() {
     { id: "1", oilType: "", ratePerLtr: "", rateLtr: "" },
   ])
 
-  // Legacy/Single states (kept if needed for compatibility, but mainly using the list now)
+  // Legacy/Single states
   const [oilType, setOilType] = useState<string>("")
   const [rateLtr, setRateLtr] = useState<string>("")
   
   const [brokerName, setBrokerName] = useState<string>("")
-  const [deliveryDate, setDeliveryDate] = useState<string>("") // Now acts as Actual Delivery Date
+  const [deliveryDate, setDeliveryDate] = useState<string>("")
   const [startDate, setStartDate] = useState<string>("")
   const [endDate, setEndDate] = useState<string>("")
   const [paymentTerms, setPaymentTerms] = useState<string>("")
@@ -120,15 +93,33 @@ export default function OrderPunchPage() {
   const [advanceAmount, setAdvanceAmount] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Fetch customers on mount
+  useEffect(() => {
+    fetchCustomers()
+  }, [])
+
   // Customer Auto-fill Effect
   useEffect(() => {
-    if (customerType === "existing" && customerName && MOCK_CUSTOMERS[customerName]) {
-      const data = MOCK_CUSTOMERS[customerName]
-      setContactPerson(data.contactPerson)
-      setWhatsappNo(data.whatsappNo)
-      setCustomerAddress(data.address)
+    if (customerType === "existing" && customerName) {
+      // Find customer in the fetched list
+      const selectedCustomer = customers.find(c => c.customer_name === customerName)
+      
+      if (selectedCustomer) {
+        setContactPerson(selectedCustomer.contact_person || "")
+        setWhatsappNo(selectedCustomer.contact || "") // Using 'contact' field for WhatsApp
+        
+        // Construct full address
+        const parts = [
+          selectedCustomer.address_line_1,
+          selectedCustomer.address_line_2,
+          selectedCustomer.state,
+          selectedCustomer.pincode
+        ].filter(Boolean)
+        
+        setCustomerAddress(parts.join(", "))
+      }
     }
-  }, [customerName, customerType])
+  }, [customerName, customerType, customers])
 
   // Week on Week Date Logic
   useEffect(() => {
@@ -136,9 +127,6 @@ export default function OrderPunchPage() {
       if (!startDate) {
         setStartDate(new Date().toISOString().split("T")[0])
       }
-    } else {
-      // clear dates if not week-on-week? or keep them
-      // keeping them is fine, but maybe hide fields
     }
   }, [orderPurpose])
 
@@ -155,12 +143,8 @@ export default function OrderPunchPage() {
   useEffect(() => {
     if (sameAsCustomerAddress) {
       setDeliveryAddress(customerAddress)
-    } else if (deliveryAddress === customerAddress && customerAddress !== "") {
-        // Optional: clear if unchecked? No, usually keep it but editable.
     }
   }, [sameAsCustomerAddress, customerAddress])
-
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -200,7 +184,7 @@ export default function OrderPunchPage() {
 
     try {
       // Prepare data for backend API
-      const customerNameValue = customerType === "existing" ? (MOCK_CUSTOMERS[customerName]?.name || customerName) : customerName
+      const customerNameValue = customerName
       
       // Prepare common order data
       const orderData: any = {
@@ -252,7 +236,7 @@ export default function OrderPunchPage() {
       if (response.success) {
         const backendOrderNo = response.data.order_no
 
-        // Prepare order entry for localStorage (for compatibility with existing workflow)
+        // Prepare order entry for localStorage (for compatibility in existing workflow)
         const orderEntry = {
           doNumber: backendOrderNo, // Use backend-generated order number
           customerType,
@@ -425,7 +409,6 @@ export default function OrderPunchPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* DO Number is now auto-generated by database trigger */}
               <div className="space-y-2">
                 <Label htmlFor="soDate">DO Date</Label>
                 <Input id="soDate" type="date" value={soDate} onChange={(e) => setSoDate(e.target.value)} />
@@ -462,7 +445,6 @@ export default function OrderPunchPage() {
                 )}
               </div>
 
-              {/* Week On Week Fields */}
               {orderPurpose === "week-on-week" && (
                 <>
                   <div className="space-y-2">
@@ -484,7 +466,6 @@ export default function OrderPunchPage() {
                       className="bg-muted"
                     />
                   </div>
-                  {/* Moved Actual Delivery Date Here */}
                   <div className="space-y-2">
                     <Label htmlFor="deliveryDate">Actual Delivery Date</Label>
                      <Input
@@ -494,7 +475,6 @@ export default function OrderPunchPage() {
                       onChange={(e) => setDeliveryDate(e.target.value)}
                     />
                   </div>
-                   {/* Spacer if needed for grid alignment */}
                    <div className="hidden md:block"></div> 
                 </>
               )}
@@ -515,14 +495,16 @@ export default function OrderPunchPage() {
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="customerName">Customer Name</Label>
                 {customerType === "existing" ? (
-                  <Select value={customerName} onValueChange={setCustomerName}>
+                  <Select value={customerName} onValueChange={setCustomerName} disabled={isLoadingCustomers}>
                     <SelectTrigger id="customerName">
-                      <SelectValue placeholder="Select existing customer" />
+                      <SelectValue placeholder={isLoadingCustomers ? "Loading customers..." : "Select existing customer"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="cust1">Acme Corp</SelectItem>
-                      <SelectItem value="cust2">Global Industries</SelectItem>
-                      <SelectItem value="cust3">Zenith Supply</SelectItem>
+                      {customers.map((customer) => (
+                        <SelectItem key={customer.id} value={customer.customer_name}>
+                          {customer.customer_name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 ) : (
@@ -565,7 +547,6 @@ export default function OrderPunchPage() {
                 />
               </div>
 
-              {/* Delivery Address Section */}
               <div className="space-y-2 md:col-span-2">
                 <div className="flex items-center space-x-2 mb-2">
                    <Checkbox 
@@ -629,7 +610,6 @@ export default function OrderPunchPage() {
                 </div>
               )}
 
-              {/* Product List Logic - Conditional Rendering */}
               {orderType === "pre-approval" && (
                 <div className="md:col-span-2 space-y-4 p-4 bg-muted/50 rounded-lg border">
                  <div className="flex justify-between items-center">
@@ -675,28 +655,27 @@ export default function OrderPunchPage() {
                           <div className="space-y-1">
                              <Label className="text-xs text-muted-foreground">Rate Per Ltr</Label>
                              <Input
-                              type="number"
-                              placeholder="0.00"
-                              value={item.ratePerLtr}
-                              onChange={(e) => updatePreApprovalProduct(item.id, "ratePerLtr", e.target.value)}
-                              className="bg-background h-9"
-                            />
+                               type="number"
+                               placeholder="0.00"
+                               value={item.ratePerLtr}
+                               onChange={(e) => updatePreApprovalProduct(item.id, "ratePerLtr", e.target.value)}
+                               className="bg-background h-9"
+                             />
                           </div>
 
                           <div className="space-y-1">
                              <Label className="text-xs text-muted-foreground">Rate Per 15KG</Label>
                              <Input
-                              type="number"
-                              placeholder="0.00"
-                              value={item.rateLtr}
-                              onChange={(e) => updatePreApprovalProduct(item.id, "rateLtr", e.target.value)}
-                              className="bg-background h-9"
-                            />
+                               type="number"
+                               placeholder="0.00"
+                               value={item.rateLtr}
+                               onChange={(e) => updatePreApprovalProduct(item.id, "rateLtr", e.target.value)}
+                               className="bg-background h-9"
+                             />
                           </div>
 
                         </div>
 
-                        {/* Action - Delete */}
                         <div className="flex-none">
                           <Button
                             type="button"
@@ -740,69 +719,68 @@ export default function OrderPunchPage() {
                           <div className="space-y-1.5 flex-1">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Name</Label>
                              <Input
-                              value={product.productName}
-                              onChange={(e) => updateProduct(product.id, "productName", e.target.value)}
-                              placeholder="Product name"
-                              className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
-                            />
+                               value={product.productName}
+                               onChange={(e) => updateProduct(product.id, "productName", e.target.value)}
+                               placeholder="Product name"
+                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
+                             />
                           </div>
 
                           <div className="space-y-1.5 flex-1">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">UOM</Label>
                              <Input
-                              value={product.uom}
-                              onChange={(e) => updateProduct(product.id, "uom", e.target.value)}
-                              placeholder="UOM"
-                              className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
-                            />
+                               value={product.uom}
+                               onChange={(e) => updateProduct(product.id, "uom", e.target.value)}
+                               placeholder="UOM"
+                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
+                             />
                           </div>
 
                           <div className="space-y-1.5 flex-1">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Order Qty</Label>
                              <Input
-                              type="number"
-                              value={product.orderQty}
-                              onChange={(e) => updateProduct(product.id, "orderQty", e.target.value)}
-                              placeholder="0"
-                              className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
-                            />
+                               type="number"
+                               value={product.orderQty}
+                               onChange={(e) => updateProduct(product.id, "orderQty", e.target.value)}
+                               placeholder="0"
+                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
+                             />
                           </div>
 
                           <div className="space-y-1.5 flex-1">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rate Of Material</Label>
                              <Input
-                              type="number"
-                              value={product.rate}
-                              onChange={(e) => updateProduct(product.id, "rate", e.target.value)}
-                              placeholder="0.00"
-                              className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600"
-                            />
+                               type="number"
+                               value={product.rate}
+                               onChange={(e) => updateProduct(product.id, "rate", e.target.value)}
+                               placeholder="0.00"
+                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600"
+                             />
                           </div>
 
                           <div className="space-y-1.5 flex-1">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Alt UOM</Label>
                              <Input
-                              value={product.altUom}
-                              onChange={(e) => updateProduct(product.id, "altUom", e.target.value)}
-                              placeholder="Alt UOM"
-                              className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
-                            />
+                               value={product.altUom}
+                               onChange={(e) => updateProduct(product.id, "altUom", e.target.value)}
+                               placeholder="Alt UOM"
+                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
+                             />
                           </div>
 
                           <div className="space-y-1.5 flex-1">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Alt Qty (Kg)</Label>
                              <Input
-                              type="number"
-                              value={product.altQty}
-                              onChange={(e) => updateProduct(product.id, "altQty", e.target.value)}
-                              placeholder="0"
-                              className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
-                            />
+                               type="number"
+                               value={product.altQty}
+                               onChange={(e) => updateProduct(product.id, "altQty", e.target.value)}
+                               placeholder="0"
+                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
+                             />
                           </div>
                           
                         </div>
 
-                        {/* Action - Delete */}
                         <div className="flex-none mb-1">
                           <Button
                             type="button"
@@ -820,9 +798,6 @@ export default function OrderPunchPage() {
                   </div>
                 </div>
               )}
-
-              {/* Legacy Oil Type View - removed for now as confusing with Depo logic
-                  If needed, it can be restored. */}
 
               <div className="space-y-2">
                 <Label htmlFor="isBroker">Is This Order Through Broker</Label>
@@ -849,18 +824,6 @@ export default function OrderPunchPage() {
                 </div>
               )}
 
-              {/* Delivery Date is now conditional or moved, lets add Expected Delivery Date down here if NOT week-on-week as fallback? 
-                  The prompt says: "Actual Delivery Date ... jo ki abhi Form me hai Expected Delivery Date hai usko upr lao or jb Start date, end ddate enable hoga mtlb Week on Week dropdown se select krenege tb wo bhi show krega."
-                  This implies it ONLY shows then? Or if not week-on-week, does it show as Expected?
-                  Usually regular orders still need a delivery date. I will leave it here as "Expected Delivery Date" for non-week-on-week cases to be safe, or just hide it if that's what "usko upr lao" meant (move entirely).
-                  "usko upr lao" (bring it up). I brought it up.
-                  "or jb Start date... enable hoga... tb wo bhi show krega" (and when start date is enable, it will also show).
-                  This might mean it should ONLY be visible then? Or it should be visible generally? 
-                  Most likely, regular orders still need a delivery date. 
-                  I will conditionally render it:
-                  If Week-on-Week: It's shown above as 'Actual Delivery Date'.
-                  If NOT Week-on-Week: It should probably still stay as 'Expected Delivery Date'.
-              */}
               {orderPurpose !== "week-on-week" && (
                 <div className="space-y-2">
                   <Label htmlFor="deliveryDate">Expected Delivery Date</Label>
