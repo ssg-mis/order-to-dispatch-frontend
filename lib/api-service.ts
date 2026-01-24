@@ -849,6 +849,58 @@ export const skuApi = {
   },
 };
 
+/**
+ * Depot API
+ */
+export const depotApi = {
+  /**
+   * Get all depots
+   */
+  getAll: async (): Promise<ApiResponse> => {
+    return request('/depots');
+  },
+
+  /**
+   * Get depot by ID
+   */
+  getById: async (id: string): Promise<ApiResponse> => {
+    return request(`/depots/${id}`);
+  },
+
+  /**
+   * Get depot by name
+   */
+  getByName: async (name: string): Promise<ApiResponse> => {
+    return request(`/depots/name/${encodeURIComponent(name)}`);
+  },
+};
+
+/**
+ * Broker API
+ */
+export const brokerApi = {
+  /**
+   * Get all brokers
+   */
+  getAll: async (): Promise<ApiResponse> => {
+    return request('/brokers');
+  },
+
+  /**
+   * Get broker by ID
+   */
+  getById: async (id: string): Promise<ApiResponse> => {
+    return request(`/brokers/${id}`);
+  },
+
+  /**
+   * Get broker by salesman name
+   */
+  getByName: async (name: string): Promise<ApiResponse> => {
+    return request(`/brokers/name/${encodeURIComponent(name)}`);
+  },
+};
+
 export default {
   order: orderApi,
   preApproval: preApprovalApi,
@@ -866,4 +918,6 @@ export default {
   user: userApi,
   customer: customerApi,
   sku: skuApi,
+  depot: depotApi,
+  broker: brokerApi,
 };

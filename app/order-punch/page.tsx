@@ -12,7 +12,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Save, FileUp, Plus, Trash2 } from "lucide-react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { useToast } from "@/hooks/use-toast"
-import { customerApi } from "@/lib/api-service"
+import { customerApi, depotApi, skuApi, brokerApi } from "@/lib/api-service"
+import { Combobox } from "@/components/ui/combobox"
 
 type ProductItem = {
   id: string
@@ -39,6 +40,18 @@ export default function OrderPunchPage() {
   const [customers, setCustomers] = useState<any[]>([])
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false)
 
+  // New state for depots
+  const [depots, setDepots] = useState<any[]>([])
+  const [isLoadingDepots, setIsLoadingDepots] = useState(false)
+
+  // New state for SKUs
+  const [skus, setSkus] = useState<any[]>([])
+  const [isLoadingSkus, setIsLoadingSkus] = useState(false)
+
+  // New state for Brokers
+  const [brokers, setBrokers] = useState<any[]>([])
+  const [isLoadingBrokers, setIsLoadingBrokers] = useState(false)
+
   // Function to fetch customers - declared before useEffect
   const fetchCustomers = async () => {
     try {
@@ -56,6 +69,66 @@ export default function OrderPunchPage() {
       })
     } finally {
       setIsLoadingCustomers(false)
+    }
+  }
+
+  // Function to fetch depots
+  const fetchDepots = async () => {
+    try {
+      setIsLoadingDepots(true)
+      const response = await depotApi.getAll()
+      if (response.success) {
+        setDepots(response.data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch depots:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load depot list",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingDepots(false)
+    }
+  }
+
+  // Function to fetch SKUs
+  const fetchSkus = async () => {
+    try {
+      setIsLoadingSkus(true)
+      const response = await skuApi.getAll()
+      if (response.success) {
+        setSkus(response.data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch SKUs:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load product list",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingSkus(false)
+    }
+  }
+
+  // Function to fetch Brokers
+  const fetchBrokers = async () => {
+    try {
+      setIsLoadingBrokers(true)
+      const response = await brokerApi.getAll()
+      if (response.success) {
+        setBrokers(response.data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch brokers:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load broker list",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingBrokers(false)
     }
   }
 
@@ -94,9 +167,12 @@ export default function OrderPunchPage() {
   const [advanceAmount, setAdvanceAmount] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Fetch customers on mount
+  // Fetch customers, depots, SKUs, and brokers on mount
   useEffect(() => {
     fetchCustomers()
+    fetchDepots()
+    fetchSkus()
+    fetchBrokers()
   }, [])
 
   // Customer Auto-fill Effect
@@ -244,7 +320,7 @@ export default function OrderPunchPage() {
           depoName,
           isBrokerOrder,
           orderPurpose,
-          orderType,
+          orderType: orderType as "regular" | "pre-approval",
           advancePaymentTaken,
           soNumber: backendOrderNo, // Use generated order number
           soDate,
@@ -270,8 +346,7 @@ export default function OrderPunchPage() {
           preApprovalProducts,
           stage: orderType === "regular" ? "Approval Of Order" : "Pre-Approval",
           status: "Pending" as const,
-          timestamp: new Date().toISOString(),
-          orderType: orderType as "regular" | "pre-approval"
+          timestamp: new Date().toISOString()
         }
 
         // Save workflow history
@@ -335,6 +410,28 @@ export default function OrderPunchPage() {
     );
   }
 
+  // Handle product selection and auto-fill UOM fields
+  const handleProductSelect = (productId: string, skuName: string) => {
+    const selectedSku = skus.find((sku) => sku.sku_name === skuName)
+    
+    if (selectedSku) {
+      setProducts((prevProducts) => 
+        prevProducts.map((p) => {
+          if (p.id !== productId) return p;
+          return {
+            ...p,
+            productName: selectedSku.sku_name,
+            uom: selectedSku.main_uom || "",
+            altUom: selectedSku.alternate_uom || ""
+          };
+        })
+      );
+    } else {
+      // If no SKU found, just update the product name
+      updateProduct(productId, "productName", skuName)
+    }
+  }
+
   // Pre-Approval Product Helpers
   const addPreApprovalProduct = () => {
     setPreApprovalProducts([
@@ -391,7 +488,7 @@ export default function OrderPunchPage() {
   }
 
   return (
-    <div className="p-6 max-w-full space-y-6">
+    <div className="p-6 max-w-full space-y-6" suppressHydrationWarning>
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
           <SidebarTrigger className="-ml-1" />
@@ -405,7 +502,7 @@ export default function OrderPunchPage() {
         </Button>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6" suppressHydrationWarning>
         <Card>
           <CardHeader>
             <CardTitle>Order Information</CardTitle>
@@ -499,18 +596,20 @@ export default function OrderPunchPage() {
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="customerName">Customer Name</Label>
                 {customerType === "existing" ? (
-                  <Select value={customerName} onValueChange={setCustomerName} disabled={isLoadingCustomers}>
-                    <SelectTrigger id="customerName">
-                      <SelectValue placeholder={isLoadingCustomers ? "Loading customers..." : "Select existing customer"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.customer_name}>
-                          {customer.customer_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    options={customers
+                      .filter(c => c && c.customer_name) // Filter invalid customers
+                      .map((customer) => ({
+                        value: customer.customer_name,
+                        label: customer.customer_name
+                      }))}
+                    value={customerName}
+                    onValueChange={setCustomerName}
+                    placeholder={isLoadingCustomers ? "Loading customers..." : "Select existing customer"}
+                    searchPlaceholder="Search customers..."
+                    emptyText="No customer found."
+                    disabled={isLoadingCustomers}
+                  />
                 ) : (
                   <Input
                     id="customerName"
@@ -575,15 +674,18 @@ export default function OrderPunchPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="depoName">Depo Name</Label>
-                <Select value={depoName} onValueChange={setDepoName}>
+                <Select value={depoName} onValueChange={setDepoName} disabled={isLoadingDepots}>
                   <SelectTrigger id="depoName">
-                    <SelectValue placeholder="Select Depo" />
+                    <SelectValue placeholder={isLoadingDepots ? "Loading depots..." : "Select Depo"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Depo A">Depo A</SelectItem>
-                    <SelectItem value="Depo B">Depo B</SelectItem>
-                    <SelectItem value="Depo C">Depo C</SelectItem>
-                    <SelectItem value="Depo D">Depo D</SelectItem>
+                    {depots
+                      .filter(d => d && d.depot_id && d.depot_name) // Filter invalid depots
+                      .map((depot) => (
+                      <SelectItem key={depot.depot_id} value={depot.depot_name}>
+                        {depot.depot_name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -722,11 +824,20 @@ export default function OrderPunchPage() {
                           
                           <div className="space-y-1.5 flex-1">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Name</Label>
-                             <Input
+                             <Combobox
+                               options={skus
+                                 .filter(s => s && s.sku_name) // Filter invalid SKUs
+                                 .map((sku) => ({
+                                   value: sku.sku_name,
+                                   label: sku.sku_name
+                                 }))}
                                value={product.productName}
-                               onChange={(e) => updateProduct(product.id, "productName", e.target.value)}
-                               placeholder="Product name"
-                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
+                               onValueChange={(value) => handleProductSelect(product.id, value)}
+                               placeholder={isLoadingSkus ? "Loading products..." : "Select product"}
+                               searchPlaceholder="Search products..."
+                               emptyText="No product found."
+                               disabled={isLoadingSkus}
+                               className="h-10"
                              />
                           </div>
 
@@ -736,7 +847,8 @@ export default function OrderPunchPage() {
                                value={product.uom}
                                onChange={(e) => updateProduct(product.id, "uom", e.target.value)}
                                placeholder="UOM"
-                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
+                               className="h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 bg-muted"
+                               readOnly
                              />
                           </div>
 
@@ -768,7 +880,8 @@ export default function OrderPunchPage() {
                                value={product.altUom}
                                onChange={(e) => updateProduct(product.id, "altUom", e.target.value)}
                                placeholder="Alt UOM"
-                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
+                               className="h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 bg-muted"
+                               readOnly
                              />
                           </div>
 
@@ -819,11 +932,19 @@ export default function OrderPunchPage() {
               {isBrokerOrder === "YES" && (
                 <div className="space-y-2">
                   <Label htmlFor="brokerName">Broker Name (IF ORDER THROUGH BROKER)</Label>
-                  <Input
-                    id="brokerName"
-                    placeholder="Enter broker name"
+                  <Combobox
+                    options={brokers
+                      .filter(b => b && b.salesman_name) // Filter invalid brokers
+                      .map((broker) => ({
+                        value: broker.salesman_name,
+                        label: broker.salesman_name
+                      }))}
                     value={brokerName}
-                    onChange={(e) => setBrokerName(e.target.value)}
+                    onValueChange={setBrokerName}
+                    placeholder={isLoadingBrokers ? "Loading brokers..." : "Select broker"}
+                    searchPlaceholder="Search brokers..."
+                    emptyText="No broker found."
+                    disabled={isLoadingBrokers}
                   />
                 </div>
               )}
