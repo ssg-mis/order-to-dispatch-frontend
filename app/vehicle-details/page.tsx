@@ -287,12 +287,22 @@ export default function VehicleDetailsPage() {
                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">DO-No: {item.orderNo}</span>
                                    <h4 className="text-xs font-bold text-slate-800 leading-tight truncate pr-16">{item.customerName || "—"}</h4>
                                 </div>
-                                <div className="pt-2 border-t border-slate-50 mt-0.5">
+                                <div className="mt-2 pt-2 border-t border-slate-50 space-y-2">
                                    <div className="flex items-center gap-1.5">
                                       <div className="w-1 h-1 rounded-full bg-blue-500" />
                                       <span className="text-xs font-bold text-blue-600 truncate">
                                         {item.productName || "—"}
                                       </span>
+                                   </div>
+                                   <div className="grid grid-cols-2 gap-2">
+                                       <div className="flex flex-col">
+                                          <span className="text-[9px] text-slate-400 font-medium">Qty</span>
+                                          <span className="text-[10px] font-bold text-slate-700">{item.qtyToDispatch || "—"}</span>
+                                       </div>
+                                       <div className="flex flex-col">
+                                          <span className="text-[9px] text-slate-400 font-medium">Transport</span>
+                                          <span className="text-[10px] font-bold text-slate-700 truncate">{item.transportType || "—"}</span>
+                                       </div>
                                    </div>
                                 </div>
                             </div>

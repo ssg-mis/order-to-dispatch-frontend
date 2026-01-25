@@ -377,6 +377,16 @@ export default function MaterialLoadPage() {
                                         {item.productName || "—"}
                                       </span>
                                    </div>
+                                   <div className="mt-2 pt-2 border-t border-slate-50 grid grid-cols-2 gap-2">
+                                       <div className="flex flex-col">
+                                          <span className="text-[9px] text-slate-400 font-medium">Qty</span>
+                                          <span className="text-[10px] font-bold text-slate-700">{item.qtyToDispatch || "—"}</span>
+                                       </div>
+                                       <div className="flex flex-col">
+                                          <span className="text-[9px] text-slate-400 font-medium">Transport</span>
+                                          <span className="text-[10px] font-bold text-slate-700 truncate">{item.transportType || "—"}</span>
+                                       </div>
+                                   </div>
                                 </div>
                             </div>
                         ))}

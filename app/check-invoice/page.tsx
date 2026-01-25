@@ -222,9 +222,28 @@ export default function CheckInvoicePage() {
                        invoiceDate: order.invoice_date || "—",
                        billAmount: order.bill_amount || "—",
                        
-                       // extra fields if needed
-                       customerAddress: order.customer_address || "—",
-                       paymentTerms: order.payment_terms || "—",
+                       // Detailed fields
+                       productName1: order.product_name_1,
+                       actualQtyDispatch: order.actual_qty_dispatch,
+                       checkStatus: order.check_status,
+                       remarks: order.remarks,
+                       fitness: order.fitness,
+                       insurance: order.insurance,
+                       taxCopy: order.tax_copy,
+                       polution: order.polution,
+                       permit1: order.permit1,
+                       permit2: order.permit2_out_state,
+                       actualQty: order.actual_qty,
+                       weightmentSlip: order.weightment_slip_copy,
+                       rstNo: order.rst_no,
+                       transporterName: order.transporter_name,
+                       reasonDiff: order.reason_of_difference_in_weight_if_any_speacefic,
+                       truckNo: order.truck_no,
+                       vehicleImage: order.vehicle_no_plate_image,
+                       biltyNo: order.bilty_no,
+                       grossWeight: order.gross_weight,
+                       tareWeight: order.tare_weight,
+                       netWeight: order.net_weight,
                    }
 
                    return (
@@ -234,48 +253,102 @@ export default function CheckInvoicePage() {
                          <DialogTrigger asChild>
                            <Button size="sm">Verify Invoice</Button>
                          </DialogTrigger>
-                         <DialogContent className="max-w-lg">
+                         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                            <DialogHeader>
                              <DialogTitle>Verify Invoice: {row.doNumber}</DialogTitle>
                            </DialogHeader>
-                           <div className="space-y-4 py-4">
-                             <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                    <span className="font-semibold">Invoice No:</span> {row.invoiceNo}
-                                </div>
-                                <div>
-                                    <span className="font-semibold">Invoice Date:</span> {row.invoiceDate}
-                                </div>
-                                <div>
-                                    <span className="font-semibold">Bill Amount:</span> {row.billAmount}
-                                </div>
-                             </div>
+                           
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+                              {/* Left Column: Read-Only Details */}
+                              <div className="space-y-4 text-sm">
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                      <h4 className="font-bold text-slate-700 mb-2 border-b border-slate-200 pb-1">Order Details</h4>
+                                      <div className="grid grid-cols-2 gap-2">
+                                          <div><span className="text-slate-500 text-xs">SO No:</span> <span className="font-medium text-slate-800">{row.orderNo}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Customer:</span> <span className="font-medium text-slate-800">{row.customerName}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Product:</span> <span className="font-medium text-slate-800">{row.productName}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Qty To Dispatch:</span> <span className="font-medium text-slate-800">{row.qtyToDispatch}</span></div>
+                                      </div>
+                                  </div>
 
-                             <div className="space-y-2">
-                               <Label>Verification Status</Label>
-                               <Input
-                                 value={checkData.status}
-                                 onChange={(e) => setCheckData({ ...checkData, status: e.target.value })}
-                                 placeholder="e.g. Verified, Issues Found"
-                               />
-                             </div>
-                             <div className="space-y-2">
-                               <Label>Remarks</Label>
-                               <Textarea
-                                 value={checkData.remarks}
-                                 onChange={(e) => setCheckData({ ...checkData, remarks: e.target.value })}
-                                 placeholder="Enter verification remarks..."
-                               />
-                             </div>
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                      <h4 className="font-bold text-slate-700 mb-2 border-b border-slate-200 pb-1">Vehicle & Transport</h4>
+                                      <div className="grid grid-cols-2 gap-2">
+                                          <div><span className="text-slate-500 text-xs">Truck No:</span> <span className="font-medium text-slate-800">{row.truckNo || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Transporter:</span> <span className="font-medium text-slate-800">{row.transporterName || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Transport Type:</span> <span className="font-medium text-slate-800">{row.transportType}</span></div>
+                                          <div><span className="text-slate-500 text-xs">RST No:</span> <span className="font-medium text-slate-800">{row.rstNo || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Driver Status:</span> <span className="font-medium text-slate-800">{row.checkStatus || "-"}</span></div>
+                                          <div className="col-span-2"><span className="text-slate-500 text-xs">Remarks:</span> <span className="font-medium text-slate-800">{row.remarks || "-"}</span></div>
+                                      </div>
+                                  </div>
+
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                      <h4 className="font-bold text-slate-700 mb-2 border-b border-slate-200 pb-1">Dispatch & Weights</h4>
+                                      <div className="grid grid-cols-2 gap-2">
+                                          <div><span className="text-slate-500 text-xs">Actual Qty:</span> <span className="font-medium text-slate-800">{row.actualQty || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Bilty No:</span> <span className="font-medium text-slate-800">{row.biltyNo || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Gross Wt:</span> <span className="font-medium text-slate-800">{row.grossWeight || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Tare Wt:</span> <span className="font-medium text-slate-800">{row.tareWeight || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Net Wt:</span> <span className="font-medium text-blue-600">{row.netWeight || "-"}</span></div>
+                                          {row.reasonDiff && (
+                                              <div className="col-span-2 bg-amber-50 p-1 rounded border border-amber-100 mt-1">
+                                                  <span className="text-xs text-amber-600 font-bold">Diff Reason:</span> <span className="text-xs text-amber-800">{row.reasonDiff}</span>
+                                              </div>
+                                          )}
+                                      </div>
+                                  </div>
+                              </div>
+
+                              {/* Right Column: Verification Form */}
+                              <div className="space-y-4 border-l pl-6 border-slate-100">
+                                 <h3 className="font-bold text-lg text-slate-900">Verify Invoice</h3>
+                                 
+                                 <div className="grid grid-cols-1 gap-4 text-sm bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4">
+                                    <div>
+                                        <span className="font-semibold text-blue-700 block text-xs uppercase tracking-wider">Invoice No</span>
+                                        <span className="text-slate-900 font-bold text-lg">{row.invoiceNo}</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <span className="font-semibold text-blue-700 block text-xs uppercase tracking-wider">Invoice Date</span>
+                                            <span className="text-slate-800 font-medium">{row.invoiceDate}</span>
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold text-blue-700 block text-xs uppercase tracking-wider">Bill Amount</span>
+                                            <span className="text-slate-800 font-medium">{row.billAmount}</span>
+                                        </div>
+                                    </div>
+                                 </div>
+
+                                 <div className="space-y-2">
+                                   <Label>Verification Status</Label>
+                                   <Input
+                                     value={checkData.status}
+                                     onChange={(e) => setCheckData({ ...checkData, status: e.target.value })}
+                                     placeholder="e.g. Verified, Issues Found"
+                                   />
+                                 </div>
+                                 <div className="space-y-2">
+                                   <Label>Remarks</Label>
+                                   <Textarea
+                                     value={checkData.remarks}
+                                     onChange={(e) => setCheckData({ ...checkData, remarks: e.target.value })}
+                                     placeholder="Enter verification remarks..."
+                                   />
+                                 </div>
+
+                                 <div className="pt-4">
+                                   <Button
+                                     onClick={() => handleSubmit(order)}
+                                     disabled={!checkData.status || isProcessing}
+                                     className="w-full bg-blue-600 hover:bg-blue-700"
+                                   >
+                                     {isProcessing ? "Processing..." : "Submit Verification"}
+                                   </Button>
+                                 </div>
+                              </div>
                            </div>
-                           <DialogFooter>
-                             <Button
-                               onClick={() => handleSubmit(order)}
-                               disabled={!checkData.status || isProcessing}
-                             >
-                               {isProcessing ? "Processing..." : "Submit Verification"}
-                             </Button>
-                           </DialogFooter>
                          </DialogContent>
                        </Dialog>
                      </TableCell>

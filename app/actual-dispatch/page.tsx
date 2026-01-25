@@ -10,6 +10,9 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { Settings2 } from "lucide-react"
 import { actualDispatchApi } from "@/lib/api-service"
 
@@ -20,6 +23,8 @@ export default function ActualDispatchPage() {
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [selectedOrders, setSelectedOrders] = useState<string[]>([])
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [confirmDetails, setConfirmDetails] = useState<Record<string, { qty: string }>>({})
   const PAGE_COLUMNS = [
     { id: "orderNo", label: "DO Number" },
     { id: "customerName", label: "Customer Name" },
@@ -128,7 +133,33 @@ export default function ActualDispatchPage() {
     }
   }
 
-  const handleBulkConfirm = async () => {
+  const handleBulkConfirm = () => {
+     if (selectedOrders.length === 0) {
+        toast({
+           title: "No Items Selected",
+           description: "Please select items to confirm",
+           variant: "destructive",
+        });
+        return;
+     }
+     
+     // Pre-fill confirmation details with default/existing values
+     const newDetails: Record<string, { qty: string }> = {};
+     displayRows.forEach(row => {
+        const rowKey = `${row.doNumber || row.orderNo}-${row._product?.id || row._product?.productName || row._product?.oilType || 'no-id'}`;
+        if (selectedOrders.includes(rowKey)) {
+           // Default to Qty to Dispatch if not already set
+           newDetails[rowKey] = {
+              qty: String(row.qtyToDispatch || row.qtytobedispatched || "")
+           };
+        }
+     });
+     
+     setConfirmDetails(prev => ({ ...prev, ...newDetails }));
+     setIsDialogOpen(true);
+  }
+
+  const performDispatchConfirmation = async () => {
     setIsProcessing(true)
     try {
       const itemsToDispatch = displayRows.filter((row) =>
@@ -136,11 +167,7 @@ export default function ActualDispatchPage() {
       )
 
       if (itemsToDispatch.length === 0) {
-        toast({
-          title: "No Items Selected",
-          description: "Please select items to confirm",
-          variant: "destructive",
-        });
+        setIsDialogOpen(false);
         return;
       }
 
@@ -150,12 +177,14 @@ export default function ActualDispatchPage() {
       // Submit each item to backend API
       for (const item of itemsToDispatch) {
         const dsrNumber = item.d_sr_number; // DSR number from lift_receiving_confirmation
+        const rowKey = `${item.doNumber || item.orderNo}-${item._product?.id || item._product?.productName || item._product?.oilType || 'no-id'}`;
+        const confirmedQty = confirmDetails[rowKey]?.qty;
 
         try {
           if (dsrNumber) {
             const dispatchData = {
               product_name_1: item.product_name,
-              actual_qty_dispatch: item.qty_to_be_dispatched,
+              actual_qty_dispatch: confirmedQty || item.qty_to_be_dispatched,
             };
 
             console.log('[ACTUAL DISPATCH] Submitting for DSR:', dsrNumber, dispatchData);
@@ -186,6 +215,8 @@ export default function ActualDispatchPage() {
 
         // Clear selections
         setSelectedOrders([]);
+        setIsDialogOpen(false); 
+        setConfirmDetails({});
 
         // Refresh data from backend
         await fetchPendingDispatches();
@@ -463,6 +494,77 @@ export default function ActualDispatchPage() {
           </Table>
         </Card>
       </div>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-[95vw] max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Confirm Dispatch Details</DialogTitle>
+            <DialogDescription>
+              Verify and confirm the actual dispatch quantities.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto py-4">
+             <div className="space-y-4">
+                {displayRows.filter(
+                   (row) => selectedOrders.includes(
+                      `${row.doNumber || row.orderNo}-${row._product?.id || row._product?.productName || row._product?.oilType || 'no-id'}`
+                   )
+                ).map((item) => {
+                   const rowKey = `${item.doNumber || item.orderNo}-${item._product?.id || item._product?.productName || item._product?.oilType || 'no-id'}`;
+                   return (
+                      <div key={rowKey} className="border rounded-lg p-4 space-y-4 bg-muted/5">
+                         <div className="flex flex-col sm:flex-row justify-between gap-4 border-b pb-4">
+                            <div className="space-y-1">
+                               <div className="font-semibold text-lg">{item.customerName}</div>
+                               <div className="text-sm text-muted-foreground flex flex-wrap gap-4">
+                                  <span>DO: <span className="font-medium text-foreground">{item.doNumber || item.orderNo}</span></span>
+                                  <span>Product: <span className="font-medium text-foreground">{item._product?.productName || item._product?.oilType}</span></span>
+                                  <span>Planned Qty: <span className="font-medium text-foreground">{item.qtyToDispatch || "—"}</span></span>
+                               </div>
+                            </div>
+                            <div className="flex items-start gap-2">
+                               <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 whitespace-nowrap">
+                                  {item.transportType}
+                               </Badge>
+                               <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+                                  Pending
+                               </Badge>
+                            </div>
+                         </div>
+                         
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                               <Label>Actual Qty Dispatched</Label>
+                               <Input
+                                  type="number"
+                                  placeholder="Confirm Qty"
+                                  value={confirmDetails[rowKey]?.qty || ""}
+                                  onChange={(e) =>
+                                     setConfirmDetails((prev) => ({
+                                        ...prev,
+                                        [rowKey]: {
+                                           ...prev[rowKey],
+                                           qty: e.target.value
+                                        }
+                                     }))
+                                  }
+                               />
+                            </div>
+                         </div>
+                      </div>
+                   );
+                })}
+             </div>
+          </div>
+
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+            <Button onClick={performDispatchConfirmation} disabled={isProcessing}>
+               {isProcessing ? "Processing..." : "Confirm Dispatch"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </WorkflowStageShell>
   )
 }

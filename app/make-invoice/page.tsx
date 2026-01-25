@@ -238,9 +238,28 @@ export default function MakeInvoicePage() {
                      deliveryFrom: order.dispatch_from || "—",
                      transportType: order.type_of_transporting || "—",
                      status: "Pending Invoice",
-                     // Add other fields from backend if available, or map existing ones
-                     customerAddress: order.customer_address || "—",
-                     paymentTerms: order.payment_terms || "—",
+                     // Detailed fields
+                     productName1: order.product_name_1,
+                     actualQtyDispatch: order.actual_qty_dispatch,
+                     checkStatus: order.check_status,
+                     remarks: order.remarks,
+                     fitness: order.fitness,
+                     insurance: order.insurance,
+                     taxCopy: order.tax_copy,
+                     polution: order.polution,
+                     permit1: order.permit1,
+                     permit2: order.permit2_out_state,
+                     actualQty: order.actual_qty,
+                     weightmentSlip: order.weightment_slip_copy,
+                     rstNo: order.rst_no,
+                     transporterName: order.transporter_name,
+                     reasonDiff: order.reason_of_difference_in_weight_if_any_speacefic,
+                     truckNo: order.truck_no,
+                     vehicleImage: order.vehicle_no_plate_image,
+                     biltyNo: order.bilty_no,
+                     grossWeight: order.gross_weight,
+                     tareWeight: order.tare_weight,
+                     netWeight: order.net_weight,
                    }
 
                    return (
@@ -250,98 +269,148 @@ export default function MakeInvoicePage() {
                          <DialogTrigger asChild>
                            <Button size="sm">Create Invoice</Button>
                          </DialogTrigger>
-                         <DialogContent className="max-w-lg">
+                         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                            <DialogHeader>
                              <DialogTitle>Make Invoice: {row.doNumber}</DialogTitle>
                            </DialogHeader>
-                           <div className="space-y-4 py-4">
-                             
-                             <div className="space-y-2">
-                                 <Label>Bill Type</Label>
-                                 <Select value={invoiceType} onValueChange={(val: any) => setInvoiceType(val)}>
-                                   <SelectTrigger>
-                                     <SelectValue placeholder="Select Type" />
-                                   </SelectTrigger>
-                                   <SelectContent>
-                                     <SelectItem value="independent">Independent</SelectItem>
-                                     <SelectItem value="common">Common</SelectItem>
-                                   </SelectContent>
-                                 </Select>
-                             </div>
+                           
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+                              {/* Left Column: Read-Only Details */}
+                              <div className="space-y-4 text-sm">
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                      <h4 className="font-bold text-slate-700 mb-2 border-b border-slate-200 pb-1">Order Details</h4>
+                                      <div className="grid grid-cols-2 gap-2">
+                                          <div><span className="text-slate-500 text-xs">SO No:</span> <span className="font-medium text-slate-800">{row.orderNo}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Customer:</span> <span className="font-medium text-slate-800">{row.customerName}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Product:</span> <span className="font-medium text-slate-800">{row.productName}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Qty To Dispatch:</span> <span className="font-medium text-slate-800">{row.qtyToDispatch}</span></div>
+                                      </div>
+                                  </div>
 
-                             {invoiceType === "independent" && (
-                               <div className="space-y-2">
-                                   <Label>Invoice Date</Label>
-                                   <Input 
-                                       type="date" 
-                                       value={invoiceData.invoiceDate} 
-                                       onChange={(e) => setInvoiceData({...invoiceData, invoiceDate: e.target.value})} 
-                                   />
-                               </div>
-                             )}
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                      <h4 className="font-bold text-slate-700 mb-2 border-b border-slate-200 pb-1">Vehicle & Transport</h4>
+                                      <div className="grid grid-cols-2 gap-2">
+                                          <div><span className="text-slate-500 text-xs">Truck No:</span> <span className="font-medium text-slate-800">{row.truckNo || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Transporter:</span> <span className="font-medium text-slate-800">{row.transporterName || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Transport Type:</span> <span className="font-medium text-slate-800">{row.transportType}</span></div>
+                                          <div><span className="text-slate-500 text-xs">RST No:</span> <span className="font-medium text-slate-800">{row.rstNo || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Driver Status:</span> <span className="font-medium text-slate-800">{row.checkStatus || "-"}</span></div>
+                                          <div className="col-span-2"><span className="text-slate-500 text-xs">Remarks:</span> <span className="font-medium text-slate-800">{row.remarks || "-"}</span></div>
+                                      </div>
+                                  </div>
 
-                             <div className="space-y-2">
-                               <Label>Invoice Number</Label>
-                               <Input
-                                 value={invoiceData.invoiceNo}
-                                 onChange={(e) => setInvoiceData({ ...invoiceData, invoiceNo: e.target.value })}
-                                 placeholder="Enter invoice number"
-                               />
-                             </div>
-                             
-                             <div className="space-y-2">
-                               <Label>Qty</Label>
-                               <Input
-                                 type="number"
-                                 value={invoiceData.qty}
-                                 onChange={(e) => setInvoiceData({ ...invoiceData, qty: e.target.value })}
-                                 placeholder="Enter Quantity"
-                               />
-                             </div>
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                      <h4 className="font-bold text-slate-700 mb-2 border-b border-slate-200 pb-1">Dispatch & Weights</h4>
+                                      <div className="grid grid-cols-2 gap-2">
+                                          <div><span className="text-slate-500 text-xs">Actual Qty:</span> <span className="font-medium text-slate-800">{row.actualQty || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Bilty No:</span> <span className="font-medium text-slate-800">{row.biltyNo || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Gross Wt:</span> <span className="font-medium text-slate-800">{row.grossWeight || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Tare Wt:</span> <span className="font-medium text-slate-800">{row.tareWeight || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Net Wt:</span> <span className="font-medium text-blue-600">{row.netWeight || "-"}</span></div>
+                                          {row.reasonDiff && (
+                                              <div className="col-span-2 bg-amber-50 p-1 rounded border border-amber-100 mt-1">
+                                                  <span className="text-xs text-amber-600 font-bold">Diff Reason:</span> <span className="text-xs text-amber-800">{row.reasonDiff}</span>
+                                              </div>
+                                          )}
+                                      </div>
+                                  </div>
+                                  
 
-                             {invoiceType === "independent" && (
-                               <div className="space-y-2">
-                                   <Label>Bill Amount</Label>
+                              </div>
+
+                              {/* Right Column: Invoice Form */}
+                              <div className="space-y-4 border-l pl-6 border-slate-100">
+                                 <h3 className="font-bold text-lg text-slate-900">Generate Invoice</h3>
+                                 
+                                 <div className="space-y-2">
+                                     <Label>Bill Type</Label>
+                                     <Select value={invoiceType} onValueChange={(val: any) => setInvoiceType(val)}>
+                                       <SelectTrigger>
+                                         <SelectValue placeholder="Select Type" />
+                                       </SelectTrigger>
+                                       <SelectContent>
+                                         <SelectItem value="independent">Independent</SelectItem>
+                                         <SelectItem value="common">Common</SelectItem>
+                                       </SelectContent>
+                                     </Select>
+                                 </div>
+    
+                                 {invoiceType === "independent" && (
+                                   <div className="space-y-2">
+                                       <Label>Invoice Date</Label>
+                                       <Input 
+                                           type="date" 
+                                           value={invoiceData.invoiceDate} 
+                                           onChange={(e) => setInvoiceData({...invoiceData, invoiceDate: e.target.value})} 
+                                       />
+                                   </div>
+                                 )}
+    
+                                 <div className="space-y-2">
+                                   <Label>Invoice Number</Label>
                                    <Input
-                                       type="number" 
-                                       value={invoiceData.billAmount} 
-                                       onChange={(e) => setInvoiceData({...invoiceData, billAmount: e.target.value })} 
-                                       placeholder="Enter Bill Amount"
+                                     value={invoiceData.invoiceNo}
+                                     onChange={(e) => setInvoiceData({ ...invoiceData, invoiceNo: e.target.value })}
+                                     placeholder="Enter invoice number"
                                    />
-                               </div>
-                             )}
+                                 </div>
+                                 
+                                 <div className="space-y-2">
+                                   <Label>Qty</Label>
+                                   <Input
+                                     type="number"
+                                     value={invoiceData.qty}
+                                     onChange={(e) => setInvoiceData({ ...invoiceData, qty: e.target.value })}
+                                     placeholder="Enter Quantity"
+                                   />
+                                 </div>
+    
+                                 {invoiceType === "independent" && (
+                                   <div className="space-y-2">
+                                       <Label>Bill Amount</Label>
+                                       <Input
+                                           type="number" 
+                                           value={invoiceData.billAmount} 
+                                           onChange={(e) => setInvoiceData({...invoiceData, billAmount: e.target.value })} 
+                                           placeholder="Enter Bill Amount"
+                                       />
+                                   </div>
+                                 )}
+    
+                                 <div className="space-y-2">
+                                   <Label>Upload Invoice</Label>
+                                   <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                                     <Input
+                                       type="file"
+                                       accept=".pdf,.jpg,.png"
+                                       onChange={(e) => {
+                                         if (e.target.files?.[0]) {
+                                           setInvoiceData({ ...invoiceData, invoiceFile: e.target.files[0] })
+                                         }
+                                       }}
+                                       className="hidden"
+                                       id="invoice-upload"
+                                     />
+                                     <label htmlFor="invoice-upload" className="cursor-pointer">
+                                       <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                                       <p className="text-sm text-muted-foreground">
+                                         {invoiceData.invoiceFile ? invoiceData.invoiceFile.name : "Click to upload invoice"}
+                                       </p>
+                                     </label>
+                                   </div>
+                                 </div>
 
-                             <div className="space-y-2">
-                               <Label>Upload Invoice</Label>
-                               <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                                 <Input
-                                   type="file"
-                                   accept=".pdf,.jpg,.png"
-                                   onChange={(e) => {
-                                     if (e.target.files?.[0]) {
-                                       setInvoiceData({ ...invoiceData, invoiceFile: e.target.files[0] })
-                                     }
-                                   }}
-                                   className="hidden"
-                                   id="invoice-upload"
-                                 />
-                                 <label htmlFor="invoice-upload" className="cursor-pointer">
-                                   <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                                   <p className="text-sm text-muted-foreground">
-                                     {invoiceData.invoiceFile ? invoiceData.invoiceFile.name : "Click to upload invoice"}
-                                   </p>
-                                 </label>
-                               </div>
-                             </div>
+                                 <div className="pt-4">
+                                   <Button
+                                     onClick={() => handleSubmit(order)}
+                                     disabled={!invoiceData.invoiceNo || !invoiceType || isProcessing}
+                                     className="w-full bg-blue-600 hover:bg-blue-700"
+                                   >
+                                     {isProcessing ? "Processing..." : "Submit Invoice"}
+                                   </Button>
+                                 </div>
+                              </div>
                            </div>
-                           <DialogFooter>
-                             <Button
-                               onClick={() => handleSubmit(order)}
-                               disabled={!invoiceData.invoiceNo || !invoiceType || isProcessing}
-                             >
-                               {isProcessing ? "Processing..." : "Submit Invoice"}
-                             </Button>
-                           </DialogFooter>
                          </DialogContent>
                        </Dialog>
                      </TableCell>

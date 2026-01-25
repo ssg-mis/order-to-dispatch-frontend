@@ -497,9 +497,9 @@ export default function OrderPunchPage() {
             <p className="text-muted-foreground">Create a new order with customer and product details.</p>
           </div>
         </div>
-        <Button variant="outline" className="gap-2 bg-transparent">
+        {/* <Button variant="outline" className="gap-2 bg-transparent">
           <FileUp className="h-4 w-4" /> Import
-        </Button>
+        </Button> */}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6" suppressHydrationWarning>
@@ -820,9 +820,9 @@ export default function OrderPunchPage() {
                          <div className="absolute top-2 left-4 text-[10px] font-bold text-blue-500/80 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest">
                              Product {idx + 1}
                          </div>
-                        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 flex-1">
+                        <div className="grid grid-cols-2 md:grid-cols-12 gap-4 flex-1">
                           
-                          <div className="space-y-1.5 flex-1">
+                          <div className="space-y-1.5 col-span-2 md:col-span-4">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Name</Label>
                              <Combobox
                                options={skus
@@ -832,8 +832,8 @@ export default function OrderPunchPage() {
                                    label: sku.sku_name
                                  }))}
                                value={product.productName}
-                               onValueChange={(value) => handleProductSelect(product.id, value)}
-                               placeholder={isLoadingSkus ? "Loading products..." : "Select product"}
+                               onValueChange={(val) => handleProductSelect(product.id, val)}
+                               placeholder={isLoadingSkus ? "Loading..." : "Select product"}
                                searchPlaceholder="Search products..."
                                emptyText="No product found."
                                disabled={isLoadingSkus}
@@ -841,7 +841,7 @@ export default function OrderPunchPage() {
                              />
                           </div>
 
-                          <div className="space-y-1.5 flex-1">
+                          <div className="space-y-1.5 col-span-1 md:col-span-1">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">UOM</Label>
                              <Input
                                value={product.uom}
@@ -852,7 +852,7 @@ export default function OrderPunchPage() {
                              />
                           </div>
 
-                          <div className="space-y-1.5 flex-1">
+                          <div className="space-y-1.5 col-span-1 md:col-span-2">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Order Qty</Label>
                              <Input
                                type="number"
@@ -863,8 +863,8 @@ export default function OrderPunchPage() {
                              />
                           </div>
 
-                          <div className="space-y-1.5 flex-1">
-                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rate Of Material</Label>
+                          <div className="space-y-1.5 col-span-1 md:col-span-2">
+                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate (Material)</Label>
                              <Input
                                type="number"
                                value={product.rate}
@@ -874,19 +874,19 @@ export default function OrderPunchPage() {
                              />
                           </div>
 
-                          <div className="space-y-1.5 flex-1">
-                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Alt UOM</Label>
+                          <div className="space-y-1.5 col-span-1 md:col-span-1">
+                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Alt UOM</Label>
                              <Input
                                value={product.altUom}
                                onChange={(e) => updateProduct(product.id, "altUom", e.target.value)}
-                               placeholder="Alt UOM"
+                               placeholder="Alt"
                                className="h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 bg-muted"
                                readOnly
                              />
                           </div>
 
-                          <div className="space-y-1.5 flex-1">
-                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Alt Qty (Kg)</Label>
+                          <div className="space-y-1.5 col-span-1 md:col-span-2">
+                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Alt Qty (Kg)</Label>
                              <Input
                                type="number"
                                value={product.altQty}
@@ -898,7 +898,7 @@ export default function OrderPunchPage() {
                           
                         </div>
 
-                        <div className="flex-none mb-1">
+                        <div className="flex-none mb-1 pt-6">
                           <Button
                             type="button"
                             variant="ghost"

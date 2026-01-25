@@ -258,6 +258,15 @@ export default function SecurityApprovalPage() {
       qtyToDispatch: record.qty_to_be_dispatched,
       transportType: record.type_of_transporting,
       deliveryFrom: record.dispatch_from,
+      // New fields
+      actualQty: record.actual_qty_dispatch,
+      rstNo: record.rst_no,
+      grossWeight: record.gross_weight,
+      tareWeight: record.tare_weight,
+      netWeight: record.net_weight,
+      transporterName: record.transporter_name,
+      reasonForDiff: record.reason_of_difference_in_weight_if_any_speacefic,
+      truckNo: record.truck_no,
       timestamp: record.timestamp,
       status: "Pending Security",
     }))
@@ -328,12 +337,43 @@ export default function SecurityApprovalPage() {
                                    <h4 className="text-xs font-bold text-slate-800 leading-tight truncate pr-16">{item.customerName || "—"}</h4>
                                 </div>
                                 <div className="pt-2 border-t border-slate-50 mt-0.5">
-                                   <div className="flex items-center gap-1.5">
+                                   <div className="flex items-center gap-1.5 mb-2">
                                       <div className="w-1 h-1 rounded-full bg-blue-500" />
                                       <span className="text-xs font-bold text-blue-600 truncate">
                                         {item.productName || "—"}
                                       </span>
                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-2 gap-y-1 bg-slate-50 p-2 rounded-lg">
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] text-slate-400 uppercase font-bold">Actual Qty</span>
+                                            <span className="text-[10px] font-bold text-slate-700">{item.actualQty || "—"}</span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] text-slate-400 uppercase font-bold">Truck No</span>
+                                            <span className="text-[10px] font-bold text-slate-700">{item.truckNo || "—"}</span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] text-slate-400 uppercase font-bold">RST No</span>
+                                            <span className="text-[10px] font-bold text-slate-700">{item.rstNo || "—"}</span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] text-slate-400 uppercase font-bold">Transport</span>
+                                            <span className="text-[10px] font-bold text-slate-700 truncate">{item.transporterName || "—"}</span>
+                                        </div>
+                                        <div className="flex flex-col col-span-2 mt-1 pt-1 border-t border-slate-200">
+                                            <div className="flex justify-between items-center text-[9px]">
+                                                <span className="text-slate-500">Gross: <span className="font-bold text-slate-700">{item.grossWeight || "—"}</span></span>
+                                                <span className="text-slate-500">Tare: <span className="font-bold text-slate-700">{item.tareWeight || "—"}</span></span>
+                                                <span className="text-slate-500">Net: <span className="font-bold text-blue-600">{item.netWeight || "—"}</span></span>
+                                            </div>
+                                        </div>
+                                        {item.reasonForDiff && (
+                                            <div className="flex flex-col col-span-2 mt-1 bg-amber-50 p-1 rounded border border-amber-100">
+                                                <span className="text-[8px] text-amber-600 font-bold uppercase">Weight Diff Reason</span>
+                                                <span className="text-[9px] text-amber-800 leading-tight">{item.reasonForDiff}</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))}

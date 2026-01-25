@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import { Settings2 } from "lucide-react"
 import { dispatchPlanningApi } from "@/lib/api-service"
 
@@ -22,6 +24,7 @@ export default function DispatchMaterialPage() {
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [selectedOrders, setSelectedOrders] = useState<string[]>([])
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [dispatchData, setDispatchData] = useState({
     dispatchDate: "",
     dispatchTime: "",
@@ -37,8 +40,6 @@ export default function DispatchMaterialPage() {
     { id: "customerName", label: "Customer Name" },
     { id: "productName", label: "Products Name" },
     { id: "transportType", label: "Type of Transporting" },
-    { id: "qtyDispatch", label: "Qty to be Dispatch" },
-    { id: "deliveryFrom", label: "Delivery From" },
     { id: "status", label: "Status" },
     
     // Requested Options
@@ -75,8 +76,6 @@ export default function DispatchMaterialPage() {
     "customerName",
     "productName",
     "transportType",
-    "qtyDispatch",
-    "deliveryFrom",
     "status",
   ])
 
@@ -167,12 +166,14 @@ export default function DispatchMaterialPage() {
         
         // Extract values reliably
         const deliveryVal = dispatchDetails[rowKey]?.deliveryFrom || "";
-
+        // Optional: You might want to send the Qty as well if the API supports partial dispatch
+        
         try {
           if (orderId) {
             // Call backend API to submit dispatch planning
             const dispatchData = {
               dispatch_from: deliveryVal,
+              dispatch_qty: dispatchDetails[rowKey]?.qty,
             };
 
             console.log('[DISPATCH] Submitting dispatch planning for order ID:', orderId, dispatchData);
@@ -204,6 +205,7 @@ export default function DispatchMaterialPage() {
         // Clear selections
         setSelectedOrders([]);
         setDispatchDetails({});
+        setIsDialogOpen(false); // Close dialog
 
         // Refresh data from backend
         await fetchPendingDispatches();
@@ -356,10 +358,10 @@ export default function DispatchMaterialPage() {
         </DropdownMenu>
 
         <Button
-          onClick={handleBulkDispatch}
-          disabled={selectedOrders.length === 0 || isProcessing}
+          onClick={() => setIsDialogOpen(true)}
+          disabled={selectedOrders.length === 0}
         >
-          {isProcessing ? "Processing..." : `Dispatch Selected (${selectedOrders.length})`}
+          {`Dispatch Selected (${selectedOrders.length})`}
         </Button>
       </div>
 
@@ -455,45 +457,6 @@ export default function DispatchMaterialPage() {
                            <div className="flex justify-center">
                              <Badge className="bg-orange-100 text-orange-700">Pending Dispatch</Badge>
                            </div>
-                        ) : col.id === "qtyDispatch" ? (
-                           <Input
-                            type="number"
-                            placeholder="Qty"
-                            className="h-8 w-[100px] mx-auto bg-white"
-                            value={dispatchDetails[rowKey]?.qty || ""}
-                            onChange={(e) =>
-                              setDispatchDetails((prev) => ({
-                                ...prev,
-                                [rowKey]: {
-                                   ...prev[rowKey],
-                                   qty: e.target.value
-                                }
-                              }))
-                            }
-                            disabled={!selectedOrders.includes(rowKey)}
-                          />
-                        ) : col.id === "deliveryFrom" ? (
-                           <Select
-                            value={dispatchDetails[rowKey]?.deliveryFrom || order.deliveryData?.deliveryFrom || order.data?.orderData?.deliveryData?.deliveryFrom || ""}
-                            onValueChange={(val) =>
-                              setDispatchDetails((prev) => ({
-                                ...prev,
-                                [rowKey]: {
-                                   ...prev[rowKey],
-                                   deliveryFrom: val
-                                }
-                              }))
-                            }
-                            disabled={!selectedOrders.includes(rowKey)}
-                          >
-                            <SelectTrigger className="h-8 w-[130px] mx-auto bg-white">
-                              <SelectValue placeholder="Select" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="in-stock">In Stock</SelectItem>
-                              <SelectItem value="production">Production</SelectItem>
-                            </SelectContent>
-                          </Select>
                         ) : (
                            row[col.id as keyof typeof row]
                         )}
@@ -511,6 +474,100 @@ export default function DispatchMaterialPage() {
           </TableBody>
         </Table>
       </Card>
+      
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-[95vw] max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Dispatch Selected Orders</DialogTitle>
+            <DialogDescription>
+              Enter dispatch details for the selected orders.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto py-4">
+            <div className="space-y-4">
+              {displayRows.filter(
+                (row) => selectedOrders.includes(
+                  `${row.doNumber || row.orderNo}-${row._product?.id || row._product?.productName || row._product?.oilType || 'no-id'}`
+                )
+              ).map((item) => {
+                const rowKey = `${item.doNumber || item.orderNo}-${item._product?.id || item._product?.productName || item._product?.oilType || 'no-id'}`;
+                return (
+                  <div key={rowKey} className="border rounded-lg p-4 space-y-4 bg-muted/5">
+                    <div className="flex flex-col sm:flex-row justify-between gap-4 border-b pb-4">
+                      <div className="space-y-1">
+                        <div className="font-semibold text-lg">{item.customerName}</div>
+                        <div className="text-sm text-muted-foreground flex gap-4">
+                            <span>DO: <span className="font-medium text-foreground">{item.doNumber || item.orderNo}</span></span>
+                            <span>Product: <span className="font-medium text-foreground">{item._product?.productName || item._product?.oilType}</span></span>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 whitespace-nowrap">
+                          {item.transportType}
+                        </Badge>
+                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+                           Pending
+                        </Badge>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                         <Label>Qty to Dispatch</Label>
+                         <Input
+                            type="number"
+                            placeholder="Enter Qty"
+                            value={dispatchDetails[rowKey]?.qty || ""}
+                            onChange={(e) =>
+                              setDispatchDetails((prev) => ({
+                                ...prev,
+                                [rowKey]: {
+                                   ...prev[rowKey],
+                                   qty: e.target.value
+                                }
+                              }))
+                            }
+                         />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Delivery From</Label>
+                        <Select
+                            value={dispatchDetails[rowKey]?.deliveryFrom || item.deliveryData?.deliveryFrom || item.data?.orderData?.deliveryData?.deliveryFrom || ""}
+                            onValueChange={(val) =>
+                              setDispatchDetails((prev) => ({
+                                ...prev,
+                                [rowKey]: {
+                                  ...prev[rowKey],
+                                  deliveryFrom: val
+                                }
+                              }))
+                            }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Source" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="in-stock">In Stock</SelectItem>
+                            <SelectItem value="production">Production</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleBulkDispatch} disabled={isProcessing}>
+               {isProcessing ? "Processing..." : "Confirm Dispatch"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </WorkflowStageShell>
   )
 }

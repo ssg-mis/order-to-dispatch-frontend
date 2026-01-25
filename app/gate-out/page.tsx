@@ -226,14 +226,28 @@ export default function GateOutPage() {
                        invoiceDate: order.invoice_date || "—",
                        billAmount: order.bill_amount || "—",
                        
-                       // driver details
-                       vehicleNo: order.truck_no || "—",
-                       driverName: "—", // Driver details not available in this stage
-                       
-                       // vehicle weights
-                       grossWeight: order.gross_weight || "—",
-                       tareWeight: order.tare_weight || "—",
-                       netWeight: order.net_weight || "—",
+                       // Detailed fields
+                       productName1: order.product_name_1,
+                       actualQtyDispatch: order.actual_qty_dispatch,
+                       checkStatus: order.check_status,
+                       remarks: order.remarks,
+                       fitness: order.fitness,
+                       insurance: order.insurance,
+                       taxCopy: order.tax_copy,
+                       polution: order.polution,
+                       permit1: order.permit1,
+                       permit2: order.permit2_out_state,
+                       actualQty: order.actual_qty,
+                       weightmentSlip: order.weightment_slip_copy,
+                       rstNo: order.rst_no,
+                       transporterName: order.transporter_name,
+                       reasonDiff: order.reason_of_difference_in_weight_if_any_speacefic,
+                       truckNo: order.truck_no,
+                       vehicleImage: order.vehicle_no_plate_image,
+                       biltyNo: order.bilty_no,
+                       grossWeight: order.gross_weight,
+                       tareWeight: order.tare_weight,
+                       netWeight: order.net_weight,
                    }
 
                    return (
@@ -243,71 +257,123 @@ export default function GateOutPage() {
                          <DialogTrigger asChild>
                            <Button size="sm">Gate Out</Button>
                          </DialogTrigger>
-                         <DialogContent className="max-w-lg">
+                         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                            <DialogHeader>
                              <DialogTitle>Gate Out: {row.doNumber}</DialogTitle>
                            </DialogHeader>
-                           <div className="space-y-4 py-4">
-                             {/*
-                             <div className="space-y-2">
-                               <Label>Gate Out Time</Label>
-                               <Input
-                                 type="datetime-local"
-                                 value={gateOutData.gateOutTime}
-                                 onChange={(e) => setGateOutData({ ...gateOutData, gateOutTime: e.target.value })}
-                               />
-                             </div>
-                             */}
-                             <div className="space-y-2">
-                               <Label>Upload Gate Pass</Label>
-                               <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                                 <Input
-                                   type="file"
-                                   accept="image/*,.pdf"
-                                   onChange={(e) => {
-                                     if (e.target.files?.[0]) {
-                                       setGateOutData({ ...gateOutData, gatePassFile: e.target.files[0] })
-                                     }
-                                   }}
-                                   className="hidden"
-                                   id="gatepass-upload"
-                                 />
-                                 <label htmlFor="gatepass-upload" className="cursor-pointer">
-                                   <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                                   <p className="text-sm text-muted-foreground">
-                                     {gateOutData.gatePassFile ? gateOutData.gatePassFile.name : "Click to upload gate pass"}
-                                   </p>
-                                 </label>
-                               </div>
-                             </div>
-                             <div className="space-y-2">
-                               <Label>Upload Vehicle Loaded Image</Label>
-                               <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                                 <Input
-                                   type="file"
-                                   accept="image/*"
-                                   onChange={(e) => {
-                                     if (e.target.files?.[0]) {
-                                       setGateOutData({ ...gateOutData, vehicleLoadedImage: e.target.files[0] })
-                                     }
-                                   }}
-                                   className="hidden"
-                                   id="vehicle-loaded-upload"
-                                 />
-                                 <label htmlFor="vehicle-loaded-upload" className="cursor-pointer">
-                                   <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                                   <p className="text-sm text-muted-foreground">
-                                     {gateOutData.vehicleLoadedImage ? gateOutData.vehicleLoadedImage.name : "Click to upload vehicle image"}
-                                   </p>
-                                 </label>
-                               </div>
-                             </div>
+                           
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+                              {/* Left Column: Read-Only Details */}
+                              <div className="space-y-4 text-sm">
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                      <h4 className="font-bold text-slate-700 mb-2 border-b border-slate-200 pb-1">Order Details</h4>
+                                      <div className="grid grid-cols-2 gap-2">
+                                          <div><span className="text-slate-500 text-xs">SO No:</span> <span className="font-medium text-slate-800">{row.orderNo}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Customer:</span> <span className="font-medium text-slate-800">{row.customerName}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Product:</span> <span className="font-medium text-slate-800">{row.productName}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Qty To Dispatch:</span> <span className="font-medium text-slate-800">{row.qtyToDispatch}</span></div>
+                                      </div>
+                                  </div>
+
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                      <h4 className="font-bold text-slate-700 mb-2 border-b border-slate-200 pb-1">Vehicle & Transport</h4>
+                                      <div className="grid grid-cols-2 gap-2">
+                                          <div><span className="text-slate-500 text-xs">Truck No:</span> <span className="font-medium text-slate-800">{row.truckNo || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Transporter:</span> <span className="font-medium text-slate-800">{row.transporterName || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Transport Type:</span> <span className="font-medium text-slate-800">{row.transportType}</span></div>
+                                          <div><span className="text-slate-500 text-xs">RST No:</span> <span className="font-medium text-slate-800">{row.rstNo || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Driver Status:</span> <span className="font-medium text-slate-800">{row.checkStatus || "-"}</span></div>
+                                          <div className="col-span-2"><span className="text-slate-500 text-xs">Remarks:</span> <span className="font-medium text-slate-800">{row.remarks || "-"}</span></div>
+                                      </div>
+                                  </div>
+
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                      <h4 className="font-bold text-slate-700 mb-2 border-b border-slate-200 pb-1">Dispatch & Weights</h4>
+                                      <div className="grid grid-cols-2 gap-2">
+                                          <div><span className="text-slate-500 text-xs">Actual Qty:</span> <span className="font-medium text-slate-800">{row.actualQty || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Bilty No:</span> <span className="font-medium text-slate-800">{row.biltyNo || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Gross Wt:</span> <span className="font-medium text-slate-800">{row.grossWeight || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Tare Wt:</span> <span className="font-medium text-slate-800">{row.tareWeight || "-"}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Net Wt:</span> <span className="font-medium text-blue-600">{row.netWeight || "-"}</span></div>
+                                          {row.reasonDiff && (
+                                              <div className="col-span-2 bg-amber-50 p-1 rounded border border-amber-100 mt-1">
+                                                  <span className="text-xs text-amber-600 font-bold">Diff Reason:</span> <span className="text-xs text-amber-800">{row.reasonDiff}</span>
+                                              </div>
+                                          )}
+                                      </div>
+                                  </div>
+
+                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                      <h4 className="font-bold text-slate-700 mb-2 border-b border-slate-200 pb-1">Invoice Details</h4>
+                                      <div className="grid grid-cols-2 gap-2">
+                                          <div><span className="text-slate-500 text-xs">Invoice No:</span> <span className="font-medium text-slate-800">{row.invoiceNo}</span></div>
+                                          <div><span className="text-slate-500 text-xs">Bill Amount:</span> <span className="font-medium text-slate-800">{row.billAmount}</span></div>
+                                          <div className="col-span-2"><span className="text-slate-500 text-xs">Invoice Date:</span> <span className="font-medium text-slate-800">{row.invoiceDate}</span></div>
+                                      </div>
+                                  </div>
+                              </div>
+
+                              {/* Right Column: Gate Out Form */}
+                              <div className="space-y-4 border-l pl-6 border-slate-100">
+                                 <h3 className="font-bold text-lg text-slate-900">Gate Out Actions</h3>
+                                 
+                                 <div className="space-y-2">
+                                   <Label>Upload Gate Pass</Label>
+                                   <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                                     <Input
+                                       type="file"
+                                       accept="image/*,.pdf"
+                                       onChange={(e) => {
+                                         if (e.target.files?.[0]) {
+                                           setGateOutData({ ...gateOutData, gatePassFile: e.target.files[0] })
+                                         }
+                                       }}
+                                       className="hidden"
+                                       id="gatepass-upload"
+                                     />
+                                     <label htmlFor="gatepass-upload" className="cursor-pointer">
+                                       <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                                       <p className="text-sm text-muted-foreground">
+                                         {gateOutData.gatePassFile ? gateOutData.gatePassFile.name : "Click to upload gate pass"}
+                                       </p>
+                                     </label>
+                                   </div>
+                                 </div>
+                                 <div className="space-y-2">
+                                   <Label>Upload Vehicle Loaded Image</Label>
+                                   <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                                     <Input
+                                       type="file"
+                                       accept="image/*"
+                                       onChange={(e) => {
+                                         if (e.target.files?.[0]) {
+                                           setGateOutData({ ...gateOutData, vehicleLoadedImage: e.target.files[0] })
+                                         }
+                                       }}
+                                       className="hidden"
+                                       id="vehicle-loaded-upload"
+                                     />
+                                     <label htmlFor="vehicle-loaded-upload" className="cursor-pointer">
+                                       <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                                       <p className="text-sm text-muted-foreground">
+                                         {gateOutData.vehicleLoadedImage ? gateOutData.vehicleLoadedImage.name : "Click to upload vehicle image"}
+                                       </p>
+                                     </label>
+                                   </div>
+                                 </div>
+                                 
+                                 <div className="pt-4">
+                                     <Button 
+                                        onClick={() => handleSubmit(order)} 
+                                        disabled={isProcessing}
+                                        className="w-full bg-blue-600 hover:bg-blue-700"
+                                     >
+                                       {isProcessing ? "Processing..." : "Complete Gate Out"}
+                                     </Button>
+                                 </div>
+                              </div>
                            </div>
-                           <DialogFooter>
-                             <Button onClick={() => handleSubmit(order)} disabled={isProcessing}>
-                               {isProcessing ? "Processing..." : "Complete Gate Out"}
-                             </Button>
-                           </DialogFooter>
+
                          </DialogContent>
                        </Dialog>
                      </TableCell>
