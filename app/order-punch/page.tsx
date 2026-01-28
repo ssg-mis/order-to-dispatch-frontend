@@ -9,11 +9,15 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Save, FileUp, Plus, Trash2 } from "lucide-react"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Save, FileUp, Plus, Trash2, CalendarIcon } from "lucide-react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { useToast } from "@/hooks/use-toast"
 import { customerApi, depotApi, skuApi, brokerApi } from "@/lib/api-service"
 import { Combobox } from "@/components/ui/combobox"
+import { format } from "date-fns"
+import { cn } from "@/lib/utils"
 
 type ProductItem = {
   id: string
@@ -136,12 +140,13 @@ export default function OrderPunchPage() {
     { id: "1", productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "" },
   ])
   const [customerType, setCustomerType] = useState<string>("")
-  const [depoName, setDepoName] = useState<string>("")
+  const [depoName, setDepoName] = useState<string>("Banari")
   const [isBrokerOrder, setIsBrokerOrder] = useState<string>("NO")
   const [orderPurpose, setOrderPurpose] = useState<string>("")
   const [orderType, setOrderType] = useState<string>("")
   const [advancePaymentTaken, setAdvancePaymentTaken] = useState<string>("NO")
-  const [soDate, setSoDate] = useState<string>("")
+  // Set DO Date to today's date by default
+  const [soDate, setSoDate] = useState<string>(new Date().toISOString().split("T")[0])
   const [customerName, setCustomerName] = useState<string>("")
   const [contactPerson, setContactPerson] = useState<string>("")
   const [whatsappNo, setWhatsappNo] = useState<string>("")
@@ -160,11 +165,13 @@ export default function OrderPunchPage() {
   
   const [brokerName, setBrokerName] = useState<string>("")
   const [deliveryDate, setDeliveryDate] = useState<string>("")
+  const [deliveryDateError, setDeliveryDateError] = useState<string>("")
   const [startDate, setStartDate] = useState<string>("")
   const [endDate, setEndDate] = useState<string>("")
   const [paymentTerms, setPaymentTerms] = useState<string>("")
   const [transportType, setTransportType] = useState<string>("")
   const [advanceAmount, setAdvanceAmount] = useState<string>("")
+  const [futurePeriodDate, setFuturePeriodDate] = useState<string>("") // New state for future period date
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Fetch customers, depots, SKUs, and brokers on mount
@@ -198,14 +205,17 @@ export default function OrderPunchPage() {
     }
   }, [customerName, customerType, customers])
 
-  // Week on Week Date Logic
+  // Week on Week Date Logic - Initialize Start Date from DO Date
   useEffect(() => {
     if (orderPurpose === "week-on-week") {
-      if (!startDate) {
+      // If DO Date (soDate) is set, use it as Start Date; otherwise use today
+      if (soDate) {
+        setStartDate(soDate)
+      } else if (!startDate) {
         setStartDate(new Date().toISOString().split("T")[0])
       }
     }
-  }, [orderPurpose])
+  }, [orderPurpose, soDate])
 
   useEffect(() => {
     if (startDate) {
@@ -215,6 +225,23 @@ export default function OrderPunchPage() {
       setEndDate(end.toISOString().split("T")[0])
     }
   }, [startDate])
+
+  // Validate Actual Delivery Date is within Start Date to End Date range
+  useEffect(() => {
+    if (deliveryDate && startDate && endDate && orderPurpose === "week-on-week") {
+      const delivery = new Date(deliveryDate)
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      
+      if (delivery < start || delivery > end) {
+        setDeliveryDateError(`You selected a date not between the start and end date (${startDate} to ${endDate})`)
+      } else {
+        setDeliveryDateError("")
+      }
+    } else {
+      setDeliveryDateError("")
+    }
+  }, [deliveryDate, startDate, endDate, orderPurpose])
 
   // Same as Customer Address Logic
   useEffect(() => {
@@ -227,21 +254,24 @@ export default function OrderPunchPage() {
     e.preventDefault()
 
     // Validate based on Order Type
-    if (orderType === "pre-approval") {
-      if (preApprovalProducts.some(p => !p.oilType || !p.rateLtr || !p.ratePerLtr)) {
-         toast({
-          title: "Validation Error",
-          description: "Please fill in all Pre-Approval product details (Oil Type, Rate Per Ltr and Rate Per 15KG).",
-          variant: "destructive",
-        })
-        return
-      }
-    } else {
-      // Regular or default handling
+    if (orderType === "regular" || orderType === "pre-approval") {
+      // For regular and pre-approval, validate products
       if (depoName && products.some((p) => !p.productName)) {
         toast({
           title: "Validation Error",
           description: "Please fill in product details for all rows.",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
+    // Validate future period date if orderPurpose is future-period
+    if (orderPurpose === "future-period") {
+      if (!futurePeriodDate) {
+        toast({
+          title: "Validation Error",
+          description: "Please select the future period date.",
           variant: "destructive",
         })
         return
@@ -283,10 +313,11 @@ export default function OrderPunchPage() {
         broker_name: brokerName || null,
         type_of_transporting: transportType || null,
         remark: null,
+        futureperioddate: futurePeriodDate || null, // Add future period date
       }
 
-      // Add products array for backend
-      if (orderType === "regular" && products.length > 0) {
+      // Add products array for backend (for regular and pre-approval order types)
+      if ((orderType === "regular" || orderType === "pre-approval") && products.length > 0) {
         orderData.products = products.map(p => ({
           product_name: p.productName,
           uom: p.uom || "Ltr",
@@ -294,13 +325,6 @@ export default function OrderPunchPage() {
           rate_of_material: p.rate ? parseFloat(p.rate) : null,
           alternate_uom: p.altUom || "Kg",
           alternate_qty_kg: p.altQty ? parseFloat(p.altQty) : null,
-        }))
-      } else if (orderType === "pre-approval" && preApprovalProducts.length > 0) {
-        orderData.products = preApprovalProducts.map(p => ({
-          product_name: p.oilType, // Using oil type as product name for pre-approval
-          oil_type: p.oilType,
-          rate_per_ltr: p.ratePerLtr ? parseFloat(p.ratePerLtr) : null,
-          rate_per_15kg: p.rateLtr ? parseFloat(p.rateLtr) : null,
         }))
       }
 
@@ -378,9 +402,16 @@ export default function OrderPunchPage() {
 
     } catch (error: any) {
       console.error('Error submitting order:', error)
+      
+      let errorMessage = error.message || "Failed to save order to database. Please try again."
+      
+      if (errorMessage.includes("too long for type character varying")) {
+        errorMessage = "One or more fields exceed maximum length. Check: WhatsApp number (max 20 chars), Payment Terms, Transport Type."
+      }
+      
       toast({
         title: "Error Saving Order",
-        description: error.message || "Failed to save order to database. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -483,6 +514,7 @@ export default function OrderPunchPage() {
     setPaymentTerms("")
     setTransportType("")
     setAdvanceAmount("")
+    setFuturePeriodDate("")
     setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "" }])
     setPreApprovalProducts([{ id: Math.random().toString(36).substr(2, 9), oilType: "", ratePerLtr: "", rateLtr: "" }])
   }
@@ -528,6 +560,22 @@ export default function OrderPunchPage() {
                 </Select>
               </div>
 
+              {/* Show Future Period Date field when orderPurpose is future-period */}
+              {orderPurpose === "future-period" && (
+                <div className="space-y-2">
+                  <Label htmlFor="futurePeriodDate">Future Period Date</Label>
+                  <Input
+                    id="futurePeriodDate"
+                    type="date"
+                    value={futurePeriodDate}
+                    onChange={(e) => setFuturePeriodDate(e.target.value)}
+                  />
+                  <p className="text-xs text-blue-600 mt-1">
+                    ℹ️ This date will be saved for future period delivery
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="orderType">ORDER TYPE</Label>
                 <Select value={orderType} onValueChange={setOrderType}>
@@ -569,12 +617,47 @@ export default function OrderPunchPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="deliveryDate">Actual Delivery Date</Label>
-                     <Input
-                      id="deliveryDate"
-                      type="date"
-                      value={deliveryDate}
-                      onChange={(e) => setDeliveryDate(e.target.value)}
-                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !deliveryDate && "text-muted-foreground",
+                            deliveryDateError && "border-red-500"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {deliveryDate ? format(new Date(deliveryDate), "PPP") : <span>Pick a date</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={deliveryDate ? new Date(deliveryDate) : undefined}
+                          onSelect={(date) => {
+                            if (date) {
+                              setDeliveryDate(format(date, "yyyy-MM-dd"))
+                            }
+                          }}
+                          initialFocus
+                          modifiers={{
+                            inRange: (date) => {
+                              if (!startDate || !endDate) return false
+                              const start = new Date(startDate)
+                              const end = new Date(endDate)
+                              return date >= start && date <= end
+                            }
+                          }}
+                          modifiersClassNames={{
+                            inRange: "bg-blue-100 text-blue-900 hover:bg-blue-200"
+                          }}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    {deliveryDateError && (
+                      <p className="text-xs text-red-600 font-medium">{deliveryDateError}</p>
+                    )}
                   </div>
                    <div className="hidden md:block"></div> 
                 </>
@@ -587,8 +670,8 @@ export default function OrderPunchPage() {
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="new">New Customer</SelectItem>
                     <SelectItem value="existing">Existing Customer</SelectItem>
+                    <SelectItem value="new">New Customer</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -716,91 +799,8 @@ export default function OrderPunchPage() {
                 </div>
               )}
 
-              {orderType === "pre-approval" && (
-                <div className="md:col-span-2 space-y-4 p-4 bg-muted/50 rounded-lg border">
-                 <div className="flex justify-between items-center">
-                    <Label className="text-lg font-semibold">Pre-Approval Products</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addPreApprovalProduct}
-                      className="gap-2 bg-transparent"
-                    >
-                      <Plus className="h-4 w-4" /> Add Product
-                    </Button>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    {preApprovalProducts.map((item, idx) => (
-                      <div key={item.id} className="flex gap-4 items-center p-4 border rounded-lg bg-card relative pt-8">
-                         <div className="absolute top-2 left-4 text-[10px] font-bold text-blue-500/80 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest">
-                             Requirement {idx + 1}
-                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
-                          
-                          <div className="space-y-1">
-                            <Label className="text-xs text-muted-foreground">Oil Type</Label>
-                            <Select 
-                              value={item.oilType} 
-                              onValueChange={(val) => updatePreApprovalProduct(item.id, "oilType", val)}
-                            >
-                              <SelectTrigger className="bg-background h-9">
-                                <SelectValue placeholder="Select Type" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Rice Bran Oil">Rice Bran Oil</SelectItem>
-                                <SelectItem value="Soyabeen Oil">Soyabeen Oil</SelectItem>
-                                <SelectItem value="Palm Oil">Palm Oil</SelectItem>
-                                <SelectItem value="Mustard Oil">Mustard Oil</SelectItem>
-                                <SelectItem value="Sunflower Oil">Sunflower Oil</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-1">
-                             <Label className="text-xs text-muted-foreground">Rate Per Ltr</Label>
-                             <Input
-                               type="number"
-                               placeholder="0.00"
-                               value={item.ratePerLtr}
-                               onChange={(e) => updatePreApprovalProduct(item.id, "ratePerLtr", e.target.value)}
-                               className="bg-background h-9"
-                             />
-                          </div>
-
-                          <div className="space-y-1">
-                             <Label className="text-xs text-muted-foreground">Rate Per 15KG</Label>
-                             <Input
-                               type="number"
-                               placeholder="0.00"
-                               value={item.rateLtr}
-                               onChange={(e) => updatePreApprovalProduct(item.id, "rateLtr", e.target.value)}
-                               className="bg-background h-9"
-                             />
-                          </div>
-
-                        </div>
-
-                        <div className="flex-none">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removePreApprovalProduct(item.id)}
-                            disabled={preApprovalProducts.length === 1}
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {orderType === "regular" && (
+              {/* Show Product List for both regular and pre-approval */}
+              {(orderType === "regular" || orderType === "pre-approval") && (
                   <div className="md:col-span-2 space-y-4 p-4 bg-muted/50 rounded-lg border">
                     <div className="flex justify-between items-center">
                       <Label className="text-lg font-semibold">Product List</Label>
@@ -820,7 +820,7 @@ export default function OrderPunchPage() {
                          <div className="absolute top-2 left-4 text-[10px] font-bold text-blue-500/80 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest">
                              Product {idx + 1}
                          </div>
-                        <div className="grid grid-cols-2 md:grid-cols-12 gap-4 flex-1">
+                        <div className="grid grid-cols-2 md:grid-cols-9 gap-4 flex-1">
                           
                           <div className="space-y-1.5 col-span-2 md:col-span-4">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Name</Label>
@@ -841,7 +841,7 @@ export default function OrderPunchPage() {
                              />
                           </div>
 
-                          <div className="space-y-1.5 col-span-1 md:col-span-1">
+                          <div className="space-y-1.5 col-span-1 md:col-span-2">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">UOM</Label>
                              <Input
                                value={product.uom}
@@ -863,7 +863,7 @@ export default function OrderPunchPage() {
                              />
                           </div>
 
-                          <div className="space-y-1.5 col-span-1 md:col-span-2">
+                          <div className="space-y-1.5 col-span-2 md:col-span-1">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate (Material)</Label>
                              <Input
                                type="number"
@@ -871,28 +871,6 @@ export default function OrderPunchPage() {
                                onChange={(e) => updateProduct(product.id, "rate", e.target.value)}
                                placeholder="0.00"
                                className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600"
-                             />
-                          </div>
-
-                          <div className="space-y-1.5 col-span-1 md:col-span-1">
-                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Alt UOM</Label>
-                             <Input
-                               value={product.altUom}
-                               onChange={(e) => updateProduct(product.id, "altUom", e.target.value)}
-                               placeholder="Alt"
-                               className="h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 bg-muted"
-                               readOnly
-                             />
-                          </div>
-
-                          <div className="space-y-1.5 col-span-1 md:col-span-2">
-                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Alt Qty (Kg)</Label>
-                             <Input
-                               type="number"
-                               value={product.altQty}
-                               onChange={(e) => updateProduct(product.id, "altQty", e.target.value)}
-                               placeholder="0"
-                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
                              />
                           </div>
                           

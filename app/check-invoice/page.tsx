@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { WorkflowStageShell } from "@/components/workflow/workflow-stage-shell"
@@ -8,19 +8,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { CheckCircle, Settings2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Settings2 } from "lucide-react"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { checkInvoiceApi } from "@/lib/api-service"
 
@@ -35,6 +35,13 @@ export default function CheckInvoicePage() {
     "customerName",
     "status",
   ])
+
+  // Selection & Dialog State
+  const [selectedItems, setSelectedItems] = useState<string[]>([])
+  const [selectedGroup, setSelectedGroup] = useState<any>(null)
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+
   const [checkData, setCheckData] = useState({
     status: "",
     remarks: "",
@@ -69,51 +76,7 @@ export default function CheckInvoicePage() {
     fetchHistory();
   }, [])
 
-  const handleSubmit = async (order: any) => {
-    setIsProcessing(true)
-    try {
-      const submitData = {
-        status_1: checkData.status,
-        remarks_2: checkData.remarks,
-      };
-
-      const response = await checkInvoiceApi.submit(order.id, submitData);
-
-      if (response.success) {
-        toast({
-            title: "Invoice Verified",
-            description: "Invoice has been checked and verified.",
-        })
-        
-        await fetchPending();
-        await fetchHistory();
-        
-        // Reset form
-        setCheckData({ status: "", remarks: "" });
-
-        // If you want to navigate away, un-comment this:
-        // setTimeout(() => {
-        //   router.push("/gate-out")
-        // }, 1500)
-      } else {
-         throw new Error(response.message || "Failed to submit");
-      }
-
-    } catch (error: any) {
-      console.error("Submit error:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Something went wrong",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
-
+  /* Filter Logic */
   const [filterValues, setFilterValues] = useState({
       status: "",
       startDate: "",
@@ -130,7 +93,6 @@ export default function CheckInvoicePage() {
       }
 
       // Filter by Date Range
-      // using timestamp or planned_6 date
       const orderDateStr = order.timestamp || order.planned_6
       if (orderDateStr) {
           const orderDate = new Date(orderDateStr)
@@ -149,11 +111,199 @@ export default function CheckInvoicePage() {
       return matches
   })
 
+  /* Grouping Logic */
+  const displayRows = useMemo(() => {
+    const grouped: { [key: string]: any } = {}
+
+    filteredPendingOrders.forEach((order: any) => {
+       // Prioritize SO Number (DO Number) for grouping
+       const doNumber = order.so_no || order.d_sr_number || "DO-XXX"
+       
+       // Group by Base DO (e.g. DO-022 from DO-022A)
+       const baseDoMatch = doNumber.match(/^(DO-\d+)/i)
+       const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
+
+       if (!grouped[baseDo]) {
+          grouped[baseDo] = {
+             _rowKey: baseDo,
+             doNumber: baseDo,
+             customerName: order.party_name || "—",
+             
+             // Order Details from JOIN (assuming first item has details)
+             deliveryPurpose: order.order_type_delivery_purpose || "—",
+             orderType: order.order_type || "—",
+             startDate: order.start_date ? new Date(order.start_date).toLocaleDateString("en-IN") : "—",
+             endDate: order.end_date ? new Date(order.end_date).toLocaleDateString("en-IN") : "—",
+             deliveryDate: order.delivery_date ? new Date(order.delivery_date).toLocaleDateString("en-IN") : "—",
+             transportType: order.type_of_transporting || "—",
+             contactPerson: order.customer_contact_person_name || "—",
+             contactWhatsapp: order.customer_contact_person_whatsapp_no || "—",
+             customerAddress: order.customer_address || "—",
+             totalAmount: order.total_amount_with_gst || "—",
+             
+             // Added dispatch/invoice details for header
+             invoiceNo: order.invoice_no || "—",
+             invoiceDate: order.invoice_date ? new Date(order.invoice_date).toLocaleDateString("en-IN") : "—",
+             biltyNo: order.bilty_no || "—",
+             rstNo: order.rst_no || "—",
+             grossWeight: order.gross_weight || "—",
+             tareWeight: order.tare_weight || "—",
+             netWeight: order.net_weight || "—",
+             transporterName: order.transporter_name || "—",
+             truckNo: order.truck_no || "—",
+             diffReason: order.reason_of_difference_in_weight_if_any_speacefic || "—",
+             
+             _allProducts: [],
+             _productCount: 0
+          }
+       }
+       
+       grouped[baseDo]._allProducts.push({
+          ...order,
+          _rowKey: `${baseDo}-${order.id}`,
+          id: order.id,
+          specificOrderNo: order.so_no,
+          productName: order.product_name,
+          invoiceNo: order.invoice_no,
+          invoiceDate: order.invoice_date,
+          billAmount: order.bill_amount,
+          qty: order.qty,
+          actualQty: order.actual_qty_dispatch,
+          truckNo: order.truck_no,
+          rstNo: order.rst_no,
+          grossWeight: order.gross_weight,
+          tareWeight: order.tare_weight,
+          netWeight: order.net_weight,
+          transporterName: order.transporter_name,
+       })
+       
+       grouped[baseDo]._productCount = grouped[baseDo]._allProducts.length
+    })
+
+    return Object.values(grouped)
+  }, [filteredPendingOrders])
+
+  const toggleSelectItem = (itemKey: string) => {
+    setSelectedItems(prev => 
+      prev.includes(itemKey) 
+        ? prev.filter(k => k !== itemKey)
+        : [...prev, itemKey]
+    )
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedItems.length === displayRows.length) {
+      setSelectedItems([])
+    } else {
+      setSelectedItems(displayRows.map(r => r._rowKey))
+    }
+  }
+
+  const handleOpenDialog = () => {
+    if (selectedItems.length === 0) return
+    
+    // Open for the first selected group
+    const targetGroup = displayRows.find(r => r._rowKey === selectedItems[0])
+    if (targetGroup) {
+      setSelectedGroup(targetGroup)
+      setSelectedProducts(targetGroup._allProducts.map((p: any) => p._rowKey)) // Select all by default
+      
+      // Reset form
+      setCheckData({ status: "", remarks: "" })
+      
+      setIsDialogOpen(true)
+    }
+  }
+
+  const handleSubmit = async () => {
+    if (!selectedGroup || !checkData.status) {
+        toast({
+            title: "Validation Error",
+            description: "Please enter verification status.",
+            variant: "destructive"
+        })
+        return
+    }
+
+    const productsToSubmit = selectedGroup._allProducts.filter((p: any) => 
+      selectedProducts.includes(p._rowKey)
+    )
+    
+    if (productsToSubmit.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please select at least one product to verify",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsProcessing(true)
+    try {
+      const successfulSubmissions: any[] = []
+      const failedSubmissions: any[] = []
+
+      for (const product of productsToSubmit) {
+        const submitData = {
+            status_1: checkData.status,
+            remarks_2: checkData.remarks,
+        };
+
+        try {
+            console.log(`[CHECK] Submitting for ID ${product.id}`, submitData);
+            const response = await checkInvoiceApi.submit(product.id, submitData);
+            
+            if (response.success) {
+                successfulSubmissions.push(product);
+            } else {
+                failedSubmissions.push({ product, error: response.message });
+            }
+        } catch (err: any) {
+             console.error(`[CHECK] Failed for ID ${product.id}`, err);
+             failedSubmissions.push({ product, error: err.message });
+        }
+      }
+
+      if (successfulSubmissions.length > 0) {
+        toast({
+          title: "Invoices Verified",
+          description: `Successfully verified ${successfulSubmissions.length} items.`,
+        })
+        
+        await fetchPending();
+        await fetchHistory();
+        
+        setIsDialogOpen(false)
+        setSelectedItems([])
+      }
+
+      if (failedSubmissions.length > 0) {
+        toast({
+            title: "Partial Failure",
+            description: `Failed to process ${failedSubmissions.length} items.`,
+            variant: "destructive"
+        })
+      }
+
+    } catch (error: any) {
+      console.error("Batch submit error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
+
   return (
     <WorkflowStageShell
       title="Stage 10: Check Invoice"
-      description="Review and verify invoice details."
-      pendingCount={filteredPendingOrders.length}
+      description="Review and verify invoices grouped by DO Number."
+      pendingCount={displayRows.length}
       historyData={historyOrders.map((order) => ({
         date: order.actual_6 ? new Date(order.actual_6).toLocaleDateString("en-GB") : "-",
         stage: "Check Invoice",
@@ -165,7 +315,17 @@ export default function CheckInvoicePage() {
       remarksColName="Verification Status"
     >
       <div className="space-y-4">
+        {/* Action Bar */}
         <div className="flex justify-end gap-2">
+           <Button 
+            onClick={handleOpenDialog}
+            disabled={selectedItems.length === 0} 
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <CheckCircle className="mr-2 h-4 w-4" />
+            Verify Invoice ({selectedItems.length})
+          </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="bg-transparent">
@@ -192,181 +352,40 @@ export default function CheckInvoicePage() {
           </DropdownMenu>
         </div>
 
+        {/* Main Table (Grouped) */}
         <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>
-                <TableHead className="w-[80px]">Action</TableHead>
-                {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                  <TableHead key={col.id} className="whitespace-nowrap text-center">
-                    {col.label}
-                  </TableHead>
-                ))}
+                <TableHead className="w-12 text-center">
+                    <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
+                </TableHead>
+                <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Products</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredPendingOrders.length > 0 ? (
-                filteredPendingOrders.map((order, index) => {
-                   // Map backend data to display row
-                   const row: any = {
-                       orderNo: order.so_no || "—",
-                       doNumber: order.d_sr_number || "—",
-                       customerName: order.party_name || "—",
-                       productName: order.product_name || "—",
-                       qtyToDispatch: order.qty_to_be_dispatched || "—",
-                       deliveryFrom: order.dispatch_from || "—",
-                       transportType: order.type_of_transporting || "—",
-                       status: "Pending Review",
-                       // invoice specific fields
-                       invoiceNo: order.invoice_no || "—",
-                       invoiceDate: order.invoice_date || "—",
-                       billAmount: order.bill_amount || "—",
-                       
-                       // Detailed fields
-                       productName1: order.product_name_1,
-                       actualQtyDispatch: order.actual_qty_dispatch,
-                       checkStatus: order.check_status,
-                       remarks: order.remarks,
-                       fitness: order.fitness,
-                       insurance: order.insurance,
-                       taxCopy: order.tax_copy,
-                       polution: order.polution,
-                       permit1: order.permit1,
-                       permit2: order.permit2_out_state,
-                       actualQty: order.actual_qty,
-                       weightmentSlip: order.weightment_slip_copy,
-                       rstNo: order.rst_no,
-                       transporterName: order.transporter_name,
-                       reasonDiff: order.reason_of_difference_in_weight_if_any_speacefic,
-                       truckNo: order.truck_no,
-                       vehicleImage: order.vehicle_no_plate_image,
-                       biltyNo: order.bilty_no,
-                       grossWeight: order.gross_weight,
-                       tareWeight: order.tare_weight,
-                       netWeight: order.net_weight,
-                   }
-
-                   return (
-                   <TableRow key={index}>
-                     <TableCell>
-                       <Dialog>
-                         <DialogTrigger asChild>
-                           <Button size="sm">Verify Invoice</Button>
-                         </DialogTrigger>
-                         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                           <DialogHeader>
-                             <DialogTitle>Verify Invoice: {row.doNumber}</DialogTitle>
-                           </DialogHeader>
-                           
-                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-                              {/* Left Column: Read-Only Details */}
-                              <div className="space-y-4 text-sm">
-                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                                      <h4 className="font-bold text-slate-700 mb-2 border-b border-slate-200 pb-1">Order Details</h4>
-                                      <div className="grid grid-cols-2 gap-2">
-                                          <div><span className="text-slate-500 text-xs">SO No:</span> <span className="font-medium text-slate-800">{row.orderNo}</span></div>
-                                          <div><span className="text-slate-500 text-xs">Customer:</span> <span className="font-medium text-slate-800">{row.customerName}</span></div>
-                                          <div><span className="text-slate-500 text-xs">Product:</span> <span className="font-medium text-slate-800">{row.productName}</span></div>
-                                          <div><span className="text-slate-500 text-xs">Qty To Dispatch:</span> <span className="font-medium text-slate-800">{row.qtyToDispatch}</span></div>
-                                      </div>
-                                  </div>
-
-                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                                      <h4 className="font-bold text-slate-700 mb-2 border-b border-slate-200 pb-1">Vehicle & Transport</h4>
-                                      <div className="grid grid-cols-2 gap-2">
-                                          <div><span className="text-slate-500 text-xs">Truck No:</span> <span className="font-medium text-slate-800">{row.truckNo || "-"}</span></div>
-                                          <div><span className="text-slate-500 text-xs">Transporter:</span> <span className="font-medium text-slate-800">{row.transporterName || "-"}</span></div>
-                                          <div><span className="text-slate-500 text-xs">Transport Type:</span> <span className="font-medium text-slate-800">{row.transportType}</span></div>
-                                          <div><span className="text-slate-500 text-xs">RST No:</span> <span className="font-medium text-slate-800">{row.rstNo || "-"}</span></div>
-                                          <div><span className="text-slate-500 text-xs">Driver Status:</span> <span className="font-medium text-slate-800">{row.checkStatus || "-"}</span></div>
-                                          <div className="col-span-2"><span className="text-slate-500 text-xs">Remarks:</span> <span className="font-medium text-slate-800">{row.remarks || "-"}</span></div>
-                                      </div>
-                                  </div>
-
-                                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                                      <h4 className="font-bold text-slate-700 mb-2 border-b border-slate-200 pb-1">Dispatch & Weights</h4>
-                                      <div className="grid grid-cols-2 gap-2">
-                                          <div><span className="text-slate-500 text-xs">Actual Qty:</span> <span className="font-medium text-slate-800">{row.actualQty || "-"}</span></div>
-                                          <div><span className="text-slate-500 text-xs">Bilty No:</span> <span className="font-medium text-slate-800">{row.biltyNo || "-"}</span></div>
-                                          <div><span className="text-slate-500 text-xs">Gross Wt:</span> <span className="font-medium text-slate-800">{row.grossWeight || "-"}</span></div>
-                                          <div><span className="text-slate-500 text-xs">Tare Wt:</span> <span className="font-medium text-slate-800">{row.tareWeight || "-"}</span></div>
-                                          <div><span className="text-slate-500 text-xs">Net Wt:</span> <span className="font-medium text-blue-600">{row.netWeight || "-"}</span></div>
-                                          {row.reasonDiff && (
-                                              <div className="col-span-2 bg-amber-50 p-1 rounded border border-amber-100 mt-1">
-                                                  <span className="text-xs text-amber-600 font-bold">Diff Reason:</span> <span className="text-xs text-amber-800">{row.reasonDiff}</span>
-                                              </div>
-                                          )}
-                                      </div>
-                                  </div>
-                              </div>
-
-                              {/* Right Column: Verification Form */}
-                              <div className="space-y-4 border-l pl-6 border-slate-100">
-                                 <h3 className="font-bold text-lg text-slate-900">Verify Invoice</h3>
-                                 
-                                 <div className="grid grid-cols-1 gap-4 text-sm bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4">
-                                    <div>
-                                        <span className="font-semibold text-blue-700 block text-xs uppercase tracking-wider">Invoice No</span>
-                                        <span className="text-slate-900 font-bold text-lg">{row.invoiceNo}</span>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <span className="font-semibold text-blue-700 block text-xs uppercase tracking-wider">Invoice Date</span>
-                                            <span className="text-slate-800 font-medium">{row.invoiceDate}</span>
-                                        </div>
-                                        <div>
-                                            <span className="font-semibold text-blue-700 block text-xs uppercase tracking-wider">Bill Amount</span>
-                                            <span className="text-slate-800 font-medium">{row.billAmount}</span>
-                                        </div>
-                                    </div>
-                                 </div>
-
-                                 <div className="space-y-2">
-                                   <Label>Verification Status</Label>
-                                   <Input
-                                     value={checkData.status}
-                                     onChange={(e) => setCheckData({ ...checkData, status: e.target.value })}
-                                     placeholder="e.g. Verified, Issues Found"
-                                   />
-                                 </div>
-                                 <div className="space-y-2">
-                                   <Label>Remarks</Label>
-                                   <Textarea
-                                     value={checkData.remarks}
-                                     onChange={(e) => setCheckData({ ...checkData, remarks: e.target.value })}
-                                     placeholder="Enter verification remarks..."
-                                   />
-                                 </div>
-
-                                 <div className="pt-4">
-                                   <Button
-                                     onClick={() => handleSubmit(order)}
-                                     disabled={!checkData.status || isProcessing}
-                                     className="w-full bg-blue-600 hover:bg-blue-700"
-                                   >
-                                     {isProcessing ? "Processing..." : "Submit Verification"}
-                                   </Button>
-                                 </div>
-                              </div>
-                           </div>
-                         </DialogContent>
-                       </Dialog>
-                     </TableCell>
-                     {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                        <TableCell key={col.id} className="whitespace-nowrap text-center">
-                          {col.id === "status" ? (
-                             <div className="flex justify-center">
-                                <Badge className="bg-yellow-100 text-yellow-700">Pending Review</Badge>
-                             </div>
-                          ) : row[col.id as keyof typeof row] || "—"}
-                        </TableCell>
-                      ))}
+              {displayRows.length > 0 ? (
+                displayRows.map((group) => (
+                   <TableRow key={group._rowKey} className={selectedItems.includes(group._rowKey) ? "bg-blue-50/50" : ""}>
+                      <TableCell className="text-center">
+                        <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
+                      </TableCell>
+                      <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
+                      <TableCell className="text-center text-xs">{group.customerName}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary">{group._productCount} items</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                         <Badge className="bg-yellow-100 text-yellow-700">Pending Review</Badge>
+                      </TableCell>
                    </TableRow>
-                   )
-                })
+                ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                     No invoices pending for review
                   </TableCell>
                 </TableRow>
@@ -375,6 +394,205 @@ export default function CheckInvoicePage() {
           </Table>
         </Card>
       </div>
+
+       {/* Split-View Dialog */}
+       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="!max-w-[95vw] w-full max-h-[95vh] overflow-y-auto p-0">
+          <div className="p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-slate-900">
+              Verify Invoice - {selectedGroup?.doNumber}
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedGroup && (
+            <div className="space-y-6 mt-4">
+              {/* Order Details Top Section */}
+              <div className="border rounded-lg p-4 bg-muted/30">
+                <h3 className="text-sm font-semibold mb-3 text-primary">Order Details</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4 text-xs">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Delivery Purpose</Label>
+                    <p className="font-medium">{selectedGroup.deliveryPurpose}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Order Type</Label>
+                    <p className="font-medium">{selectedGroup.orderType}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Start Date</Label>
+                    <p className="font-medium">{selectedGroup.startDate}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">End Date</Label>
+                    <p className="font-medium">{selectedGroup.endDate}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Delivery Date</Label>
+                    <p className="font-medium">{selectedGroup.deliveryDate}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Transport Type</Label>
+                    <p className="font-medium">{selectedGroup.transportType}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Contact Person</Label>
+                    <p className="font-medium">{selectedGroup.contactPerson}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Customer Address</Label>
+                    <p className="font-medium truncate" title={selectedGroup.customerAddress}>{selectedGroup.customerAddress}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Invoice No</Label>
+                    <p className="font-medium text-blue-600">{selectedGroup.invoiceNo}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Invoice Date</Label>
+                    <p className="font-medium">{selectedGroup.invoiceDate}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Bilty No</Label>
+                    <p className="font-medium">{selectedGroup.biltyNo}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Truck No</Label>
+                    <p className="font-medium">{selectedGroup.truckNo}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Transporter</Label>
+                    <p className="font-medium truncate" title={selectedGroup.transporterName}>{selectedGroup.transporterName}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">RST No</Label>
+                    <p className="font-medium">{selectedGroup.rstNo}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Gross Wt</Label>
+                    <p className="font-medium">{selectedGroup.grossWeight}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Tare Wt</Label>
+                    <p className="font-medium">{selectedGroup.tareWeight}</p>
+                  </div>
+                   <div>
+                    <Label className="text-xs text-muted-foreground">Net Wt</Label>
+                    <p className="font-medium">{selectedGroup.netWeight}</p>
+                  </div>
+                   {selectedGroup.diffReason && selectedGroup.diffReason !== "—" && (
+                    <div className="col-span-2">
+                        <Label className="text-xs text-muted-foreground">Diff Reason</Label>
+                        <p className="font-medium text-amber-600">{selectedGroup.diffReason}</p>
+                    </div>
+                   )}
+                </div>
+              </div>
+
+              {/* Product List Table (Middle) */}
+              <div className="border rounded-lg overflow-hidden">
+                <div className="bg-muted/50 px-4 py-2 border-b">
+                  <h3 className="text-sm font-semibold text-primary">Products ({selectedProducts.length}/{selectedGroup._productCount} selected)</h3>
+                </div>
+                <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox 
+                          checked={selectedProducts.length === selectedGroup._allProducts.length && selectedGroup._allProducts.length > 0}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedProducts(selectedGroup._allProducts.map((p: any) => p._rowKey))
+                            } else {
+                              setSelectedProducts([])
+                            }
+                          }}
+                        />
+                      </TableHead>
+                      <TableHead>Order No</TableHead>
+                      <TableHead>Product Name</TableHead>
+                      <TableHead>Invoice No</TableHead>
+                      <TableHead>Bill Amt</TableHead>
+                      <TableHead>Actual Qty</TableHead>
+                      <TableHead>Truck No</TableHead>
+                      <TableHead>Net Wt</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedGroup._allProducts.map((product: any) => (
+                      <TableRow key={product._rowKey} className={selectedProducts.includes(product._rowKey) ? "bg-blue-50/30" : ""}>
+                        <TableCell>
+                          <Checkbox 
+                            checked={selectedProducts.includes(product._rowKey)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedProducts(prev => [...prev, product._rowKey])
+                              } else {
+                                setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
+                              }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium text-xs">{product.specificOrderNo || "—"}</TableCell>
+                        <TableCell className="font-medium">{product.productName}</TableCell>
+                        <TableCell className="font-medium text-blue-700">{product.invoiceNo || "—"}</TableCell>
+                        <TableCell>{product.billAmount || "—"}</TableCell>
+                        <TableCell>{product.actualQty || "—"}</TableCell>
+                        <TableCell>{product.truckNo || "—"}</TableCell>
+                        <TableCell className="font-semibold">{product.netWeight || "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                </div>
+              </div>
+
+              {/* Invoice Form (Bottom) */}
+              <div className="space-y-6 border rounded-lg p-6 bg-white shadow-sm">
+                 <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
+                    <CheckCircle className="h-4 w-4 text-blue-600" />
+                    Verification Details
+                 </h3>
+                 
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     <div className="space-y-2">
+                       <Label>Verification Status <span className="text-red-500">*</span></Label>
+                       <Input
+                         value={checkData.status}
+                         onChange={(e) => setCheckData({ ...checkData, status: e.target.value })}
+                         placeholder="e.g. Verified, Issues Found"
+                       />
+                     </div>
+
+                     <div className="space-y-2">
+                       <Label>Remarks</Label>
+                       <Textarea
+                         value={checkData.remarks}
+                         onChange={(e) => setCheckData({ ...checkData, remarks: e.target.value })}
+                         placeholder="Enter verification remarks..."
+                         className="h-[38px] min-h-[38px]"
+                       />
+                     </div>
+                 </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-8 border-t pt-4 bg-gray-50 -mx-6 -mb-6 px-6 py-4">
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isProcessing}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSubmit} 
+              disabled={isProcessing || !checkData.status}
+              className="bg-blue-600 hover:bg-blue-700 min-w-[150px]"
+            >
+              {isProcessing ? "Processing..." : "Complete Verification"}
+            </Button>
+          </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
     </WorkflowStageShell>
   )
 }

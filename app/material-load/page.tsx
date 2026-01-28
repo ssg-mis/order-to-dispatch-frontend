@@ -7,7 +7,6 @@ import { WorkflowStageShell } from "@/components/workflow/workflow-stage-shell"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import {
   Dialog,
@@ -16,13 +15,14 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
-  DialogDescription,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Settings2 } from "lucide-react"
+import { Settings2, Truck, Weight } from "lucide-react"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
+import { Checkbox } from "@/components/ui/checkbox"
 import { materialLoadApi } from "@/lib/api-service"
 
 export default function MaterialLoadPage() {
@@ -31,13 +31,13 @@ export default function MaterialLoadPage() {
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
     "orderNo",
     "customerName",
-    "productName",
     "status",
   ])
-  const [selectedItems, setSelectedItems] = useState<any[]>([])
+  
   const [loadData, setLoadData] = useState({
     actualQty: "",
     weightmentSlip: "",
@@ -45,7 +45,6 @@ export default function MaterialLoadPage() {
     grossWeight: "",
     tareWeight: "",
     netWeight: "",
-    totalWeight: "",
     grossWeightPacking: "",
     netWeightPacking: "",
     otherItemWeight: "",
@@ -55,7 +54,13 @@ export default function MaterialLoadPage() {
     reason: "",
     truckNo: "",
     vehicleNoPlateImage: "",
+    checkStatus: "",
+    remarks: "",
   })
+
+  const [selectedItems, setSelectedItems] = useState<string[]>([])
+  const [selectedGroup, setSelectedGroup] = useState<any>(null)
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
 
   // Fetch pending material loads from backend
   const fetchPendingMaterialLoads = async () => {
@@ -133,15 +138,165 @@ export default function MaterialLoadPage() {
     }))
   }, [loadData.dharamkataWeight, loadData.grossWeightPacking])
 
+
+  /* Filter logic */
+  const [filterValues, setFilterValues] = useState({
+      status: "",
+      startDate: "",
+      endDate: "",
+      partyName: ""
+  })
+
+  const filteredPendingOrders = pendingOrders.filter(order => {
+      let matches = true
+      if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) matches = false
+      const orderDateStr = order.timestamp
+      if (orderDateStr) {
+          const orderDate = new Date(orderDateStr)
+          if (filterValues.startDate && orderDate < new Date(filterValues.startDate)) matches = false
+          if (filterValues.endDate && orderDate > new Date(filterValues.endDate)) matches = false
+      }
+      return matches
+  })
+
+  // Group orders by Base DO Number
+  const displayRows = useMemo(() => {
+    const grouped: { [key: string]: any } = {}
+
+    filteredPendingOrders.forEach((order: any) => {
+       const doNumber = order.so_no || order.soNo || "DO-XXX"
+       // Group by Base DO (e.g. DO-022 from DO-022A)
+       const baseDoMatch = doNumber.match(/^(DO-\d+)/i)
+       const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
+
+       if (!grouped[baseDo]) {
+          grouped[baseDo] = {
+             ...order,
+             _rowKey: baseDo,
+             orderNo: baseDo,
+             doNumber: baseDo,
+             customerName: order.party_name || order.partyName,
+             
+             // Map all order details from JOIN
+             deliveryPurpose: order.order_type_delivery_purpose || "—",
+             orderType: order.order_type || "—",
+             startDate: order.start_date ? new Date(order.start_date).toLocaleDateString("en-IN") : "—",
+             endDate: order.end_date ? new Date(order.end_date).toLocaleDateString("en-IN") : "—",
+             deliveryDate: order.delivery_date ? new Date(order.delivery_date).toLocaleDateString("en-IN") : "—",
+             customerType: order.customer_type || "—",
+             partySoDate: order.party_so_date ? new Date(order.party_so_date).toLocaleDateString("en-IN") : "—",
+             oilType: order.oil_type || "—",
+             ratePer15kg: order.rate_per_15kg || "—",
+             ratePerLtr: order.rate_per_ltr || "—",
+             rateOfMaterial: order.rate_of_material || "—",
+             totalAmount: order.total_amount_with_gst || "—",
+             transportType: order.type_of_transporting || "—",
+             contactPerson: order.customer_contact_person_name || "—",
+             contactWhatsapp: order.customer_contact_person_whatsapp_no || "—",
+             customerAddress: order.customer_address || "—",
+             paymentTerms: order.payment_terms || "—",
+             advancePayment: order.advance_payment_to_be_taken || "—",
+             advanceAmount: order.advance_amount || "—",
+             isBroker: order.is_order_through_broker || "—",
+             brokerName: order.broker_name || "—",
+             skuName: order.sku_name || "—",
+             approvalQty: order.approval_qty || "—",
+             
+             _allProducts: [],
+             _productCount: 0
+          }
+       }
+       
+       // Add product to group
+       grouped[baseDo]._allProducts.push({
+          ...order,
+          _rowKey: `${baseDo}-${order.d_sr_number || order.id}`,
+          id: order.id, // Keep DB ID for submission
+          specificOrderNo: doNumber, // Store specific DO (e.g. DO-022A)
+          productName: order.product_name || order.productName,
+          qtyToDispatch: order.qty_to_be_dispatched || order.qtyToDispatch,
+          actualQtyDispatch: order.actual_qty_dispatch, // Map the field
+          deliveryFrom: order.dispatch_from || order.deliveryFrom,
+          dsrNumber: order.d_sr_number
+       })
+       
+       grouped[baseDo]._productCount = grouped[baseDo]._allProducts.length
+    })
+
+    return Object.values(grouped)
+  }, [filteredPendingOrders])
+
+  const toggleSelectItem = (itemKey: string) => {
+    setSelectedItems(prev => 
+      prev.includes(itemKey) 
+        ? prev.filter(k => k !== itemKey)
+        : [...prev, itemKey]
+    )
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedItems.length === displayRows.length) {
+      setSelectedItems([])
+    } else {
+      setSelectedItems(displayRows.map(r => r._rowKey))
+    }
+  }
+
+  const handleOpenDialog = () => {
+    if (selectedItems.length === 0) return
+    
+    const targetGroup = displayRows.find(r => r._rowKey === selectedItems[0])
+    if (targetGroup) {
+      setSelectedGroup(targetGroup)
+      setSelectedProducts(targetGroup._allProducts.map((p: any) => p._rowKey)) // Select all by default
+      setLoadData({
+        actualQty: "",
+        weightmentSlip: "",
+        rstNo: "",
+        grossWeight: "",
+        tareWeight: "",
+        netWeight: "",
+        grossWeightPacking: "",
+        netWeightPacking: "",
+        otherItemWeight: "",
+        dharamkataWeight: "",
+        differanceWeight: "",
+        transporterName: "",
+        reason: "",
+        truckNo: "",
+        vehicleNoPlateImage: "",
+        checkStatus: "",
+        remarks: "",
+      })
+      setIsDialogOpen(true)
+    }
+  }
+
   const handleBulkSubmit = async () => {
+    if (!selectedGroup) return
+    
+    // Submit only selected products
+    const productsToSubmit = selectedGroup._allProducts.filter((p: any) => 
+      selectedProducts.includes(p._rowKey)
+    )
+    
+    if (productsToSubmit.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please select at least one product to process",
+        variant: "destructive"
+      })
+      return
+    }
+
     setIsProcessing(true)
     try {
       const successfulSubmissions: any[] = []
       const failedSubmissions: any[] = []
 
       // Submit each item to backend API
-      for (const item of selectedItems) {
-        const recordId = item.id; // Use the lift_receiving_confirmation table ID
+      for (const product of productsToSubmit) {
+        const recordId = product.id;
         
         try {
           if (recordId) {
@@ -156,6 +311,8 @@ export default function MaterialLoadPage() {
               reason_of_difference_in_weight_if_any_speacefic: loadData.reason || null,
               truck_no: loadData.truckNo || null,
               vehicle_no_plate_image: loadData.vehicleNoPlateImage || null,
+              check_status: loadData.checkStatus || null,
+              remarks: loadData.remarks || null,
             };
 
             console.log('[MATERIAL LOAD] Submitting material load for ID:', recordId, submitData);
@@ -163,17 +320,17 @@ export default function MaterialLoadPage() {
             console.log('[MATERIAL LOAD] API Response:', response);
             
             if (response.success) {
-              successfulSubmissions.push({ item, response });
+              successfulSubmissions.push({ product, response });
             } else {
-              failedSubmissions.push({ item, error: response.message || 'Unknown error' });
+              failedSubmissions.push({ product, error: response.message || 'Unknown error' });
             }
           } else {
-            console.warn('[MATERIAL LOAD] Skipping - no record ID found for:', item);
-            failedSubmissions.push({ item, error: 'No record ID found' });
+            console.warn('[MATERIAL LOAD] Skipping - no record ID found for:', product);
+            failedSubmissions.push({ product, error: 'No record ID found' });
           }
         } catch (error: any) {
           console.error('[MATERIAL LOAD] Failed to submit material load:', error);
-          failedSubmissions.push({ item, error: error?.message || error?.toString() || 'Unknown error' });
+          failedSubmissions.push({ product, error: error?.message || error?.toString() || 'Unknown error' });
         }
       }
 
@@ -186,24 +343,7 @@ export default function MaterialLoadPage() {
 
         // Clear selections and form
         setSelectedItems([]);
-        setLoadData({
-          actualQty: "",
-          weightmentSlip: "",
-          rstNo: "",
-          grossWeight: "",
-          tareWeight: "",
-          netWeight: "",
-          totalWeight: "",
-          grossWeightPacking: "",
-          netWeightPacking: "",
-          otherItemWeight: "",
-          dharamkataWeight: "",
-          differanceWeight: "",
-          transporterName: "",
-          reason: "",
-          truckNo: "",
-          vehicleNoPlateImage: "",
-        });
+        setIsDialogOpen(false);
 
         // Refresh data from backend
         await fetchPendingMaterialLoads();
@@ -238,74 +378,6 @@ export default function MaterialLoadPage() {
   /* Extract unique customer names */
   const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
 
-  const [filterValues, setFilterValues] = useState({
-      status: "",
-      startDate: "",
-      endDate: "",
-      partyName: ""
-  })
-
-  // Selection Logic
-  const toggleSelectItem = (item: any) => {
-    const itemKey = `${item.id}`;
-    setSelectedItems((prev) =>
-      prev.some((i) => i.id === item.id)
-        ? prev.filter((i) => i.id !== item.id)
-        : [...prev, item]
-    )
-  }
-
-  const toggleSelectAll = () => {
-    if (selectedItems.length === displayRows.length && displayRows.length > 0) {
-      setSelectedItems([])
-    } else {
-      setSelectedItems(displayRows)
-    }
-  }
-
-  const filteredPendingOrders = pendingOrders.filter(order => {
-      let matches = true
-      
-      // Filter by Party Name
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) {
-          matches = false
-      }
-
-      // Filter by Date Range
-      const orderDateStr = order.timestamp
-      if (orderDateStr) {
-          const orderDate = new Date(orderDateStr)
-          if (filterValues.startDate) {
-              const start = new Date(filterValues.startDate)
-              start.setHours(0,0,0,0)
-              if (orderDate < start) matches = false
-          }
-          if (filterValues.endDate) {
-              const end = new Date(filterValues.endDate)
-              end.setHours(23,59,59,999)
-              if (orderDate > end) matches = false
-          }
-      }
-
-      return matches
-  })
-
-  // Map backend data to display format
-  const displayRows = useMemo(() => {
-    return filteredPendingOrders.map((record: any) => ({
-      id: record.id, // Keep DB ID for submission
-      doNumber: record.d_sr_number,
-      orderNo: record.so_no,
-      customerName: record.party_name,
-      productName: record.product_name,
-      qtyToDispatch: record.qty_to_be_dispatched,
-      transportType: record.type_of_transporting,
-      deliveryFrom: record.dispatch_from,
-      timestamp: record.timestamp,
-      status: "Ready to Load",
-    }))
-  }, [filteredPendingOrders])
-
   return (
     <WorkflowStageShell
       title="Stage 7: Material Load"
@@ -318,6 +390,15 @@ export default function MaterialLoadPage() {
     >
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
+          <Button 
+            onClick={handleOpenDialog}
+            disabled={selectedItems.length === 0} 
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Weight className="mr-2 h-4 w-4" />
+            Load Material ({selectedItems.length})
+          </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="bg-transparent">
@@ -342,68 +423,185 @@ export default function MaterialLoadPage() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
 
-          <Dialog>
-             <DialogTrigger asChild>
-               <Button
-                 disabled={selectedItems.length === 0 || isProcessing}
-                 className="bg-blue-600 hover:bg-blue-700 font-bold shadow-md transform active:scale-95 transition-all"
-               >
-                 Load Material ({selectedItems.length})
-               </Button>
-             </DialogTrigger>
-             <DialogContent className="sm:max-w-6xl !max-w-6xl max-h-[95vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="text-xl font-bold text-slate-900 leading-none">Bulk Material Load ({selectedItems.length} Items)</DialogTitle>
-                  <DialogDescription className="text-slate-500 mt-1.5">Enter common loading details for all selected items.</DialogDescription>
-                </DialogHeader>
+        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
+              <TableRow>
+                <TableHead className="w-12 text-center">
+                    <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
+                </TableHead>
+                <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Products</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {displayRows.length > 0 ? (
+                displayRows.map((group) => (
+                   <TableRow key={group._rowKey} className={selectedItems.includes(group._rowKey) ? "bg-blue-50/50" : ""}>
+                      <TableCell className="text-center">
+                        <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
+                      </TableCell>
+                      <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
+                      <TableCell className="text-center text-xs">{group.customerName}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary">{group._productCount} items</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge className="bg-blue-100 text-blue-700">Ready to Load</Badge>
+                      </TableCell>
+                   </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    No items pending for material loading
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Card>
+      </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm mt-4">
-                    <Label className="text-[10px] font-bold uppercase tracking-wider text-blue-600/70 block px-1 mb-3">Selected Items ({selectedItems.length})</Label>
-                    <div className="max-h-[200px] overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 pr-2 scrollbar-hide">
-                        {selectedItems.map((item, idx) => (
-                            <div key={idx} className="bg-white p-3 border border-slate-200 rounded-xl shadow-sm flex flex-col gap-1.5 relative overflow-hidden group hover:border-blue-200 transition-all">
-                                <div className="absolute top-0 right-0 py-0.5 px-2 bg-slate-50 border-l border-b border-slate-100 rounded-bl-lg">
-                                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{item.doNumber || "—"}</span>
-                                </div>
-                                <div className="flex flex-col">
-                                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">DO-No: {item.orderNo}</span>
-                                   <h4 className="text-xs font-bold text-slate-800 leading-tight truncate pr-16">{item.customerName || "—"}</h4>
-                                </div>
-                                <div className="pt-2 border-t border-slate-50 mt-0.5">
-                                   <div className="flex items-center gap-1.5">
-                                      <div className="w-1 h-1 rounded-full bg-blue-500" />
-                                      <span className="text-xs font-bold text-blue-600 truncate">
-                                        {item.productName || "—"}
-                                      </span>
-                                   </div>
-                                   <div className="mt-2 pt-2 border-t border-slate-50 grid grid-cols-2 gap-2">
-                                       <div className="flex flex-col">
-                                          <span className="text-[9px] text-slate-400 font-medium">Qty</span>
-                                          <span className="text-[10px] font-bold text-slate-700">{item.qtyToDispatch || "—"}</span>
-                                       </div>
-                                       <div className="flex flex-col">
-                                          <span className="text-[9px] text-slate-400 font-medium">Transport</span>
-                                          <span className="text-[10px] font-bold text-slate-700 truncate">{item.transportType || "—"}</span>
-                                       </div>
-                                   </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+      {/* Split-View Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="!max-w-[95vw] w-full max-h-[95vh] overflow-y-auto p-0">
+          <div className="p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-slate-900">
+              Bulk Material Load - {selectedGroup?.doNumber}
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedGroup && (
+            <div className="space-y-6 mt-4">
+              {/* Order Details Header */}
+              <div className="border rounded-lg p-4 bg-muted/30">
+                <h3 className="text-sm font-semibold mb-3 text-primary">Order Details</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4 text-xs">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Delivery Purpose</Label>
+                    <p className="font-medium">{selectedGroup.deliveryPurpose}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Order Type</Label>
+                    <p className="font-medium">{selectedGroup.orderType}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Start Date</Label>
+                    <p className="font-medium">{selectedGroup.startDate}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">End Date</Label>
+                    <p className="font-medium">{selectedGroup.endDate}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Delivery Date</Label>
+                    <p className="font-medium">{selectedGroup.deliveryDate}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Transport Type</Label>
+                    <p className="font-medium">{selectedGroup.transportType}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Contact Person</Label>
+                    <p className="font-medium">{selectedGroup.contactPerson}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Contact No.</Label>
+                    <p className="font-medium">{selectedGroup.contactWhatsapp}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs text-muted-foreground">Customer Address</Label>
+                    <p className="font-medium">{selectedGroup.customerAddress}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Total Amount</Label>
+                    <p className="font-medium">{selectedGroup.totalAmount}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Oil Type</Label>
+                    <p className="font-medium">{selectedGroup.oilType}</p>
+                  </div>
                 </div>
+              </div>
 
-                <div className="py-6 space-y-8">
-                  <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+              {/* Product Table */}
+              <div className="border rounded-lg overflow-hidden">
+                <div className="bg-muted/50 px-4 py-2 border-b">
+                  <h3 className="text-sm font-semibold text-primary">Products ({selectedProducts.length}/{selectedGroup._productCount} selected)</h3>
+                </div>
+                <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox 
+                          checked={selectedProducts.length === selectedGroup._allProducts.length}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedProducts(selectedGroup._allProducts.map((p: any) => p._rowKey))
+                            } else {
+                              setSelectedProducts([])
+                            }
+                          }}
+                        />
+                      </TableHead>
+                      <TableHead>Order No.</TableHead>
+                      <TableHead>Product Name</TableHead>
+                      <TableHead>Planned Qty</TableHead>
+                      <TableHead>Actual Qty</TableHead>
+                      <TableHead>Delivery From</TableHead>
+                      <TableHead>DSR Number</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedGroup._allProducts.map((product: any) => (
+                      <TableRow 
+                        key={product._rowKey}
+                        className={selectedProducts.includes(product._rowKey) ? "bg-blue-50/30" : ""}
+                      >
+                        <TableCell>
+                          <Checkbox 
+                            checked={selectedProducts.includes(product._rowKey)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedProducts(prev => [...prev, product._rowKey])
+                              } else {
+                                setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
+                              }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium text-xs">{product.specificOrderNo}</TableCell>
+                        <TableCell className="font-medium">{product.productName}</TableCell>
+                        <TableCell>{product.qtyToDispatch}</TableCell>
+                        <TableCell>{product.actualQtyDispatch || "—"}</TableCell>
+                        <TableCell>{product.deliveryFrom}</TableCell>
+                        <TableCell>{product.dsrNumber}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                </div>
+              </div>
+
+              {/* Material Load Form */}
+              <div className="space-y-6 border rounded-lg p-6 bg-white">
+                <div className="bg-white border text-center border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
                     <h3 className="text-sm font-bold text-slate-800 px-1 flex items-center gap-2 uppercase tracking-tight">
                       <div className="w-1.5 h-4 bg-blue-600 rounded-full" />
                       General Details
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Actual Qty (Total)</Label>
                         <Input
-                          type="number"
+                          type="number" step="0.01"
                           value={loadData.actualQty || ""}
                           onChange={(e) => setLoadData(prev => ({ ...prev, actualQty: e.target.value }))}
                           placeholder="Qty"
@@ -440,7 +638,7 @@ export default function MaterialLoadPage() {
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Gross Weight</Label>
                         <Input
-                          type="number"
+                          type="number" step="0.01"
                           value={loadData.grossWeight || ""}
                           onChange={(e) => setLoadData(prev => ({ ...prev, grossWeight: e.target.value }))}
                           placeholder="Gross"
@@ -450,7 +648,7 @@ export default function MaterialLoadPage() {
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Tare Weight</Label>
                         <Input
-                          type="number"
+                          type="number" step="0.01"
                           value={loadData.tareWeight || ""}
                           onChange={(e) => setLoadData(prev => ({ ...prev, tareWeight: e.target.value }))}
                           placeholder="Tare"
@@ -471,7 +669,7 @@ export default function MaterialLoadPage() {
                           <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-bold text-indigo-600 tracking-wider">Net (Packing)</Label>
                             <Input
-                              type="number"
+                              type="number" step="0.01"
                               value={loadData.netWeightPacking || ""}
                               onChange={(e) => setLoadData(prev => ({ ...prev, netWeightPacking: e.target.value }))}
                               placeholder="Net"
@@ -481,7 +679,7 @@ export default function MaterialLoadPage() {
                           <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-bold text-indigo-600 tracking-wider">Other Items</Label>
                             <Input
-                              type="number"
+                              type="number" step="0.01"
                               value={loadData.otherItemWeight || ""}
                               onChange={(e) => setLoadData(prev => ({ ...prev, otherItemWeight: e.target.value }))}
                               placeholder="Other"
@@ -492,7 +690,7 @@ export default function MaterialLoadPage() {
                         <div className="space-y-2">
                           <Label className="text-[10px] uppercase font-bold text-indigo-600 tracking-wider">Gross Packing Weight</Label>
                           <Input
-                            type="number"
+                            type="number" step="0.01"
                             value={loadData.grossWeightPacking || ""}
                             readOnly
                             className="bg-indigo-100 border-indigo-200 font-bold text-indigo-700 h-10"
@@ -511,7 +709,7 @@ export default function MaterialLoadPage() {
                            <div className="space-y-2">
                              <Label className="text-[10px] uppercase font-bold text-amber-600 tracking-wider">Dharamkata Weight</Label>
                              <Input
-                               type="number"
+                               type="number" step="0.01"
                                value={loadData.dharamkataWeight || ""}
                                onChange={(e) => setLoadData(prev => ({ ...prev, dharamkataWeight: e.target.value }))}
                                placeholder="Weight"
@@ -521,7 +719,7 @@ export default function MaterialLoadPage() {
                            <div className="space-y-2">
                              <Label className="text-[10px] uppercase font-bold text-amber-600 tracking-wider">Difference</Label>
                              <Input
-                               type="number"
+                               type="number" step="0.01"
                                value={loadData.differanceWeight || ""}
                                readOnly
                                className="bg-amber-100 border-amber-200 font-bold text-amber-700 h-10"
@@ -541,11 +739,10 @@ export default function MaterialLoadPage() {
                     </div>
                   </div>
 
-                  {/* Verification Artifacts Section */}
                   <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 shadow-sm">
                     <h3 className="text-sm font-bold text-slate-800 mb-4 px-1 flex items-center gap-2">
                       <div className="w-1 h-4 bg-slate-600 rounded-full" />
-                      Verification Artifacts
+                      Verification Artifacts & Status
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
@@ -556,76 +753,43 @@ export default function MaterialLoadPage() {
                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Vehicle No. Plate Image</Label>
                         <Input type="file" className="bg-white cursor-pointer" />
                       </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Check Status</Label>
+                        <Select value={loadData.checkStatus} onValueChange={(v) => setLoadData(prev => ({...prev, checkStatus: v}))}>
+                            <SelectTrigger className="bg-white"><SelectValue placeholder="Status" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Accept">Accept</SelectItem>
+                                <SelectItem value="Reject">Reject</SelectItem>
+                            </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Remarks</Label>
+                        <Input 
+                          value={loadData.remarks} 
+                          onChange={(e) => setLoadData(prev => ({...prev, remarks: e.target.value}))}
+                          placeholder="Enter remarks..."
+                          className="bg-white border-slate-200 h-10"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
+              </div>
+            </div>
+          )}
 
-                <DialogFooter>
-                   <Button variant="outline" onClick={() => (document.querySelector('[data-state="open"] button[aria-label="Close"]') as HTMLElement)?.click()}>
-                     Cancel
-                   </Button>
-                   <Button onClick={handleBulkSubmit} disabled={isProcessing} className="bg-blue-600 hover:bg-blue-700 lg:min-w-[200px]">
-                     {isProcessing ? "Processing..." : "Complete Bulk Load"}
-                   </Button>
-                </DialogFooter>
-             </DialogContent>
-          </Dialog>
-        </div>
-
-        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
-          <Table>
-            <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
-              <TableRow>
-                <TableHead className="w-12 text-center">
-                  <Checkbox 
-                    checked={displayRows.length > 0 && selectedItems.length === displayRows.length}
-                    onCheckedChange={toggleSelectAll}
-                  />
-                </TableHead>
-                {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                  <TableHead key={col.id} className="whitespace-nowrap text-center">
-                    {col.label}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {displayRows.length > 0 ? (
-                displayRows.map((item: any, index: number) => {
-                   const rowKey = `${item.id}`;
-                   const isSelected = selectedItems.some(i => i.id === item.id);
-
-                   return (
-                   <TableRow key={`${index}-${rowKey}`} className={isSelected ? "bg-blue-50/50" : ""}>
-                     <TableCell className="text-center">
-                        <Checkbox 
-                          checked={isSelected}
-                          onCheckedChange={() => toggleSelectItem(item)}
-                        />
-                     </TableCell>
-                     {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                       <TableCell key={col.id} className="whitespace-nowrap text-center text-xs">
-                         {col.id === "status" ? (
-                            <div className="flex justify-center">
-                               <Badge className="bg-indigo-100 text-indigo-700">Ready to Load</Badge>
-                            </div>
-                         ) : (item as any)[col.id] || "—"}
-                       </TableCell>
-                     ))}
-                   </TableRow>
-                   )
-                })
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
-                    No items pending for material loading
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-           </Table>
-         </Card>
-       </div>
-     </WorkflowStageShell>
-   )
- }
+          <DialogFooter className="mt-6">
+            <Button 
+              onClick={handleBulkSubmit} 
+              disabled={isProcessing}
+              className="bg-blue-600 hover:bg-blue-700 w-full md:w-auto min-w-[150px]"
+            >
+              {isProcessing ? "Processing..." : "Complete Bulk Load"}
+            </Button>
+          </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </WorkflowStageShell>
+  )
+}

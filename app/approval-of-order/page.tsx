@@ -232,10 +232,14 @@ export default function CommitmentReviewPage() {
       const failedApprovals: any[] = []
       
       // Process each selected item individually
-      for (const item of selectedItems) {
-        const orderIdentifier = item.doNumber || item.soNumber || item.orderNo || "ORD-XXX";
-        const productName = item._product?.productName || item._product?.oilType || "Unknown";
-        const product = item._product || item.products?.[0];
+      // Process selected products from the dialog
+      const itemsToProcess = allProductsFromSelectedGroups.filter(p => dialogSelectedProducts.includes(p._rowKey))
+      
+      for (const item of itemsToProcess) {
+        const orderData = item._orderData || {};
+        const orderIdentifier = item._originalOrderId || orderData.doNumber || orderData.orderNo || "ORD-XXX";
+        const productName = item.productName || item.oilType || "Unknown";
+        const product = item;
 
         console.log('[APPROVAL] Processing item:', {
           orderIdentifier,
@@ -247,10 +251,10 @@ export default function CommitmentReviewPage() {
 
         // Create a focused order object with ONLY the approved/rejected product
         const focusedOrderData = {
-            ...item,
-            products: item.orderType === "regular" ? [item._product] : [],
-            preApprovalProducts: item.orderType === "pre-approval" ? [item._product] : (item.preApprovalProducts?.some((p: any) => p.oilType) ? [item._product] : []),
-            _product: item._product // keep for reference
+            ...orderData,
+            products: orderData.orderType === "regular" ? [product] : [],
+            preApprovalProducts: orderData.orderType === "pre-approval" ? [product] : (orderData.preApprovalProducts?.some((p: any) => p.oilType) ? [product] : []),
+            _product: product // keep for reference
         };
 
         // Try submitting to backend API
@@ -292,7 +296,7 @@ export default function CommitmentReviewPage() {
         if (hasRejection) {
           const historyEntry = {
             orderNo: orderIdentifier,
-            customerName: item.customerName || "Unknown",
+            customerName: orderData.customerName || "Unknown",
             stage: "Approval Of Order",
             status: "Rejected" as const,
             processedBy: "Current User",
@@ -303,7 +307,7 @@ export default function CommitmentReviewPage() {
               checklistResults: checklistValues,
               rejectedAt: timestamp,
             },
-            orderType: item.orderType || "regular"
+            orderType: orderData.orderType || "regular"
           }
           saveWorkflowHistory(historyEntry)
         } else {
@@ -378,13 +382,25 @@ export default function CommitmentReviewPage() {
   }
 
   const [selectedItems, setSelectedItems] = useState<any[]>([])
+  const [dialogSelectedProducts, setDialogSelectedProducts] = useState<string[]>([])
+
+  const toggleSelectDialogProduct = (key: string) => {
+    setDialogSelectedProducts(prev => 
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    )
+  }
+
+  // Get all flattened products from selected Groups
+  const allProductsFromSelectedGroups = useMemo(() => {
+    return selectedItems.flatMap(group => group._allProducts || [])
+  }, [selectedItems])
 
   const toggleSelectItem = (item: any) => {
-    const key = `${item.doNumber || item.orderNo}-${item._product?.productName || item._product?.oilType || 'no-prod'}`
-    const isSelected = selectedItems.some(i => `${i.doNumber || i.orderNo}-${i._product?.productName || i._product?.oilType || 'no-prod'}` === key)
+    const key = item._rowKey
+    const isSelected = selectedItems.some(i => i._rowKey === key)
     
     if (isSelected) {
-      setSelectedItems(prev => prev.filter(i => `${i.doNumber || i.orderNo}-${i._product?.productName || i._product?.oilType || 'no-prod'}` !== key))
+      setSelectedItems(prev => prev.filter(i => i._rowKey !== key))
     } else {
       setSelectedItems(prev => [...prev, item])
     }
@@ -401,11 +417,14 @@ export default function CommitmentReviewPage() {
   const handleBulkVerifyOpen = (open: boolean) => {
     if (!open) {
       setSelectedOrder(null)
+      setDialogSelectedProducts([])
     } else {
-      // Pick the first one as representative for the dialog fields, 
-      // but the process will apply to all selected items
+      // Pick the first one as representative for the dialog fields
       if (selectedItems.length > 0) {
         setSelectedOrder(selectedItems[0])
+        // Select all products by default
+        const allKeys = selectedItems.flatMap(g => g._allProducts || []).map((p: any) => p._rowKey)
+        setDialogSelectedProducts(allKeys)
       }
     }
   }
@@ -473,10 +492,16 @@ export default function CommitmentReviewPage() {
       return matches
   })
 
-  // Flatten orders for table display
+  // Group orders by base DO number (DO-022A, DO-022B → DO-022)
   const displayRows = useMemo(() => {
-    const rows: any[] = []
+    const grouped: { [key: string]: any } = {}
+    
     filteredPendingOrders.forEach((order) => {
+      const orderId = order.doNumber || order.orderNo || "DO-XXX"
+      // Extract base DO number (remove suffix like A, B, C)
+      const baseDoMatch = orderId.match(/^(DO-\d+)/i)
+      const baseDo = baseDoMatch ? baseDoMatch[1] : orderId
+      
       const isRegular = order.orderType === "regular" || order.stage === "Approval Of Order";
       const hasPreApproval = order.preApprovalProducts?.some((p: any) => p.oilType);
 
@@ -491,28 +516,45 @@ export default function CommitmentReviewPage() {
         products = hasPreApproval ? order.preApprovalProducts : (order.products || []);
       }
 
-      if (!products || products.length === 0) {
-        // Only push if not already verified in history
-        const isVerified = history.some(h => 
-            (h.orderNo === (order.doNumber || order.orderNo)) && h._product === null
-        );
-        if (!isVerified) rows.push({ ...order, _product: null })
-      } else {
+      if (!grouped[baseDo]) {
+        grouped[baseDo] = {
+          ...order,
+          _displayDo: baseDo,
+          _rowKey: baseDo,
+          _allProducts: [],
+          _productCount: 0
+        }
+      }
+      
+      // Aggregate products
+      if (products && products.length > 0) {
         products.forEach((prod: any) => {
-          // Check if THIS specific product is already verified in history
+          // Check if already verified
           const pName = prod.productName || prod.oilType;
           const isVerified = history.some(h => 
-            (h.orderNo === (order.doNumber || order.orderNo)) && 
+            (h.orderNo === orderId || h.orderNo === baseDo) && 
             (h.data?.orderData?._product?.productName === pName || h.data?.orderData?._product?.oilType === pName)
           );
-
+          
           if (!isVerified) {
-            rows.push({ ...order, _product: prod })
+             grouped[baseDo]._allProducts.push({
+              ...prod,
+              _originalOrderId: orderId,
+              _orderData: order,
+              _rowKey: `${baseDo}-${prod._pid || prod.id}`
+            })
           }
-        });
+        })
+      } else if (!history.some(h => h.orderNo === orderId)) {
+           // Case for no products but still pending order
+           // Or handle as empty
       }
+      
+      grouped[baseDo]._productCount = grouped[baseDo]._allProducts.length
     })
-    return rows
+    
+    // Filter out groups with no pending products
+    return Object.values(grouped).filter(g => g._productCount > 0)
   }, [filteredPendingOrders, history])
 
   return (
@@ -544,32 +586,89 @@ export default function CommitmentReviewPage() {
                   <DialogDescription className="text-slate-500 mt-1.5">Verify order details and complete the six-point check for commitment.</DialogDescription>
                 </DialogHeader>
 
-                {/* Selected Items Detail Section */}
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm mt-4">
-                    <div className="space-y-3">
-                        <Label className="text-[10px] font-bold uppercase tracking-wider text-blue-600/70 block px-1">Selected Items ({selectedItems.length})</Label>
-                        <div className="max-h-[300px] overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 pr-2 scrollbar-hide">
-                            {selectedItems.map((item, idx) => (
-                                <div key={idx} className="bg-white p-3 border border-slate-200 rounded-xl shadow-sm flex flex-col gap-1.5 relative overflow-hidden group hover:border-blue-200 transition-all">
-                                    <div className="absolute top-0 right-0 py-0.5 px-2 bg-slate-50 border-l border-b border-slate-100 rounded-bl-lg">
-                                       <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{item.orderType || "—"}</span>
-                                    </div>
-                                    <div className="flex flex-col">
-                                       <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">DO-No: {item.doNumber || item.orderNo}</span>
-                                       <h4 className="text-xs font-bold text-slate-800 leading-tight truncate pr-16">{item.customerName || "—"}</h4>
-                                    </div>
-                                    <div className="pt-2 border-t border-slate-50 mt-0.5">
-                                       <div className="flex items-center gap-1.5">
-                                          <div className="w-1 h-1 rounded-full bg-blue-500" />
-                                          <span className="text-xs font-bold text-blue-600 truncate">
-                                            {item._product?.productName || item._product?.oilType || "—"}
-                                          </span>
-                                       </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                {/* Order Details Section (from first selected group) */}
+                {selectedItems.length > 0 && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3 mt-4">
+                    <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">
+                        Order Details {selectedItems.length > 1 && <span className="text-xs font-normal text-slate-500 normal-case ml-2">(Showing details for {selectedItems[0].doNumber} + {selectedItems.length - 1} others)</span>}
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Delivery Purpose</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].orderPurpose || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Order Type</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].orderType || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Dates</p>
+                        <p className="text-xs font-semibold text-slate-900">
+                            Start: {selectedItems[0].startDate || "—"}<br/>
+                            End: {selectedItems[0].endDate || "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Delivery Date</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].deliveryDate || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Transport</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].transportType || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Customer</p>
+                        <p className="text-sm font-semibold text-slate-900 truncate" title={selectedItems[0].customerName}>{selectedItems[0].customerName || "—"}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-xs text-slate-500 font-medium">Address</p>
+                        <p className="text-sm font-semibold text-slate-900 truncate">{selectedItems[0].customerAddress || "—"}</p>
+                      </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Products Table */}
+                <div className="border rounded-md mt-4 max-h-[400px] overflow-auto">
+                    <Table>
+                        <TableHeader className="bg-slate-50 sticky top-0">
+                            <TableRow>
+                                <TableHead className="w-[50px] text-center">
+                                    <Checkbox 
+                                        checked={dialogSelectedProducts.length > 0 && dialogSelectedProducts.length === allProductsFromSelectedGroups.length}
+                                        onCheckedChange={(checked) => {
+                                            if (checked) setDialogSelectedProducts(allProductsFromSelectedGroups.map(p => p._rowKey))
+                                            else setDialogSelectedProducts([])
+                                        }}
+                                    />
+                                </TableHead>
+                                <TableHead>Order No</TableHead>
+                                <TableHead>Product Name</TableHead>
+                                <TableHead>Qty</TableHead>
+                                <TableHead>Rate</TableHead>
+                                <TableHead>Review Status</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {allProductsFromSelectedGroups.map((prod: any, idx) => (
+                                <TableRow key={prod._rowKey || idx} className={dialogSelectedProducts.includes(prod._rowKey) ? "bg-blue-50/30" : ""}>
+                                    <TableCell className="text-center">
+                                        <Checkbox 
+                                            checked={dialogSelectedProducts.includes(prod._rowKey)}
+                                            onCheckedChange={() => toggleSelectDialogProduct(prod._rowKey)}
+                                        />
+                                    </TableCell>
+                                    <TableCell className="text-xs font-semibold text-slate-700">{prod._originalOrderId || "—"}</TableCell>
+                                    <TableCell className="font-medium text-xs">{prod.productName || "—"}</TableCell>
+                                    <TableCell className="text-xs font-bold">{prod.orderQty}</TableCell>
+                                    <TableCell className="text-xs">{prod.rate || "—"}</TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">Pending Review</Badge>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
                 </div>
 
                 <div className="py-6 space-y-4">
@@ -614,7 +713,7 @@ export default function CommitmentReviewPage() {
                      ? "Processing..."
                      : Object.values(checklistValues).includes("reject")
                        ? "Reject & Save to History"
-                       : `Approve ${selectedItems.length} Item(s)`}
+                       : `Approve ${dialogSelectedProducts.length} Selected Item(s)`}
                  </Button>
                </DialogFooter>
              </DialogContent>
@@ -675,7 +774,8 @@ export default function CommitmentReviewPage() {
                 </TableRow>
               ) : displayRows.length > 0 ? (
                 displayRows.map((order: any, index: number) => {
-                   const p = order._product;
+                   const products = order._allProducts || []
+                   const firstProduct = products[0]
                    
                    const CUSTOMER_MAP: Record<string, string> = {
                      cust1: "Acme Corp",
@@ -683,8 +783,11 @@ export default function CommitmentReviewPage() {
                      cust3: "Zenith Supply",
                    }
 
+                   // Get aggregated oil types
+                   const oilTypes = Array.from(new Set(products.map((p:any) => p.oilType || p.productName))).filter(Boolean).join(", ")
+
                    const row = {
-                     orderNo: order.doNumber || order.orderNo || "DO-XXX",
+                     orderNo: order._displayDo || order.doNumber || order.orderNo || "DO-XXX",
                      deliveryPurpose: order.orderPurpose || "—",
                      customerType: order.customerType || "—",
                      orderType: order.orderType || "—",
@@ -695,16 +798,16 @@ export default function CommitmentReviewPage() {
                      endDate: order.endDate || "—",
                      deliveryDate: order.deliveryDate || "—",
                      
-                     // Rates & Product Details - Single product from flattened row
-                     oilType: p?.oilType || order.oilType || "—",
-                     ratePerLtr: p?.ratePerLtr || order.ratePerLtr || "—",
-                     ratePer15Kg: p?.rateLtr || order.rateLtr || "—",
-                     productName: p?.productName || p?.oilType || "—",
-                     uom: p?.uom || "—",
-                     orderQty: p?.orderQty !== undefined ? p?.orderQty : "—",
-                     altUom: p?.altUom || "—",
-                     altQty: p?.altQty !== undefined ? p?.altQty : "—",
-                     rate: p?.rate || "—",
+                     // Rates & Product Details - Show Summary
+                     oilType: oilTypes || "—",
+                     ratePerLtr: firstProduct?.ratePerLtr || "—",
+                     ratePer15Kg: firstProduct?.rateLtr || "—",
+                     productName: `${products.length} Products`, // Show count
+                     uom: firstProduct?.uom || "—",
+                     orderQty: products.reduce((sum: number, p: any) => sum + (Number(p.orderQty) || 0), 0).toFixed(2),
+                     altUom: firstProduct?.altUom || "—",
+                     altQty: products.reduce((sum: number, p: any) => sum + (Number(p.altQty) || 0), 0).toFixed(2),
+                     rate: firstProduct?.rate || "—",
 
                      // Extended Columns
                      totalWithGst: order.totalWithGst || "—",
@@ -719,31 +822,30 @@ export default function CommitmentReviewPage() {
                      brokerName: order.brokerName || "—",
                      uploadSo: "do_document.pdf",
                      
-                     status: "Excellent",
-                     products: (order.orderType === "regular" && order.products?.length > 0) 
-                        ? order.products 
-                        : (order.preApprovalProducts?.some((p: any) => p.oilType) 
-                            ? order.preApprovalProducts 
-                            : (order.products || order.data?.products || order.orderData?.products || [])),
+                     status: "Pending",
                    }
 
                    return (
                    <TableRow 
-                      key={`${index}-${row.orderNo}-${row.productName}`}
-                      className={selectedItems.some(i => `${i.doNumber || i.orderNo}-${i._product?.productName || i._product?.oilType || 'no-prod'}` === `${row.orderNo}-${row.productName}`) ? "bg-blue-50/50" : ""}
+                      key={order._rowKey}
+                      className={selectedItems.some(i => i._rowKey === order._rowKey) ? "bg-blue-50/50" : ""}
                    >
                      <TableCell className="text-center">
                         <Checkbox 
-                            checked={selectedItems.some(i => `${i.doNumber || i.orderNo}-${i._product?.productName || i._product?.oilType || 'no-prod'}` === `${row.orderNo}-${row.productName}`)}
+                            checked={selectedItems.some(i => i._rowKey === order._rowKey)}
                             onCheckedChange={() => toggleSelectItem(order)}
                         />
                      </TableCell>
                       {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
                         <TableCell key={col.id} className="whitespace-nowrap text-center">
                           {col.id === "status" ? (
-                             <div className="flex justify-center">
-                                <Badge className="bg-green-100 text-green-700">Excellent</Badge>
+                             <div className="flex justify-center gap-2">
+                                <Badge variant="outline" className="text-xs bg-slate-100 text-slate-700 border-slate-200">
+                                   {order._productCount} Items
+                                </Badge>
                              </div>
+                          ) : col.id === "productName" ? (
+                             <span className="font-medium text-slate-700">{row.productName}</span>
                           ) : row[col.id as keyof typeof row]}
                         </TableCell>
                       ))}

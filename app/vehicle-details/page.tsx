@@ -24,17 +24,20 @@ import { Settings2, Truck } from "lucide-react"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { Checkbox } from "@/components/ui/checkbox"
 import { vehicleDetailsApi } from "@/lib/api-service"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function VehicleDetailsPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
     "orderNo",
     "customerName",
     "status",
   ])
+  const [vehicleNumber, setVehicleNumber] = useState("")
   const [vehicleData, setVehicleData] = useState({
     checkStatus: "",
     remarks: "",
@@ -47,7 +50,9 @@ export default function VehicleDetailsPage() {
   })
 
   const [history, setHistory] = useState<any[]>([])
-  const [selectedItems, setSelectedItems] = useState<any[]>([])
+  const [selectedItems, setSelectedItems] = useState<string[]>([])
+  const [selectedGroup, setSelectedGroup] = useState<any>(null)
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
 
   // Fetch pending vehicle details from backend
   const fetchPendingVehicleDetails = async () => {
@@ -121,55 +126,138 @@ export default function VehicleDetailsPage() {
       return matches
   })
   
-  // Map backend data to display format
+  // Group orders by Base DO Number (like Actual Dispatch)
   const displayRows = useMemo(() => {
-    return filteredPendingOrders.map((record: any) => ({
-      id: record.id, // Keep DB ID for submission
-      doNumber: record.d_sr_number,
-      orderNo: record.so_no,
-      customerName: record.party_name,
-      productName: record.product_name,
-      qtyToDispatch: record.qty_to_be_dispatched,
-      transportType: record.type_of_transporting,
-      deliveryFrom: record.dispatch_from,
-      timestamp: record.timestamp,
-      status: "Awaiting Vehicle",
-    }))
+    const grouped: { [key: string]: any } = {}
+
+    filteredPendingOrders.forEach((order: any) => {
+       const doNumber = order.so_no || order.soNo || "DO-XXX"
+       // Group by Base DO (e.g. DO-022 from DO-022A)
+       const baseDoMatch = doNumber.match(/^(DO-\d+)/i)
+       const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
+
+       if (!grouped[baseDo]) {
+          grouped[baseDo] = {
+             ...order,
+             _rowKey: baseDo,
+             orderNo: baseDo,
+             doNumber: baseDo,
+             customerName: order.party_name || order.customerName,
+             
+             // Map all order details from JOIN
+             deliveryPurpose: order.order_type_delivery_purpose || "—",
+             orderType: order.order_type || "—",
+             startDate: order.start_date ? new Date(order.start_date).toLocaleDateString("en-IN") : "—",
+             endDate: order.end_date ? new Date(order.end_date).toLocaleDateString("en-IN") : "—",
+             deliveryDate: order.delivery_date ? new Date(order.delivery_date).toLocaleDateString("en-IN") : "—",
+             customerType: order.customer_type || "—",
+             partySoDate: order.party_so_date ? new Date(order.party_so_date).toLocaleDateString("en-IN") : "—",
+             oilType: order.oil_type || "—",
+             ratePer15kg: order.rate_per_15kg || "—",
+             ratePerLtr: order.rate_per_ltr || "—",
+             rateOfMaterial: order.rate_of_material || "—",
+             totalAmount: order.total_amount_with_gst || "—",
+             transportType: order.type_of_transporting || "—",
+             contactPerson: order.customer_contact_person_name || "—",
+             contactWhatsapp: order.customer_contact_person_whatsapp_no || "—",
+             customerAddress: order.customer_address || "—",
+             paymentTerms: order.payment_terms || "—",
+             advancePayment: order.advance_payment_to_be_taken || "—",
+             advanceAmount: order.advance_amount || "—",
+             isBroker: order.is_order_through_broker || "—",
+             brokerName: order.broker_name || "—",
+             skuName: order.sku_name || "—",
+             approvalQty: order.approval_qty || "—",
+             
+             _allProducts: [],
+             _productCount: 0
+          }
+       }
+       
+       // Add product to group
+       grouped[baseDo]._allProducts.push({
+          ...order,
+          _rowKey: `${baseDo}-${order.d_sr_number || order.id}`,
+          id: order.id, // Keep DB ID for submission
+          specificOrderNo: doNumber, // Store specific DO (e.g. DO-022A)
+          productName: order.product_name || order.productName,
+          qtyToDispatch: order.qty_to_be_dispatched || order.qtyToDispatch,
+          deliveryFrom: order.dispatch_from || order.deliveryFrom,
+          dsrNumber: order.d_sr_number
+       })
+       
+       grouped[baseDo]._productCount = grouped[baseDo]._allProducts.length
+    })
+
+    return Object.values(grouped)
   }, [filteredPendingOrders])
 
-  const toggleSelectItem = (item: any) => {
-    const key = `${item.id}`
-    const isSelected = selectedItems.some(i => i.id === item.id)
-    
-    if (isSelected) {
-      setSelectedItems(prev => prev.filter(i => i.id !== item.id))
-    } else {
-      setSelectedItems(prev => [...prev, item])
-    }
+  const toggleSelectItem = (itemKey: string) => {
+    setSelectedItems(prev => 
+      prev.includes(itemKey) 
+        ? prev.filter(k => k !== itemKey)
+        : [...prev, itemKey]
+    )
   }
 
   const toggleSelectAll = () => {
     if (selectedItems.length === displayRows.length) {
       setSelectedItems([])
     } else {
-      setSelectedItems([...displayRows])
+      setSelectedItems(displayRows.map(r => r._rowKey))
+    }
+  }
+
+  const handleOpenDialog = () => {
+    if (selectedItems.length === 0) return
+    
+    const targetGroup = displayRows.find(r => r._rowKey === selectedItems[0])
+    if (targetGroup) {
+      setSelectedGroup(targetGroup)
+      setSelectedProducts(targetGroup._allProducts.map((p: any) => p._rowKey)) // Select all by default
+      setVehicleNumber("") // Reset
+      setIsDialogOpen(true)
     }
   }
 
   const handleAssignVehicle = async () => {
-    if (selectedItems.length === 0) return
+    if (!vehicleNumber.trim()) {
+      toast({
+        title: "Error",
+        description: "Vehicle number is required",
+        variant: "destructive"
+      })
+      return
+    }
+    
+    if (!selectedGroup) return
+    
     setIsProcessing(true)
     try {
       const successfulSubmissions: any[] = []
       const failedSubmissions: any[] = []
 
-      // Submit each item to backend API
-      for (const item of selectedItems) {
-        const recordId = item.id; // Use the lift_receiving_confirmation table ID
+      // Submit only selected products
+      const productsToSubmit = selectedGroup._allProducts.filter((p: any) => 
+        selectedProducts.includes(p._rowKey)
+      )
+      
+      if (productsToSubmit.length === 0) {
+        toast({
+          title: "Error",
+          description: "Please select at least one product to process",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      for (const product of productsToSubmit) {
+        const recordId = product.id;
         
         try {
           if (recordId) {
             const submitData = {
+              vehicle_number: vehicleNumber,
               check_status: vehicleData.checkStatus,
               remarks: vehicleData.remarks,
               fitness: vehicleData.fitness || "pending",
@@ -185,17 +273,17 @@ export default function VehicleDetailsPage() {
             console.log('[VEHICLE] API Response:', response);
             
             if (response.success) {
-              successfulSubmissions.push({ item, response });
+              successfulSubmissions.push({ product, response });
             } else {
-              failedSubmissions.push({ item, error: response.message || 'Unknown error' });
+              failedSubmissions.push({ product, error: response.message || 'Unknown error' });
             }
           } else {
-            console.warn('[VEHICLE] Skipping - no record ID found for:', item);
-            failedSubmissions.push({ item, error: 'No record ID found' });
+            console.warn('[VEHICLE] Skipping - no record ID found for:', product);
+            failedSubmissions.push({ product, error: 'No record ID found' });
           }
         } catch (error: any) {
           console.error('[VEHICLE] Failed to submit vehicle details:', error);
-          failedSubmissions.push({ item, error: error?.message || error?.toString() || 'Unknown error' });
+          failedSubmissions.push({ product, error: error?.message || error?.toString() || 'Unknown error' });
         }
       }
 
@@ -208,6 +296,7 @@ export default function VehicleDetailsPage() {
 
         // Clear selections and form
         setSelectedItems([]);
+        setVehicleNumber("");
         setVehicleData({
           checkStatus: "",
           remarks: "",
@@ -218,6 +307,9 @@ export default function VehicleDetailsPage() {
           permit1: "",
           permit2_out_state: "",
         });
+
+        // Close dialog
+        setIsDialogOpen(false);
 
         // Refresh data from backend
         await fetchPendingVehicleDetails();
@@ -263,86 +355,14 @@ export default function VehicleDetailsPage() {
     >
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
-          <Dialog>
-            <DialogTrigger asChild>
-                <Button disabled={selectedItems.length === 0} className="bg-purple-600 hover:bg-purple-700">
-                    <Truck className="mr-2 h-4 w-4" />
-                    Assign Vehicle ({selectedItems.length})
-                </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-                <DialogHeader>
-                    <DialogTitle className="text-xl font-bold text-slate-900 leading-none">Vehicle Details Assignment ({selectedItems.length} items)</DialogTitle>
-                </DialogHeader>
-
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm mt-4">
-                    <Label className="text-[10px] font-bold uppercase tracking-wider text-blue-600/70 block px-1 mb-3">Selected Items ({selectedItems.length})</Label>
-                    <div className="max-h-[180px] overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-3 pr-2 scrollbar-hide">
-                        {selectedItems.map((item, idx) => (
-                            <div key={idx} className="bg-white p-3 border border-slate-200 rounded-xl shadow-sm flex flex-col gap-1.5 relative overflow-hidden group hover:border-blue-200 transition-all">
-                                <div className="absolute top-0 right-0 py-0.5 px-2 bg-slate-50 border-l border-b border-slate-100 rounded-bl-lg">
-                                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{item.doNumber || "—"}</span>
-                                </div>
-                                <div className="flex flex-col">
-                                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">DO-No: {item.orderNo}</span>
-                                   <h4 className="text-xs font-bold text-slate-800 leading-tight truncate pr-16">{item.customerName || "—"}</h4>
-                                </div>
-                                <div className="mt-2 pt-2 border-t border-slate-50 space-y-2">
-                                   <div className="flex items-center gap-1.5">
-                                      <div className="w-1 h-1 rounded-full bg-blue-500" />
-                                      <span className="text-xs font-bold text-blue-600 truncate">
-                                        {item.productName || "—"}
-                                      </span>
-                                   </div>
-                                   <div className="grid grid-cols-2 gap-2">
-                                       <div className="flex flex-col">
-                                          <span className="text-[9px] text-slate-400 font-medium">Qty</span>
-                                          <span className="text-[10px] font-bold text-slate-700">{item.qtyToDispatch || "—"}</span>
-                                       </div>
-                                       <div className="flex flex-col">
-                                          <span className="text-[9px] text-slate-400 font-medium">Transport</span>
-                                          <span className="text-[10px] font-bold text-slate-700 truncate">{item.transportType || "—"}</span>
-                                       </div>
-                                   </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-                <div className="space-y-4 py-4">
-                    <div className="">
-                    <h4 className="text-sm font-medium mb-4 text-muted-foreground">Vehicle Documents</h4>
-                    <div className="grid grid-cols-2 gap-4 text-xs">
-                        <div className="space-y-1"><Label>Fitness Copy</Label><Input type="file" className="h-8 text-[10px]" /></div>
-                        <div className="space-y-1"><Label>Insurance</Label><Input type="file" className="h-8 text-[10px]" /></div>
-                        <div className="space-y-1"><Label>Tax Copy</Label><Input type="file" className="h-8 text-[10px]" /></div>
-                        <div className="space-y-1"><Label>Pollution Check</Label><Input type="file" className="h-8 text-[10px]" /></div>
-                    </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 border-t pt-4">
-                        <div className="space-y-2">
-                            <Label>Check Status</Label>
-                            <Select value={vehicleData.checkStatus} onValueChange={(v) => setVehicleData({...vehicleData, checkStatus: v})}>
-                                <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Accept">Accept</SelectItem>
-                                    <SelectItem value="Reject">Reject</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Remarks</Label>
-                            <Input value={vehicleData.remarks} onChange={(e) => setVehicleData({...vehicleData, remarks: e.target.value})} placeholder="Remarks" />
-                        </div>
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button onClick={handleAssignVehicle} disabled={!vehicleData.checkStatus || isProcessing}>
-                        {isProcessing ? "Processing..." : "Confirm & Assign"}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button 
+            onClick={handleOpenDialog}
+            disabled={selectedItems.length === 0} 
+            className="bg-purple-600 hover:bg-purple-700"
+          >
+            <Truck className="mr-2 h-4 w-4" />
+            Assign Vehicle ({selectedItems.length})
+          </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -377,38 +397,32 @@ export default function VehicleDetailsPage() {
                 <TableHead className="w-12 text-center">
                     <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
-                {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                  <TableHead key={col.id} className="whitespace-nowrap text-center">
-                    {col.label}
-                  </TableHead>
-                ))}
+                <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Products</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {displayRows.length > 0 ? (
-                displayRows.map((item, index) => {
-                    const rowKey = `${item.id}`;
-                    
-                    return (
-                   <TableRow key={rowKey} className={selectedItems.some(i => i.id === item.id) ? "bg-purple-50/50" : ""}>
+                displayRows.map((group) => (
+                   <TableRow key={group._rowKey} className={selectedItems.includes(group._rowKey) ? "bg-purple-50/50" : ""}>
                       <TableCell className="text-center">
-                        <Checkbox checked={selectedItems.some(i => i.id === item.id)} onCheckedChange={() => toggleSelectItem(item)} />
+                        <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                       </TableCell>
-                      {ALL_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                        <TableCell key={col.id} className="whitespace-nowrap text-center text-xs">
-                          {col.id === "status" ? (
-                             <div className="flex justify-center">
-                                <Badge className="bg-purple-100 text-purple-700">Awaiting Vehicle</Badge>
-                             </div>
-                          ) : (item as any)[col.id] || "—"}
-                        </TableCell>
-                      ))}
+                      <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
+                      <TableCell className="text-center text-xs">{group.customerName}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary">{group._productCount} items</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge className="bg-purple-100 text-purple-700">Awaiting Vehicle</Badge>
+                      </TableCell>
                    </TableRow>
-                   )
-                })
+                ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                     No orders pending for vehicle assignment
                   </TableCell>
                 </TableRow>
@@ -417,6 +431,183 @@ export default function VehicleDetailsPage() {
           </Table>
         </Card>
       </div>
+
+      {/* Split-View Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="!max-w-7xl max-h-[95vh] overflow-y-auto w-full">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-slate-900">
+              Vehicle Details Assignment - {selectedGroup?.doNumber}
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedGroup && (
+            <div className="space-y-6">
+              {/* Order Details Header */}
+              <div className="border rounded-lg p-4 bg-muted/30">
+                <h3 className="text-sm font-semibold mb-3 text-primary">Order Details</h3>
+                <div className="grid grid-cols-4 gap-4 text-xs">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Delivery Purpose</Label>
+                    <p className="font-medium">{selectedGroup.deliveryPurpose}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Order Type</Label>
+                    <p className="font-medium">{selectedGroup.orderType}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Start Date</Label>
+                    <p className="font-medium">{selectedGroup.startDate}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">End Date</Label>
+                    <p className="font-medium">{selectedGroup.endDate}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Delivery Date</Label>
+                    <p className="font-medium">{selectedGroup.deliveryDate}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Transport Type</Label>
+                    <p className="font-medium">{selectedGroup.transportType}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Contact Person</Label>
+                    <p className="font-medium">{selectedGroup.contactPerson}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Contact No.</Label>
+                    <p className="font-medium">{selectedGroup.contactWhatsapp}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs text-muted-foreground">Customer Address</Label>
+                    <p className="font-medium">{selectedGroup.customerAddress}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Payment Terms</Label>
+                    <p className="font-medium">{selectedGroup.paymentTerms}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Oil Type</Label>
+                    <p className="font-medium">{selectedGroup.oilType}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Product Table */}
+              <div className="border rounded-lg">
+                <div className="bg-muted/50 px-4 py-2 border-b">
+                  <h3 className="text-sm font-semibold text-primary">Products ({selectedProducts.length}/{selectedGroup._productCount} selected)</h3>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox 
+                          checked={selectedProducts.length === selectedGroup._allProducts.length}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedProducts(selectedGroup._allProducts.map((p: any) => p._rowKey))
+                            } else {
+                              setSelectedProducts([])
+                            }
+                          }}
+                        />
+                      </TableHead>
+                      <TableHead>Order No.</TableHead>
+                      <TableHead>Product Name</TableHead>
+                      <TableHead>Planned Qty</TableHead>
+                      <TableHead>Delivery From</TableHead>
+                      <TableHead>DSR Number</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedGroup._allProducts.map((product: any) => (
+                      <TableRow 
+                        key={product._rowKey}
+                        className={selectedProducts.includes(product._rowKey) ? "bg-purple-50/30" : ""}
+                      >
+                        <TableCell>
+                          <Checkbox 
+                            checked={selectedProducts.includes(product._rowKey)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedProducts(prev => [...prev, product._rowKey])
+                              } else {
+                                setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
+                              }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium text-xs">{product.specificOrderNo}</TableCell>
+                        <TableCell className="font-medium">{product.productName}</TableCell>
+                        <TableCell>{product.qtyToDispatch}</TableCell>
+                        <TableCell>{product.deliveryFrom}</TableCell>
+                        <TableCell>{product.dsrNumber}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Vehicle Assignment Form */}
+              <div className="border rounded-lg p-4 space-y-4">
+                <h3 className="text-sm font-semibold text-primary">Vehicle Information</h3>
+                
+                {/* Vehicle Number - NEW REQUIRED FIELD */}
+                <div>
+                  <Label className="text-sm font-medium">Vehicle Number <span className="text-red-500">*</span></Label>
+                  <Input
+                    value={vehicleNumber}
+                    onChange={(e) => setVehicleNumber(e.target.value)}
+                    placeholder="Enter vehicle number (e.g., MH-12-AB-1234)"
+                    className="mt-1"
+                  />
+                </div>
+
+                {/* Vehicle Documents */}
+                <div>
+                  <h4 className="text-sm font-medium mb-3 text-muted-foreground">Vehicle Documents</h4>
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div className="space-y-1"><Label>Fitness Copy</Label><Input type="file" className="h-8 text-[10px]" /></div>
+                    <div className="space-y-1"><Label>Insurance</Label><Input type="file" className="h-8 text-[10px]" /></div>
+                    <div className="space-y-1"><Label>Tax Copy</Label><Input type="file" className="h-8 text-[10px]" /></div>
+                    <div className="space-y-1"><Label>Pollution Check</Label><Input type="file" className="h-8 text-[10px]" /></div>
+                  </div>
+                </div>
+
+                {/* Check Status and Remarks */}
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label>Check Status</Label>
+                    <Select value={vehicleData.checkStatus} onValueChange={(v) => setVehicleData({...vehicleData, checkStatus: v})}>
+                      <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Accept">Accept</SelectItem>
+                        <SelectItem value="Reject">Reject</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Remarks</Label>
+                    <Input value={vehicleData.remarks} onChange={(e) => setVehicleData({...vehicleData, remarks: e.target.value})} placeholder="Remarks" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button 
+              onClick={handleAssignVehicle} 
+              disabled={!vehicleNumber.trim() || !vehicleData.checkStatus || isProcessing}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {isProcessing ? "Processing..." : "Confirm & Assign"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </WorkflowStageShell>
   )
 }

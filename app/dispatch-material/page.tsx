@@ -121,11 +121,18 @@ export default function DispatchMaterialPage() {
     fetchDispatchHistory();
   }, [])
 
+  // State for popup selection
+  const [selectedGroup, setSelectedGroup] = useState<any>(null)
+  const [dialogSelectedProducts, setDialogSelectedProducts] = useState<string[]>([])
+
   const toggleSelectAll = () => {
+    // In grouped view, selecting all might not be the primary action, 
+    // but if needed, we can select all *GROUPS* or just rely on individual group action.
+    // For now, let's keep it simple: Select all visible groups
     if (selectedOrders.length === displayRows.length) {
       setSelectedOrders([])
     } else {
-      setSelectedOrders(displayRows.map((row) => `${row.doNumber || row.orderNo}-${row._product?.id || row._product?.productName || row._product?.oilType || 'no-id'}`))
+      setSelectedOrders(displayRows.map((row) => row._rowKey))
     }
   }
 
@@ -138,16 +145,38 @@ export default function DispatchMaterialPage() {
     }
   }
 
+  const handleOpenDialog = () => {
+      // Pick the first selected order to display details
+      // In a real bulk scenario with DIFFERENT orders, we might need a wizard.
+      // But typically dispatch planning is done per DO.
+      // We will take the first selected group.
+      const firstKey = selectedOrders[0];
+      const group = displayRows.find(r => r._rowKey === firstKey);
+      
+      if (group) {
+          setSelectedGroup(group)
+          // Default: Select ALL products in the group for dispatch
+          setDialogSelectedProducts(group._allProducts.map((p: any) => p._rowKey))
+          setIsDialogOpen(true)
+      }
+  }
+
+  const toggleSelectDialogProduct = (key: string) => {
+     if (dialogSelectedProducts.includes(key)) {
+         setDialogSelectedProducts(prev => prev.filter(k => k !== key))
+     } else {
+         setDialogSelectedProducts(prev => [...prev, key])
+     }
+  }
+
 
 
   const handleBulkDispatch = async () => {
     setIsProcessing(true)
     try {
-      const itemsToDispatch = displayRows.filter((row) =>
-        selectedOrders.includes(`${row.doNumber || row.orderNo}-${row._product?.id || row._product?.productName || row._product?.oilType || 'no-id'}`)
-      )
-
-      if (itemsToDispatch.length === 0) {
+      // Logic: Iterate through dialogSelectedProducts which contains keys of selected PRODUCTS
+      // Find the product in selectedGroup._allProducts
+      if (!selectedGroup || dialogSelectedProducts.length === 0) {
         toast({
           title: "No Items Selected",
           description: "Please select items to dispatch",
@@ -158,22 +187,26 @@ export default function DispatchMaterialPage() {
 
       const successfulDispatches: any[] = []
       const failedDispatches: any[] = []
+      
+      const itemsToProcess = selectedGroup._allProducts.filter((p: any) => dialogSelectedProducts.includes(p._rowKey))
 
       // Submit each item to backend API
-      for (const item of itemsToDispatch) {
+      for (const item of itemsToProcess) {
         const orderId = item.id // Use the order_dispatch table ID from backend
-        const rowKey = `${item.doNumber || item.orderNo}-${item._product?.id || item._product?.productName || item._product?.oilType || 'no-id'}`;
+        const rowKey = item._rowKey;
         
-        // Extract values reliably
-        const deliveryVal = dispatchDetails[rowKey]?.deliveryFrom || "";
-        // Optional: You might want to send the Qty as well if the API supports partial dispatch
+        // Extract values from input state or default to item values
+        // Default delivery from "in-stock" if not set
+        const deliveryVal = dispatchDetails[rowKey]?.deliveryFrom || "in-stock";
+        // Default qty to orderQty if not set
+        const dispatchQty = dispatchDetails[rowKey]?.qty || item.orderQty;
         
         try {
           if (orderId) {
             // Call backend API to submit dispatch planning
             const dispatchData = {
               dispatch_from: deliveryVal,
-              dispatch_qty: dispatchDetails[rowKey]?.qty,
+              dispatch_qty: dispatchQty,
             };
 
             console.log('[DISPATCH] Submitting dispatch planning for order ID:', orderId, dispatchData);
@@ -205,6 +238,7 @@ export default function DispatchMaterialPage() {
         // Clear selections
         setSelectedOrders([]);
         setDispatchDetails({});
+        setDialogSelectedProducts([]);
         setIsDialogOpen(false); // Close dialog
 
         // Refresh data from backend
@@ -295,25 +329,84 @@ export default function DispatchMaterialPage() {
       return matches
   })
 
-  // Flatten orders for table display
+  // Group orders by DO Number for table display
   const displayRows = useMemo(() => {
-    // Backend returns flat data with snake_case fields
-    // Map to the format expected by the table
-    return filteredPendingOrders.map((order: any) => ({
-      ...order,
-      id: order.id, // Keep the database ID for API calls
-      doNumber: order.order_no,
-      orderNo: order.order_no,
-      customerName: order.customer_name,
-      productName: order.product_name,
-      deliveryDate: order.delivery_date,
-      transportType: order.type_of_transporting,
-      _product: {
+    const grouped: { [key: string]: any } = {}
+    
+    filteredPendingOrders.forEach((order: any) => {
+      // Backend order_no is the DO number
+      const orderId = order.order_no || order.orderNo || "DO-XXX"
+      
+      // Extract base DO number (remove suffix like A, B, C)
+      // Matches DO-022 from DO-022A, DO-022B, etc.
+      const baseDoMatch = orderId.match(/^(DO-\d+)/i)
+      const baseDo = baseDoMatch ? baseDoMatch[1] : orderId
+      
+      if (!grouped[baseDo]) {
+         const internalOrder = order.data?.orderData || order;
+         const preApproval = order.data?.preApprovalData || internalOrder.preApprovalData || {};
+
+        grouped[baseDo] = {
+           ...order,
+           _id: order.id, // Keep one ID for key
+           _rowKey: baseDo,
+           doNumber: baseDo,
+           orderNo: baseDo,
+           customerName: order.customer_name || internalOrder.customerName,
+           transportType: order.type_of_transporting || internalOrder.transportType,
+           deliveryDate: order.delivery_date || internalOrder.deliveryDate,
+           
+           // Aggregated Data
+           _allProducts: [],
+           _productCount: 0,
+           
+           // Order Details for Header - Robust Mapping
+           deliveryPurpose: internalOrder.order_type_delivery_purpose || internalOrder.orderPurpose || "—",
+           startDate: internalOrder.start_date || internalOrder.startDate || "—",
+           endDate: internalOrder.end_date || internalOrder.endDate || "—",
+           orderType: internalOrder.order_type || internalOrder.orderType || "—",
+           customerType: internalOrder.customer_type || internalOrder.customerType || "—",
+           partySoDate: internalOrder.party_so_date || internalOrder.soDate || "—",
+           totalWithGst: internalOrder.total_amount_with_gst || internalOrder.totalWithGst || "—",
+           contactPerson: internalOrder.customer_contact_person_name || internalOrder.contactPerson || "—",
+           whatsapp: internalOrder.customer_contact_person_whatsapp_no || internalOrder.whatsappNo || "—",
+           address: internalOrder.customer_address || internalOrder.customerAddress || "—",
+           paymentTerms: internalOrder.payment_terms || internalOrder.paymentTerms || "—",
+           advanceTaken: internalOrder.advance_payment_to_be_taken || internalOrder.advancePaymentTaken || false,
+           advanceAmount: internalOrder.advance_amount || internalOrder.advanceAmount || "—",
+           isBroker: internalOrder.is_order_through_broker || internalOrder.isBrokerOrder || false,
+           brokerName: internalOrder.broker_name || internalOrder.brokerName || "—",
+           
+           // Extended fields requested
+           custContactName: internalOrder.customer_contact_person_name || internalOrder.contactPerson || "—",
+           weDealInSku: internalOrder.we_are_dealing_in_ordered_sku || false,
+           creditStatus: internalOrder.party_credit_status || internalOrder.creditStatus || "—",
+           dispatchConfirmed: internalOrder.dispatch_date_confirmed || false,
+           overallStatus: internalOrder.overall_status_of_order || internalOrder.overallStatus || "—",
+           custConfirmation: internalOrder.order_confirmation_with_customer || false,
+        }
+      }
+
+      // Add product to the group
+      grouped[baseDo]._allProducts.push({
+        ...order,
+        _rowKey: `${baseDo}-${order.id}`, // Unique key for product row
         id: order.id,
-        productName: order.product_name,
-        orderQty: order.order_quantity,
-      },
-    }))
+        orderNo: order.order_no,
+        productName: order.product_name || order._product?.productName || order._product?.oilType,
+        oilType: order.oil_type || order._product?.oilType,
+        orderQty: order.order_quantity || order._product?.orderQty,
+        rate: order.rate || order._product?.rate,
+        ratePerLtr: order.rate_per_ltr || order._product?.ratePerLtr,
+        approvalQty: order.approval_qty || order.order_quantity,
+        remainingDispatchQty: order.remaining_dispatch_qty !== null ? order.remaining_dispatch_qty : (order.approval_qty || order.order_quantity),
+        // Include any other product specific fields
+      })
+      
+      grouped[baseDo]._productCount = grouped[baseDo]._allProducts.length
+    })
+
+    return Object.values(grouped)
   }, [filteredPendingOrders])
 
   return (
@@ -358,10 +451,10 @@ export default function DispatchMaterialPage() {
         </DropdownMenu>
 
         <Button
-          onClick={() => setIsDialogOpen(true)}
+          onClick={handleOpenDialog}
           disabled={selectedOrders.length === 0}
         >
-          {`Dispatch Selected (${selectedOrders.length})`}
+          {selectedOrders.length > 1 ? `Select 1 Group to Dispatch` : `Dispatch Selected (${selectedOrders.length})`}
         </Button>
       </div>
 
@@ -385,86 +478,56 @@ export default function DispatchMaterialPage() {
           </TableHeader>
           <TableBody>
             {displayRows.length > 0 ? (
-                displayRows.map((item, index) => {
-                   const order = item;
-                   const p = order._product;
-                   const rowKey = `${order.doNumber || order.orderNo}-${p?.id || p?.productName || p?.oilType || 'no-id'}`;
-
-                   // Map Data
-                   const internalOrder = order.data?.orderData || order;
-                   const preApproval = order.data?.preApprovalData || internalOrder.preApprovalData || {};
-                   const productRates = preApproval.productRates || {};
+                displayRows.map((row) => {
+                   const rowKey = row._rowKey;
                    
-                   const prodName = p?.productName || p?.oilType || "—";
-                   const rateLtr = p?.ratePerLtr || p?.rateLtr || internalOrder.ratePerLtr || "—";
-                   const rate15Kg = p?.ratePer15Kg || p?.rateLtr || internalOrder.rateLtr || "—";
-                   const oilType = p?.oilType || internalOrder.oilType || "—";
-                   
-                   // SKU/Rates from productRates map - filter by current product if possible
-                   // In this page, we'll show what's available for this product row
-                   const skuName = productRates[p?.id]?.skuName || "—";
-                   const approvalQty = productRates[p?.id]?.approvalQty || "—";
-                   const reqRate = productRates[p?.id]?.rate || "—";
-                   
-                     const row = {
-                      orderNo: internalOrder.doNumber || internalOrder.orderNo,
-                      customerName: internalOrder.customerName,
-                      productName: prodName, 
-                      transportType: internalOrder.transportType || "—",
-                      rate: p?.rate || "—",
-                      status: "Pending Dispatch", 
+                   return (
+                   <TableRow key={row._rowKey} className={selectedOrders.includes(rowKey) ? "bg-blue-50/50" : ""}>
+                     <TableCell className="text-center">
+                       <Checkbox
+                         checked={selectedOrders.includes(rowKey)}
+                         onCheckedChange={() => toggleSelectOrder(rowKey)}
+                         aria-label={`Select item ${rowKey}`}
+                       />
+                     </TableCell>
                      
-                     soNo: internalOrder.soNumber || "—",
-                     deliveryPurpose: internalOrder.orderPurpose || "—",
-                     startDate: internalOrder.startDate || "—",
-                     endDate: internalOrder.endDate || "—",
-                     deliveryDate: internalOrder.deliveryDate || "—",
-                     orderType: internalOrder.orderType || "—",
-                     customerType: internalOrder.customerType || "—",
-                     partySoDate: internalOrder.soDate || "—",
-                     oilType: oilType,
-                     ratePer15Kg: rate15Kg,
-                     ratePerLtr: rateLtr,
-                     totalWithGst: internalOrder.totalWithGst || "—",
-                     contactPerson: internalOrder.contactPerson || "—",
-                     whatsapp: internalOrder.whatsappNo || "—",
-                     address: internalOrder.customerAddress || "—",
-                     paymentTerms: internalOrder.paymentTerms || "—",
-                     advanceTaken: internalOrder.advancePaymentTaken || "—",
-                     advanceAmount: internalOrder.advanceAmount || "—",
-                     isBroker: internalOrder.isBrokerOrder || "—",
-                     brokerName: internalOrder.brokerName || "—",
-                      uploadSo: "do_document.pdf",
-                     skuName: skuName,
-                     approvalQty: approvalQty,
-                     skuRates: reqRate,
-                     remark: order.remarks || internalOrder.preApprovalRemark || preApproval.overallRemark || "—",
-                  }
-                  
-                  return (
-                  <TableRow key={rowKey} className={selectedOrders.includes(rowKey) ? "bg-blue-50/50" : ""}>
-                    <TableCell className="text-center">
-                      <Checkbox
-                        checked={selectedOrders.includes(rowKey)}
-                        onCheckedChange={() => toggleSelectOrder(rowKey)}
-                        aria-label={`Select item ${rowKey}`}
-                      />
-                    </TableCell>
-                    
-                    {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                      <TableCell key={col.id} className="whitespace-nowrap text-center">
-                        {col.id === "status" ? (
-                           <div className="flex justify-center">
-                             <Badge className="bg-orange-100 text-orange-700">Pending Dispatch</Badge>
-                           </div>
-                        ) : (
-                           row[col.id as keyof typeof row]
-                        )}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                )})
-              ) : (
+                     {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                       <TableCell key={col.id} className="whitespace-nowrap text-center">
+                         {col.id === "status" ? (
+                            <div className="flex justify-center flex-col items-center gap-1">
+                              <Badge className="bg-orange-100 text-orange-700">Pending</Badge>
+                              {row._productCount > 1 && (
+                                  <span className="text-[10px] text-slate-500 font-medium">({row._productCount} Items)</span>
+                              )}
+                            </div>
+                         ) : col.id === "productName" ? (
+                             <div className="flex flex-col items-center">
+                                 <span className="font-medium text-slate-700">{row.productName}</span>
+                                 {row._productCount > 1 && (
+                                     <span className="text-[10px] text-slate-500">+ {row._productCount - 1} more types</span>
+                                 )}
+                             </div>
+                         ) : (
+                            row[col.id as keyof typeof row]
+                         )}
+                       </TableCell>
+                     ))}
+                     
+                     {/* Action to open dialog for this specific row */}
+                     <TableCell>
+                         <Button variant="ghost" size="sm" onClick={() => {
+                             setSelectedOrders([rowKey]) // Select only this one
+                             setSelectedGroup(row)
+                             setDialogSelectedProducts(row._allProducts.map((p: any) => p._rowKey))
+                             setIsDialogOpen(true)
+                         }}>
+                             <Settings2 className="w-4 h-4 ml-2 text-slate-400 hover:text-blue-600" />
+                         </Button>
+                     </TableCell>
+                   </TableRow>
+                   )
+                 })
+               ) : (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                   No orders pending for dispatch
@@ -476,94 +539,221 @@ export default function DispatchMaterialPage() {
       </Card>
       
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-[95vw] max-h-[90vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Dispatch Selected Orders</DialogTitle>
-            <DialogDescription>
-              Enter dispatch details for the selected orders.
+        <DialogContent className="sm:max-w-6xl !max-w-6xl max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <DialogHeader className="border-b pb-4">
+            <DialogTitle className="text-xl font-bold text-slate-900 leading-none">
+              Dispatch Planning: {selectedGroup?.doNumber || "Order Dispatch"}
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 mt-1.5">
+              Review order details and set dispatch quantities for products.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="flex-1 overflow-y-auto py-4">
-            <div className="space-y-4">
-              {displayRows.filter(
-                (row) => selectedOrders.includes(
-                  `${row.doNumber || row.orderNo}-${row._product?.id || row._product?.productName || row._product?.oilType || 'no-id'}`
-                )
-              ).map((item) => {
-                const rowKey = `${item.doNumber || item.orderNo}-${item._product?.id || item._product?.productName || item._product?.oilType || 'no-id'}`;
-                return (
-                  <div key={rowKey} className="border rounded-lg p-4 space-y-4 bg-muted/5">
-                    <div className="flex flex-col sm:flex-row justify-between gap-4 border-b pb-4">
-                      <div className="space-y-1">
-                        <div className="font-semibold text-lg">{item.customerName}</div>
-                        <div className="text-sm text-muted-foreground flex gap-4">
-                            <span>DO: <span className="font-medium text-foreground">{item.doNumber || item.orderNo}</span></span>
-                            <span>Product: <span className="font-medium text-foreground">{item._product?.productName || item._product?.oilType}</span></span>
+          {selectedGroup && (
+            <div className="space-y-6">
+                {/* Order Details Header */}
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mt-4">
+                    <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Order Details</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4">
+                        <div>
+                            <p className="text-xs text-slate-500 font-medium">Delivery Purpose</p>
+                            <p className="text-sm font-semibold text-slate-900">{selectedGroup.deliveryPurpose}</p>
                         </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 whitespace-nowrap">
-                          {item.transportType}
-                        </Badge>
-                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-                           Pending
-                        </Badge>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                         <Label>Qty to Dispatch</Label>
-                         <Input
-                            type="number"
-                            placeholder="Enter Qty"
-                            value={dispatchDetails[rowKey]?.qty || ""}
-                            onChange={(e) =>
-                              setDispatchDetails((prev) => ({
-                                ...prev,
-                                [rowKey]: {
-                                   ...prev[rowKey],
-                                   qty: e.target.value
-                                }
-                              }))
-                            }
-                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Delivery From</Label>
-                        <Select
-                            value={dispatchDetails[rowKey]?.deliveryFrom || item.deliveryData?.deliveryFrom || item.data?.orderData?.deliveryData?.deliveryFrom || ""}
-                            onValueChange={(val) =>
-                              setDispatchDetails((prev) => ({
-                                ...prev,
-                                [rowKey]: {
-                                  ...prev[rowKey],
-                                  deliveryFrom: val
-                                }
-                              }))
-                            }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select Source" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="in-stock">In Stock</SelectItem>
-                            <SelectItem value="production">Production</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                        <div>
+                            <p className="text-xs text-slate-500 font-medium">Order Type</p>
+                            <p className="text-sm font-semibold text-slate-900">{selectedGroup.orderType}</p>
+                        </div>
+                        <div>
+                             <p className="text-xs text-slate-500 font-medium">Dates</p>
+                             <p className="text-xs font-semibold text-slate-900">
+                                 Start: {selectedGroup.startDate}<br/>
+                                 End: {selectedGroup.endDate}
+                             </p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-slate-500 font-medium">Delivery Date</p>
+                            <p className="text-sm font-semibold text-slate-900">{selectedGroup.deliveryDate}</p>
+                        </div>
+                        
+                        <div>
+                            <p className="text-xs text-slate-500 font-medium">Transport</p>
+                            <p className="text-sm font-semibold text-slate-900">{selectedGroup.transportType}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-slate-500 font-medium">Customer</p>
+                            <p className="text-sm font-semibold text-slate-900 truncate" title={selectedGroup.customerName}>{selectedGroup.customerName}</p>
+                            <p className="text-xs text-slate-500">{selectedGroup.custContactName} ({selectedGroup.whatsapp})</p>
+                        </div>
+                        <div className="md:col-span-2">
+                             <p className="text-xs text-slate-500 font-medium">Address</p>
+                             <p className="text-xs font-semibold text-slate-900 truncate" title={selectedGroup.address}>{selectedGroup.address}</p>
+                        </div>
 
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleBulkDispatch} disabled={isProcessing}>
-               {isProcessing ? "Processing..." : "Confirm Dispatch"}
+                        <div>
+                            <p className="text-xs text-slate-500 font-medium">Payment Terms</p>
+                            <p className="text-sm font-semibold text-slate-900">{selectedGroup.paymentTerms}</p>
+                        </div>
+                         <div>
+                            <p className="text-xs text-slate-500 font-medium">Advance Payment</p>
+                            <p className="text-sm font-semibold text-slate-900">
+                                {selectedGroup.advanceTaken ? `Yes (${selectedGroup.advanceAmount})` : "No"}
+                            </p>
+                        </div>
+                        <div>
+                             <p className="text-xs text-slate-500 font-medium">Broker</p>
+                             <p className="text-sm font-semibold text-slate-900">
+                                 {selectedGroup.isBroker ? selectedGroup.brokerName : "No"}
+                               </p>
+                        </div>
+                         <div>
+                             <p className="text-xs text-slate-500 font-medium">Credit Status</p>
+                             <div className="flex items-center gap-2">
+                                 <span className={`text-xs font-bold px-2 py-0.5 rounded ${selectedGroup.creditStatus === 'Good' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                     {selectedGroup.creditStatus}
+                                 </span>
+                             </div>
+                        </div>
+
+                        <div className="col-span-2 md:col-span-4 grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t border-slate-200 mt-2">
+                           <div className="flex items-center gap-2">
+                               <div className={`w-2 h-2 rounded-full ${selectedGroup.weDealInSku ? 'bg-green-500' : 'bg-red-500'}`} />
+                               <span className="text-xs text-slate-600">We Deal in SKU?</span>
+                           </div>
+                            <div className="flex items-center gap-2">
+                               <div className={`w-2 h-2 rounded-full ${selectedGroup.dispatchConfirmed ? 'bg-green-500' : 'bg-red-500'}`} />
+                               <span className="text-xs text-slate-600">Dispatch Confirmed?</span>
+                           </div>
+                            <div className="flex items-center gap-2">
+                               <div className={`w-2 h-2 rounded-full ${selectedGroup.overallStatus === 'Approved' ? 'bg-green-500' : 'bg-red-500'}`} />
+                               <span className="text-xs text-slate-600">Overall Status: {selectedGroup.overallStatus}</span>
+                           </div>
+                           <div className="flex items-center gap-2">
+                               <div className={`w-2 h-2 rounded-full ${selectedGroup.custConfirmation ? 'bg-green-500' : 'bg-red-500'}`} />
+                               <span className="text-xs text-slate-600">Cust. Confirmed?</span>
+                           </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Product Table */}
+                <div className="border rounded-md mt-4 max-h-[400px] overflow-auto">
+                    <Table>
+                        <TableHeader className="bg-slate-50 sticky top-0 z-10">
+                            <TableRow>
+                                <TableHead className="w-[50px] text-center">
+                                    <Checkbox 
+                                        checked={dialogSelectedProducts.length > 0 && dialogSelectedProducts.length === selectedGroup._allProducts.length}
+                                        onCheckedChange={(checked) => {
+                                            if (checked) setDialogSelectedProducts(selectedGroup._allProducts.map((p: any) => p._rowKey))
+                                            else setDialogSelectedProducts([])
+                                        }}
+                                    />
+                                </TableHead>
+                                <TableHead>Order No</TableHead>
+                                <TableHead>Product Name</TableHead>
+                                <TableHead>Ordered Qty</TableHead>
+                                <TableHead>Approval Qty</TableHead>
+                                <TableHead className="w-[150px]">Qty to Dispatch</TableHead>
+                                <TableHead className="w-[180px]">Delivery From</TableHead>
+                                <TableHead>Remaining Qty</TableHead>
+                                <TableHead>Status</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {selectedGroup._allProducts.map((prod: any) => {
+                                const rowKey = prod._rowKey;
+                                // Default dispatch qty to remainingDispatchQty if available, else approvalQty
+                                const defaultDispatchQty = prod.remainingDispatchQty !== undefined ? prod.remainingDispatchQty : prod.approvalQty;
+                                const currentDispatchQty = dispatchDetails[rowKey]?.qty !== undefined ? dispatchDetails[rowKey].qty : defaultDispatchQty;
+                                
+                                // Validation limit is remainingDispatchQty
+                                const maxLimit = prod.remainingDispatchQty !== undefined ? prod.remainingDispatchQty : prod.approvalQty;
+                                
+                                // Remaining Qty Calc: (Limit) - (Current Input)
+                                const remainingQty = (maxLimit || 0) - (Number(currentDispatchQty) || 0);
+
+                                return (
+                                <TableRow key={rowKey} className={dialogSelectedProducts.includes(rowKey) ? "bg-blue-50/30" : ""}>
+                                    <TableCell className="text-center">
+                                        <Checkbox 
+                                            checked={dialogSelectedProducts.includes(rowKey)}
+                                            onCheckedChange={() => toggleSelectDialogProduct(rowKey)}
+                                        />
+                                    </TableCell>
+                                    <TableCell className="text-xs font-semibold text-slate-700">{prod.orderNo || "—"}</TableCell>
+                                    <TableCell className="font-medium text-xs">{prod.productName || "—"}</TableCell>
+                                    <TableCell className="text-xs font-bold">{prod.orderQty}</TableCell>
+                                    <TableCell className="text-xs font-bold text-blue-600">{prod.approvalQty || "—"}</TableCell>
+                                    <TableCell>
+                                        <Input
+                                            type="number"
+                                            className="h-8 text-xs"
+                                            placeholder="Qty"
+                                            value={currentDispatchQty}
+                                            max={maxLimit}
+                                            onChange={(e) => {
+                                                let val = Number(e.target.value);
+                                                const maxVal = Number(maxLimit);
+                                                
+                                                if (val > maxVal) {
+                                                    val = maxVal;
+                                                    toast({
+                                                        title: "Limit Exceeded",
+                                                        description: `Dispatch Ref cannot exceed Remaining Qty (${maxVal})`,
+                                                        variant: "destructive"
+                                                    })
+                                                }
+
+                                                setDispatchDetails((prev) => ({
+                                                ...prev,
+                                                [rowKey]: {
+                                                    ...prev[rowKey],
+                                                    qty: val.toString()
+                                                }
+                                                }))
+                                            }}
+                                        />
+                                    </TableCell>
+                                    <TableCell>
+                                        <Select
+                                            value={dispatchDetails[rowKey]?.deliveryFrom || "in-stock"} // Default to In Stock
+                                            onValueChange={(val) =>
+                                              setDispatchDetails((prev) => ({
+                                                ...prev,
+                                                [rowKey]: {
+                                                  ...prev[rowKey],
+                                                  deliveryFrom: val
+                                                }
+                                              }))
+                                            }
+                                        >
+                                          <SelectTrigger className="h-8 text-xs">
+                                            <SelectValue placeholder="Source" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="in-stock">In Stock</SelectItem>
+                                            <SelectItem value="production">Production</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                    </TableCell>
+                                    <TableCell className="text-xs font-bold text-slate-500">
+                                        {maxLimit}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className="text-[10px] bg-orange-50 text-orange-700 border-orange-200">Pending</Badge>
+                                    </TableCell>
+                                </TableRow>
+                            )})}
+                        </TableBody>
+                    </Table>
+                </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-4 border-t pt-4">
+             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+             <Button onClick={handleBulkDispatch} disabled={isProcessing || dialogSelectedProducts.length === 0}>
+                {isProcessing ? "Processing..." : `Dispatch ${dialogSelectedProducts.length} Item(s)`}
             </Button>
           </DialogFooter>
         </DialogContent>

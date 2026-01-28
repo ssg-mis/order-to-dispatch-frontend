@@ -92,10 +92,11 @@ export default function PreApprovalPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [preApprovalData, setPreApprovalData] = useState<any>(null)
-  const [productRates, setProductRates] = useState<{ [key: string]: { skuName: string; approvalQty: string; rate: string; remark: string } }>({})
-  const [overallRemark, setOverallRemark] = useState("")
+  const [productRates, setProductRates] = useState<{ [key: string]: { skuName: string; approvalQty: string; rate: string; remark: string; productName: string; rateOfMaterial: string } }>({})
   const [selectedRows, setSelectedRows] = useState<string[]>([])
   const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false)
+  const [selectedProductRows, setSelectedProductRows] = useState<string[]>([])
+  const [qtyValidationErrors, setQtyValidationErrors] = useState<{ [key: string]: string }>({})
 
   const [history, setHistory] = useState<any[]>([])
   
@@ -161,9 +162,10 @@ export default function PreApprovalPage() {
         uom: backendOrder.uom,
         orderQty: backendOrder.order_quantity,
         altUom: backendOrder.alternate_uom,
-        altQty: backendOrder.alternate_qty_kg,
+        altQty: backendOrder.order_quantity,
         ratePerLtr: backendOrder.rate_per_ltr,
         rateLtr: backendOrder.rate_per_15kg,
+        rateOfMaterial: backendOrder.rate_of_material, // Map rate_of_material
         skuName: backendOrder.sku_name,
         approvalQty: backendOrder.approval_qty,
       }]
@@ -245,9 +247,12 @@ export default function PreApprovalPage() {
           // Prepare submission data
           const submissionData = {
             sku_name: rateData?.skuName,
+            product_name: rateData?.productName || rateData?.skuName,  // Include product_name
             approval_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
+            remaining_dispatch_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
             rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : null,
-            remark: overallRemark || null,
+            rate_of_material: rateData?.rateOfMaterial ? parseFloat(rateData.rateOfMaterial) : null, // Submit to existing rate_of_material column
+            remark: rateData?.remark || null, // Use individual remark
           }
           
           // Call backend API to submit pre-approval
@@ -263,7 +268,7 @@ export default function PreApprovalPage() {
             status: "Completed" as const,
             processedBy: "Current User",
             timestamp: new Date().toISOString(),
-            remarks: overallRemark || "-",
+            remarks: rateData?.remark || "-", // Use individual remark
             orderType: item.orderType || "pre-approval"
           }
           saveWorkflowHistory(historyEntry)
@@ -297,7 +302,6 @@ export default function PreApprovalPage() {
       setSelectedRows([])
       setIsBulkDialogOpen(false)
       setProductRates({})
-      setOverallRemark("")
       
       // Navigate if all pending items are processed
       if (successfulApprovals.length > 0 && pendingOrders.length === successfulApprovals.length) {
@@ -367,34 +371,42 @@ export default function PreApprovalPage() {
       return matches
   })
 
-  // Flatten orders for table display with suffixes
+  // Group orders by base DO number (DO-022A, DO-022B → DO-022)
   const displayRows = useMemo(() => {
-    const rows: any[] = []
+    const grouped: { [key: string]: any } = {}
+    
     filteredPendingOrders.forEach((order) => {
       const orderId = order.doNumber || order.orderNo || "DO-XXX"
+      // Extract base DO number (remove suffix like A, B, C)
+      const baseDoMatch = orderId.match(/^(DO-\d+)/i)
+      const baseDo = baseDoMatch ? baseDoMatch[1] : orderId
+      
       const products = (order.preApprovalProducts && order.preApprovalProducts.length > 0)
         ? order.preApprovalProducts
-        : (order.products || []);
+        : (order.products || [])
 
-      if (products.length === 0) {
-        rows.push({ 
-          ...order, 
-          _product: null, 
-          _displayDo: order.doNumber || order.orderNo || order.soNumber || "DO-XXX",
-          _rowKey: `${orderId}-null`
-        })
-      } else {
-        products.forEach((prod: any) => {
-          rows.push({ 
-            ...order, 
-            _product: prod, 
-            _displayDo: orderId,
-            _rowKey: `${orderId}-${prod._pid}`
-          })
-        });
+      if (!grouped[baseDo]) {
+        grouped[baseDo] = {
+          ...order,
+          _displayDo: baseDo,
+          _rowKey: baseDo,
+          _allProducts: [],
+          _productCount: 0
+        }
       }
+      
+      // Aggregate products
+      products.forEach((prod: any) => {
+        grouped[baseDo]._allProducts.push({
+          ...prod,
+          _originalOrderId: orderId,
+          _rowKey: `${baseDo}-${prod._pid || prod.id}`
+        })
+      })
+      grouped[baseDo]._productCount = grouped[baseDo]._allProducts.length
     })
-    return rows
+    
+    return Object.values(grouped)
   }, [filteredPendingOrders])
 
   const toggleSelectAll = () => {
@@ -411,7 +423,21 @@ export default function PreApprovalPage() {
     )
   }
 
+  const toggleSelectProductRow = (key: string) => {
+    setSelectedProductRows(prev => 
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    )
+  }
+
   const selectedItems = displayRows.filter(r => selectedRows.includes(r._rowKey))
+  
+  // Get all products from selected orders
+  const allProductsFromSelectedOrders = selectedItems.flatMap(order => 
+    (order._allProducts || []).map((prod: any) => ({
+      ...prod,
+      _orderData: order
+    }))
+  )
 
   return (
     <WorkflowStageShell
@@ -433,34 +459,122 @@ export default function PreApprovalPage() {
               </DialogTrigger>
               <DialogContent className="sm:max-w-6xl !max-w-6xl max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 <DialogHeader className="border-b pb-4">
-                  <DialogTitle className="text-xl font-bold text-slate-900 leading-none">Complete Pre-Approval ({selectedRows.length} Items)</DialogTitle>
-                  <DialogDescription className="text-slate-500 mt-1.5">Enter rates and SKU details for all selected products below.</DialogDescription>
+                  <DialogTitle className="text-xl font-bold text-slate-900 leading-none">Complete Pre-Approval ({allProductsFromSelectedOrders.length} Products)</DialogTitle>
+                  <DialogDescription className="text-slate-500 mt-1.5">Select and edit products to approve. Only checked products will be processed.</DialogDescription>
                 </DialogHeader>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 py-3">
-                  {selectedItems.map((item, idx) => {
-                    const product = item._product;
-                    const pId = product.id ? String(product.id) : `idx-${idx}`;
-                    return (
-                      <div key={item._rowKey} className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm hover:border-blue-200 transition-all flex flex-col gap-2">
-                        {/* Header: Item Identity */}
-                        <div className="border-b border-slate-50 pb-1.5">
-                          <div className="flex justify-between items-start mb-0.5">
-                             <Badge variant="secondary" className="text-[9px] font-black px-1 py-0 rounded bg-blue-50 text-blue-700 border-blue-100">{item._displayDo}</Badge>
-                             <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">{item.orderType}</span>
-                          </div>
-                          <h4 className="text-[10px] font-bold text-slate-800 truncate leading-tight" title={item.customerName}>{item.customerName}</h4>
-                          <p className="text-[9px] text-slate-500 truncate font-semibold leading-tight">{product.oilType || product.productName || "No Product"}</p>
-                        </div>
-
-                        {/* Input Grid */}
-                        <div className="space-y-2">
-                          {/* SKU Selection */}
-                          <div className="space-y-1">
-                             <Label className="text-[8px] uppercase font-bold text-slate-400 ml-0.5">Select SKU</Label>
-                             <Popover open={openPopoverId === item._rowKey} onOpenChange={(open) => setOpenPopoverId(open ? item._rowKey : null)}>
+                
+                {/* Order Details Section */}
+                {selectedItems.length > 0 && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
+                    <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Order Details</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Delivery Purpose</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].orderPurpose || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Order Type</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].orderType || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Start Date</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].startDate || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">End Date</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].endDate || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Delivery Date</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].deliveryDate || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Transport Type</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].transportType || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Contact Person</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].contactPerson || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">WhatsApp No.</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].whatsappNo || "—"}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-xs text-slate-500 font-medium">Customer Address</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].customerAddress || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Payment Terms</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].paymentTerms || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Advance Payment</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].advancePaymentTaken ? `Yes - ₹${selectedItems[0].advanceAmount || 0}` : "No"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Through Broker</p>
+                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].isBrokerOrder ? selectedItems[0].brokerName || "Yes" : "No"}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Table Format for Products */}
+                <div className="py-3 overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12 text-center">Select</TableHead>
+                        <TableHead>Order No.</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Oil Type</TableHead>
+                        <TableHead>QTY</TableHead>
+                        <TableHead>Select SKU</TableHead>
+                        <TableHead>Rate of Material</TableHead>
+                        <TableHead>Approval Qty</TableHead>
+                        <TableHead>Rate</TableHead>
+                        <TableHead>Remarks</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {allProductsFromSelectedOrders.map((product, idx) => {
+                        const rowKey = product._rowKey
+                        const isSelected = selectedProductRows.includes(rowKey)
+                        const hasError = qtyValidationErrors[rowKey]
+                        const maxQty = product.orderQty || 0
+                        
+                        return (
+                          <TableRow 
+                            key={rowKey} 
+                            className={cn(
+                              isSelected ? "bg-blue-50/50" : "",
+                              hasError ? "bg-red-50/50 border-red-200" : ""
+                            )}
+                          >
+                            <TableCell className="text-center">
+                              <Checkbox 
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelectProductRow(rowKey)}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium text-xs">
+                              <Badge variant="secondary" className="text-xs">{product._originalOrderId}</Badge>
+                            </TableCell>
+                            <TableCell className="text-xs truncate max-w-[150px]" title={product._orderData.customerName}>
+                              {product._orderData.customerName}
+                            </TableCell>
+                            <TableCell className="text-xs">{product.oilType || product.productName || "—"}</TableCell>
+                            <TableCell className="text-xs font-bold text-blue-600">{maxQty}</TableCell>
+                            <TableCell>
+                              <Popover open={openPopoverId === rowKey} onOpenChange={(open) => setOpenPopoverId(open ? rowKey : null)}>
                                 <PopoverTrigger asChild>
-                                  <Button variant="outline" className="h-8 w-full justify-between bg-white px-2 border-slate-200 text-[10px] text-slate-700">
-                                    <span className="truncate">{productRates[item._rowKey]?.skuName || "Select SKU.."}</span>
+                                  <Button 
+                                    variant="outline" 
+                                    className="h-8 w-full justify-between bg-white px-2 border-slate-200 text-xs"
+                                    disabled={!isSelected}
+                                  >
+                                    <span className="truncate">{productRates[rowKey]?.skuName || "Select SKU.."}</span>
                                     <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
                                   </Button>
                                 </PopoverTrigger>
@@ -473,11 +587,20 @@ export default function PreApprovalPage() {
                                       )}
                                       <CommandGroup>
                                         {skuMaster.filter(sku => sku.toLowerCase().includes(skuSearch.toLowerCase())).map((sku) => (
-                                          <CommandItem key={sku} value={sku} className="cursor-pointer py-1.5 px-3 text-[10px]" onSelect={() => {
-                                            setProductRates({ ...productRates, [item._rowKey]: { ...productRates[item._rowKey], skuName: sku } });
-                                            setSkuSearch(""); setOpenPopoverId(null);
+                                          <CommandItem key={sku} value={sku} className="cursor-pointer py-1.5 px-3 text-xs" onSelect={() => {
+                                            // Auto-update product_name when SKU is selected
+                                            setProductRates({ 
+                                              ...productRates, 
+                                              [rowKey]: { 
+                                                ...productRates[rowKey], 
+                                                skuName: sku,
+                                                productName: sku  // Auto-fill product name with SKU name
+                                              } 
+                                            });
+                                            setSkuSearch(""); 
+                                            setOpenPopoverId(null);
                                           }}>
-                                            <Check className={cn("mr-2 h-3 w-3 text-blue-600", productRates[item._rowKey]?.skuName === sku ? "opacity-100" : "opacity-0")} />
+                                            <Check className={cn("mr-2 h-3 w-3 text-blue-600", productRates[rowKey]?.skuName === sku ? "opacity-100" : "opacity-0")} />
                                             {sku}
                                           </CommandItem>
                                         ))}
@@ -485,54 +608,133 @@ export default function PreApprovalPage() {
                                     </CommandList>
                                   </Command>
                                 </PopoverContent>
-                             </Popover>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            {/* Approval Qty */}
-                            <div className="space-y-1">
-                               <Label className="text-[8px] uppercase font-bold text-slate-400 ml-0.5">App. Qty</Label>
-                               <Input 
-                                  type="number" 
-                                  placeholder="Qty"
-                                  className="h-8 bg-white text-[10px] px-2 border-slate-200 focus:ring-1 focus:ring-blue-100" 
-                                  value={productRates[item._rowKey]?.approvalQty || ""} 
-                                  onChange={(e) => setProductRates({ ...productRates, [item._rowKey]: { ...productRates[item._rowKey], approvalQty: e.target.value } })} 
-                               />
-                            </div>
-
-                            {/* Required Rate */}
-                            <div className="space-y-1">
-                               <Label className="text-[8px] uppercase font-bold text-slate-400 ml-0.5">Req. Rate</Label>
-                               <Input 
-                                  type="number" 
-                                  placeholder="Rate"
-                                  className="h-8 bg-white text-[10px] px-2 border-slate-200 font-bold text-blue-700 focus:ring-1 focus:ring-blue-100" 
-                                  value={productRates[item._rowKey]?.rate || ""} 
-                                  onChange={(e) => setProductRates({ ...productRates, [item._rowKey]: { ...productRates[item._rowKey], rate: e.target.value } })} 
-                               />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                              </Popover>
+                            </TableCell>
+                            <TableCell>
+                              <Input 
+                                type="number"
+                                className="h-8 text-xs bg-white"
+                                value={productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || ""}
+                                onChange={(e) => setProductRates({ 
+                                  ...productRates, 
+                                  [rowKey]: { 
+                                    ...productRates[rowKey], 
+                                    rateOfMaterial: e.target.value 
+                                  } 
+                                })}
+                                disabled={!isSelected}
+                                placeholder="Rate of Material"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input 
+                                type="number" 
+                                placeholder="Qty"
+                                className={cn(
+                                  "h-8 text-xs bg-white",
+                                  hasError && "border-red-500"
+                                )}
+                                value={productRates[rowKey]?.approvalQty || ""} 
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  const qty = parseFloat(value)
+                                  
+                                  // Validate quantity
+                                  if (value && qty > maxQty) {
+                                    setQtyValidationErrors({
+                                      ...qtyValidationErrors,
+                                      [rowKey]: `Cannot exceed ${maxQty}`
+                                    })
+                                  } else {
+                                    const newErrors = {...qtyValidationErrors}
+                                    delete newErrors[rowKey]
+                                    setQtyValidationErrors(newErrors)
+                                  }
+                                  
+                                  setProductRates({ 
+                                    ...productRates, 
+                                    [rowKey]: { 
+                                      ...productRates[rowKey], 
+                                      approvalQty: value 
+                                    } 
+                                  })
+                                }} 
+                                disabled={!isSelected}
+                              />
+                              {hasError && (
+                                <p className="text-xs text-red-600 mt-1">{hasError}</p>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Input 
+                                type="number" 
+                                placeholder="Rate"
+                                className="h-8 text-xs bg-white font-bold text-blue-700"
+                                value={productRates[rowKey]?.rate || ""} 
+                                onChange={(e) => setProductRates({ 
+                                  ...productRates, 
+                                  [rowKey]: { 
+                                    ...productRates[rowKey], 
+                                    rate: e.target.value 
+                                  } 
+                                })} 
+                                disabled={!isSelected}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input 
+                                className="h-8 text-xs bg-white"
+                                value={productRates[rowKey]?.remark || ""}
+                                onChange={(e) => setProductRates({ 
+                                  ...productRates, 
+                                  [rowKey]: { 
+                                    ...productRates[rowKey], 
+                                    remark: e.target.value 
+                                  } 
+                                })}
+                                disabled={!isSelected}
+                                placeholder="Enter remarks"
+                              />
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-bold text-slate-700 uppercase tracking-tight">Overall Remark</Label>
-                    <Textarea placeholder="Enter internal remarks..." className="min-h-[80px] bg-white border-slate-200" value={overallRemark} onChange={(e) => setOverallRemark(e.target.value)} />
-                  </div>
+
+
                 
 
                 <DialogFooter className="sm:justify-end gap-3 border-t pt-4">
-                  <Button variant="outline" onClick={() => setIsBulkDialogOpen(false)}>Cancel</Button>
+                  <Button variant="outline" onClick={() => {
+                    setIsBulkDialogOpen(false)
+                    setSelectedProductRows([])
+                    setQtyValidationErrors({})
+                  }}>Cancel</Button>
                   <Button 
-                    onClick={() => handleApprove(selectedItems)} 
-                    disabled={isApproving || selectedItems.some(item => !productRates[item._rowKey]?.rate)}
+                    onClick={() => {
+                      // Filter to only selected products
+                      const selectedProducts = allProductsFromSelectedOrders.filter(p => selectedProductRows.includes(p._rowKey))
+                      const itemsToApprove = selectedProducts.map(prod => ({
+                        _product: prod,
+                        _rowKey: prod._rowKey,
+                        _displayDo: prod._originalOrderId,
+                        customerName: prod._orderData.customerName,
+                        orderType: prod._orderData.orderType
+                      }))
+                      handleApprove(itemsToApprove)
+                    }} 
+                    disabled={
+                      isApproving || 
+                      selectedProductRows.length === 0 ||
+                      Object.keys(qtyValidationErrors).length > 0 ||
+                      selectedProductRows.some(key => !productRates[key]?.rate)
+                    }
                     className="min-w-[200px] h-11 bg-blue-600 font-bold shadow-lg"
                   >
                     {isApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {isApproving ? "Processing..." : "Submit All Approvals"}
+                    {isApproving ? "Processing..." : `Submit ${selectedProductRows.length} Product(s)`}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -605,6 +807,10 @@ export default function PreApprovalPage() {
                     cust3: "Zenith Supply",
                   }
                   
+                  // Get oil types from all products
+                  const oilTypes = rawOrder._allProducts?.map((p: any) => p.oilType || p.productName).filter(Boolean).join(", ") || "—"
+                  const firstProduct = rawOrder._allProducts?.[0]
+                  
                   const row = {
                    orderNo: rawOrder._displayDo,
                    deliveryPurpose: rawOrder.orderPurpose || "Week On Week",
@@ -617,17 +823,17 @@ export default function PreApprovalPage() {
                    startDate: rawOrder.startDate || "—",
                    endDate: rawOrder.endDate || "—",
                    deliveryDate: rawOrder.deliveryDate || "—",
-                   // Handle Rates Aggregation (Single product now)
-                   oilType: rawOrder._product?.oilType || rawOrder._product?.productName || "—",
-                   ratePerLtr: rawOrder._product?.ratePerLtr || "—",
-                   ratePer15Kg: rawOrder._product?.rateLtr || "—",
+                   // Show all oil types and product count
+                   oilType: `${oilTypes} (${rawOrder._productCount} items)`,
+                   ratePerLtr: firstProduct?.ratePerLtr || "—",
+                   ratePer15Kg: firstProduct?.rateLtr || "—",
                    
                    itemConfirm: rawOrder.itemConfirm?.toUpperCase() || "YES",
-                   productName: rawOrder._product?.productName || rawOrder._product?.oilType || "",
-                   uom: rawOrder._product?.uom || "",
-                   orderQty: rawOrder._product?.orderQty || "",
-                   altUom: rawOrder._product?.altUom || "",
-                   altQty: rawOrder._product?.altQty || "",
+                   productName: firstProduct?.productName || firstProduct?.oilType || "",
+                   uom: firstProduct?.uom || "",
+                   orderQty: firstProduct?.orderQty || "",
+                   altUom: firstProduct?.altUom || "",
+                   altQty: firstProduct?.altQty || "",
                    
                    // Extended Columns
                    totalWithGst: rawOrder.totalWithGst || "—",
@@ -642,7 +848,7 @@ export default function PreApprovalPage() {
                    brokerName: rawOrder.brokerName || "—",
                    uploadSo: "so_document.pdf",
                    
-                   products: rawOrder._product ? [rawOrder._product] : [],
+                   products: rawOrder._allProducts || [],
                  }
 
                 return (
