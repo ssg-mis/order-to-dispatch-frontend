@@ -24,6 +24,7 @@ import {
   LogOut,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
+import { useEffect, useState } from "react"
 
 import {
   Sidebar,
@@ -47,8 +48,6 @@ const modules = [
 
   { title: "Dispatch Planning", icon: PackageCheck, url: "/dispatch-material" },
   { title: "Actual Dispatch", icon: Send, url: "/actual-dispatch" },
-  { title: "Vehicle Details", icon: Car, url: "/vehicle-details" },
-  { title: "Material Load", icon: Truck, url: "/material-load" },
   { title: "Security Guard Approval", icon: ShieldCheck, url: "/security-approval" },
   { title: "Make Invoice (Proforma)", icon: FileText, url: "/make-invoice" },
   { title: "Check Invoice", icon: FileCheck, url: "/check-invoice" },
@@ -57,11 +56,43 @@ const modules = [
   { title: "Confirm Material Receipt", icon: FileSignature, url: "/material-receipt" },
   { title: "Damage Adjustment", icon: AlertCircle, url: "/damage-adjustment" },
   { title: "Settings", icon: Settings2, url: "/settings" },
+  { title: "Master", icon: BookMarked, url: "/master" },
 
 ]
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const [allowedModules, setAllowedModules] = useState(modules)
+
+  useEffect(() => {
+    const userStr = localStorage.getItem("user")
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr)
+        const pageAccess = user.page_access || []
+        
+        // Special mapping for cases where sidebar title differs from permission name
+        const permissionMapping: Record<string, string> = {
+          "Make Invoice (Proforma)": "Make Invoice",
+          "Confirm Material Receipt": "Confirm Material Receipt",
+          "Damage Adjustment": "Damage Adjustment",
+        }
+
+        const filtered = modules.filter(module => {
+          // Dashboard is always allowed if authenticated
+          if (module.title === "Dashboard") return true
+          
+          const permissionName = permissionMapping[module.title] || module.title
+          return pageAccess.includes(permissionName)
+        })
+        
+        setAllowedModules(filtered)
+      } catch (e) {
+        console.error("Failed to parse user for sidebar filtering", e)
+      }
+    }
+  }, [])
+
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="p-4 border-b border-sidebar-border">
@@ -77,7 +108,7 @@ export function AppSidebar() {
           <SidebarGroupLabel className="text-sidebar-foreground/50">Modules</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {modules.map((item) => {
+              {allowedModules.map((item) => {
                 const isActive = pathname === item.url
                 return (
                   <SidebarMenuItem key={item.title}>

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar } from "@/components/ui/calendar"
@@ -139,11 +140,11 @@ export default function OrderPunchPage() {
   const [products, setProducts] = useState<ProductItem[]>([
     { id: "1", productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "" },
   ])
-  const [customerType, setCustomerType] = useState<string>("")
+  const [customerType, setCustomerType] = useState<string>("existing")
   const [depoName, setDepoName] = useState<string>("Banari")
-  const [isBrokerOrder, setIsBrokerOrder] = useState<string>("NO")
-  const [orderPurpose, setOrderPurpose] = useState<string>("")
-  const [orderType, setOrderType] = useState<string>("")
+  const [isBrokerOrder, setIsBrokerOrder] = useState<string>("YES")
+  const [orderPurpose, setOrderPurpose] = useState<string>("week-on-week")
+  const [orderType, setOrderType] = useState<string>("regular")
   const [advancePaymentTaken, setAdvancePaymentTaken] = useState<string>("NO")
   // Set DO Date to today's date by default
   const [soDate, setSoDate] = useState<string>(new Date().toISOString().split("T")[0])
@@ -152,7 +153,7 @@ export default function OrderPunchPage() {
   const [whatsappNo, setWhatsappNo] = useState<string>("")
   const [customerAddress, setCustomerAddress] = useState<string>("")
   const [deliveryAddress, setDeliveryAddress] = useState<string>("")
-  const [sameAsCustomerAddress, setSameAsCustomerAddress] = useState<boolean>(false)
+  const [sameAsCustomerAddress, setSameAsCustomerAddress] = useState<boolean>(true)
   
   // Pre-Approval Products State
   const [preApprovalProducts, setPreApprovalProducts] = useState<PreApprovalProduct[]>([
@@ -163,15 +164,16 @@ export default function OrderPunchPage() {
   const [oilType, setOilType] = useState<string>("")
   const [rateLtr, setRateLtr] = useState<string>("")
   
-  const [brokerName, setBrokerName] = useState<string>("")
+  const [brokerName, setBrokerName] = useState<string>("Ashish Motwani")
   const [deliveryDate, setDeliveryDate] = useState<string>("")
   const [deliveryDateError, setDeliveryDateError] = useState<string>("")
   const [startDate, setStartDate] = useState<string>("")
   const [endDate, setEndDate] = useState<string>("")
-  const [paymentTerms, setPaymentTerms] = useState<string>("")
-  const [transportType, setTransportType] = useState<string>("")
+  const [paymentTerms, setPaymentTerms] = useState<string>("7days")
+  const [transportType, setTransportType] = useState<string>("self")
   const [advanceAmount, setAdvanceAmount] = useState<string>("")
   const [futurePeriodDate, setFuturePeriodDate] = useState<string>("") // New state for future period date
+  const [orderPunchRemarks, setOrderPunchRemarks] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Fetch customers, depots, SKUs, and brokers on mount
@@ -205,9 +207,9 @@ export default function OrderPunchPage() {
     }
   }, [customerName, customerType, customers])
 
-  // Week on Week Date Logic - Initialize Start Date from DO Date
+  // Week on Week / Future Period Date Logic - Initialize Start Date from DO Date
   useEffect(() => {
-    if (orderPurpose === "week-on-week") {
+    if (orderPurpose === "week-on-week" || orderPurpose === "future-period") {
       // If DO Date (soDate) is set, use it as Start Date; otherwise use today
       if (soDate) {
         setStartDate(soDate)
@@ -266,12 +268,30 @@ export default function OrderPunchPage() {
       }
     }
 
-    // Validate future period date if orderPurpose is future-period
-    if (orderPurpose === "future-period") {
-      if (!futurePeriodDate) {
+    // Validate dates based on orderPurpose
+    if (orderPurpose === "future-period" || orderPurpose === "week-on-week") {
+      if (!startDate) {
         toast({
           title: "Validation Error",
-          description: "Please select the future period date.",
+          description: "Please select a start date.",
+          variant: "destructive",
+        })
+        return
+      }
+      
+      if (orderPurpose === "week-on-week" && !deliveryDate) {
+        toast({
+          title: "Validation Error",
+          description: "Please select an actual delivery date.",
+          variant: "destructive",
+        })
+        return
+      }
+      
+      if (orderPurpose === "future-period" && !futurePeriodDate) {
+        toast({
+          title: "Validation Error",
+          description: "Please select a future period date.",
           variant: "destructive",
         })
         return
@@ -306,12 +326,14 @@ export default function OrderPunchPage() {
         customer_contact_person_name: contactPerson || null,
         customer_contact_person_whatsapp_no: whatsappNo || null,
         customer_address: customerAddress || null,
+        depo_name: depoName || null,
         payment_terms: paymentTerms || null,
         advance_payment_to_be_taken: advancePaymentTaken === "YES",
         advance_amount: advanceAmount ? parseFloat(advanceAmount) : null,
         is_order_through_broker: isBrokerOrder === "YES",
         broker_name: brokerName || null,
         type_of_transporting: transportType || null,
+        order_punch_remarks: orderPunchRemarks || null,
         remark: null,
         futureperioddate: futurePeriodDate || null, // Add future period date
       }
@@ -361,6 +383,7 @@ export default function OrderPunchPage() {
           endDate,
           paymentTerms,
           transportType,
+          orderPunchRemarks,
           advanceAmount,
           products: products.map(p => ({
              ...p,
@@ -492,29 +515,30 @@ export default function OrderPunchPage() {
   }
 
   const resetForm = () => {
-    setCustomerType("")
-    setDepoName("")
-    setIsBrokerOrder("NO")
-    setOrderPurpose("")
-    setOrderType("")
+    setCustomerType("existing")
+    setDepoName("Banari")
+    setIsBrokerOrder("YES")
+    setOrderPurpose("week-on-week")
+    setOrderType("regular")
     setAdvancePaymentTaken("NO")
-    setSoDate("")
+    setSoDate(new Date().toISOString().split("T")[0])
     setCustomerName("")
     setContactPerson("")
     setWhatsappNo("")
     setCustomerAddress("")
     setDeliveryAddress("")
-    setSameAsCustomerAddress(false)
+    setSameAsCustomerAddress(true)
     setOilType("")
     setRateLtr("")
-    setBrokerName("")
+    setBrokerName("Ashish Motwani")
     setDeliveryDate("")
     setStartDate("")
     setEndDate("")
-    setPaymentTerms("")
-    setTransportType("")
+    setPaymentTerms("7days")
+    setTransportType("self")
     setAdvanceAmount("")
     setFuturePeriodDate("")
+    setOrderPunchRemarks("")
     setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "" }])
     setPreApprovalProducts([{ id: Math.random().toString(36).substr(2, 9), oilType: "", ratePerLtr: "", rateLtr: "" }])
   }
@@ -560,21 +584,6 @@ export default function OrderPunchPage() {
                 </Select>
               </div>
 
-              {/* Show Future Period Date field when orderPurpose is future-period */}
-              {orderPurpose === "future-period" && (
-                <div className="space-y-2">
-                  <Label htmlFor="futurePeriodDate">Future Period Date</Label>
-                  <Input
-                    id="futurePeriodDate"
-                    type="date"
-                    value={futurePeriodDate}
-                    onChange={(e) => setFuturePeriodDate(e.target.value)}
-                  />
-                  <p className="text-xs text-blue-600 mt-1">
-                    ℹ️ This date will be saved for future period delivery
-                  </p>
-                </div>
-              )}
 
               <div className="space-y-2">
                 <Label htmlFor="orderType">ORDER TYPE</Label>
@@ -594,7 +603,7 @@ export default function OrderPunchPage() {
                 )}
               </div>
 
-              {orderPurpose === "week-on-week" && (
+              {(orderPurpose === "week-on-week" || orderPurpose === "future-period") && (
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="startDate">Start Date</Label>
@@ -615,51 +624,99 @@ export default function OrderPunchPage() {
                       className="bg-muted"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="deliveryDate">Actual Delivery Date</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !deliveryDate && "text-muted-foreground",
-                            deliveryDateError && "border-red-500"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {deliveryDate ? format(new Date(deliveryDate), "PPP") : <span>Pick a date</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={deliveryDate ? new Date(deliveryDate) : undefined}
-                          onSelect={(date) => {
-                            if (date) {
-                              setDeliveryDate(format(date, "yyyy-MM-dd"))
-                            }
-                          }}
-                          initialFocus
-                          modifiers={{
-                            inRange: (date) => {
-                              if (!startDate || !endDate) return false
-                              const start = new Date(startDate)
-                              const end = new Date(endDate)
-                              return date >= start && date <= end
-                            }
-                          }}
-                          modifiersClassNames={{
-                            inRange: "bg-blue-100 text-blue-900 hover:bg-blue-200"
-                          }}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    {deliveryDateError && (
-                      <p className="text-xs text-red-600 font-medium">{deliveryDateError}</p>
-                    )}
-                  </div>
-                   <div className="hidden md:block"></div> 
+                  {(orderPurpose === "week-on-week" || orderPurpose === "future-period") && (
+                    <div className="space-y-2">
+                      <Label htmlFor="deliveryDate">Actual Delivery Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !deliveryDate && "text-muted-foreground",
+                              deliveryDateError && "border-red-500"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {deliveryDate ? format(new Date(deliveryDate), "PPP") : <span>Pick a date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={deliveryDate ? new Date(deliveryDate) : undefined}
+                            onSelect={(date) => {
+                              if (date) {
+                                setDeliveryDate(format(date, "yyyy-MM-dd"))
+                              }
+                            }}
+                            initialFocus
+                            modifiers={{
+                              inRange: (date) => {
+                                if (!startDate || !endDate) return false
+                                const start = new Date(startDate)
+                                const end = new Date(endDate)
+                                return date >= start && date <= end
+                              }
+                            }}
+                            modifiersClassNames={{
+                              inRange: "bg-blue-100 text-blue-900 hover:bg-blue-200"
+                            }}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      {deliveryDateError && (
+                        <p className="text-xs text-red-600 font-medium">{deliveryDateError}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {orderPurpose === "future-period" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="futurePeriodDate">Future Period Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !futurePeriodDate && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {futurePeriodDate ? format(new Date(futurePeriodDate), "PPP") : <span>Pick a date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={futurePeriodDate ? new Date(futurePeriodDate) : undefined}
+                            onSelect={(date) => {
+                              if (date) {
+                                setFuturePeriodDate(format(date, "yyyy-MM-dd"))
+                              }
+                            }}
+                            initialFocus
+                            modifiers={{
+                              inRange: (date) => {
+                                if (!startDate || !endDate) return false
+                                const start = new Date(startDate)
+                                const end = new Date(endDate)
+                                return date >= start && date <= end
+                              }
+                            }}
+                            modifiersClassNames={{
+                              inRange: "bg-blue-100 text-blue-900 hover:bg-blue-200"
+                            }}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <p className="text-xs text-blue-600 mt-1">
+                        ℹ️ This date will be saved for future period delivery
+                      </p>
+                    </div>
+                  )}
+                  <div className="hidden md:block"></div> 
                 </>
               )}
 
@@ -827,6 +884,7 @@ export default function OrderPunchPage() {
                              <Combobox
                                options={skus
                                  .filter(s => s && s.sku_name) // Filter invalid SKUs
+                                 .filter(s => !products.some(p => p.productName === s.sku_name && p.id !== product.id)) // Filter already selected products
                                  .map((sku) => ({
                                    value: sku.sku_name,
                                    label: sku.sku_name
@@ -969,6 +1027,17 @@ export default function OrderPunchPage() {
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="soFile">Upload SO Copy</Label>
                 <Input id="soFile" type="file" className="cursor-pointer" />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="orderPunchRemarks">Remarks</Label>
+                <Textarea 
+                  id="orderPunchRemarks" 
+                  placeholder="Enter any additional remarks here..." 
+                  value={orderPunchRemarks}
+                  onChange={(e) => setOrderPunchRemarks(e.target.value)}
+                  className="min-h-[100px]"
+                />
               </div>
             </div>
           </CardContent>

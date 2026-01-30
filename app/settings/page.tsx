@@ -55,7 +55,8 @@ const PAGE_ACCESS_OPTIONS = [
   "Gate Out",
   "Confirm Material Receipt",
   "Damage Adjustment",
-  "Settings"
+  "Settings",
+  "Master"
 ]
 
 const ROLES = ["admin", "user"]

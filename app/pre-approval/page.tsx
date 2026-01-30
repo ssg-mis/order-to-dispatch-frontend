@@ -27,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Settings2, Loader2 } from "lucide-react"
+import { Settings2, Loader2, ChevronDown, ChevronUp } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { skuApi, preApprovalApi } from "@/lib/api-service"
@@ -99,6 +99,19 @@ export default function PreApprovalPage() {
   const [qtyValidationErrors, setQtyValidationErrors] = useState<{ [key: string]: string }>({})
 
   const [history, setHistory] = useState<any[]>([])
+  const [expandedOrders, setExpandedOrders] = useState<string[]>([])
+  
+  // Date formatting helper
+  const formatDate = (dateStr: string) => {
+    if (!dateStr || dateStr === "—") return "—";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString("en-GB");
+    } catch (e) {
+      return dateStr;
+    }
+  };
   
   // SKU State
   const [skuMaster, setSkuMaster] = useState<string[]>([])
@@ -152,6 +165,8 @@ export default function PreApprovalPage() {
       isBrokerOrder: backendOrder.is_order_through_broker,
       brokerName: backendOrder.broker_name,
       transportType: backendOrder.type_of_transporting,
+      depoName: backendOrder.depo_name,
+      orderPunchRemarks: backendOrder.order_punch_remarks,
       totalWithGst: backendOrder.total_with_gst,
       // Product info (for individual row from DB)
       preApprovalProducts: [{
@@ -376,34 +391,80 @@ export default function PreApprovalPage() {
     const grouped: { [key: string]: any } = {}
     
     filteredPendingOrders.forEach((order) => {
-      const orderId = order.doNumber || order.orderNo || "DO-XXX"
-      // Extract base DO number (remove suffix like A, B, C)
-      const baseDoMatch = orderId.match(/^(DO-\d+)/i)
-      const baseDo = baseDoMatch ? baseDoMatch[1] : orderId
+      const originalOrderId = order.doNumber || order.orderNo || "DO-XXX"
+      
+      // Strip suffix (A, B, C...) from DO number for grouping/display
+      const baseDoMatch = originalOrderId.match(/^(DO-\d+)/i)
+      const baseDo = baseDoMatch ? baseDoMatch[1] : originalOrderId
+      
+      // Group by Order Number (baseDo) instead of Customer Name
+      const groupKey = baseDo
       
       const products = (order.preApprovalProducts && order.preApprovalProducts.length > 0)
         ? order.preApprovalProducts
         : (order.products || [])
 
-      if (!grouped[baseDo]) {
-        grouped[baseDo] = {
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = {
           ...order,
           _displayDo: baseDo,
-          _rowKey: baseDo,
+          _allBaseDos: new Set([baseDo]),
+          _rowKey: groupKey,
           _allProducts: [],
-          _productCount: 0
+          _productCount: 0,
+          _ordersMap: {} // Map to store details for each base DO
+        }
+      } else {
+        grouped[groupKey]._allBaseDos.add(baseDo)
+      }
+      
+      // Store/Update details for this base DO group
+      if (!grouped[groupKey]._ordersMap[baseDo]) {
+        grouped[groupKey]._ordersMap[baseDo] = {
+          orderPurpose: order.orderPurpose,
+          orderType: order.orderType,
+          startDate: order.startDate,
+          endDate: order.endDate,
+          deliveryDate: order.deliveryDate,
+          transportType: order.transportType,
+          contactPerson: order.contactPerson,
+          whatsappNo: order.whatsappNo,
+          customerAddress: order.customerAddress,
+          paymentTerms: order.paymentTerms,
+          advancePaymentTaken: order.advancePaymentTaken,
+          advanceAmount: order.advanceAmount,
+          isBrokerOrder: order.isBrokerOrder,
+          brokerName: order.brokerName,
+          depoName: order.depoName,
+          orderPunchRemarks: order.orderPunchRemarks,
+          _products: []
         }
       }
       
-      // Aggregate products
+      // Aggregate products and link them to their original order ID
       products.forEach((prod: any) => {
-        grouped[baseDo]._allProducts.push({
+        const productWithId = {
           ...prod,
-          _originalOrderId: orderId,
-          _rowKey: `${baseDo}-${prod._pid || prod.id}`
-        })
+          _originalOrderId: originalOrderId,
+          _baseDo: baseDo,
+          _rowKey: `${groupKey}-${prod._pid || prod.id}`
+        }
+        grouped[groupKey]._allProducts.push(productWithId)
+        grouped[groupKey]._ordersMap[baseDo]._products.push(productWithId)
       })
-      grouped[baseDo]._productCount = grouped[baseDo]._allProducts.length
+      
+      grouped[groupKey]._productCount = grouped[groupKey]._allProducts.length
+    })
+    
+    // Finalize display strings
+    Object.values(grouped).forEach((grp: any) => {
+      grp._displayDo = Array.from(grp._allBaseDos).join(", ")
+      
+      const allTransports = new Set<string>()
+      Object.values(grp._ordersMap).forEach((order: any) => {
+          if (order.transportType) allTransports.add(order.transportType)
+      })
+      grp.transportType = Array.from(allTransports).join(", ")
     })
     
     return Object.values(grouped)
@@ -431,13 +492,8 @@ export default function PreApprovalPage() {
 
   const selectedItems = displayRows.filter(r => selectedRows.includes(r._rowKey))
   
-  // Get all products from selected orders
-  const allProductsFromSelectedOrders = selectedItems.flatMap(order => 
-    (order._allProducts || []).map((prod: any) => ({
-      ...prod,
-      _orderData: order
-    }))
-  )
+  // Aggregate all products from selected items for the dialog summary count
+  const allProductsFromSelectedOrders = selectedItems.flatMap(order => order._allProducts || [])
 
   return (
     <WorkflowStageShell
@@ -457,250 +513,326 @@ export default function PreApprovalPage() {
                   Process Selected ({selectedRows.length})
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-6xl !max-w-6xl max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <DialogContent className="sm:max-w-6xl max-w-6xl! max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 <DialogHeader className="border-b pb-4">
                   <DialogTitle className="text-xl font-bold text-slate-900 leading-none">Complete Pre-Approval ({allProductsFromSelectedOrders.length} Products)</DialogTitle>
                   <DialogDescription className="text-slate-500 mt-1.5">Select and edit products to approve. Only checked products will be processed.</DialogDescription>
                 </DialogHeader>
                 
-                {/* Order Details Section */}
-                {selectedItems.length > 0 && (
-                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
-                    <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Order Details</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div>
-                        <p className="text-xs text-slate-500 font-medium">Delivery Purpose</p>
-                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].orderPurpose || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500 font-medium">Order Type</p>
-                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].orderType || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500 font-medium">Start Date</p>
-                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].startDate || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500 font-medium">End Date</p>
-                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].endDate || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500 font-medium">Delivery Date</p>
-                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].deliveryDate || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500 font-medium">Transport Type</p>
-                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].transportType || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500 font-medium">Contact Person</p>
-                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].contactPerson || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500 font-medium">WhatsApp No.</p>
-                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].whatsappNo || "—"}</p>
-                      </div>
-                      <div className="col-span-2">
-                        <p className="text-xs text-slate-500 font-medium">Customer Address</p>
-                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].customerAddress || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500 font-medium">Payment Terms</p>
-                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].paymentTerms || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500 font-medium">Advance Payment</p>
-                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].advancePaymentTaken ? `Yes - ₹${selectedItems[0].advanceAmount || 0}` : "No"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500 font-medium">Through Broker</p>
-                        <p className="text-sm font-semibold text-slate-900">{selectedItems[0].isBrokerOrder ? selectedItems[0].brokerName || "Yes" : "No"}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Table Format for Products */}
-                <div className="py-3 overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12 text-center">Select</TableHead>
-                        <TableHead>Order No.</TableHead>
-                        <TableHead>Customer</TableHead>
-                        <TableHead>Oil Type</TableHead>
-                        <TableHead>QTY</TableHead>
-                        <TableHead>Select SKU</TableHead>
-                        <TableHead>Rate of Material</TableHead>
-                        <TableHead>Approval Qty</TableHead>
-                        <TableHead>Rate</TableHead>
-                        <TableHead>Remarks</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {allProductsFromSelectedOrders.map((product, idx) => {
-                        const rowKey = product._rowKey
-                        const isSelected = selectedProductRows.includes(rowKey)
-                        const hasError = qtyValidationErrors[rowKey]
-                        const maxQty = product.orderQty || 0
+                {/* Interleaved Order Details and Product Tables Section */}
+                <div className="space-y-12 mb-8">
+                  {selectedItems.map((customerGrp) => (
+                    <div key={customerGrp._rowKey} className="space-y-6">
+                      <h2 className="text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
+                        {customerGrp.customerName}
+                        <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
+                          {customerGrp._productCount} PRODUCTS
+                        </Badge>
+                      </h2>
+                      
+                      {/* Iterate through each unique base DO for this customer */}
+                      {Object.entries(customerGrp._ordersMap).map(([baseDo, orderDetails]: [string, any], orderIdx) => {
+                        const isExpanded = expandedOrders.includes(baseDo);
                         
+                        const toggleExpand = () => {
+                          setExpandedOrders(prev => 
+                            isExpanded ? prev.filter(id => id !== baseDo) : [...prev, baseDo]
+                          );
+                        };
+
                         return (
-                          <TableRow 
-                            key={rowKey} 
-                            className={cn(
-                              isSelected ? "bg-blue-50/50" : "",
-                              hasError ? "bg-red-50/50 border-red-200" : ""
-                            )}
-                          >
-                            <TableCell className="text-center">
-                              <Checkbox 
-                                checked={isSelected}
-                                onCheckedChange={() => toggleSelectProductRow(rowKey)}
-                              />
-                            </TableCell>
-                            <TableCell className="font-medium text-xs">
-                              <Badge variant="secondary" className="text-xs">{product._originalOrderId}</Badge>
-                            </TableCell>
-                            <TableCell className="text-xs truncate max-w-[150px]" title={product._orderData.customerName}>
-                              {product._orderData.customerName}
-                            </TableCell>
-                            <TableCell className="text-xs">{product.oilType || product.productName || "—"}</TableCell>
-                            <TableCell className="text-xs font-bold text-blue-600">{maxQty}</TableCell>
-                            <TableCell>
-                              <Popover open={openPopoverId === rowKey} onOpenChange={(open) => setOpenPopoverId(open ? rowKey : null)}>
-                                <PopoverTrigger asChild>
-                                  <Button 
-                                    variant="outline" 
-                                    className="h-8 w-full justify-between bg-white px-2 border-slate-200 text-xs"
-                                    disabled={!isSelected}
+                          <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
+                            <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
+                               <div className="flex items-center gap-4">
+                                 <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
+                                    ORDER: {baseDo}
+                                 </Badge>
+                                 <div className="flex flex-col">
+                                   <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">Section {orderIdx + 1}</span>
+                                   <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products.length} Items Selected</span>
+                                 </div>
+                               </div>
+                               <div className="flex items-center gap-3">
+                                 <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
+                                 <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-white hover:bg-white/20 rounded-full"
                                   >
-                                    <span className="truncate">{productRates[rowKey]?.skuName || "Select SKU.."}</span>
-                                    <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                                    {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                                   </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[300px] p-0 shadow-xl border-slate-200" align="start">
-                                  <Command shouldFilter={false}>
-                                    <CommandInput placeholder="Search SKU..." value={skuSearch} onValueChange={setSkuSearch} className="h-9 border-none focus:ring-0 text-xs" />
-                                    <CommandList className="max-h-[250px] overflow-y-auto">
-                                      {skuMaster.filter(s => s.toLowerCase().includes(skuSearch.toLowerCase())).length === 0 && (
-                                        <CommandEmpty className="py-6 text-xs text-slate-500 text-center font-medium">No SKU found</CommandEmpty>
-                                      )}
-                                      <CommandGroup>
-                                        {skuMaster.filter(sku => sku.toLowerCase().includes(skuSearch.toLowerCase())).map((sku) => (
-                                          <CommandItem key={sku} value={sku} className="cursor-pointer py-1.5 px-3 text-xs" onSelect={() => {
-                                            // Auto-update product_name when SKU is selected
-                                            setProductRates({ 
-                                              ...productRates, 
-                                              [rowKey]: { 
-                                                ...productRates[rowKey], 
-                                                skuName: sku,
-                                                productName: sku  // Auto-fill product name with SKU name
-                                              } 
-                                            });
-                                            setSkuSearch(""); 
-                                            setOpenPopoverId(null);
-                                          }}>
-                                            <Check className={cn("mr-2 h-3 w-3 text-blue-600", productRates[rowKey]?.skuName === sku ? "opacity-100" : "opacity-0")} />
-                                            {sku}
-                                          </CommandItem>
-                                        ))}
-                                      </CommandGroup>
-                                    </CommandList>
-                                  </Command>
-                                </PopoverContent>
-                              </Popover>
-                            </TableCell>
-                            <TableCell>
-                              <Input 
-                                type="number"
-                                className="h-8 text-xs bg-white"
-                                value={productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || ""}
-                                onChange={(e) => setProductRates({ 
-                                  ...productRates, 
-                                  [rowKey]: { 
-                                    ...productRates[rowKey], 
-                                    rateOfMaterial: e.target.value 
-                                  } 
-                                })}
-                                disabled={!isSelected}
-                                placeholder="Rate of Material"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input 
-                                type="number" 
-                                placeholder="Qty"
-                                className={cn(
-                                  "h-8 text-xs bg-white",
-                                  hasError && "border-red-500"
-                                )}
-                                value={productRates[rowKey]?.approvalQty || ""} 
-                                onChange={(e) => {
-                                  const value = e.target.value
-                                  const qty = parseFloat(value)
-                                  
-                                  // Validate quantity
-                                  if (value && qty > maxQty) {
-                                    setQtyValidationErrors({
-                                      ...qtyValidationErrors,
-                                      [rowKey]: `Cannot exceed ${maxQty}`
-                                    })
-                                  } else {
-                                    const newErrors = {...qtyValidationErrors}
-                                    delete newErrors[rowKey]
-                                    setQtyValidationErrors(newErrors)
-                                  }
-                                  
-                                  setProductRates({ 
-                                    ...productRates, 
-                                    [rowKey]: { 
-                                      ...productRates[rowKey], 
-                                      approvalQty: value 
-                                    } 
-                                  })
-                                }} 
-                                disabled={!isSelected}
-                              />
-                              {hasError && (
-                                <p className="text-xs text-red-600 mt-1">{hasError}</p>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <Input 
-                                type="number" 
-                                placeholder="Rate"
-                                className="h-8 text-xs bg-white font-bold text-blue-700"
-                                value={productRates[rowKey]?.rate || ""} 
-                                onChange={(e) => setProductRates({ 
-                                  ...productRates, 
-                                  [rowKey]: { 
-                                    ...productRates[rowKey], 
-                                    rate: e.target.value 
-                                  } 
-                                })} 
-                                disabled={!isSelected}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input 
-                                className="h-8 text-xs bg-white"
-                                value={productRates[rowKey]?.remark || ""}
-                                onChange={(e) => setProductRates({ 
-                                  ...productRates, 
-                                  [rowKey]: { 
-                                    ...productRates[rowKey], 
-                                    remark: e.target.value 
-                                  } 
-                                })}
-                                disabled={!isSelected}
-                                placeholder="Enter remarks"
-                              />
-                            </TableCell>
-                          </TableRow>
+                               </div>
+                            </div>
+
+                            {/* Collapsible Order Details */}
+                            {isExpanded && (
+                              <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
+                                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Customer Name</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{customerGrp.customerName || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Depo Name</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.depoName || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Purpose</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight capitalize">{orderDetails.orderPurpose?.replace(/-/g, ' ') || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Order Type</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight capitalize">{orderDetails.orderType || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Start Date</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.startDate)}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">End Date</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.endDate)}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Date</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.deliveryDate)}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Transport Type</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.transportType || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Contact Person</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.contactPerson || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">WhatsApp No.</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.whatsappNo || "—"}</p>
+                                    </div>
+                                    <div className="col-span-2">
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Customer Address</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.customerAddress || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Payment Terms</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight capitalize">{orderDetails.paymentTerms || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Advance Amount</p>
+                                      <p className="text-base font-black text-blue-700 leading-tight">₹{orderDetails.advanceAmount || 0}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Advance Payment</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.advancePaymentTaken ? "YES" : "NO"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Through Broker</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.isBrokerOrder ? orderDetails.brokerName || "Yes" : "No"}</p>
+                                    </div>
+                                    <div className="col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
+                                      <div className="bg-amber-100 p-2 rounded-lg">
+                                        <Settings2 className="h-5 w-5 text-amber-600" />
+                                      </div>
+                                      <div>
+                                        <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
+                                        <p className="text-sm font-medium text-slate-700 italic leading-snug">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Render Product Table for this DO */}
+                            <div className="px-5 pb-6">
+                              <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow className="bg-slate-50 border-b">
+                                      <TableHead className="w-12 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">Select</TableHead>
+                                      <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Product Info</TableHead>
+                                      <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Order Qty</TableHead>
+                                      <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Select SKU</TableHead>
+                                      <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Rate (Mat.)</TableHead>
+                                      <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Appr. Qty</TableHead>
+                                      <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Final Rate</TableHead>
+                                      <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Remarks</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {orderDetails._products.map((product: any) => {
+                                      const rowKey = product._rowKey
+                                      const isSelected = selectedProductRows.includes(rowKey)
+                                      const hasError = qtyValidationErrors[rowKey]
+                                      const maxQty = product.orderQty || 0
+                                      
+                                      return (
+                                        <TableRow 
+                                          key={rowKey} 
+                                          className={cn(
+                                            isSelected ? "bg-blue-50/40" : "",
+                                            hasError ? "bg-red-50" : ""
+                                          )}
+                                        >
+                                          <TableCell className="text-center p-3">
+                                            <Checkbox 
+                                              checked={isSelected}
+                                              onCheckedChange={() => toggleSelectProductRow(rowKey)}
+                                            />
+                                          </TableCell>
+                                          <TableCell className="p-3">
+                                            <div className="flex flex-col">
+                                              <span className="text-xs font-black text-slate-900 leading-none mb-1">{product.oilType || product.productName || "—"}</span>
+                                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{product._originalOrderId}</span>
+                                            </div>
+                                          </TableCell>
+                                          <TableCell className="p-3">
+                                            <Badge variant="outline" className="border-blue-200 text-blue-700 font-black px-2">{maxQty}</Badge>
+                                          </TableCell>
+                                          <TableCell className="p-2 min-w-[180px]">
+                                            <Popover open={openPopoverId === rowKey} onOpenChange={(open) => setOpenPopoverId(open ? rowKey : null)}>
+                                              <PopoverTrigger asChild>
+                                                <Button 
+                                                  variant="outline" 
+                                                  className="h-9 w-full justify-between bg-white px-3 border-slate-200 text-xs font-bold shadow-sm"
+                                                  disabled={!isSelected}
+                                                >
+                                                  <span className="truncate">{productRates[rowKey]?.skuName || "Select SKU..."}</span>
+                                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                </Button>
+                                              </PopoverTrigger>
+                                              <PopoverContent className="w-[320px] p-0 shadow-2xl border-slate-200" align="start">
+                                                <Command shouldFilter={false}>
+                                                  <CommandInput placeholder="Search SKU catalog..." value={skuSearch} onValueChange={setSkuSearch} className="h-10 border-none focus:ring-0 text-xs font-bold" />
+                                                  <CommandList className="max-h-[300px] overflow-y-auto">
+                                                    {skuMaster.filter(s => s.toLowerCase().includes(skuSearch.toLowerCase())).length === 0 && (
+                                                      <CommandEmpty className="py-8 text-xs text-slate-400 text-center font-bold">No SKU match found</CommandEmpty>
+                                                    )}
+                                                    <CommandGroup>
+                                                      {skuMaster.filter(sku => sku.toLowerCase().includes(skuSearch.toLowerCase())).map((sku) => (
+                                                        <CommandItem key={sku} value={sku} className="cursor-pointer py-2.5 px-4 text-xs font-bold hover:bg-blue-50 hover:text-blue-700 transition-colors" onSelect={() => {
+                                                          setProductRates({ 
+                                                            ...productRates, 
+                                                            [rowKey]: { 
+                                                              ...productRates[rowKey], 
+                                                              skuName: sku,
+                                                              productName: sku
+                                                            } 
+                                                          });
+                                                          setSkuSearch(""); 
+                                                          setOpenPopoverId(null);
+                                                        }}>
+                                                          <div className="flex items-center justify-between w-full">
+                                                            <span>{sku}</span>
+                                                            <Check className={cn("h-4 w-4 text-blue-600", productRates[rowKey]?.skuName === sku ? "opacity-100" : "opacity-0")} />
+                                                          </div>
+                                                        </CommandItem>
+                                                      ))}
+                                                    </CommandGroup>
+                                                  </CommandList>
+                                                </Command>
+                                              </PopoverContent>
+                                            </Popover>
+                                          </TableCell>
+                                          <TableCell className="p-2">
+                                            <div className="relative">
+                                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-black">₹</span>
+                                              <Input 
+                                                type="number"
+                                                className="h-9 text-xs bg-white pl-5 font-bold border-slate-200 focus:border-blue-500 focus:ring-blue-500"
+                                                value={productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || ""}
+                                                onChange={(e) => setProductRates({ 
+                                                  ...productRates, 
+                                                  [rowKey]: { 
+                                                    ...productRates[rowKey], 
+                                                    rateOfMaterial: e.target.value 
+                                                  } 
+                                                })}
+                                                disabled={!isSelected}
+                                                placeholder="0.00"
+                                              />
+                                            </div>
+                                          </TableCell>
+                                          <TableCell className="p-2">
+                                            <Input 
+                                              type="number" 
+                                              placeholder="Qty"
+                                              className={cn(
+                                                "h-9 text-xs bg-white font-bold border-slate-200 focus:border-blue-500 focus:ring-blue-500",
+                                                hasError && "border-red-500 ring-1 ring-red-500"
+                                              )}
+                                              value={productRates[rowKey]?.approvalQty || ""} 
+                                              onChange={(e) => {
+                                                const value = e.target.value
+                                                const qty = parseFloat(value)
+                                                if (value && qty > maxQty) {
+                                                  setQtyValidationErrors({
+                                                    ...qtyValidationErrors,
+                                                    [rowKey]: `Max ${maxQty}`
+                                                  })
+                                                } else {
+                                                  const newErrors = {...qtyValidationErrors}
+                                                  delete newErrors[rowKey]
+                                                  setQtyValidationErrors(newErrors)
+                                                }
+                                                setProductRates({ 
+                                                  ...productRates, 
+                                                  [rowKey]: { 
+                                                    ...productRates[rowKey], 
+                                                    approvalQty: value 
+                                                  } 
+                                                })
+                                              }} 
+                                              disabled={!isSelected}
+                                            />
+                                            {hasError && <p className="text-[9px] text-red-600 font-black mt-1 uppercase tracking-tighter text-center">{hasError}</p>}
+                                          </TableCell>
+                                          <TableCell className="p-2">
+                                            <div className="relative">
+                                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-400 text-[10px] font-black">₹</span>
+                                              <Input 
+                                                type="number" 
+                                                placeholder="0.00"
+                                                className="h-9 text-xs bg-white font-black text-blue-700 border-slate-200 focus:border-blue-600 focus:ring-blue-600 pl-5"
+                                                value={productRates[rowKey]?.rate || ""} 
+                                                onChange={(e) => setProductRates({ 
+                                                  ...productRates, 
+                                                  [rowKey]: { 
+                                                    ...productRates[rowKey], 
+                                                    rate: e.target.value 
+                                                  } 
+                                                })} 
+                                                disabled={!isSelected}
+                                              />
+                                            </div>
+                                          </TableCell>
+                                          <TableCell className="p-2">
+                                            <Input 
+                                              className="h-9 text-[10px] bg-white border-slate-200 italic font-medium"
+                                              value={productRates[rowKey]?.remark || ""}
+                                              onChange={(e) => setProductRates({ 
+                                                ...productRates, 
+                                                [rowKey]: { 
+                                                  ...productRates[rowKey], 
+                                                  remark: e.target.value 
+                                                } 
+                                              })}
+                                              disabled={!isSelected}
+                                              placeholder="Add review remark..."
+                                            />
+                                          </TableCell>
+                                        </TableRow>
+                                      )
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </div>
+                          </div>
                         )
                       })}
-                    </TableBody>
-                  </Table>
+                    </div>
+                  ))}
                 </div>
 
 
@@ -817,12 +949,12 @@ export default function PreApprovalPage() {
                    customerType: rawOrder.customerType || "Existing",
                    orderType: rawOrder.orderType || "Regular",
                    soNo: rawOrder._displayDo,
-                   partySoDate: rawOrder.soDate || "2024-03-21",
+                   partySoDate: formatDate(rawOrder.soDate),
                    customerName: CUSTOMER_MAP[rawOrder.customerName] || rawOrder.customerName || "Acme Corp",
                    // Handle new date fields
-                   startDate: rawOrder.startDate || "—",
-                   endDate: rawOrder.endDate || "—",
-                   deliveryDate: rawOrder.deliveryDate || "—",
+                   startDate: formatDate(rawOrder.startDate),
+                   endDate: formatDate(rawOrder.endDate),
+                   deliveryDate: formatDate(rawOrder.deliveryDate),
                    // Show all oil types and product count
                    oilType: `${oilTypes} (${rawOrder._productCount} items)`,
                    ratePerLtr: firstProduct?.ratePerLtr || "—",

@@ -811,8 +811,11 @@ export const customerApi = {
   /**
    * Get all customers
    */
-  getAll: async (): Promise<ApiResponse> => {
-    return request('/customers');
+  getAll: async (params?: any): Promise<ApiResponse> => {
+    const queryString = params 
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`/customers${queryString}`);
   },
 
   /**
@@ -827,6 +830,35 @@ export const customerApi = {
    */
   getByName: async (name: string): Promise<ApiResponse> => {
     return request(`/customers/name/${encodeURIComponent(name)}`);
+  },
+
+  /**
+   * Create new customer
+   */
+  create: async (data: any): Promise<ApiResponse> => {
+    return request('/customers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Update customer
+   */
+  update: async (id: number, data: any): Promise<ApiResponse> => {
+    return request(`/customers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Delete customer
+   */
+  delete: async (id: number): Promise<ApiResponse> => {
+    return request(`/customers/${id}`, {
+      method: 'DELETE',
+    });
   },
 };
 
@@ -856,8 +888,11 @@ export const depotApi = {
   /**
    * Get all depots
    */
-  getAll: async (): Promise<ApiResponse> => {
-    return request('/depots');
+  getAll: async (params?: any): Promise<ApiResponse> => {
+    const queryString = params 
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`/depots${queryString}`);
   },
 
   /**
@@ -873,6 +908,35 @@ export const depotApi = {
   getByName: async (name: string): Promise<ApiResponse> => {
     return request(`/depots/name/${encodeURIComponent(name)}`);
   },
+
+  /**
+   * Create new depot
+   */
+  create: async (data: any): Promise<ApiResponse> => {
+    return request('/depots', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Update depot
+   */
+  update: async (id: string, data: any): Promise<ApiResponse> => {
+    return request(`/depots/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Delete depot
+   */
+  delete: async (id: string): Promise<ApiResponse> => {
+    return request(`/depots/${id}`, {
+      method: 'DELETE',
+    });
+  },
 };
 
 /**
@@ -882,8 +946,11 @@ export const brokerApi = {
   /**
    * Get all brokers
    */
-  getAll: async (): Promise<ApiResponse> => {
-    return request('/brokers');
+  getAll: async (params?: any): Promise<ApiResponse> => {
+    const queryString = params 
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`/brokers${queryString}`);
   },
 
   /**
@@ -898,6 +965,35 @@ export const brokerApi = {
    */
   getByName: async (name: string): Promise<ApiResponse> => {
     return request(`/brokers/name/${encodeURIComponent(name)}`);
+  },
+
+  /**
+   * Create new broker
+   */
+  create: async (data: any): Promise<ApiResponse> => {
+    return request('/brokers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Update broker
+   */
+  update: async (id: string, data: any): Promise<ApiResponse> => {
+    return request(`/brokers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Delete broker
+   */
+  delete: async (id: string): Promise<ApiResponse> => {
+    return request(`/brokers/${id}`, {
+      method: 'DELETE',
+    });
   },
 };
 

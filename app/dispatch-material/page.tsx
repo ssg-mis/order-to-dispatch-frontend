@@ -14,8 +14,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Settings2 } from "lucide-react"
+import { Settings2, ChevronDown, ChevronUp } from "lucide-react"
 import { dispatchPlanningApi } from "@/lib/api-service"
+import { cn } from "@/lib/utils"
 
 export default function DispatchMaterialPage() {
   const router = useRouter()
@@ -23,7 +24,7 @@ export default function DispatchMaterialPage() {
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
-  const [selectedOrders, setSelectedOrders] = useState<string[]>([])
+  const [selectedGroup, setSelectedGroup] = useState<any>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [dispatchData, setDispatchData] = useState({
     dispatchDate: "",
@@ -34,6 +35,7 @@ export default function DispatchMaterialPage() {
     labelsAttached: false,
   })
   const [dispatchDetails, setDispatchDetails] = useState<Record<string, { qty: string, transportType?: string, deliveryFrom?: string }>>({})
+  const [expandedOrders, setExpandedOrders] = useState<string[]>([])
 
   const PAGE_COLUMNS = [
     { id: "orderNo", label: "DO Number" },
@@ -121,42 +123,34 @@ export default function DispatchMaterialPage() {
     fetchDispatchHistory();
   }, [])
 
-  // State for popup selection
-  const [selectedGroup, setSelectedGroup] = useState<any>(null)
+  const [selectedItems, setSelectedItems] = useState<any[]>([])
   const [dialogSelectedProducts, setDialogSelectedProducts] = useState<string[]>([])
 
   const toggleSelectAll = () => {
-    // In grouped view, selecting all might not be the primary action, 
-    // but if needed, we can select all *GROUPS* or just rely on individual group action.
-    // For now, let's keep it simple: Select all visible groups
-    if (selectedOrders.length === displayRows.length) {
-      setSelectedOrders([])
+    if (selectedItems.length === displayRows.length) {
+      setSelectedItems([])
     } else {
-      setSelectedOrders(displayRows.map((row) => row._rowKey))
+      setSelectedItems([...displayRows])
     }
   }
 
-  const toggleSelectOrder = (rowKey: string) => {
-    if (!rowKey) return
-    if (selectedOrders.includes(rowKey)) {
-      setSelectedOrders(selectedOrders.filter((id) => id !== rowKey))
+  const toggleSelectItem = (item: any) => {
+    const key = item._rowKey
+    const isSelected = selectedItems.some(i => i._rowKey === key)
+    
+    if (isSelected) {
+      setSelectedItems(prev => prev.filter(i => i._rowKey !== key))
     } else {
-      setSelectedOrders([...selectedOrders, rowKey])
+      setSelectedItems(prev => [...prev, item])
     }
   }
 
   const handleOpenDialog = () => {
-      // Pick the first selected order to display details
-      // In a real bulk scenario with DIFFERENT orders, we might need a wizard.
-      // But typically dispatch planning is done per DO.
-      // We will take the first selected group.
-      const firstKey = selectedOrders[0];
-      const group = displayRows.find(r => r._rowKey === firstKey);
-      
-      if (group) {
-          setSelectedGroup(group)
-          // Default: Select ALL products in the group for dispatch
-          setDialogSelectedProducts(group._allProducts.map((p: any) => p._rowKey))
+      if (selectedItems.length > 0) {
+          setSelectedGroup(selectedItems[0])
+          // Default: Select ALL products in all selected groups for dispatch
+          const allKeys = selectedItems.flatMap(g => g._allProducts || []).map((p: any) => p._rowKey)
+          setDialogSelectedProducts(allKeys)
           setIsDialogOpen(true)
       }
   }
@@ -169,14 +163,30 @@ export default function DispatchMaterialPage() {
      }
   }
 
+  // Get all flattened products from selected Groups
+  const allProductsFromSelectedGroups = useMemo(() => {
+    return selectedItems.flatMap(group => group._allProducts || [])
+  }, [selectedItems])
 
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "—";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
 
   const handleBulkDispatch = async () => {
     setIsProcessing(true)
     try {
-      // Logic: Iterate through dialogSelectedProducts which contains keys of selected PRODUCTS
-      // Find the product in selectedGroup._allProducts
-      if (!selectedGroup || dialogSelectedProducts.length === 0) {
+      if (selectedItems.length === 0 || dialogSelectedProducts.length === 0) {
         toast({
           title: "No Items Selected",
           description: "Please select items to dispatch",
@@ -188,42 +198,49 @@ export default function DispatchMaterialPage() {
       const successfulDispatches: any[] = []
       const failedDispatches: any[] = []
       
-      const itemsToProcess = selectedGroup._allProducts.filter((p: any) => dialogSelectedProducts.includes(p._rowKey))
+      const itemsToProcess = allProductsFromSelectedGroups.filter((p: any) => dialogSelectedProducts.includes(p._rowKey))
+
+      // 1. Validation Check: Ensure no quantities are 0
+      const itemsWithZeroQty = itemsToProcess.filter(item => {
+        const rowKey = item._rowKey;
+        const qty = dispatchDetails[rowKey]?.qty !== undefined ? dispatchDetails[rowKey].qty : (item.remainingDispatchQty !== undefined ? item.remainingDispatchQty : item.approvalQty);
+        return Number(qty) <= 0;
+      });
+
+      if (itemsWithZeroQty.length > 0) {
+        toast({
+          title: "Submission Blocked",
+          description: "Select quantity greater than 0 to dispatch items.",
+          variant: "destructive",
+        });
+        setIsProcessing(false);
+        return;
+      }
 
       // Submit each item to backend API
       for (const item of itemsToProcess) {
         const orderId = item.id // Use the order_dispatch table ID from backend
         const rowKey = item._rowKey;
         
-        // Extract values from input state or default to item values
-        // Default delivery from "in-stock" if not set
         const deliveryVal = dispatchDetails[rowKey]?.deliveryFrom || "in-stock";
-        // Default qty to orderQty if not set
-        const dispatchQty = dispatchDetails[rowKey]?.qty || item.orderQty;
+        const dispatchQty = dispatchDetails[rowKey]?.qty !== undefined ? dispatchDetails[rowKey].qty : (item.remainingDispatchQty !== undefined ? item.remainingDispatchQty : item.approvalQty);
         
         try {
           if (orderId) {
-            // Call backend API to submit dispatch planning
             const dispatchData = {
               dispatch_from: deliveryVal,
               dispatch_qty: dispatchQty,
             };
 
-            console.log('[DISPATCH] Submitting dispatch planning for order ID:', orderId, dispatchData);
             const response = await dispatchPlanningApi.submit(orderId, dispatchData);
-            console.log('[DISPATCH] API Response:', response);
             
             if (response.success) {
               successfulDispatches.push({ item, dsrNumber: response.data?.dsrNumber });
             } else {
               failedDispatches.push({ item, error: response.message || 'Unknown error' });
             }
-          } else {
-            console.warn('[DISPATCH] Skipping - no order ID found for:', item);
-            failedDispatches.push({ item, error: 'No order ID found' });
           }
         } catch (error: any) {
-          console.error('[DISPATCH] Failed to submit dispatch planning:', error);
           failedDispatches.push({ item, error: error?.message || error?.toString() || 'Unknown error' });
         }
       }
@@ -232,35 +249,30 @@ export default function DispatchMaterialPage() {
       if (successfulDispatches.length > 0) {
         toast({
           title: "Dispatches Submitted Successfully",
-          description: `${successfulDispatches.length} dispatch(es) submitted. DSR numbers created.`,
+          description: `${successfulDispatches.length} dispatch(es) submitted.`,
         });
 
-        // Clear selections
-        setSelectedOrders([]);
+        setSelectedItems([]);
         setDispatchDetails({});
         setDialogSelectedProducts([]);
-        setIsDialogOpen(false); // Close dialog
+        setIsDialogOpen(false);
 
-        // Refresh data from backend
         await fetchPendingDispatches();
         await fetchDispatchHistory();
 
-        // Optionally navigate to actual dispatch after a delay
         setTimeout(() => {
           router.push("/actual-dispatch")
         }, 1500)
       }
 
       if (failedDispatches.length > 0) {
-        console.error('[DISPATCH] Failed dispatches:', failedDispatches);
         toast({
           title: "Some Dispatches Failed",
-          description: `${failedDispatches.length} dispatch(es) failed. Check console for details.`,
+          description: `${failedDispatches.length} dispatch(es) failed.`,
           variant: "destructive",
         })
       }
     } catch (error: any) {
-      console.error('[DISPATCH] Unexpected error:', error);
       toast({
         title: "Error",
         description: error?.message || "An unexpected error occurred",
@@ -287,12 +299,10 @@ export default function DispatchMaterialPage() {
   const filteredPendingOrders = pendingOrders.filter(order => {
       let matches = true
       
-      // Filter by Party Name
       if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
           matches = false
       }
 
-      // Filter by Date Range
       const orderDateStr = order.dispatchData?.dispatchDate || order.timestamp
       if (orderDateStr) {
           const orderDate = new Date(orderDateStr)
@@ -308,7 +318,6 @@ export default function DispatchMaterialPage() {
           }
       }
 
-      // Filter by Status (On Time / Expire)
       if (filterValues.status) {
           const today = new Date()
           today.setHours(0, 0, 0, 0)
@@ -329,84 +338,91 @@ export default function DispatchMaterialPage() {
       return matches
   })
 
-  // Group orders by DO Number for table display
+  // Group by base DO number (removing uniqueness by Customer Name as per request)
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
     
     filteredPendingOrders.forEach((order: any) => {
-      // Backend order_no is the DO number
       const orderId = order.order_no || order.orderNo || "DO-XXX"
       
-      // Extract base DO number (remove suffix like A, B, C)
-      // Matches DO-022 from DO-022A, DO-022B, etc.
+      // Strip suffix (A, B, C...) from DO number for grouping/display
       const baseDoMatch = orderId.match(/^(DO-\d+)/i)
       const baseDo = baseDoMatch ? baseDoMatch[1] : orderId
       
-      if (!grouped[baseDo]) {
-         const internalOrder = order.data?.orderData || order;
-         const preApproval = order.data?.preApprovalData || internalOrder.preApprovalData || {};
-
-        grouped[baseDo] = {
-           ...order,
-           _id: order.id, // Keep one ID for key
-           _rowKey: baseDo,
-           doNumber: baseDo,
-           orderNo: baseDo,
-           customerName: order.customer_name || internalOrder.customerName,
-           transportType: order.type_of_transporting || internalOrder.transportType,
-           deliveryDate: order.delivery_date || internalOrder.deliveryDate,
-           
-           // Aggregated Data
-           _allProducts: [],
-           _productCount: 0,
-           
-           // Order Details for Header - Robust Mapping
-           deliveryPurpose: internalOrder.order_type_delivery_purpose || internalOrder.orderPurpose || "—",
-           startDate: internalOrder.start_date || internalOrder.startDate || "—",
-           endDate: internalOrder.end_date || internalOrder.endDate || "—",
-           orderType: internalOrder.order_type || internalOrder.orderType || "—",
-           customerType: internalOrder.customer_type || internalOrder.customerType || "—",
-           partySoDate: internalOrder.party_so_date || internalOrder.soDate || "—",
-           totalWithGst: internalOrder.total_amount_with_gst || internalOrder.totalWithGst || "—",
-           contactPerson: internalOrder.customer_contact_person_name || internalOrder.contactPerson || "—",
-           whatsapp: internalOrder.customer_contact_person_whatsapp_no || internalOrder.whatsappNo || "—",
-           address: internalOrder.customer_address || internalOrder.customerAddress || "—",
-           paymentTerms: internalOrder.payment_terms || internalOrder.paymentTerms || "—",
-           advanceTaken: internalOrder.advance_payment_to_be_taken || internalOrder.advancePaymentTaken || false,
-           advanceAmount: internalOrder.advance_amount || internalOrder.advanceAmount || "—",
-           isBroker: internalOrder.is_order_through_broker || internalOrder.isBrokerOrder || false,
-           brokerName: internalOrder.broker_name || internalOrder.brokerName || "—",
-           
-           // Extended fields requested
-           custContactName: internalOrder.customer_contact_person_name || internalOrder.contactPerson || "—",
-           weDealInSku: internalOrder.we_are_dealing_in_ordered_sku || false,
-           creditStatus: internalOrder.party_credit_status || internalOrder.creditStatus || "—",
-           dispatchConfirmed: internalOrder.dispatch_date_confirmed || false,
-           overallStatus: internalOrder.overall_status_of_order || internalOrder.overallStatus || "—",
-           custConfirmation: internalOrder.order_confirmation_with_customer || false,
+      // Group by Order Number (baseDo)
+      const groupKey = baseDo
+      
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = {
+          ...order,
+          customerName: order.customer_name || order.customerName || "—",
+          transportType: order.type_of_transporting || order.transportType || "—",
+          _displayDo: baseDo,
+          _rowKey: groupKey,
+          _allProducts: [],
+          _productCount: 0,
+          _ordersMap: {} // Map to store details for each base DO
         }
       }
 
+      const internalOrder = order.data?.orderData || order;
+      if (!grouped[groupKey]._ordersMap[baseDo]) {
+         grouped[groupKey]._ordersMap[baseDo] = {
+            ...order,
+            baseDo,
+            _products: [],
+            // Robust Mapping for Header
+            deliveryPurpose: internalOrder.order_type_delivery_purpose || internalOrder.orderPurpose || "—",
+            startDate: internalOrder.start_date || internalOrder.startDate || "—",
+            endDate: internalOrder.end_date || internalOrder.endDate || "—",
+            deliveryDate: internalOrder.delivery_date || internalOrder.deliveryDate || internalOrder.timestamp || "—",
+            orderType: internalOrder.order_type || internalOrder.orderType || "—",
+            customerType: internalOrder.customer_type || internalOrder.customerType || "—",
+            partySoDate: internalOrder.party_so_date || internalOrder.soDate || "—",
+            totalWithGst: internalOrder.total_amount_with_gst || internalOrder.totalWithGst || "—",
+            contactPerson: internalOrder.customer_contact_person_name || internalOrder.contactPerson || "—",
+            whatsapp: internalOrder.customer_contact_person_whatsapp_no || internalOrder.whatsappNo || "—",
+            address: internalOrder.customer_address || internalOrder.customerAddress || "—",
+            paymentTerms: internalOrder.payment_terms || internalOrder.paymentTerms || "—",
+            advanceTaken: internalOrder.advance_payment_to_be_taken || internalOrder.advancePaymentTaken || false,
+            advanceAmount: internalOrder.advance_amount || internalOrder.advanceAmount || "—",
+            isBroker: internalOrder.is_order_through_broker || internalOrder.isBrokerOrder || false,
+            brokerName: internalOrder.broker_name || internalOrder.brokerName || "—",
+            depoName: internalOrder.depo_name || internalOrder.depoName || "—",
+            orderPunchRemarks: internalOrder.order_punch_remarks || internalOrder.orderPunchRemarks || "—",
+            custContactName: internalOrder.customer_contact_person_name || internalOrder.contactPerson || "—",
+            weDealInSku: internalOrder.we_are_dealing_in_ordered_sku || false,
+            creditStatus: internalOrder.party_credit_status || internalOrder.creditStatus || "—",
+            dispatchConfirmed: internalOrder.dispatch_date_confirmed || false,
+            overallStatus: internalOrder.overall_status_of_order || internalOrder.overallStatus || "—",
+            custConfirmation: internalOrder.order_confirmation_with_customer || false,
+         }
+      }
+
       // Add product to the group
-      grouped[baseDo]._allProducts.push({
+      const productWithMeta = {
         ...order,
-        _rowKey: `${baseDo}-${order.id}`, // Unique key for product row
+        _rowKey: `${baseDo}-${order.id}`,
         id: order.id,
         orderNo: order.order_no,
         productName: order.product_name || order._product?.productName || order._product?.oilType,
         oilType: order.oil_type || order._product?.oilType,
         orderQty: order.order_quantity || order._product?.orderQty,
         rate: order.rate || order._product?.rate,
-        ratePerLtr: order.rate_per_ltr || order._product?.ratePerLtr,
         approvalQty: order.approval_qty || order.order_quantity,
         remainingDispatchQty: order.remaining_dispatch_qty !== null ? order.remaining_dispatch_qty : (order.approval_qty || order.order_quantity),
-        // Include any other product specific fields
-      })
+      }
       
-      grouped[baseDo]._productCount = grouped[baseDo]._allProducts.length
+      grouped[groupKey]._ordersMap[baseDo]._products.push(productWithMeta)
+      grouped[groupKey]._allProducts.push(productWithMeta)
     })
-
-    return Object.values(grouped)
+    
+    return Object.values(grouped).map((group: any) => ({
+      ...group,
+      orderNo: group._displayDo,
+      transportType: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.transportType))).filter(t => t && t !== "—").join(", ") || "—",
+      _productCount: group._allProducts.length
+    })).filter(group => group._productCount > 0)
   }, [filteredPendingOrders])
 
   return (
@@ -452,9 +468,9 @@ export default function DispatchMaterialPage() {
 
         <Button
           onClick={handleOpenDialog}
-          disabled={selectedOrders.length === 0}
+          disabled={selectedItems.length === 0}
         >
-          {selectedOrders.length > 1 ? `Select 1 Group to Dispatch` : `Dispatch Selected (${selectedOrders.length})`}
+          {selectedItems.length > 1 ? `Select 1 Group to Dispatch` : `Dispatch Selected (${selectedItems.length})`}
         </Button>
       </div>
 
@@ -464,7 +480,7 @@ export default function DispatchMaterialPage() {
             <TableRow>
               <TableHead className="w-12 text-center">
                 <Checkbox
-                  checked={displayRows.length > 0 && selectedOrders.length === displayRows.length}
+                  checked={displayRows.length > 0 && selectedItems.length === displayRows.length}
                   onCheckedChange={toggleSelectAll}
                   aria-label="Select all"
                 />
@@ -474,25 +490,25 @@ export default function DispatchMaterialPage() {
                   {col.label}
                 </TableHead>
               ))}
+              <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {displayRows.length > 0 ? (
                 displayRows.map((row) => {
-                   const rowKey = row._rowKey;
+                   const isSelected = selectedItems.some(i => i._rowKey === row._rowKey);
                    
                    return (
-                   <TableRow key={row._rowKey} className={selectedOrders.includes(rowKey) ? "bg-blue-50/50" : ""}>
+                   <TableRow key={row._rowKey} className={isSelected ? "bg-blue-50/50" : ""}>
                      <TableCell className="text-center">
                        <Checkbox
-                         checked={selectedOrders.includes(rowKey)}
-                         onCheckedChange={() => toggleSelectOrder(rowKey)}
-                         aria-label={`Select item ${rowKey}`}
+                         checked={isSelected}
+                         onCheckedChange={() => toggleSelectItem(row)}
                        />
                      </TableCell>
                      
                      {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                       <TableCell key={col.id} className="whitespace-nowrap text-center">
+                       <TableCell key={col.id} className="whitespace-nowrap text-center text-xs">
                          {col.id === "status" ? (
                             <div className="flex justify-center flex-col items-center gap-1">
                               <Badge className="bg-orange-100 text-orange-700">Pending</Badge>
@@ -501,27 +517,24 @@ export default function DispatchMaterialPage() {
                               )}
                             </div>
                          ) : col.id === "productName" ? (
-                             <div className="flex flex-col items-center">
-                                 <span className="font-medium text-slate-700">{row.productName}</span>
-                                 {row._productCount > 1 && (
-                                     <span className="text-[10px] text-slate-500">+ {row._productCount - 1} more types</span>
-                                 )}
-                             </div>
-                         ) : (
-                            row[col.id as keyof typeof row]
-                         )}
+                              <div className="flex flex-col items-center">
+                                  <span className="font-medium text-slate-700">{row._allProducts[0]?.productName}</span>
+                                  {row._productCount > 1 && (
+                                      <span className="text-[10px] text-slate-500">+ {row._productCount - 1} more types</span>
+                                  )}
+                              </div>
+                          ) : (
+                             row[col.id as keyof typeof row] || "—"
+                          )}
                        </TableCell>
                      ))}
                      
-                     {/* Action to open dialog for this specific row */}
                      <TableCell>
                          <Button variant="ghost" size="sm" onClick={() => {
-                             setSelectedOrders([rowKey]) // Select only this one
-                             setSelectedGroup(row)
-                             setDialogSelectedProducts(row._allProducts.map((p: any) => p._rowKey))
-                             setIsDialogOpen(true)
+                             setSelectedItems([row])
+                             handleOpenDialog()
                          }}>
-                             <Settings2 className="w-4 h-4 ml-2 text-slate-400 hover:text-blue-600" />
+                             <Settings2 className="w-4 h-4 text-slate-400 hover:text-blue-600" />
                          </Button>
                      </TableCell>
                    </TableRow>
@@ -529,7 +542,7 @@ export default function DispatchMaterialPage() {
                  })
                ) : (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={visibleColumns.length + 2} className="text-center py-8 text-muted-foreground">
                   No orders pending for dispatch
                 </TableCell>
               </TableRow>
@@ -542,213 +555,214 @@ export default function DispatchMaterialPage() {
         <DialogContent className="sm:max-w-6xl !max-w-6xl max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <DialogHeader className="border-b pb-4">
             <DialogTitle className="text-xl font-bold text-slate-900 leading-none">
-              Dispatch Planning: {selectedGroup?.doNumber || "Order Dispatch"}
+              Dispatch Planning
             </DialogTitle>
             <DialogDescription className="text-slate-500 mt-1.5">
               Review order details and set dispatch quantities for products.
             </DialogDescription>
           </DialogHeader>
           
-          {selectedGroup && (
-            <div className="space-y-6">
-                {/* Order Details Header */}
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mt-4">
-                    <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Order Details</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4">
-                        <div>
-                            <p className="text-xs text-slate-500 font-medium">Delivery Purpose</p>
-                            <p className="text-sm font-semibold text-slate-900">{selectedGroup.deliveryPurpose}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-slate-500 font-medium">Order Type</p>
-                            <p className="text-sm font-semibold text-slate-900">{selectedGroup.orderType}</p>
-                        </div>
-                        <div>
-                             <p className="text-xs text-slate-500 font-medium">Dates</p>
-                             <p className="text-xs font-semibold text-slate-900">
-                                 Start: {selectedGroup.startDate}<br/>
-                                 End: {selectedGroup.endDate}
-                             </p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-slate-500 font-medium">Delivery Date</p>
-                            <p className="text-sm font-semibold text-slate-900">{selectedGroup.deliveryDate}</p>
-                        </div>
-                        
-                        <div>
-                            <p className="text-xs text-slate-500 font-medium">Transport</p>
-                            <p className="text-sm font-semibold text-slate-900">{selectedGroup.transportType}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-slate-500 font-medium">Customer</p>
-                            <p className="text-sm font-semibold text-slate-900 truncate" title={selectedGroup.customerName}>{selectedGroup.customerName}</p>
-                            <p className="text-xs text-slate-500">{selectedGroup.custContactName} ({selectedGroup.whatsapp})</p>
-                        </div>
-                        <div className="md:col-span-2">
-                             <p className="text-xs text-slate-500 font-medium">Address</p>
-                             <p className="text-xs font-semibold text-slate-900 truncate" title={selectedGroup.address}>{selectedGroup.address}</p>
-                        </div>
+          <div className="space-y-8 mt-4">
+            {/* Group by Customer -> Multiple Orders -> Consolidated Table */}
+            <div className="space-y-12 mt-6">
+              {(() => {
+                const groupedByCustomer: Record<string, any[]> = {};
+                selectedItems.forEach(item => {
+                  const custName = item.customerName || item.customer_name || "Unknown";
+                  if (!groupedByCustomer[custName]) groupedByCustomer[custName] = [];
+                  groupedByCustomer[custName].push(item);
+                });
 
-                        <div>
-                            <p className="text-xs text-slate-500 font-medium">Payment Terms</p>
-                            <p className="text-sm font-semibold text-slate-900">{selectedGroup.paymentTerms}</p>
-                        </div>
-                         <div>
-                            <p className="text-xs text-slate-500 font-medium">Advance Payment</p>
-                            <p className="text-sm font-semibold text-slate-900">
-                                {selectedGroup.advanceTaken ? `Yes (${selectedGroup.advanceAmount})` : "No"}
-                            </p>
-                        </div>
-                        <div>
-                             <p className="text-xs text-slate-500 font-medium">Broker</p>
-                             <p className="text-sm font-semibold text-slate-900">
-                                 {selectedGroup.isBroker ? selectedGroup.brokerName : "No"}
-                               </p>
-                        </div>
-                         <div>
-                             <p className="text-xs text-slate-500 font-medium">Credit Status</p>
-                             <div className="flex items-center gap-2">
-                                 <span className={`text-xs font-bold px-2 py-0.5 rounded ${selectedGroup.creditStatus === 'Good' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                     {selectedGroup.creditStatus}
-                                 </span>
-                             </div>
-                        </div>
+                return Object.entries(groupedByCustomer).map(([custName, items]) => (
+                  <div key={custName} className="space-y-6">
+                    <h2 className="text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
+                      {custName}
+                      <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
+                        {items.reduce((acc, current) => acc + current._productCount, 0)} PRODUCTS
+                      </Badge>
+                    </h2>
 
-                        <div className="col-span-2 md:col-span-4 grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t border-slate-200 mt-2">
-                           <div className="flex items-center gap-2">
-                               <div className={`w-2 h-2 rounded-full ${selectedGroup.weDealInSku ? 'bg-green-500' : 'bg-red-500'}`} />
-                               <span className="text-xs text-slate-600">We Deal in SKU?</span>
-                           </div>
-                            <div className="flex items-center gap-2">
-                               <div className={`w-2 h-2 rounded-full ${selectedGroup.dispatchConfirmed ? 'bg-green-500' : 'bg-red-500'}`} />
-                               <span className="text-xs text-slate-600">Dispatch Confirmed?</span>
-                           </div>
-                            <div className="flex items-center gap-2">
-                               <div className={`w-2 h-2 rounded-full ${selectedGroup.overallStatus === 'Approved' ? 'bg-green-500' : 'bg-red-500'}`} />
-                               <span className="text-xs text-slate-600">Overall Status: {selectedGroup.overallStatus}</span>
-                           </div>
-                           <div className="flex items-center gap-2">
-                               <div className={`w-2 h-2 rounded-full ${selectedGroup.custConfirmation ? 'bg-green-500' : 'bg-red-500'}`} />
-                               <span className="text-xs text-slate-600">Cust. Confirmed?</span>
-                           </div>
-                        </div>
-                    </div>
-                </div>
+                    {items.map((group) => (
+                      Object.entries(group._ordersMap).map(([baseDo, orderDetails]: [string, any], orderIdx) => {
+                        const isExpanded = expandedOrders.includes(baseDo);
+                        const toggleExpand = () => {
+                          setExpandedOrders(prev => isExpanded ? prev.filter(id => id !== baseDo) : [...prev, baseDo]);
+                        };
 
-                {/* Product Table */}
-                <div className="border rounded-md mt-4 max-h-[400px] overflow-auto">
-                    <Table>
-                        <TableHeader className="bg-slate-50 sticky top-0 z-10">
+                        return (
+                          <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
+                            <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
+                              <div className="flex items-center gap-4">
+                                <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
+                                  ORDER: {baseDo}
+                                </Badge>
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">Section {orderIdx + 1}</span>
+                                  <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products.length} Items Selected</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20 rounded-full">
+                                  {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                                </Button>
+                              </div>
+                            </div>
+
+                            {isExpanded && (
+                              <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
+                                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Depo Name</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.depoName || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Purpose</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.deliveryPurpose}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Order Type</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.orderType}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Dates</p>
+                                      <p className="text-xs font-bold text-slate-900">S: {formatDate(orderDetails.startDate)} | E: {formatDate(orderDetails.endDate)}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Date</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.deliveryDate)}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Transport</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.transportType}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Contact Person</p>
+                                      <p className="text-sm font-bold text-slate-900 truncate">{orderDetails.custContactName || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">WhatsApp No.</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.whatsapp || "—"}</p>
+                                    </div>
+                                    <div className="col-span-2">
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Address</p>
+                                      <p className="text-sm font-bold text-slate-900 truncate" title={orderDetails.address}>{orderDetails.address}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Payment Terms</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.paymentTerms}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Advance Amount</p>
+                                      <p className="text-base font-black text-blue-700 leading-tight">
+                                        ₹{orderDetails.advanceAmount || 0} {orderDetails.advanceTaken ? "(REQ)" : "(NO)"}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Broker</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.isBroker ? orderDetails.brokerName : "No"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Credit Status</p>
+                                      <Badge className={cn("text-[10px] font-bold px-2 py-0.5", orderDetails.creditStatus === 'Good' ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-red-100 text-red-700 hover:bg-red-100')}>
+                                        {orderDetails.creditStatus}
+                                      </Badge>
+                                    </div>
+                                    <div className="col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4 mt-2">
+                                      <div className="bg-amber-100 p-2 rounded-lg"><Settings2 className="h-5 w-5 text-amber-600" /></div>
+                                      <div>
+                                        <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
+                                        <p className="text-sm font-medium text-slate-700 italic leading-snug">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    ))}
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between border-b pb-2">
+                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                          Consolidated Product List - {custName}
+                        </h3>
+                      </div>
+                      <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                        <Table>
+                          <TableHeader className="bg-slate-50">
                             <TableRow>
-                                <TableHead className="w-[50px] text-center">
-                                    <Checkbox 
-                                        checked={dialogSelectedProducts.length > 0 && dialogSelectedProducts.length === selectedGroup._allProducts.length}
-                                        onCheckedChange={(checked) => {
-                                            if (checked) setDialogSelectedProducts(selectedGroup._allProducts.map((p: any) => p._rowKey))
-                                            else setDialogSelectedProducts([])
-                                        }}
-                                    />
-                                </TableHead>
-                                <TableHead>Order No</TableHead>
-                                <TableHead>Product Name</TableHead>
-                                <TableHead>Ordered Qty</TableHead>
-                                <TableHead>Approval Qty</TableHead>
-                                <TableHead className="w-[150px]">Qty to Dispatch</TableHead>
-                                <TableHead className="w-[180px]">Delivery From</TableHead>
-                                <TableHead>Remaining Qty</TableHead>
-                                <TableHead>Status</TableHead>
+                              <TableHead className="w-12 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">
+                                <Checkbox 
+                                  checked={items.flatMap(i => i._allProducts).every(p => dialogSelectedProducts.includes(p._rowKey))}
+                                  onCheckedChange={(checked) => {
+                                    const keys = items.flatMap(i => i._allProducts).map(p => p._rowKey);
+                                    if (checked) setDialogSelectedProducts(prev => Array.from(new Set([...prev, ...keys])));
+                                    else setDialogSelectedProducts(prev => prev.filter(k => !keys.includes(k)));
+                                  }}
+                                />
+                              </TableHead>
+                              <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Sub-Order</TableHead>
+                              <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Product Name</TableHead>
+                              <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Ordered</TableHead>
+                              <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Approval</TableHead>
+                              <TableHead className="w-32 text-[10px] uppercase font-black text-slate-500 tracking-wider">Qty to Dispatch</TableHead>
+                              <TableHead className="w-40 text-[10px] uppercase font-black text-slate-500 tracking-wider">Delivery From</TableHead>
+                              <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Remaining</TableHead>
+                              <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Status</TableHead>
                             </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {selectedGroup._allProducts.map((prod: any) => {
-                                const rowKey = prod._rowKey;
-                                // Default dispatch qty to remainingDispatchQty if available, else approvalQty
-                                const defaultDispatchQty = prod.remainingDispatchQty !== undefined ? prod.remainingDispatchQty : prod.approvalQty;
-                                const currentDispatchQty = dispatchDetails[rowKey]?.qty !== undefined ? dispatchDetails[rowKey].qty : defaultDispatchQty;
-                                
-                                // Validation limit is remainingDispatchQty
-                                const maxLimit = prod.remainingDispatchQty !== undefined ? prod.remainingDispatchQty : prod.approvalQty;
-                                
-                                // Remaining Qty Calc: (Limit) - (Current Input)
-                                const remainingQty = (maxLimit || 0) - (Number(currentDispatchQty) || 0);
+                          </TableHeader>
+                          <TableBody>
+                            {items.flatMap(i => i._allProducts).map((prod) => {
+                              const rowKey = prod._rowKey;
+                              const maxLimit = prod.remainingDispatchQty !== undefined ? prod.remainingDispatchQty : prod.approvalQty;
+                              const currentDispatchQty = dispatchDetails[rowKey]?.qty !== undefined ? dispatchDetails[rowKey].qty : maxLimit;
 
-                                return (
-                                <TableRow key={rowKey} className={dialogSelectedProducts.includes(rowKey) ? "bg-blue-50/30" : ""}>
-                                    <TableCell className="text-center">
-                                        <Checkbox 
-                                            checked={dialogSelectedProducts.includes(rowKey)}
-                                            onCheckedChange={() => toggleSelectDialogProduct(rowKey)}
-                                        />
-                                    </TableCell>
-                                    <TableCell className="text-xs font-semibold text-slate-700">{prod.orderNo || "—"}</TableCell>
-                                    <TableCell className="font-medium text-xs">{prod.productName || "—"}</TableCell>
-                                    <TableCell className="text-xs font-bold">{prod.orderQty}</TableCell>
-                                    <TableCell className="text-xs font-bold text-blue-600">{prod.approvalQty || "—"}</TableCell>
-                                    <TableCell>
-                                        <Input
-                                            type="number"
-                                            className="h-8 text-xs"
-                                            placeholder="Qty"
-                                            value={currentDispatchQty}
-                                            max={maxLimit}
-                                            onChange={(e) => {
-                                                let val = Number(e.target.value);
-                                                const maxVal = Number(maxLimit);
-                                                
-                                                if (val > maxVal) {
-                                                    val = maxVal;
-                                                    toast({
-                                                        title: "Limit Exceeded",
-                                                        description: `Dispatch Ref cannot exceed Remaining Qty (${maxVal})`,
-                                                        variant: "destructive"
-                                                    })
-                                                }
-
-                                                setDispatchDetails((prev) => ({
-                                                ...prev,
-                                                [rowKey]: {
-                                                    ...prev[rowKey],
-                                                    qty: val.toString()
-                                                }
-                                                }))
-                                            }}
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Select
-                                            value={dispatchDetails[rowKey]?.deliveryFrom || "in-stock"} // Default to In Stock
-                                            onValueChange={(val) =>
-                                              setDispatchDetails((prev) => ({
-                                                ...prev,
-                                                [rowKey]: {
-                                                  ...prev[rowKey],
-                                                  deliveryFrom: val
-                                                }
-                                              }))
-                                            }
-                                        >
-                                          <SelectTrigger className="h-8 text-xs">
-                                            <SelectValue placeholder="Source" />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="in-stock">In Stock</SelectItem>
-                                            <SelectItem value="production">Production</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                    </TableCell>
-                                    <TableCell className="text-xs font-bold text-slate-500">
-                                        {maxLimit}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline" className="text-[10px] bg-orange-50 text-orange-700 border-orange-200">Pending</Badge>
-                                    </TableCell>
+                              return (
+                                <TableRow key={rowKey} className={cn(dialogSelectedProducts.includes(rowKey) ? "bg-blue-50/30" : "")}>
+                                  <TableCell className="text-center p-3">
+                                    <Checkbox checked={dialogSelectedProducts.includes(rowKey)} onCheckedChange={() => toggleSelectDialogProduct(rowKey)} />
+                                  </TableCell>
+                                  <TableCell className="text-[10px] font-semibold text-slate-700 p-1">{prod.orderNo || "—"}</TableCell>
+                                  <TableCell className="font-medium text-[11px] p-2">{prod.productName || "—"}</TableCell>
+                                  <TableCell className="text-[10px] font-bold p-2 text-center">{prod.orderQty}</TableCell>
+                                  <TableCell className="text-[10px] font-bold text-blue-600 p-2 text-center">{prod.approvalQty || "—"}</TableCell>
+                                  <TableCell className="p-2">
+                                    <Input type="number" className="h-7 text-[10px] font-bold" value={currentDispatchQty} onChange={(e) => {
+                                      let val = Number(e.target.value);
+                                      const maxVal = Number(maxLimit);
+                                      if (val > maxVal) val = maxVal;
+                                      setDispatchDetails((prev) => ({ ...prev, [rowKey]: { ...prev[rowKey], qty: val.toString() } }));
+                                    }} />
+                                  </TableCell>
+                                  <TableCell className="p-2">
+                                    <Select value={dispatchDetails[rowKey]?.deliveryFrom || "in-stock"} onValueChange={(val) => setDispatchDetails((prev) => ({ ...prev, [rowKey]: { ...prev[rowKey], deliveryFrom: val } }))}>
+                                      <SelectTrigger className="h-7 text-[10px] font-bold"><SelectValue placeholder="Source" /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="in-stock" className="text-[10px]">In Stock</SelectItem>
+                                        <SelectItem value="production" className="text-[10px]">Production</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                  <TableCell className="text-[10px] font-bold text-slate-500 p-2 text-center">{maxLimit}</TableCell>
+                                  <TableCell className="p-2 text-center">
+                                    <Badge variant="outline" className="text-[9px] bg-orange-50 text-orange-700 border-orange-200 uppercase font-black">Pending</Badge>
+                                  </TableCell>
                                 </TableRow>
-                            )})}
-                        </TableBody>
-                    </Table>
-                </div>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
-          )}
+          </div>
 
           <DialogFooter className="mt-4 border-t pt-4">
              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
