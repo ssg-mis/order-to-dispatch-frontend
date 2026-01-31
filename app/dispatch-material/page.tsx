@@ -287,9 +287,10 @@ export default function DispatchMaterialPage() {
 
 
   /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customer_name || order.customerName || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
+      search: "",
       status: "",
       startDate: "",
       endDate: "",
@@ -299,39 +300,62 @@ export default function DispatchMaterialPage() {
   const filteredPendingOrders = pendingOrders.filter(order => {
       let matches = true
       
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
+      // 1. Search Filter (DO Number, Customer Name, Product Name)
+      if (filterValues.search) {
+          const searchTerm = filterValues.search.toLowerCase();
+          const orderNo = (order.order_no || order.orderNo || "").toLowerCase();
+          const customerName = (order.customerName || order.customer_name || "").toLowerCase();
+          const productName = (order.product_name || "").toLowerCase();
+          
+          if (!orderNo.includes(searchTerm) && !customerName.includes(searchTerm) && !productName.includes(searchTerm)) {
+              matches = false;
+          }
+      }
+
+      // 2. Party Name Filter
+      if (matches && filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
           matches = false
       }
 
-      const orderDateStr = order.dispatchData?.dispatchDate || order.timestamp
-      if (orderDateStr) {
-          const orderDate = new Date(orderDateStr)
-          if (filterValues.startDate) {
-              const start = new Date(filterValues.startDate)
-              start.setHours(0,0,0,0)
-              if (orderDate < start) matches = false
-          }
-          if (filterValues.endDate) {
-              const end = new Date(filterValues.endDate)
-              end.setHours(23,59,59,999)
-              if (orderDate > end) matches = false
+      // 3. Date Range Filter
+      if (matches && (filterValues.startDate || filterValues.endDate)) {
+          const orderDateStr = order.dispatchData?.dispatchDate || order.deliveryDate || order.timestamp;
+          if (orderDateStr) {
+              const orderDate = new Date(orderDateStr);
+              orderDate.setHours(0, 0, 0, 0);
+
+              if (filterValues.startDate) {
+                  const start = new Date(filterValues.startDate)
+                  start.setHours(0, 0, 0, 0)
+                  if (orderDate < start) matches = false
+              }
+              if (matches && filterValues.endDate) {
+                  const end = new Date(filterValues.endDate)
+                  end.setHours(0, 0, 0, 0)
+                  if (orderDate > end) matches = false
+              }
+          } else if (filterValues.startDate || filterValues.endDate) {
+              // If filtering by date but order has no date, treat as no match
+              matches = false;
           }
       }
 
-      if (filterValues.status) {
+      // 4. Status Filter (On Time / Expire)
+      if (matches && filterValues.status) {
           const today = new Date()
           today.setHours(0, 0, 0, 0)
           const targetDateStr = order.deliveryDate || order.timestamp
           if (targetDateStr) {
              const targetDate = new Date(targetDateStr)
+             targetDate.setHours(0, 0, 0, 0)
              
              if (filterValues.status === "expire") {
-                 if (targetDate < today) matches = true
-                 else matches = false
+                 if (targetDate >= today) matches = false
              } else if (filterValues.status === "on-time") {
-                 if (targetDate >= today) matches = true
-                 else matches = false
+                 if (targetDate < today) matches = false
              }
+          } else {
+              matches = false;
           }
       }
 

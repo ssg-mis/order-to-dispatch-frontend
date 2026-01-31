@@ -21,7 +21,7 @@ interface WorkflowStageShellProps {
   historyData: any[]
   historyContent?: React.ReactNode
   partyNames?: string[]
-  onFilterChange?: (filters: { status: string; startDate: string; endDate: string; partyName: string }) => void
+  onFilterChange?: (filters: { search: string; status: string; startDate: string; endDate: string; partyName: string }) => void
   remarksColName?: string
   showStatusFilter?: boolean
 }
@@ -39,6 +39,7 @@ export function WorkflowStageShell({
   showStatusFilter = false,
 }: WorkflowStageShellProps) {
   const [filters, setFilters] = React.useState({
+      search: "",
       status: "",
       startDate: "",
       endDate: "",
@@ -85,13 +86,18 @@ export function WorkflowStageShell({
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search DO Number, Customer..." className="pl-9 bg-transparent h-9" />
+                <Input 
+                  placeholder="Search DO Number, Customer..." 
+                  className="pl-9 bg-transparent h-9" 
+                  value={filters.search}
+                  onChange={(e) => updateFilter("search", e.target.value)}
+                />
               </div>
               <Button variant="outline" size="icon" className="bg-transparent h-9 w-9">
                 <Filter className="h-4 w-4" />
               </Button>
               <Button variant="outline" size="icon" className="bg-transparent h-9 w-9" onClick={() => {
-                  const reset = { status: "", startDate: "", endDate: "", partyName: "" };
+                  const reset = { search: "", status: "", startDate: "", endDate: "", partyName: "" };
                   setFilters(reset);
                   if (onFilterChange) onFilterChange(reset);
               }}>
