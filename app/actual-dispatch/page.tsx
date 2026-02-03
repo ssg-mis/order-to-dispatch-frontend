@@ -847,7 +847,8 @@ export default function ActualDispatchPage() {
                                     <TableCell className="p-3">
                                         <Input
                                             type="number"
-                                            className="h-10 text-xs font-black border-2 border-slate-100 rounded-xl focus:border-blue-500 transition-colors"
+                                            readOnly
+                                            className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-slate-50 cursor-not-allowed focus:ring-0 transition-colors shadow-sm"
                                             placeholder="Actual Qty"
                                             value={confirmDetails[rowKey]?.qty || ""}
                                             onChange={(e) =>
@@ -889,34 +890,10 @@ export default function ActualDispatchPage() {
                                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Vehicle Registration Number</Label>
                                <Input 
                                  placeholder="e.g. MH-12-AB-1234" 
-                                 className="h-12 border-2 border-slate-200 rounded-xl px-4 font-black text-lg focus:border-purple-500 transition-colors uppercase"
+                                 className="h-12 border-2 border-slate-200 rounded-xl px-4 font-black text-lg focus:border-purple-500 transition-colors uppercase bg-white"
                                  value={vehicleNumber}
                                  onChange={(e) => setVehicleNumber(e.target.value)}
                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                               <div className="space-y-1.5">
-                                  <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Check Status</Label>
-                                  <Select value={vehicleData.checkStatus} onValueChange={(v) => setVehicleData(p => ({...p, checkStatus: v}))}>
-                                     <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl font-bold bg-white">
-                                        <SelectValue placeholder="Status" />
-                                     </SelectTrigger>
-                                     <SelectContent>
-                                        <SelectItem value="Accept">Accept</SelectItem>
-                                        <SelectItem value="Reject">Reject</SelectItem>
-                                     </SelectContent>
-                                  </Select>
-                               </div>
-                               <div className="space-y-1.5">
-                                  <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Remarks</Label>
-                                  <Input 
-                                    placeholder="Add notes..." 
-                                    className="h-12 border-2 border-slate-200 rounded-xl bg-white font-medium"
-                                    value={vehicleData.remarks}
-                                    onChange={(e) => setVehicleData(p => ({...p, remarks: e.target.value}))}
-                                  />
-                               </div>
                             </div>
                          </div>
 
@@ -955,6 +932,30 @@ export default function ActualDispatchPage() {
                                </div>
                             </div>
                          </div>
+
+                         <div className="pt-4 border-t border-slate-200 grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Check Status</Label>
+                               <Select value={vehicleData.checkStatus} onValueChange={(v) => setVehicleData(p => ({...p, checkStatus: v}))}>
+                                  <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl font-bold bg-white focus:ring-2 focus:ring-purple-500">
+                                     <SelectValue placeholder="Status" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                     <SelectItem value="Accept">Accept</SelectItem>
+                                     <SelectItem value="Reject">Reject</SelectItem>
+                                  </SelectContent>
+                               </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Remarks</Label>
+                               <Input 
+                                 placeholder="Add notes..." 
+                                 className="h-12 border-2 border-slate-200 rounded-xl bg-white font-medium focus:border-purple-500 transition-colors"
+                                 value={vehicleData.remarks}
+                                 onChange={(e) => setVehicleData(p => ({...p, remarks: e.target.value}))}
+                               />
+                            </div>
+                         </div>
                       </div>
                    </div>
 
@@ -972,7 +973,7 @@ export default function ActualDispatchPage() {
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                              <div className="space-y-1.5">
                                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Actual Qty</Label>
-                                <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold bg-slate-50/30" 
+                                <Input type="number" step="0.01" className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-white focus:border-blue-500 transition-colors" 
                                   value={loadData.actualQty} onChange={(e) => setLoadData(p => ({...p, actualQty: e.target.value}))} />
                              </div>
                              <div className="space-y-1.5">

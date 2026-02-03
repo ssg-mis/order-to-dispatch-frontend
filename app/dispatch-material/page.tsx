@@ -779,6 +779,43 @@ export default function DispatchMaterialPage() {
                               );
                             })}
                           </TableBody>
+                          <tfoot className="bg-slate-100/80 border-t-2 border-slate-200">
+                            <TableRow>
+                              <TableCell colSpan={3} className="p-3 text-right">
+                                <span className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Totals:</span>
+                              </TableCell>
+                              <TableCell className="p-3 text-center">
+                                <Badge variant="secondary" className="bg-blue-100 text-blue-800 font-black px-2 shadow-sm border-blue-200">
+                                  {items.flatMap(i => i._allProducts).reduce((sum, p) => sum + (parseFloat(p.orderQty) || 0), 0)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="p-3 text-center">
+                                <Badge variant="secondary" className="bg-blue-100 text-blue-800 font-black px-2 shadow-sm border-blue-200">
+                                  {items.flatMap(i => i._allProducts).reduce((sum, p) => sum + (parseFloat(p.approvalQty) || 0), 0)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="p-3">
+                                <Badge variant="secondary" className="bg-green-100 text-green-800 font-black px-2 shadow-sm border-green-200 w-full justify-center">
+                                  {items.flatMap(i => i._allProducts).reduce((sum, p) => {
+                                    const rowKey = p._rowKey;
+                                    const maxLimit = p.remainingDispatchQty !== undefined ? p.remainingDispatchQty : p.approvalQty;
+                                    const currentDispatchQty = dispatchDetails[rowKey]?.qty !== undefined ? dispatchDetails[rowKey].qty : maxLimit;
+                                    return sum + (parseFloat(currentDispatchQty) || 0);
+                                  }, 0)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell />
+                              <TableCell className="p-3 text-center">
+                                <Badge variant="secondary" className="bg-slate-200 text-slate-700 font-black px-2 shadow-sm border-slate-300">
+                                  {items.flatMap(i => i._allProducts).reduce((sum, p) => {
+                                    const maxLimit = p.remainingDispatchQty !== undefined ? p.remainingDispatchQty : p.approvalQty;
+                                    return sum + (parseFloat(maxLimit) || 0);
+                                  }, 0)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell />
+                            </TableRow>
+                          </tfoot>
                         </Table>
                       </div>
                     </div>

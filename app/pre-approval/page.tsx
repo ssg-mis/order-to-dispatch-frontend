@@ -27,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Settings2, Loader2, ChevronDown, ChevronUp } from "lucide-react"
+import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { skuApi, preApprovalApi } from "@/lib/api-service"
@@ -92,7 +92,7 @@ export default function PreApprovalPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [preApprovalData, setPreApprovalData] = useState<any>(null)
-  const [productRates, setProductRates] = useState<{ [key: string]: { skuName: string; approvalQty: string; rate: string; remark: string; productName: string; rateOfMaterial: string } }>({})
+  const [productRates, setProductRates] = useState<{ [key: string]: { skuName: string; approvalQty: string; rate: string; remark: string; productName: string; rateOfMaterial: string; orderQty?: string } }>({})
   const [selectedRows, setSelectedRows] = useState<string[]>([])
   const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false)
   const [selectedProductRows, setSelectedProductRows] = useState<string[]>([])
@@ -100,6 +100,7 @@ export default function PreApprovalPage() {
 
   const [history, setHistory] = useState<any[]>([])
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
+  const [dialogNewProducts, setDialogNewProducts] = useState<{ [key: string]: any[] }>({})
   
   // Date formatting helper
   const formatDate = (dateStr: string) => {
@@ -329,6 +330,195 @@ export default function PreApprovalPage() {
     }
   }
 
+  const handleAddProductRow = (baseDo: string, orderData: any) => {
+    // Calculate next suffix (A, B, C...)
+    const occupiedSuffixes = new Set<string>();
+    [...(orderData._products || []), ...(dialogNewProducts[baseDo] || [])].forEach(p => {
+      const id = p.orderNo || p._originalOrderId || "";
+      const match = id.match(/([A-Z])$/i);
+      if (match) occupiedSuffixes.add(match[1].toUpperCase());
+    });
+
+    let charCode = 65; // 'A'
+    while (occupiedSuffixes.has(String.fromCharCode(charCode))) {
+      charCode++;
+    }
+    const nextSuffix = String.fromCharCode(charCode);
+    const fullOrderNo = `${baseDo}${nextSuffix}`;
+
+    const newId = `new-${Math.random().toString(36).substr(2, 9)}`;
+    const newProduct = {
+      _pid: newId,
+      id: null,
+      productName: "",
+      oilType: "",
+      uom: "Ltr",
+      orderQty: "1",
+      rateOfMaterial: "0",
+      _isNew: true,
+      _baseDo: baseDo,
+      _rowKey: `${baseDo}-${newId}`,
+      _originalOrderId: fullOrderNo,
+      _orderData: orderData
+    };
+    
+    setDialogNewProducts(prev => ({
+      ...prev,
+      [baseDo]: [...(prev[baseDo] || []), newProduct]
+    }));
+
+    // Auto-select the new row and initialize rates
+    setSelectedProductRows(prev => [...prev, newProduct._rowKey]);
+    setProductRates(prev => ({
+      ...prev,
+      [newProduct._rowKey]: {
+        productName: "",
+        skuName: "",
+        approvalQty: "",
+        rateOfMaterial: "0",
+        orderQty: "1",
+        rate: "",
+        remark: ""
+      }
+    }));
+  };
+
+  const handleApproveWithAdditions = async (itemsToApprove: any[]) => {
+    setIsApproving(true)
+    try {
+      const successfulApprovals: any[] = []
+      const failedApprovals: any[] = []
+      
+      for (const item of itemsToApprove) {
+        try {
+          const product = item._product
+          const productKey = item._rowKey
+          const rateData = productRates[productKey]
+
+          if (product._isNew) {
+            // Use orderApi.create for new products
+            const orderData = {
+              ...product._orderData,
+              order_no: product._originalOrderId, // Use suffixed order number (DO-065C etc)
+              products: [{
+                product_name: rateData?.skuName || rateData?.productName,
+                uom: product.uom,
+                order_quantity: parseFloat(rateData?.orderQty || "0"),
+                rate_of_material: parseFloat(rateData?.rateOfMaterial || "0"),
+                approval_qty: parseFloat(rateData?.approvalQty || "0"),
+                rate_per_ltr: parseFloat(rateData?.rate || "0"),
+                remark: rateData?.remark || "",
+                sku_name: rateData?.skuName
+              }]
+            };
+            
+            // Map keys back to snake_case if they were camelCase
+            const mappedOrderData: any = {
+              planned_1: new Date().toISOString() // Mark as passed Step 1 so it shows in Pre-Approval
+            };
+            Object.entries(orderData).forEach(([key, val]) => {
+              if (key === 'customerName') mappedOrderData.customer_name = val;
+              else if (key === 'orderType') mappedOrderData.order_type = val;
+              else if (key === 'orderPurpose') mappedOrderData.order_type_delivery_purpose = val;
+              else if (key === 'startDate') mappedOrderData.start_date = val;
+              else if (key === 'endDate') mappedOrderData.end_date = val;
+              else if (key === 'deliveryDate') mappedOrderData.delivery_date = val;
+              else if (key === 'soDate') mappedOrderData.party_so_date = val;
+              else if (key === 'contactPerson') mappedOrderData.customer_contact_person_name = val;
+              else if (key === 'whatsappNo') mappedOrderData.customer_contact_person_whatsapp_no = val;
+              else if (key === 'customerAddress') mappedOrderData.customer_address = val;
+              else if (key === 'paymentTerms') mappedOrderData.payment_terms = val;
+              else if (key === 'advancePaymentTaken') mappedOrderData.advance_payment_to_be_taken = val;
+              else if (key === 'advanceAmount') mappedOrderData.advance_amount = val;
+              else if (key === 'isBrokerOrder') mappedOrderData.is_order_through_broker = val;
+              else if (key === 'brokerName') mappedOrderData.broker_name = val;
+              else if (key === 'transportType') mappedOrderData.type_of_transporting = val;
+              else if (key === 'depoName') mappedOrderData.depo_name = val;
+              else if (key === 'orderPunchRemarks') mappedOrderData.order_punch_remarks = val;
+              else if (key === 'customerType') mappedOrderData.customer_type = val;
+              else if (key === 'totalWithGst') mappedOrderData.total_amount_with_gst = val;
+              else mappedOrderData[key] = val;
+            });
+
+            const { orderApi } = await import('@/lib/api-service');
+            await orderApi.create(mappedOrderData);
+          } else {
+            // Existing logic for existing products
+            const submissionData = {
+              sku_name: rateData?.skuName,
+              product_name: rateData?.productName || rateData?.skuName,
+              approval_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
+              remaining_dispatch_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
+              rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : null,
+              rate_of_material: rateData?.rateOfMaterial ? parseFloat(rateData.rateOfMaterial) : null,
+              remark: rateData?.remark || null,
+            }
+            await preApprovalApi.submit(product.id, submissionData)
+          }
+          
+          successfulApprovals.push(item)
+          
+          const historyEntry = {
+            orderNo: item._displayDo,
+            customerName: item.customerName || "Unknown",
+            stage: "Pre-Approval",
+            status: "Completed" as const,
+            processedBy: "Current User",
+            timestamp: new Date().toISOString(),
+            remarks: rateData?.remark || "-",
+            orderType: item.orderType || "pre-approval"
+          }
+          saveWorkflowHistory(historyEntry)
+          
+        } catch (error: any) {
+          console.error(`Failed to approve:`, error)
+          failedApprovals.push({ item, error: error?.message || "Unknown error" })
+        }
+      }
+      
+      if (successfulApprovals.length > 0) {
+        toast({ title: "Success", description: "Approvals and additions processed." });
+        await fetchPendingOrders();
+        await fetchHistory();
+        setDialogNewProducts({});
+      }
+      
+      if (failedApprovals.length > 0) {
+        toast({ title: "Failed", description: "Some items failed to process.", variant: "destructive" });
+      }
+      
+      setSelectedRows([])
+      setIsBulkDialogOpen(false)
+      setProductRates({})
+    } finally {
+      setIsApproving(false)
+    }
+  }
+
+  const handleDeleteProduct = async (id: number, displayDo: string) => {
+    if (!window.confirm(`Are you sure you want to delete product from ${displayDo}?`)) return;
+    
+    try {
+      const { orderApi } = await import('@/lib/api-service');
+      const response = await orderApi.delete(id);
+      
+      if (response.success) {
+        toast({
+          title: "Product Deleted",
+          description: `Product from ${displayDo} has been removed.`,
+        });
+        fetchPendingOrders();
+      }
+    } catch (error: any) {
+      console.error("Failed to delete product:", error);
+      toast({
+        title: "Delete Failed",
+        description: error?.message || "Could not delete the product.",
+        variant: "destructive",
+      });
+    }
+  };
+
 
 
   const destinationColumnsCount = visibleColumns.length + 1
@@ -421,11 +611,14 @@ export default function PreApprovalPage() {
       // Store/Update details for this base DO group
       if (!grouped[groupKey]._ordersMap[baseDo]) {
         grouped[groupKey]._ordersMap[baseDo] = {
+          customerName: order.customerName,
+          customerType: order.customerType,
           orderPurpose: order.orderPurpose,
           orderType: order.orderType,
           startDate: order.startDate,
           endDate: order.endDate,
           deliveryDate: order.deliveryDate,
+          soDate: order.soDate,
           transportType: order.transportType,
           contactPerson: order.contactPerson,
           whatsappNo: order.whatsappNo,
@@ -437,17 +630,22 @@ export default function PreApprovalPage() {
           brokerName: order.brokerName,
           depoName: order.depoName,
           orderPunchRemarks: order.orderPunchRemarks,
+          totalWithGst: order.totalWithGst,
           _products: []
         }
       }
       
       // Aggregate products and link them to their original order ID
       products.forEach((prod: any) => {
+        // Create a copy of the order data (excluding large arrays) to reference during processing
+        const { _allProducts, _ordersMap, ...cleanOrderData } = grouped[groupKey]
+        
         const productWithId = {
           ...prod,
           _originalOrderId: originalOrderId,
           _baseDo: baseDo,
-          _rowKey: `${groupKey}-${prod._pid || prod.id}`
+          _rowKey: `${groupKey}-${prod._pid || prod.id}`,
+          _orderData: cleanOrderData // Inject order data for use in submission/processing
         }
         grouped[groupKey]._allProducts.push(productWithId)
         grouped[groupKey]._ordersMap[baseDo]._products.push(productWithId)
@@ -484,16 +682,42 @@ export default function PreApprovalPage() {
     )
   }
 
-  const toggleSelectProductRow = (key: string) => {
-    setSelectedProductRows(prev => 
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    )
+  const toggleSelectProductRow = (key: string, product?: any) => {
+    setSelectedProductRows(prev => {
+      const isCurrentlySelected = prev.includes(key)
+      
+      // If selecting a product and it's not already in productRates, initialize it
+      if (!isCurrentlySelected && product && !productRates[key]) {
+        setProductRates(prevRates => ({
+          ...prevRates,
+          [key]: {
+            productName: product.productName || product.oilType || "",
+            skuName: product.skuName || "",
+            approvalQty: product.approvalQty || "",
+            rateOfMaterial: product.rateOfMaterial || "",
+            orderQty: product.orderQty || "",  // Initialize orderQty from existing product
+            rate: "",
+            remark: ""
+          }
+        }))
+      }
+      
+      return isCurrentlySelected ? prev.filter(k => k !== key) : [...prev, key]
+    })
   }
 
   const selectedItems = displayRows.filter(r => selectedRows.includes(r._rowKey))
   
-  // Aggregate all products from selected items for the dialog summary count
-  const allProductsFromSelectedOrders = selectedItems.flatMap(order => order._allProducts || [])
+   // Aggregate all products from selected items for the dialog summary count
+  const allProductsFromSelectedOrders = useMemo(() => {
+    return selectedItems.flatMap(order => {
+        const existing = order._allProducts || [];
+        // Extract baseDo from order details map (it's the key)
+        const baseDoKey = Object.keys(order._ordersMap)[0];
+        const nestedNew = dialogNewProducts[baseDoKey] || [];
+        return [...existing, ...nestedNew];
+    });
+  }, [selectedItems, dialogNewProducts]);
 
   return (
     <WorkflowStageShell
@@ -594,6 +818,10 @@ export default function PreApprovalPage() {
                                       <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.endDate)}</p>
                                     </div>
                                     <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">SO Date</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.soDate)}</p>
+                                    </div>
+                                    <div>
                                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Date</p>
                                       <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.deliveryDate)}</p>
                                     </div>
@@ -643,6 +871,20 @@ export default function PreApprovalPage() {
                               </div>
                             )}
 
+                            <div className="flex justify-between items-center px-5 pt-4">
+                                <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                    <Badge variant="outline" className="bg-blue-50">SKU LIST</Badge>
+                                </h3>
+                                <Button 
+                                    onClick={() => handleAddProductRow(baseDo, orderDetails)}
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-8 gap-2 bg-white hover:bg-blue-50 text-blue-600 border-blue-200"
+                                >
+                                    <Plus className="h-4 w-4" /> Add SKU
+                                </Button>
+                            </div>
+
                             {/* Render Product Table for this DO */}
                             <div className="px-5 pb-6">
                               <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
@@ -655,16 +897,18 @@ export default function PreApprovalPage() {
                                       <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Select SKU</TableHead>
                                       <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Rate (Mat.)</TableHead>
                                       <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Appr. Qty</TableHead>
-                                      <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Final Rate</TableHead>
-                                      <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Remarks</TableHead>
-                                    </TableRow>
+                                       <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Final Rate</TableHead>
+                                       <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Remarks</TableHead>
+                                       <TableHead className="w-10 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">Action</TableHead>
+                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
-                                    {orderDetails._products.map((product: any) => {
+                                    {[...orderDetails._products, ...(dialogNewProducts[baseDo] || [])].map((product: any) => {
                                       const rowKey = product._rowKey
                                       const isSelected = selectedProductRows.includes(rowKey)
                                       const hasError = qtyValidationErrors[rowKey]
-                                      const maxQty = product.orderQty || 0
+                                       const isNew = product._isNew;
+                                       const maxQty = isNew ? (parseFloat(productRates[rowKey]?.orderQty || "0") || 0) : (parseFloat(product.orderQty) || 0)
                                       
                                       return (
                                         <TableRow 
@@ -677,7 +921,7 @@ export default function PreApprovalPage() {
                                           <TableCell className="text-center p-3">
                                             <Checkbox 
                                               checked={isSelected}
-                                              onCheckedChange={() => toggleSelectProductRow(rowKey)}
+                                              onCheckedChange={() => toggleSelectProductRow(rowKey, product)}
                                             />
                                           </TableCell>
                                           <TableCell className="p-3">
@@ -686,10 +930,41 @@ export default function PreApprovalPage() {
                                               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{product._originalOrderId}</span>
                                             </div>
                                           </TableCell>
-                                          <TableCell className="p-3">
-                                            <Badge variant="outline" className="border-blue-200 text-blue-700 font-black px-2">{maxQty}</Badge>
-                                          </TableCell>
-                                          <TableCell className="p-2 min-w-[180px]">
+                                           <TableCell className="p-3">
+                                             {!isNew ? (
+                                               <Badge variant="outline" className="border-blue-200 text-blue-700 font-black px-2">{maxQty}</Badge>
+                                             ) : (
+                                               <Input 
+                                                 type="number"
+                                                 className="h-9 w-20 text-xs font-black bg-blue-50 border-blue-200 focus:border-blue-500"
+                                                 value={productRates[rowKey]?.orderQty || ""}
+                                                 placeholder="Qty"
+                                                 onChange={(e) => {
+                                                   const newOrderQtyStr = e.target.value;
+                                                   const newOrderQty = parseFloat(newOrderQtyStr) || 0;
+                                                   const currentApprQty = parseFloat(productRates[rowKey]?.approvalQty || "0") || 0;
+                                                   
+                                                   if (productRates[rowKey]?.approvalQty && currentApprQty > newOrderQty) {
+                                                     setQtyValidationErrors(prev => ({ ...prev, [rowKey]: `Max ${newOrderQty}` }));
+                                                   } else if (qtyValidationErrors[rowKey]) {
+                                                     const newErrors = { ...qtyValidationErrors };
+                                                     delete newErrors[rowKey];
+                                                     setQtyValidationErrors(newErrors);
+                                                   }
+
+                                                   setProductRates({
+                                                     ...productRates,
+                                                     [rowKey]: {
+                                                       ...productRates[rowKey],
+                                                       orderQty: newOrderQtyStr
+                                                     }
+                                                   })
+                                                 }}
+                                                 disabled={!isSelected}
+                                               />
+                                             )}
+                                           </TableCell>
+                                          <TableCell className="p-2 min-w-45">
                                             <Popover open={openPopoverId === rowKey} onOpenChange={(open) => setOpenPopoverId(open ? rowKey : null)}>
                                               <PopoverTrigger asChild>
                                                 <Button 
@@ -704,21 +979,58 @@ export default function PreApprovalPage() {
                                               <PopoverContent className="w-[320px] p-0 shadow-2xl border-slate-200" align="start">
                                                 <Command shouldFilter={false}>
                                                   <CommandInput placeholder="Search SKU catalog..." value={skuSearch} onValueChange={setSkuSearch} className="h-10 border-none focus:ring-0 text-xs font-bold" />
-                                                  <CommandList className="max-h-[300px] overflow-y-auto">
+                                                  <CommandList className="max-h-75 overflow-y-auto">
                                                     {skuMaster.filter(s => s.toLowerCase().includes(skuSearch.toLowerCase())).length === 0 && (
                                                       <CommandEmpty className="py-8 text-xs text-slate-400 text-center font-bold">No SKU match found</CommandEmpty>
                                                     )}
                                                     <CommandGroup>
                                                       {skuMaster.filter(sku => sku.toLowerCase().includes(skuSearch.toLowerCase())).map((sku) => (
-                                                        <CommandItem key={sku} value={sku} className="cursor-pointer py-2.5 px-4 text-xs font-bold hover:bg-blue-50 hover:text-blue-700 transition-colors" onSelect={() => {
-                                                          setProductRates({ 
-                                                            ...productRates, 
-                                                            [rowKey]: { 
-                                                              ...productRates[rowKey], 
-                                                              skuName: sku,
-                                                              productName: sku
-                                                            } 
-                                                          });
+                                                        <CommandItem key={sku} value={sku} className="cursor-pointer py-2.5 px-4 text-xs font-bold hover:bg-blue-50 hover:text-blue-700 transition-colors" onSelect={async () => {
+                                                          // Extract SKU portion from full product name
+                                                          // e.g., "HK Palm Oil 13 KGS TIN" -> "13 KG TIN"
+                                                          const extractSku = (productName: string) => {
+                                                            const prefixes = ['HK Palm Oil ', 'HK RBO ', 'HK SBO ', 'HK PALM OIL ', 'HK '];
+                                                            let extracted = productName;
+                                                            for (const prefix of prefixes) {
+                                                              if (productName.toUpperCase().startsWith(prefix.toUpperCase())) {
+                                                                extracted = productName.substring(prefix.length).trim();
+                                                                break;
+                                                              }
+                                                            }
+                                                            // Normalize "KGS" to "KG" to match database entries
+                                                            return extracted.replace(/\bKGS\b/gi, 'KG');
+                                                          };
+                                                          
+                                                          const skuForRate = extractSku(sku);
+                                                          
+                                                          // Fetch rate for the selected SKU
+                                                          try {
+                                                            const response = await fetch(`/api/v1/skus/rate/${encodeURIComponent(skuForRate)}`);
+                                                            const data = await response.json();
+                                                            
+                                                            const rateValue = data.success && data.rate ? data.rate.toString() : "";
+                                                            
+                                                            setProductRates({ 
+                                                              ...productRates, 
+                                                              [rowKey]: { 
+                                                                ...productRates[rowKey], 
+                                                                skuName: sku,
+                                                                productName: sku,
+                                                                rateOfMaterial: rateValue
+                                                              } 
+                                                            });
+                                                          } catch (error) {
+                                                            console.error("Failed to fetch rate for SKU:", error);
+                                                            // Still set SKU even if rate fetch fails
+                                                            setProductRates({ 
+                                                              ...productRates, 
+                                                              [rowKey]: { 
+                                                                ...productRates[rowKey], 
+                                                                skuName: sku,
+                                                                productName: sku
+                                                              } 
+                                                            });
+                                                          }
                                                           setSkuSearch(""); 
                                                           setOpenPopoverId(null);
                                                         }}>
@@ -740,17 +1052,18 @@ export default function PreApprovalPage() {
                                               <Input 
                                                 type="number"
                                                 className="h-9 text-xs bg-white pl-5 font-bold border-slate-200 focus:border-blue-500 focus:ring-blue-500"
-                                                value={productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || ""}
-                                                onChange={(e) => setProductRates({ 
-                                                  ...productRates, 
-                                                  [rowKey]: { 
-                                                    ...productRates[rowKey], 
-                                                    rateOfMaterial: e.target.value 
-                                                  } 
-                                                })}
-                                                disabled={!isSelected}
-                                                placeholder="0.00"
-                                              />
+                                                 value={productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || ""}
+                                                 onChange={(e) => setProductRates({ 
+                                                   ...productRates, 
+                                                   [rowKey]: { 
+                                                     ...productRates[rowKey], 
+                                                     rateOfMaterial: e.target.value 
+                                                   } 
+                                                 })}
+                                                 disabled={!isNew && true}
+                                                 readOnly={!isNew}
+                                                 placeholder="0.00"
+                                               />
                                             </div>
                                           </TableCell>
                                           <TableCell className="p-2">
@@ -792,17 +1105,31 @@ export default function PreApprovalPage() {
                                               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-400 text-[10px] font-black">₹</span>
                                               <Input 
                                                 type="number" 
-                                                placeholder="0.00"
-                                                className="h-9 text-xs bg-white font-black text-blue-700 border-slate-200 focus:border-blue-600 focus:ring-blue-600 pl-5"
-                                                value={productRates[rowKey]?.rate || ""} 
-                                                onChange={(e) => setProductRates({ 
-                                                  ...productRates, 
-                                                  [rowKey]: { 
-                                                    ...productRates[rowKey], 
-                                                    rate: e.target.value 
-                                                  } 
-                                                })} 
+                                                className="h-9 text-xs bg-white font-black text-blue-700 border-slate-200 focus:border-blue-500 focus:ring-blue-500 pl-5"
+                                                value={(() => {
+                                                  // If user has manually entered a rate, use that
+                                                  if (productRates[rowKey]?.rate) {
+                                                    return productRates[rowKey].rate;
+                                                  }
+                                                  // Otherwise auto-calculate
+                                                  const approvalQty = parseFloat(productRates[rowKey]?.approvalQty || "") || 0;
+                                                  const orderQty = parseFloat(productRates[rowKey]?.orderQty || product.orderQty || "0") || 0;
+                                                  const qtyToUse = approvalQty > 0 ? approvalQty : orderQty;
+                                                  const rateOfMaterial = parseFloat(productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || "0") || 0;
+                                                  const finalRate = qtyToUse * rateOfMaterial;
+                                                  return finalRate > 0 ? finalRate.toFixed(2) : "";
+                                                })()}
+                                                onChange={(e) => {
+                                                  setProductRates({ 
+                                                    ...productRates, 
+                                                    [rowKey]: { 
+                                                      ...productRates[rowKey], 
+                                                      rate: e.target.value 
+                                                    } 
+                                                  });
+                                                }}
                                                 disabled={!isSelected}
+                                                placeholder="0.00"
                                               />
                                             </div>
                                           </TableCell>
@@ -818,13 +1145,67 @@ export default function PreApprovalPage() {
                                                 } 
                                               })}
                                               disabled={!isSelected}
-                                              placeholder="Add review remark..."
-                                            />
-                                          </TableCell>
-                                        </TableRow>
+                                               placeholder="Add review remark..."
+                                             />
+                                           </TableCell>
+                                           <TableCell className="p-2 text-center">
+                                              {!isNew && (
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  onClick={() => handleDeleteProduct(product.id, product._originalOrderId)}
+                                                  className="h-8 w-8 text-destructive hover:text-red-700 hover:bg-red-50"
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                              )}
+                                              {isNew && (
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  onClick={() => {
+                                                    setDialogNewProducts(prev => ({
+                                                      ...prev,
+                                                      [baseDo]: prev[baseDo].filter(p => p._pid !== product._pid)
+                                                    }));
+                                                    setSelectedProductRows(prev => prev.filter(k => k !== rowKey));
+                                                  }}
+                                                  className="h-8 w-8 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                              )}
+                                           </TableCell>
+                                         </TableRow>
                                       )
                                     })}
                                   </TableBody>
+                                  <tfoot className="bg-slate-100/80 border-t-2 border-slate-200">
+                                    <TableRow>
+                                      <TableCell colSpan={2} className="p-3 text-right">
+                                        <span className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Totals:</span>
+                                      </TableCell>
+                                       <TableCell className="p-3">
+                                         <Badge variant="secondary" className="bg-blue-100 text-blue-800 font-black px-2 shadow-sm border-blue-200">
+                                           {[...orderDetails._products, ...(dialogNewProducts[baseDo] || [])].reduce((sum: number, p: any) => {
+                                             const rowKey = p._rowKey;
+                                             const qty = p._isNew ? (parseFloat(productRates[rowKey]?.orderQty || "0") || 0) : (parseFloat(p.orderQty) || 0);
+                                             return sum + qty;
+                                           }, 0)}
+                                         </Badge>
+                                       </TableCell>
+                                      <TableCell colSpan={2}></TableCell>
+                                      <TableCell className="p-3 text-center">
+                                        <Badge variant="secondary" className="bg-green-100 text-green-800 font-black px-2 shadow-sm border-green-200">
+                                          {[...orderDetails._products, ...(dialogNewProducts[baseDo] || [])].reduce((sum: number, p: any) => {
+                                            const rowKey = p._rowKey;
+                                            return sum + (parseFloat(productRates[rowKey]?.approvalQty) || 0);
+                                          }, 0)}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell colSpan={2}></TableCell>
+                                    </TableRow>
+                                  </tfoot>
                                 </Table>
                               </div>
                             </div>
@@ -855,15 +1236,14 @@ export default function PreApprovalPage() {
                         customerName: prod._orderData.customerName,
                         orderType: prod._orderData.orderType
                       }))
-                      handleApprove(itemsToApprove)
+                      handleApproveWithAdditions(itemsToApprove)
                     }} 
                     disabled={
                       isApproving || 
                       selectedProductRows.length === 0 ||
-                      Object.keys(qtyValidationErrors).length > 0 ||
-                      selectedProductRows.some(key => !productRates[key]?.rate)
+                      Object.keys(qtyValidationErrors).length > 0
                     }
-                    className="min-w-[200px] h-11 bg-blue-600 font-bold shadow-lg"
+                    className="min-w-50 h-11 bg-blue-600 font-bold shadow-lg"
                   >
                     {isApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     {isApproving ? "Processing..." : `Submit ${selectedProductRows.length} Product(s)`}
@@ -880,7 +1260,7 @@ export default function PreApprovalPage() {
                 Columns
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[250px] max-h-[400px] overflow-y-auto">
+            <DropdownMenuContent align="end" className="w-62.5 max-h-100 overflow-y-auto">
               <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {PAGE_COLUMNS.map((col) => (
@@ -899,7 +1279,7 @@ export default function PreApprovalPage() {
           </DropdownMenu>
         </div>
 
-        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
+        <Card className="border-none shadow-sm overflow-auto max-h-150">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>

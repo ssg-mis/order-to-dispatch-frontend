@@ -858,19 +858,10 @@ export default function OrderPunchPage() {
 
               {/* Show Product List for both regular and pre-approval */}
               {(orderType === "regular" || orderType === "pre-approval") && (
-                  <div className="md:col-span-2 space-y-4 p-4 bg-muted/50 rounded-lg border">
-                    <div className="flex justify-between items-center">
-                      <Label className="text-lg font-semibold">Product List</Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={addProduct}
-                        className="gap-2 bg-transparent"
-                      >
-                        <Plus className="h-4 w-4" /> Add Product
-                      </Button>
-                    </div>
+                <div className="md:col-span-2 space-y-4 p-4 bg-muted/50 rounded-lg border">
+                  <div className="flex justify-between items-center">
+                    <Label className="text-lg font-semibold">Product List</Label>
+                  </div>
                   <div className="space-y-4">
                     {products.map((product, idx) => (
                       <div key={product.id} className="flex gap-4 items-end p-4 border rounded-lg bg-card shadow-sm relative pt-8">
@@ -948,6 +939,17 @@ export default function OrderPunchPage() {
                         </div>
                       </div>
                     ))}
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addProduct}
+                        className="gap-2 bg-white hover:bg-blue-50 text-blue-600 border-blue-200 shadow-sm"
+                      >
+                        <Plus className="h-4 w-4" /> Add Product
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}

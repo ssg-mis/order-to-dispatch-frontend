@@ -145,9 +145,8 @@ export default function MakeInvoicePage() {
        const group = grouped[partyName]
        group.doNumberList.add(doNumber)
        
-       // Use specific DO (so_no) as the key to ensure "details and table then details and table"
-       // even for entries that share a base DO, if the user sees them as separate pending tasks.
-       const orderKey = doNumber;
+       // Use base DO (stripping A, B, C suffixes) as the key to prevent duplicate detail blocks
+       const orderKey = doNumber.replace(/[A-Z]$/, "");
        
        if (!group._ordersMap[orderKey]) {
          group._ordersMap[orderKey] = {
