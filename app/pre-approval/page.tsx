@@ -767,10 +767,23 @@ export default function PreApprovalPage() {
       })
       grp.transportType = Array.from(allTransports).join(", ")
       
-      // Add rate fields from first product for SKU Price List calculations
-      const firstProduct = grp._allProducts?.[0]
-      grp.ratePer15Kg = firstProduct?.ratePer15Kg || null
-      grp.ratePerLtr = firstProduct?.ratePerLtr || null
+      
+      // Aggregate rate fields from ALL products for SKU Price List calculations
+      // Handle cases where one row has 15kg rate and another has 1ltr rate
+      let collected15KgRate: string | null = null
+      let collected1LtrRate: string | null = null
+      
+      grp._allProducts?.forEach((product: any) => {
+        if (product.ratePer15Kg && !collected15KgRate) {
+          collected15KgRate = product.ratePer15Kg
+        }
+        if (product.ratePerLtr && !collected1LtrRate) {
+          collected1LtrRate = product.ratePerLtr
+        }
+      })
+      
+      grp.ratePer15Kg = collected15KgRate
+      grp.ratePerLtr = collected1LtrRate
     })
     
     return Object.values(grouped)

@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Settings2, ChevronDown, ChevronUp, Truck, Weight } from "lucide-react"
-import { actualDispatchApi, vehicleDetailsApi, materialLoadApi } from "@/lib/api-service"
+import { actualDispatchApi, vehicleDetailsApi, materialLoadApi, skuApi } from "@/lib/api-service"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function ActualDispatchPage() {
@@ -28,6 +28,7 @@ export default function ActualDispatchPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [confirmDetails, setConfirmDetails] = useState<Record<string, { qty: string }>>({})
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
+  const [skus, setSkus] = useState<any[]>([])
   
   // Consolidated State for Stages 6 & 7
   const [vehicleNumber, setVehicleNumber] = useState("")
@@ -60,6 +61,7 @@ export default function ActualDispatchPage() {
     vehicleNoPlateImage: "",
     checkStatus: "",
     remarks: "",
+    extraWeight: "0",
   })
   const PAGE_COLUMNS = [
     { id: "orderNo", label: "DO Number" },
@@ -147,9 +149,31 @@ export default function ActualDispatchPage() {
     }
   };
 
+  // Fetch SKU details for weight calculations
+  const fetchSkus = async () => {
+    try {
+      console.log('[ACTUAL DISPATCH] Fetching SKUs for weight calculation...')
+      const response = await skuApi.getAll()
+      console.log('[ACTUAL DISPATCH] SKU API Response:', response)
+      
+      if (response.success && response.data) {
+        // Backend returns array directly in response.data, not response.data.skus
+        const skuArray = Array.isArray(response.data) ? response.data : []
+        console.log(`[ACTUAL DISPATCH] Loaded ${skuArray.length} SKUs`)
+        console.log('[ACTUAL DISPATCH] First 3 SKUs:', skuArray.slice(0, 3))
+        setSkus(skuArray)
+      } else {
+        console.error('[ACTUAL DISPATCH] SKU API returned no data:', response)
+      }
+    } catch (error: any) {
+      console.error("[ACTUAL DISPATCH] Failed to fetch SKUs:", error)
+    }
+  }
+
   useEffect(() => {
-    fetchPendingDispatches();
-    fetchDispatchHistory();
+    fetchPendingDispatches()
+    fetchDispatchHistory()
+    fetchSkus()
   }, [])
 
   // Auto-calculate packing weights (Stage 7 Logic)
@@ -403,8 +427,71 @@ export default function ActualDispatchPage() {
             vehicleNoPlateImage: "",
             checkStatus: "",
             remarks: "",
+            extraWeight: "0",
           })
       }
+  }
+
+  // Helper function to get SKU weight by matching product name
+  const getSkuWeight = (productName: string): number => {
+    if (!productName || skus.length === 0) {
+      console.warn(`[WEIGHT] Cannot get weight: productName="${productName}", skus.length=${skus.length}`)
+      return 0
+    }
+    
+    // Try 1: Exact match (case-insensitive)
+    let matchedSku = skus.find(sku => 
+      sku.sku_name?.toUpperCase() === productName.toUpperCase()
+    )
+    
+    if (matchedSku) {
+      console.log(`[WEIGHT] ✓ Exact match: "${productName}" -> "${matchedSku.sku_name}" = ${matchedSku.sku_weight} kg`)
+      return matchedSku?.sku_weight ? parseFloat(matchedSku.sku_weight) : 0
+    }
+    
+    // Try 2: Normalized match (KGS->KG, LTRS->LTR)
+    const normalizeSkuName = (name: string) => {
+      return name
+        .toUpperCase()
+        .replace(/KGS/g, 'KG')
+        .replace(/LTRS/g, 'LTR')
+        .replace(/\s+/g, ' ')
+        .trim()
+    }
+    
+    const normalizedProductName = normalizeSkuName(productName)
+    matchedSku = skus.find(sku => 
+      normalizeSkuName(sku.sku_name || '') === normalizedProductName
+    )
+    
+    if (matchedSku) {
+      console.log(`[WEIGHT] ✓ Normalized match: "${productName}" -> "${matchedSku.sku_name}" = ${matchedSku.sku_weight} kg`)
+      return matchedSku?.sku_weight ? parseFloat(matchedSku.sku_weight) : 0
+    }
+    
+    // Try 3: Fuzzy partial match
+    matchedSku = skus.find(sku => {
+      const normalizedSkuName = normalizeSkuName(sku.sku_name || '')
+      return normalizedSkuName.includes(normalizedProductName) || 
+             normalizedProductName.includes(normalizedSkuName)
+    })
+    
+    if (matchedSku) {
+      console.log(`[WEIGHT] ✓ Fuzzy match: "${productName}" -> "${matchedSku.sku_name}" = ${matchedSku.sku_weight} kg`)
+      return matchedSku?.sku_weight ? parseFloat(matchedSku.sku_weight) : 0
+    }
+    
+    // No match found
+    console.error(`[WEIGHT] ✗ No match for "${productName}"`)
+    console.log('[WEIGHT] Available SKUs:', skus.map(s => s.sku_name).slice(0, 10))
+    return 0
+  }
+
+  // Calculate individual weight (qty × sku_weight)
+  const calculateWeight = (productName: string, qty: string | number): number => {
+    const skuWeight = getSkuWeight(productName)
+    const quantity = typeof qty === 'string' ? parseFloat(qty) || 0 : qty
+    return skuWeight * quantity
   }
 
   const toggleSelectDialogProduct = (key: string) => {
@@ -475,7 +562,8 @@ export default function ActualDispatchPage() {
             transporter_name: loadData.transporterName,
             reason_of_difference_in_weight_if_any_speacefic: loadData.reason,
             truck_no: loadData.truckNo || vehicleNumber,
-            vehicle_no_plate_image: loadData.vehicleNoPlateImage || "pending"
+            vehicle_no_plate_image: loadData.vehicleNoPlateImage || "pending",
+            extra_weight: parseFloat(loadData.extraWeight) || 0
           });
           
           if (!res.success) throw new Error(res.message);
@@ -821,6 +909,7 @@ export default function ActualDispatchPage() {
                                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">PLANNED QTY</TableHead>
                                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">DELIVERY FROM</TableHead>
                                 <TableHead className="w-[180px] text-[10px] uppercase font-black text-slate-500 tracking-wider">ACTUAL QTY DISPATCHED</TableHead>
+                                <TableHead className="w-[120px] text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">WEIGHT (KG)</TableHead>
                                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">STATUS</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -863,10 +952,31 @@ export default function ActualDispatchPage() {
                                         />
                                     </TableCell>
                                     <TableCell className="p-3 text-center">
+                                        <div className="font-black text-sm text-purple-700">
+                                            {calculateWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch).toFixed(2)} kg
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="p-3 text-center">
                                         <Badge variant="outline" className="text-[9px] bg-orange-50 text-orange-700 border-orange-200 uppercase font-black px-2 py-0.5">Pending</Badge>
                                     </TableCell>
                                 </TableRow>
                             )})}
+                            {/* Total Weight Row */}
+                            <TableRow className="bg-purple-50 border-t-2 border-purple-200">
+                                <TableCell colSpan={6} className="text-right p-4 font-black text-sm uppercase text-purple-900 tracking-wider">
+                                    Total Weight:
+                                </TableCell>
+                                <TableCell className="p-4 text-center">
+                                    <div className="font-black text-lg text-purple-700">
+                                        {selectedGroups.flatMap(g => g._allProducts)
+                                            .reduce((total, prod) => {
+                                                const rowKey = prod._rowKey
+                                                return total + calculateWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch)
+                                            }, 0).toFixed(2)} kg
+                                    </div>
+                                </TableCell>
+                                <TableCell colSpan={1} />
+                            </TableRow>
                         </TableBody>
                     </Table>
                   </div>
@@ -998,12 +1108,18 @@ export default function ActualDispatchPage() {
                                 <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold"
                                   value={loadData.tareWeight} onChange={(e) => setLoadData(p => ({...p, tareWeight: e.target.value}))} />
                              </div>
-                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Dharamkata</Label>
-                                <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold bg-amber-50"
-                                  value={loadData.dharamkataWeight} onChange={(e) => setLoadData(p => ({...p, dharamkataWeight: e.target.value}))} />
-                             </div>
-                          </div>
+                              <div className="space-y-1.5">
+                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Dharamkata</Label>
+                                 <Input type="number" step="0.01" className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-amber-50"
+                                   value={loadData.dharamkataWeight} onChange={(e) => setLoadData(p => ({...p, dharamkataWeight: e.target.value}))} />
+                              </div>
+                              <div className="space-y-1.5">
+                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Extra Weight</Label>
+                                 <Input type="number" step="0.001" className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-white focus:border-blue-500 transition-colors"
+                                   placeholder="0.000"
+                                   value={loadData.extraWeight} onChange={(e) => setLoadData(p => ({...p, extraWeight: e.target.value}))} />
+                              </div>
+                           </div>
 
                           <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100 flex items-center justify-between">
                              <div className="space-y-0.5">

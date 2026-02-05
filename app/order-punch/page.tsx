@@ -916,7 +916,7 @@ export default function OrderPunchPage() {
                          <div className="absolute top-2 left-4 text-[10px] font-bold text-blue-500/80 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest">
                              Product {idx + 1}
                          </div>
-                        <div className={`grid grid-cols-2 gap-4 flex-1 ${orderType === "pre-approval" ? "md:grid-cols-10" : "md:grid-cols-9"}`}>
+                        <div className={`grid grid-cols-2 gap-4 flex-1 ${orderType === "pre-approval" ? "md:grid-cols-12" : "md:grid-cols-11"}`}>
                           
                           <div className="space-y-1.5 col-span-2 md:col-span-4">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Name</Label>
@@ -959,6 +959,36 @@ export default function OrderPunchPage() {
                                className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
                              />
                           </div>
+
+                          {/* For Pre-Approval Orders Only: 15 KG Rate */}
+                          {orderType === "pre-approval" && (
+                            <div className="space-y-1.5 col-span-1 md:col-span-2">
+                               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">15 KG Rate</Label>
+                               <Input
+                                 type="number"
+                                 step="0.01"
+                                 value={product.ratePer15Kg}
+                                 onChange={(e) => updateProduct(product.id, "ratePer15Kg", e.target.value)}
+                                 placeholder="0.00"
+                                 className="bg-background h-10 border-slate-200 focus:border-green-400 focus:ring-green-400 font-semibold text-green-600"
+                               />
+                            </div>
+                          )}
+
+                          {/* For Pre-Approval Orders Only: 1 LTR Rate */}
+                          {orderType === "pre-approval" && (
+                            <div className="space-y-1.5 col-span-1 md:col-span-2">
+                               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">1 LTR Rate</Label>
+                               <Input
+                                 type="number"
+                                 step="0.01"
+                                 value={product.ratePerLtr}
+                                 onChange={(e) => updateProduct(product.id, "ratePerLtr", e.target.value)}
+                                 placeholder="0.00"
+                                 className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600"
+                               />
+                            </div>
+                          )}
 
                           {/* For Regular Orders Only: Rate (Material) */}
                           {orderType !== "pre-approval" && (
