@@ -28,6 +28,8 @@ type ProductItem = {
   altUom: string
   altQty: string
   rate: string
+  ratePer15Kg: string
+  ratePerLtr: string
 }
 
 type PreApprovalProduct = {
@@ -138,7 +140,7 @@ export default function OrderPunchPage() {
   }
 
   const [products, setProducts] = useState<ProductItem[]>([
-    { id: "1", productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "" },
+    { id: "1", productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "" },
   ])
   const [customerType, setCustomerType] = useState<string>("existing")
   const [depoName, setDepoName] = useState<string>("Banari")
@@ -345,6 +347,8 @@ export default function OrderPunchPage() {
           uom: p.uom || "Ltr",
           order_quantity: p.orderQty ? parseFloat(p.orderQty) : null,
           rate_of_material: p.rate ? parseFloat(p.rate) : null,
+          rate_per_15kg: p.ratePer15Kg ? parseFloat(p.ratePer15Kg) : null,
+          rate_per_ltr: p.ratePerLtr ? parseFloat(p.ratePerLtr) : null,
           alternate_uom: p.altUom || "Kg",
           alternate_qty_kg: p.altQty ? parseFloat(p.altQty) : null,
         }))
@@ -445,7 +449,7 @@ export default function OrderPunchPage() {
   const addProduct = () => {
     setProducts([
       ...products,
-      { id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "" },
+      { id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "" },
     ])
   }
 
@@ -539,7 +543,7 @@ export default function OrderPunchPage() {
     setAdvanceAmount("")
     setFuturePeriodDate("")
     setOrderPunchRemarks("")
-    setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "" }])
+    setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "" }])
     setPreApprovalProducts([{ id: Math.random().toString(36).substr(2, 9), oilType: "", ratePerLtr: "", rateLtr: "" }])
   }
 
@@ -720,6 +724,16 @@ export default function OrderPunchPage() {
                 </>
               )}
 
+              {/* Note for Pre-Approval Orders */}
+              {orderType === "pre-approval" && (orderPurpose === "week-on-week" || orderPurpose === "future-period") && (
+                <div className="md:col-span-2 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
+                    <span className="text-lg">⚠️</span>
+                    15 KG and 1 Ltr rate is compulsory for Pre-Approval orders
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="customerType">Customer Type</Label>
                 <Select value={customerType} onValueChange={setCustomerType}>
@@ -856,6 +870,40 @@ export default function OrderPunchPage() {
                 </div>
               )}
 
+              {/* Pre-Approval Only: Shared Rate Fields */}
+              {orderType === "pre-approval" && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="ratePer15Kg" className="text-sm font-semibold">15 KG Rate</Label>
+                    <Input
+                      id="ratePer15Kg"
+                      type="number"
+                      value={products[0]?.ratePer15Kg || ""}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setProducts(products.map(p => ({ ...p, ratePer15Kg: newValue })));
+                      }}
+                      placeholder="0.00"
+                      className="bg-background border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-green-600"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ratePerLtr" className="text-sm font-semibold">1 LTR Rate</Label>
+                    <Input
+                      id="ratePerLtr"
+                      type="number"
+                      value={products[0]?.ratePerLtr || ""}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setProducts(products.map(p => ({ ...p, ratePerLtr: newValue })));
+                      }}
+                      placeholder="0.00"
+                      className="bg-background border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-green-600"
+                    />
+                  </div>
+                </>
+              )}
+
               {/* Show Product List for both regular and pre-approval */}
               {(orderType === "regular" || orderType === "pre-approval") && (
                 <div className="md:col-span-2 space-y-4 p-4 bg-muted/50 rounded-lg border">
@@ -868,7 +916,7 @@ export default function OrderPunchPage() {
                          <div className="absolute top-2 left-4 text-[10px] font-bold text-blue-500/80 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest">
                              Product {idx + 1}
                          </div>
-                        <div className="grid grid-cols-2 md:grid-cols-9 gap-4 flex-1">
+                        <div className={`grid grid-cols-2 gap-4 flex-1 ${orderType === "pre-approval" ? "md:grid-cols-10" : "md:grid-cols-9"}`}>
                           
                           <div className="space-y-1.5 col-span-2 md:col-span-4">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Name</Label>
@@ -912,16 +960,21 @@ export default function OrderPunchPage() {
                              />
                           </div>
 
-                          <div className="space-y-1.5 col-span-2 md:col-span-1">
-                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate (Material)</Label>
-                             <Input
-                               type="number"
-                               value={product.rate}
-                               onChange={(e) => updateProduct(product.id, "rate", e.target.value)}
-                               placeholder="0.00"
-                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600"
-                             />
-                          </div>
+                          {/* For Regular Orders Only: Rate (Material) */}
+                          {orderType !== "pre-approval" && (
+                            <div className="space-y-1.5 col-span-2 md:col-span-1">
+                               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate (Material)</Label>
+                               <Input
+                                 type="number"
+                                 value={product.rate}
+                                 onChange={(e) => updateProduct(product.id, "rate", e.target.value)}
+                                 placeholder="0.00"
+                                 className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600"
+                               />
+                            </div>
+                          )}
+
+
                           
                         </div>
 

@@ -879,6 +879,13 @@ export const skuApi = {
   getById: async (id: number): Promise<ApiResponse> => {
     return request(`/skus/${id}`);
   },
+
+  /**
+   * Get all SKU rates with formulas
+   */
+  getAllSkuRates: async (): Promise<ApiResponse> => {
+    return request('/skus/rates/all');
+  },
 };
 
 /**

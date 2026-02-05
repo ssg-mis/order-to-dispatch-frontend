@@ -117,6 +117,12 @@ export default function PreApprovalPage() {
   // SKU State
   const [skuMaster, setSkuMaster] = useState<string[]>([])
   const [skuSearch, setSkuSearch] = useState("")
+  
+  // SKU Price List State
+  const [showSkuPriceList, setShowSkuPriceList] = useState(false)
+  const [skuRates, setSkuRates] = useState<any[]>([])
+  const [loadingRates, setLoadingRates] = useState(false)
+  const [calculatedPrices, setCalculatedPrices] = useState<any[]>([])
 
   // Fetch SKUs
   useEffect(() => {
@@ -140,6 +146,96 @@ export default function PreApprovalPage() {
     
     fetchSkus()
   }, [])
+
+  // Calculate SKU prices based on formulas
+  const calculateSkuPrices = (baseRatePer15Kg: number, baseRatePer1Ltr: number, formulas: any[]) => {
+    return formulas.map((item) => {
+      let calculatedRate = 0
+      const formula = item.formula?.trim() || ""
+      
+      try {
+        if (!formula || formula === "") {
+          // No formula, use stored rate
+          calculatedRate = parseFloat(item.rate) || 0
+        } else if (formula.toUpperCase() === "A") {
+          // Direct 15 KG rate
+          calculatedRate = baseRatePer15Kg
+        } else if (formula.toUpperCase() === "B") {
+          // Direct 1 LTR rate
+          calculatedRate = baseRatePer1Ltr
+        } else {
+          // Replace A and B with actual values
+          let evalFormula = formula
+            .replace(/A/gi, baseRatePer15Kg.toString())
+            .replace(/B/gi, baseRatePer1Ltr.toString())
+          
+          // Evaluate the formula (be cautious with eval in production)
+          // eslint-disable-next-line no-eval
+          calculatedRate = eval(evalFormula)
+        }
+      } catch (error) {
+        console.error(`Error calculating rate for ${item.sku}:`, error)
+        calculatedRate = 0
+      }
+      
+      return {
+        sku: item.sku,
+        formula: item.formula || "—",
+        calculatedRate: calculatedRate.toFixed(2)
+      }
+    })
+  }
+
+  // Fetch SKU rates and calculate prices
+  const fetchAndCalculateRates = async () => {
+    setLoadingRates(true)
+    try {
+      const response = await skuApi.getAllSkuRates()
+      
+      if (response.success) {
+        setSkuRates(response.data)
+        
+        // Get base rates from currently selected orders
+        const selectedItems = displayRows.filter(r => selectedRows.includes(r._rowKey))
+        const firstSelected = selectedItems[0]
+        
+        console.log("First Selected Order:", firstSelected)
+        console.log("Rate Per 15 KG:", firstSelected?.ratePer15Kg)
+        console.log("Rate Per LTR:", firstSelected?.ratePerLtr)
+        
+        // Extract numeric values, handle both string numbers and "—"
+        const rate15kgRaw = firstSelected?.ratePer15Kg
+        const rateLtrRaw = firstSelected?.ratePerLtr
+        
+        let baseRatePer15Kg = 0
+        let baseRatePer1Ltr = 0
+        
+        if (rate15kgRaw && rate15kgRaw !== "—") {
+          baseRatePer15Kg = parseFloat(rate15kgRaw)
+        }
+        
+        if (rateLtrRaw && rateLtrRaw !== "—") {
+          baseRatePer1Ltr = parseFloat(rateLtrRaw)
+        }
+        
+        console.log("Parsed 15KG Rate:", baseRatePer15Kg)
+        console.log("Parsed 1LTR Rate:", baseRatePer1Ltr)
+        
+        // Calculate prices
+        const calculated = calculateSkuPrices(baseRatePer15Kg, baseRatePer1Ltr, response.data)
+        setCalculatedPrices(calculated)
+      }
+    } catch (error) {
+      console.error("Failed to fetch SKU rates:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load SKU rates",
+        variant: "destructive"
+      })
+    } finally {
+      setLoadingRates(false)
+    }
+  }
 
 
 
@@ -180,7 +276,7 @@ export default function PreApprovalPage() {
         altUom: backendOrder.alternate_uom,
         altQty: backendOrder.order_quantity,
         ratePerLtr: backendOrder.rate_per_ltr,
-        rateLtr: backendOrder.rate_per_15kg,
+        ratePer15Kg: backendOrder.rate_per_15kg,
         rateOfMaterial: backendOrder.rate_of_material, // Map rate_of_material
         skuName: backendOrder.sku_name,
         approvalQty: backendOrder.approval_qty,
@@ -246,6 +342,13 @@ export default function PreApprovalPage() {
       setPreApprovalData(JSON.parse(savedPreApprovalData));
     }
   }, [])
+
+  // Auto-calculate SKU prices when dialog opens
+  useEffect(() => {
+    if (isBulkDialogOpen && selectedRows.length > 0) {
+      fetchAndCalculateRates()
+    }
+  }, [isBulkDialogOpen])
 
   const handleApprove = async (itemsToApprove: any[]) => {
     setIsApproving(true)
@@ -663,6 +766,11 @@ export default function PreApprovalPage() {
           if (order.transportType) allTransports.add(order.transportType)
       })
       grp.transportType = Array.from(allTransports).join(", ")
+      
+      // Add rate fields from first product for SKU Price List calculations
+      const firstProduct = grp._allProducts?.[0]
+      grp.ratePer15Kg = firstProduct?.ratePer15Kg || null
+      grp.ratePerLtr = firstProduct?.ratePerLtr || null
     })
     
     return Object.values(grouped)
@@ -979,15 +1087,43 @@ export default function PreApprovalPage() {
                                               <PopoverContent className="w-[320px] p-0 shadow-2xl border-slate-200" align="start">
                                                 <Command shouldFilter={false}>
                                                   <CommandInput placeholder="Search SKU catalog..." value={skuSearch} onValueChange={setSkuSearch} className="h-10 border-none focus:ring-0 text-xs font-bold" />
-                                                  <CommandList className="max-h-75 overflow-y-auto">
+                                                  <CommandList>
                                                     {skuMaster.filter(s => s.toLowerCase().includes(skuSearch.toLowerCase())).length === 0 && (
                                                       <CommandEmpty className="py-8 text-xs text-slate-400 text-center font-bold">No SKU match found</CommandEmpty>
                                                     )}
                                                     <CommandGroup>
                                                       {skuMaster.filter(sku => sku.toLowerCase().includes(skuSearch.toLowerCase())).map((sku) => (
                                                         <CommandItem key={sku} value={sku} className="cursor-pointer py-2.5 px-4 text-xs font-bold hover:bg-blue-50 hover:text-blue-700 transition-colors" onSelect={async () => {
+                                                          // Normalize SKU for better matching
+                                                          const normalizeSku = (skuName: string) => {
+                                                            return skuName
+                                                              .toUpperCase()
+                                                              .replace(/\s+/g, ' ')           // Normalize multiple spaces
+                                                              .replace(/\//g, ' ')            // Replace slashes with spaces
+                                                              .replace(/[()]/g, '')           // Remove parentheses
+                                                              .replace(/\*/g, '')             // Remove asterisks
+                                                              .replace(/\bKGS\b/g, 'KG')      // Normalize KGS to KG
+                                                              .replace(/\bLTRS\b/g, 'LTR')    // Normalize LTRS to LTR
+                                                              .replace(/\b0+(\d)/g, '$1')     // Remove leading zeros (01 -> 1)
+                                                              .replace(/\bML\b/g, '')         // Remove ML
+                                                              .replace(/\bGM\b/g, '')         // Remove GM
+                                                              .replace(/\d+\*\d+/g, '')       // Remove pack info like 1*12
+                                                              .replace(/990/g, '')            // Remove specific weights
+                                                              .replace(/900/g, '')            // Remove specific weights
+                                                              .replace(/\s+/g, ' ')           // Normalize spaces again
+                                                              .trim();
+                                                          };
+                                                          
+                                                          // Extract core SKU tokens (size + type)
+                                                          const extractCoreTokens = (skuName: string) => {
+                                                            const normalized = normalizeSku(skuName);
+                                                            // Extract key tokens like "1 LTR PP" or "15 KG JAR"
+                                                            const tokens = normalized.split(' ').filter(t => t.length > 0);
+                                                            // Focus on size + unit + type
+                                                            return tokens.slice(0, 3).join(' ');
+                                                          };
+                                                          
                                                           // Extract SKU portion from full product name
-                                                          // e.g., "HK Palm Oil 13 KGS TIN" -> "13 KG TIN"
                                                           const extractSku = (productName: string) => {
                                                             const prefixes = ['HK Palm Oil ', 'HK RBO ', 'HK SBO ', 'HK PALM OIL ', 'HK '];
                                                             let extracted = productName;
@@ -997,40 +1133,87 @@ export default function PreApprovalPage() {
                                                                 break;
                                                               }
                                                             }
-                                                            // Normalize "KGS" to "KG" to match database entries
                                                             return extracted.replace(/\bKGS\b/gi, 'KG');
                                                           };
                                                           
                                                           const skuForRate = extractSku(sku);
+                                                          const normalizedSelected = normalizeSku(skuForRate);
+                                                          const coreTokensSelected = extractCoreTokens(skuForRate);
                                                           
-                                                          // Fetch rate for the selected SKU
-                                                          try {
-                                                            const response = await fetch(`/api/v1/skus/rate/${encodeURIComponent(skuForRate)}`);
-                                                            const data = await response.json();
-                                                            
-                                                            const rateValue = data.success && data.rate ? data.rate.toString() : "";
-                                                            
-                                                            setProductRates({ 
-                                                              ...productRates, 
-                                                              [rowKey]: { 
-                                                                ...productRates[rowKey], 
-                                                                skuName: sku,
-                                                                productName: sku,
-                                                                rateOfMaterial: rateValue
-                                                              } 
-                                                            });
-                                                          } catch (error) {
-                                                            console.error("Failed to fetch rate for SKU:", error);
-                                                            // Still set SKU even if rate fetch fails
-                                                            setProductRates({ 
-                                                              ...productRates, 
-                                                              [rowKey]: { 
-                                                                ...productRates[rowKey], 
-                                                                skuName: sku,
-                                                                productName: sku
-                                                              } 
+                                                          // Use calculated rate from SKU Price List if available
+                                                          let rateValue = "";
+                                                          
+                                                          console.log("Selected SKU:", sku);
+                                                          console.log("Extracted SKU:", skuForRate);
+                                                          console.log("Normalized Selected:", normalizedSelected);
+                                                          console.log("Core Tokens Selected:", coreTokensSelected);
+                                                          console.log("Available calculated prices:", calculatedPrices);
+                                                          
+                                                          // Try multiple matching strategies
+                                                          let calculatedRate = null;
+                                                          
+                                                          // Strategy 1: Exact match with extracted SKU
+                                                          calculatedRate = calculatedPrices.find(item => 
+                                                            item.sku.toUpperCase() === skuForRate.toUpperCase()
+                                                          );
+                                                          
+                                                          // Strategy 2: Match with full SKU name
+                                                          if (!calculatedRate) {
+                                                            calculatedRate = calculatedPrices.find(item => 
+                                                              item.sku.toUpperCase() === sku.toUpperCase()
+                                                            );
+                                                          }
+                                                          
+                                                          // Strategy 3: Normalized matching
+                                                          if (!calculatedRate) {
+                                                            calculatedRate = calculatedPrices.find(item => {
+                                                              const normalizedItem = normalizeSku(item.sku);
+                                                              console.log(`Comparing normalized "${normalizedSelected}" with "${normalizedItem}"`);
+                                                              return normalizedItem === normalizedSelected;
                                                             });
                                                           }
+                                                          
+                                                          // Strategy 4: Core token matching (size + unit + type)
+                                                          if (!calculatedRate) {
+                                                            calculatedRate = calculatedPrices.find(item => {
+                                                              const coreTokensItem = extractCoreTokens(item.sku);
+                                                              console.log(`Comparing core tokens "${coreTokensSelected}" with "${coreTokensItem}"`);
+                                                              return coreTokensItem === coreTokensSelected;
+                                                            });
+                                                          }
+                                                          
+                                                          // Strategy 5: Partial normalized match
+                                                          if (!calculatedRate) {
+                                                            calculatedRate = calculatedPrices.find(item => {
+                                                              const normalizedItem = normalizeSku(item.sku);
+                                                              return normalizedItem.includes(normalizedSelected) || normalizedSelected.includes(normalizedItem);
+                                                            });
+                                                          }
+                                                          
+                                                          if (calculatedRate) {
+                                                            console.log("✓ Found calculated rate:", calculatedRate);
+                                                            rateValue = calculatedRate.calculatedRate;
+                                                          } else {
+                                                            console.log("✗ No calculated rate found, fetching from database...");
+                                                            // Fallback: fetch stored rate from database
+                                                            try {
+                                                              const response = await fetch(`/api/v1/skus/rate/${encodeURIComponent(skuForRate)}`);
+                                                              const data = await response.json();
+                                                              rateValue = data.success && data.rate ? data.rate.toString() : "";
+                                                            } catch (error) {
+                                                              console.error("Failed to fetch rate for SKU:", error);
+                                                            }
+                                                          }
+                                                          
+                                                          setProductRates({ 
+                                                            ...productRates, 
+                                                            [rowKey]: { 
+                                                              ...productRates[rowKey], 
+                                                              skuName: sku,
+                                                              productName: sku,
+                                                              rateOfMaterial: rateValue
+                                                            } 
+                                                          });
                                                           setSkuSearch(""); 
                                                           setOpenPopoverId(null);
                                                         }}>
@@ -1077,11 +1260,31 @@ export default function PreApprovalPage() {
                                               value={productRates[rowKey]?.approvalQty || ""} 
                                               onChange={(e) => {
                                                 const value = e.target.value
-                                                const qty = parseFloat(value)
-                                                if (value && qty > maxQty) {
+                                                const qty = parseFloat(value) || 0
+                                                
+                                                // Calculate total order qty for all products in this order
+                                                const allProducts = [...orderDetails._products, ...(dialogNewProducts[baseDo] || [])]
+                                                const totalOrderQty = allProducts.reduce((sum, p) => {
+                                                  const pQty = p._isNew 
+                                                    ? (parseFloat(productRates[p._rowKey]?.orderQty || '0') || 0) 
+                                                    : (parseFloat(p.orderQty) || 0)
+                                                  return sum + pQty
+                                                }, 0)
+                                                
+                                                // Calculate total approval qty including this change
+                                                const totalApprovalQty = allProducts.reduce((sum, p) => {
+                                                  if (p._rowKey === rowKey) {
+                                                    return sum + qty  // Use the new value for current product
+                                                  }
+                                                  const approvalQty = parseFloat(productRates[p._rowKey]?.approvalQty || '0') || 0
+                                                  return sum + approvalQty
+                                                }, 0)
+                                                
+                                                // Validate against total order qty
+                                                if (value && totalApprovalQty > totalOrderQty) {
                                                   setQtyValidationErrors({
                                                     ...qtyValidationErrors,
-                                                    [rowKey]: `Max ${maxQty}`
+                                                    [rowKey]: `Total max ${totalOrderQty}`
                                                   })
                                                 } else {
                                                   const newErrors = {...qtyValidationErrors}
@@ -1120,11 +1323,32 @@ export default function PreApprovalPage() {
                                                   return finalRate > 0 ? finalRate.toFixed(2) : "";
                                                 })()}
                                                 onChange={(e) => {
+                                                  const newValue = e.target.value;
+                                                  
+                                                  // Calculate the minimum allowed rate
+                                                  const approvalQty = parseFloat(productRates[rowKey]?.approvalQty || "") || 0;
+                                                  const orderQty = parseFloat(productRates[rowKey]?.orderQty || product.orderQty || "0") || 0;
+                                                  const qtyToUse = approvalQty > 0 ? approvalQty : orderQty;
+                                                  const rateOfMaterial = parseFloat(productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || "0") || 0;
+                                                  const calculatedMinRate = qtyToUse * rateOfMaterial;
+                                                  
+                                                  const enteredRate = parseFloat(newValue) || 0;
+                                                  
+                                                  // Only allow values >= calculated rate
+                                                  if (newValue && enteredRate < calculatedMinRate) {
+                                                    toast({
+                                                      title: "Invalid Rate",
+                                                      description: `Final rate cannot be less than ₹${calculatedMinRate.toFixed(2)}. You can only increase the rate.`,
+                                                      variant: "destructive"
+                                                    });
+                                                    return; // Don't update if less than minimum
+                                                  }
+                                                  
                                                   setProductRates({ 
                                                     ...productRates, 
                                                     [rowKey]: { 
                                                       ...productRates[rowKey], 
-                                                      rate: e.target.value 
+                                                      rate: newValue
                                                     } 
                                                   });
                                                 }}
@@ -1219,35 +1443,51 @@ export default function PreApprovalPage() {
 
                 
 
-                <DialogFooter className="sm:justify-end gap-3 border-t pt-4">
-                  <Button variant="outline" onClick={() => {
-                    setIsBulkDialogOpen(false)
-                    setSelectedProductRows([])
-                    setQtyValidationErrors({})
-                  }}>Cancel</Button>
-                  <Button 
+                <DialogFooter className="sm:justify-between gap-3 border-t pt-4">
+                  {/* SKU Price List Button */}
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => {
-                      // Filter to only selected products
-                      const selectedProducts = allProductsFromSelectedOrders.filter(p => selectedProductRows.includes(p._rowKey))
-                      const itemsToApprove = selectedProducts.map(prod => ({
-                        _product: prod,
-                        _rowKey: prod._rowKey,
-                        _displayDo: prod._originalOrderId,
-                        customerName: prod._orderData.customerName,
-                        orderType: prod._orderData.orderType
-                      }))
-                      handleApproveWithAdditions(itemsToApprove)
-                    }} 
-                    disabled={
-                      isApproving || 
-                      selectedProductRows.length === 0 ||
-                      Object.keys(qtyValidationErrors).length > 0
-                    }
-                    className="min-w-50 h-11 bg-blue-600 font-bold shadow-lg"
+                      setShowSkuPriceList(true)
+                      fetchAndCalculateRates()
+                    }}
+                    className="bg-gradient-to-r from-green-50 to-blue-50 border-green-300 hover:border-green-400 text-green-700 font-semibold"
                   >
-                    {isApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {isApproving ? "Processing..." : `Submit ${selectedProductRows.length} Product(s)`}
+                    <Search className="mr-2 h-4 w-4" />
+                    View SKU Price List
                   </Button>
+                  
+                  <div className="flex gap-3">
+                    <Button variant="outline" onClick={() => {
+                      setIsBulkDialogOpen(false)
+                      setSelectedProductRows([])
+                      setQtyValidationErrors({})
+                    }}>Cancel</Button>
+                    <Button 
+                      onClick={() => {
+                        // Filter to only selected products
+                        const selectedProducts = allProductsFromSelectedOrders.filter(p => selectedProductRows.includes(p._rowKey))
+                        const itemsToApprove = selectedProducts.map(prod => ({
+                          _product: prod,
+                          _rowKey: prod._rowKey,
+                          _displayDo: prod._originalOrderId,
+                          customerName: prod._orderData.customerName,
+                          orderType: prod._orderData.orderType
+                        }))
+                        handleApproveWithAdditions(itemsToApprove)
+                      }} 
+                      disabled={
+                        isApproving || 
+                        selectedProductRows.length === 0 ||
+                        Object.keys(qtyValidationErrors).length > 0
+                      }
+                      className="min-w-50 h-11 bg-blue-600 font-bold shadow-lg"
+                    >
+                      {isApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {isApproving ? "Processing..." : `Submit ${selectedProductRows.length} Product(s)`}
+                    </Button>
+                  </div>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -1338,7 +1578,7 @@ export default function PreApprovalPage() {
                    // Show all oil types and product count
                    oilType: `${oilTypes} (${rawOrder._productCount} items)`,
                    ratePerLtr: firstProduct?.ratePerLtr || "—",
-                   ratePer15Kg: firstProduct?.rateLtr || "—",
+                   ratePer15Kg: firstProduct?.ratePer15Kg || "—",
                    
                    itemConfirm: rawOrder.itemConfirm?.toUpperCase() || "YES",
                    productName: firstProduct?.productName || firstProduct?.oilType || "",
@@ -1383,6 +1623,98 @@ export default function PreApprovalPage() {
           </Table>
         </Card>
       </div>
+
+      {/* SKU Price List Modal */}
+      <Dialog open={showSkuPriceList} onOpenChange={setShowSkuPriceList}>
+        <DialogContent className="w-[95vw] max-h-[85vh]" style={{ width: '95vw', maxWidth: '95vw' }}>
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-blue-700">SKU Price List</DialogTitle>
+            <DialogDescription className="text-sm">
+              Calculated prices based on: <span className="font-semibold text-green-600">15 KG Rate: ₹{(() => {
+                const selectedItems = displayRows.filter(r => selectedRows.includes(r._rowKey))
+                return selectedItems[0]?.ratePer15Kg || "0"
+              })()}</span> | <span className="font-semibold text-blue-600">1 LTR Rate: ₹{(() => {
+                const selectedItems = displayRows.filter(r => selectedRows.includes(r._rowKey))
+                return selectedItems[0]?.ratePerLtr || "0"
+              })()}</span>
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="overflow-auto max-h-[60vh]">
+            {loadingRates ? (
+              <div className="flex flex-col justify-center items-center py-12">
+                <Loader2 className="h-12 w-12 animate-spin text-blue-600 mb-4" />
+                <p className="text-sm text-muted-foreground">Calculating prices...</p>
+              </div>
+            ) : calculatedPrices.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <p>No SKU rates available.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                {/* Bulk SKUs Section */}
+                <div className="bg-blue-50/50 rounded-lg border border-blue-200 overflow-hidden">
+                  <div className="max-h-[60vh] overflow-auto">
+                    <Table>
+                      <TableBody>
+                        {calculatedPrices
+                          .filter(item => {
+                            const sku = item.sku.toUpperCase();
+                            return sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT');
+                          })
+                          .map((item, idx) => (
+                            <TableRow key={idx} className="hover:bg-blue-100 transition-colors border-b border-blue-100">
+                              <TableCell className="text-center text-xs font-semibold text-blue-400 w-12">{idx + 1}</TableCell>
+                              <TableCell className="font-semibold text-slate-800 py-2 text-sm">{item.sku}</TableCell>
+                              <TableCell className="text-right font-bold text-blue-700 text-base py-2">
+                                ₹{item.calculatedRate}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                {/* Retail SKUs Section */}
+                <div className="bg-green-50/50 rounded-lg border border-green-200 overflow-hidden">
+                  <div className="max-h-[60vh] overflow-auto">
+                    <Table>
+                      <TableBody>
+                        {calculatedPrices
+                          .filter(item => {
+                            const sku = item.sku.toUpperCase();
+                            // Exclude items that contain KG, TIN, JAR, or BKT (those are in bulk section)
+                            return !(sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT'));
+                          })
+                          .map((item, idx) => (
+                            <TableRow key={idx} className="hover:bg-green-100 transition-colors border-b border-green-100">
+                              <TableCell className="text-center text-xs font-semibold text-green-400 w-12">{idx + 8}</TableCell>
+                              <TableCell className="font-semibold text-slate-800 py-2 text-sm">{item.sku}</TableCell>
+                              <TableCell className="text-right font-bold text-green-700 text-base py-2">
+                                ₹{item.calculatedRate}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowSkuPriceList(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </WorkflowStageShell>
   )
 }
