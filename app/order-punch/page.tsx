@@ -15,10 +15,18 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Save, FileUp, Plus, Trash2, CalendarIcon } from "lucide-react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { useToast } from "@/hooks/use-toast"
-import { customerApi, depotApi, skuApi, brokerApi } from "@/lib/api-service"
+import { customerApi, depotApi, skuApi, brokerApi, orderApi } from "@/lib/api-service"
 import { Combobox } from "@/components/ui/combobox"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 
 type ProductItem = {
   id: string
@@ -35,8 +43,8 @@ type ProductItem = {
 type PreApprovalProduct = {
   id: string
   oilType: string
+  ratePer15Kg: string
   ratePerLtr: string
-  rateLtr: string // Used for Rate per 15KG
 }
 
 export default function OrderPunchPage() {
@@ -158,13 +166,14 @@ export default function OrderPunchPage() {
   const [sameAsCustomerAddress, setSameAsCustomerAddress] = useState<boolean>(true)
   
   // Pre-Approval Products State
-  const [preApprovalProducts, setPreApprovalProducts] = useState<PreApprovalProduct[]>([
-    { id: "1", oilType: "", ratePerLtr: "", rateLtr: "" },
-  ])
+  const [preApprovalProducts, setPreApprovalProducts] = useState<PreApprovalProduct[]>([])
 
-  // Legacy/Single states
-  const [oilType, setOilType] = useState<string>("")
-  const [rateLtr, setRateLtr] = useState<string>("")
+  // Current Pre-Approval Input State
+  const [currentPreApproval, setCurrentPreApproval] = useState({
+    oilType: "Palm Oil",
+    ratePer15Kg: "",
+    ratePerLtr: ""
+  })
   
   const [brokerName, setBrokerName] = useState<string>("Ashish Motwani")
   const [deliveryDate, setDeliveryDate] = useState<string>("")
@@ -342,21 +351,47 @@ export default function OrderPunchPage() {
 
       // Add products array for backend (for regular and pre-approval order types)
       if ((orderType === "regular" || orderType === "pre-approval") && products.length > 0) {
-        orderData.products = products.map(p => ({
-          product_name: p.productName,
-          uom: p.uom || "Ltr",
-          order_quantity: p.orderQty ? parseFloat(p.orderQty) : null,
-          rate_of_material: p.rate ? parseFloat(p.rate) : null,
-          rate_per_15kg: p.ratePer15Kg ? parseFloat(p.ratePer15Kg) : null,
-          rate_per_ltr: p.ratePerLtr ? parseFloat(p.ratePerLtr) : null,
-          alternate_uom: p.altUom || "Kg",
-          alternate_qty_kg: p.altQty ? parseFloat(p.altQty) : null,
-        }))
+        orderData.products = products.map(p => {
+          let rate15kg = p.ratePer15Kg ? parseFloat(p.ratePer15Kg) : null
+          let rateLtr = p.ratePerLtr ? parseFloat(p.ratePerLtr) : null
+          let oilTypeVal = ""
+
+          // For pre-approval, if no rates on individual product, pick from the preApprovalProducts list
+          if (orderType === "pre-approval") {
+            const productNameLower = (p.productName || "").toLowerCase()
+            let matchedRate = null
+            
+            if (productNameLower.includes("palm")) {
+              matchedRate = preApprovalProducts.find(pap => pap.oilType === "Palm Oil")
+              oilTypeVal = "Palm Oil"
+            } else if (productNameLower.includes("rice")) {
+              matchedRate = preApprovalProducts.find(pap => pap.oilType === "Rice Oil")
+              oilTypeVal = "Rice Oil"
+            } else if (productNameLower.includes("soya")) {
+              matchedRate = preApprovalProducts.find(pap => pap.oilType === "soya oil")
+              oilTypeVal = "soya oil"
+            }
+
+            if (matchedRate) {
+              rate15kg = matchedRate.ratePer15Kg ? parseFloat(matchedRate.ratePer15Kg) : rate15kg
+              rateLtr = matchedRate.ratePerLtr ? parseFloat(matchedRate.ratePerLtr) : rateLtr
+            }
+          }
+
+          return {
+            product_name: p.productName,
+            uom: p.uom || "Ltr",
+            order_quantity: p.orderQty ? parseFloat(p.orderQty) : null,
+            rate_of_material: p.rate ? parseFloat(p.rate) : null,
+            rate_per_15kg: rate15kg,
+            rate_per_ltr: rateLtr,
+            oil_type: oilTypeVal,
+            alternate_uom: p.altUom || "Kg",
+            alternate_qty_kg: p.altQty ? parseFloat(p.altQty) : null,
+          }
+        })
       }
 
-      // Import API service
-      const { orderApi } = await import('@/lib/api-service')
-      
       // Call backend API
       const response = await orderApi.create(orderData)
 
@@ -379,8 +414,6 @@ export default function OrderPunchPage() {
           whatsappNo,
           customerAddress,
           deliveryAddress,
-          oilType,
-          rateLtr,
           brokerName,
           deliveryDate,
           startDate,
@@ -480,7 +513,7 @@ export default function OrderPunchPage() {
             ...p,
             productName: selectedSku.sku_name,
             uom: selectedSku.main_uom || "",
-            altUom: selectedSku.alternate_uom || ""
+            altUom: selectedSku.alternate_uom || "",
           };
         })
       );
@@ -492,15 +525,31 @@ export default function OrderPunchPage() {
 
   // Pre-Approval Product Helpers
   const addPreApprovalProduct = () => {
+    if (!currentPreApproval.ratePer15Kg && !currentPreApproval.ratePerLtr) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter at least one rate (15 KG or 1 LTR).",
+        variant: "destructive",
+      })
+      return
+    }
+
     setPreApprovalProducts([
       ...preApprovalProducts,
       { 
         id: Math.random().toString(36).substr(2, 9), 
-        oilType: "", 
-        ratePerLtr: "", 
-        rateLtr: "", 
+        oilType: currentPreApproval.oilType, 
+        ratePer15Kg: currentPreApproval.ratePer15Kg, 
+        ratePerLtr: currentPreApproval.ratePerLtr, 
       },
     ])
+    
+    // Reset current input
+    setCurrentPreApproval({
+      ...currentPreApproval,
+      ratePer15Kg: "",
+      ratePerLtr: ""
+    })
   }
 
   const removePreApprovalProduct = (id: string) => {
@@ -532,8 +581,12 @@ export default function OrderPunchPage() {
     setCustomerAddress("")
     setDeliveryAddress("")
     setSameAsCustomerAddress(true)
-    setOilType("")
-    setRateLtr("")
+    setPreApprovalProducts([])
+    setCurrentPreApproval({
+      oilType: "Palm Oil",
+      ratePer15Kg: "",
+      ratePerLtr: ""
+    })
     setBrokerName("Ashish Motwani")
     setDeliveryDate("")
     setStartDate("")
@@ -544,7 +597,6 @@ export default function OrderPunchPage() {
     setFuturePeriodDate("")
     setOrderPunchRemarks("")
     setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "" }])
-    setPreApprovalProducts([{ id: Math.random().toString(36).substr(2, 9), oilType: "", ratePerLtr: "", rateLtr: "" }])
   }
 
   return (
@@ -870,38 +922,97 @@ export default function OrderPunchPage() {
                 </div>
               )}
 
-              {/* Pre-Approval Only: Shared Rate Fields */}
+              {/* Pre-Approval Rates Section */}
               {orderType === "pre-approval" && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="ratePer15Kg" className="text-sm font-semibold">15 KG Rate</Label>
-                    <Input
-                      id="ratePer15Kg"
-                      type="number"
-                      value={products[0]?.ratePer15Kg || ""}
-                      onChange={(e) => {
-                        const newValue = e.target.value;
-                        setProducts(products.map(p => ({ ...p, ratePer15Kg: newValue })));
-                      }}
-                      placeholder="0.00"
-                      className="bg-background border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-green-600"
-                    />
+                <div className="md:col-span-2 space-y-4 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
+                  <div className="flex flex-col space-y-1">
+                    <Label className="text-lg font-semibold text-blue-900">Pre-Approval Rates</Label>
+                    <p className="text-sm text-blue-600">Add 15 KG and 1 LTR rates for different oil types.</p>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="ratePerLtr" className="text-sm font-semibold">1 LTR Rate</Label>
-                    <Input
-                      id="ratePerLtr"
-                      type="number"
-                      value={products[0]?.ratePerLtr || ""}
-                      onChange={(e) => {
-                        const newValue = e.target.value;
-                        setProducts(products.map(p => ({ ...p, ratePerLtr: newValue })));
-                      }}
-                      placeholder="0.00"
-                      className="bg-background border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-green-600"
-                    />
+
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-white p-4 rounded-md shadow-sm border border-blue-100">
+                    <div className="space-y-2">
+                      <Label htmlFor="currentOilType">Oil Type</Label>
+                      <Select 
+                        value={currentPreApproval.oilType} 
+                        onValueChange={(val) => setCurrentPreApproval(prev => ({ ...prev, oilType: val }))}
+                      >
+                        <SelectTrigger id="currentOilType">
+                          <SelectValue placeholder="Select Oil" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Palm Oil">Palm Oil</SelectItem>
+                          <SelectItem value="Rice Oil">Rice Oil</SelectItem>
+                          <SelectItem value="soya oil">Soya Oil</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="currentRate15Kg">15 KG Rate</Label>
+                      <Input
+                        id="currentRate15Kg"
+                        type="number"
+                        value={currentPreApproval.ratePer15Kg}
+                        onChange={(e) => setCurrentPreApproval(prev => ({ ...prev, ratePer15Kg: e.target.value }))}
+                        placeholder="0.00"
+                        className="font-semibold text-green-600"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="currentRateLtr">1 LTR Rate</Label>
+                      <Input
+                        id="currentRateLtr"
+                        type="number"
+                        value={currentPreApproval.ratePerLtr}
+                        onChange={(e) => setCurrentPreApproval(prev => ({ ...prev, ratePerLtr: e.target.value }))}
+                        placeholder="0.00"
+                        className="font-semibold text-blue-600"
+                      />
+                    </div>
+                    <Button 
+                      type="button" 
+                      onClick={addPreApprovalProduct}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                    >
+                      <Plus className="h-4 w-4 mr-2" /> Add to List
+                    </Button>
                   </div>
-                </>
+
+                  {preApprovalProducts.length > 0 && (
+                    <div className="overflow-hidden rounded-md border border-blue-100 bg-white">
+                      <Table>
+                        <TableHeader className="bg-blue-50/50">
+                          <TableRow>
+                            <TableHead className="font-bold text-blue-900 text-xs uppercase tracking-wider">Oil Type</TableHead>
+                            <TableHead className="font-bold text-blue-900 text-xs uppercase tracking-wider">15 KG Rate</TableHead>
+                            <TableHead className="font-bold text-blue-900 text-xs uppercase tracking-wider">1 LTR Rate</TableHead>
+                            <TableHead className="w-[50px]"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {preApprovalProducts.map((p) => (
+                            <TableRow key={p.id} className="hover:bg-blue-50/30">
+                              <TableCell className="font-medium py-2">{p.oilType}</TableCell>
+                              <TableCell className="font-semibold text-green-600 py-2">₹{p.ratePer15Kg || "0.00"}</TableCell>
+                              <TableCell className="font-semibold text-blue-600 py-2">₹{p.ratePerLtr || "0.00"}</TableCell>
+                              <TableCell className="py-2 text-right">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removePreApprovalProduct(p.id)}
+                                  className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Show Product List for both regular and pre-approval */}
@@ -916,14 +1027,26 @@ export default function OrderPunchPage() {
                          <div className="absolute top-2 left-4 text-[10px] font-bold text-blue-500/80 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest">
                              Product {idx + 1}
                          </div>
-                        <div className={`grid grid-cols-2 gap-4 flex-1 ${orderType === "pre-approval" ? "md:grid-cols-12" : "md:grid-cols-11"}`}>
+                         <div className="grid grid-cols-2 gap-4 flex-1 md:grid-cols-11">
                           
-                          <div className="space-y-1.5 col-span-2 md:col-span-4">
+                          <div className={`space-y-1.5 col-span-2 ${orderType === "pre-approval" ? "md:col-span-5" : "md:col-span-6"}`}>
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Name</Label>
                              <Combobox
                                options={skus
                                  .filter(s => s && s.sku_name) // Filter invalid SKUs
                                  .filter(s => !products.some(p => p.productName === s.sku_name && p.id !== product.id)) // Filter already selected products
+                                 .filter(s => {
+                                   if (orderType !== "pre-approval") return true;
+                                   if (preApprovalProducts.length === 0) return true; // Show all if none added yet? User said "when i select... show only", implying filtering.
+                                   
+                                   const skuNameLower = s.sku_name.toLowerCase();
+                                   return preApprovalProducts.some(pap => {
+                                      if (pap.oilType === "Palm Oil") return skuNameLower.includes("palm");
+                                      if (pap.oilType === "Rice Oil") return skuNameLower.includes("rice") || skuNameLower.includes("rbo");
+                                      if (pap.oilType === "soya oil") return skuNameLower.includes("soya") || skuNameLower.includes("sbo");
+                                      return false;
+                                   });
+                                 })
                                  .map((sku) => ({
                                    value: sku.sku_name,
                                    label: sku.sku_name
@@ -959,41 +1082,22 @@ export default function OrderPunchPage() {
                                className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
                              />
                           </div>
-
-                          {/* For Pre-Approval Orders Only: 15 KG Rate */}
-                          {orderType === "pre-approval" && (
-                            <div className="space-y-1.5 col-span-1 md:col-span-2">
-                               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">15 KG Rate</Label>
+                      
+                          {/* Rate field for both types, but auto-filled for Pre-Approval */}
+                          {orderType === "pre-approval" ? (
+                            <div className="space-y-1.5 col-span-2 md:col-span-2">
+                               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate</Label>
                                <Input
                                  type="number"
-                                 step="0.01"
-                                 value={product.ratePer15Kg}
-                                 onChange={(e) => updateProduct(product.id, "ratePer15Kg", e.target.value)}
-                                 placeholder="0.00"
-                                 className="bg-background h-10 border-slate-200 focus:border-green-400 focus:ring-green-400 font-semibold text-green-600"
-                               />
-                            </div>
-                          )}
-
-                          {/* For Pre-Approval Orders Only: 1 LTR Rate */}
-                          {orderType === "pre-approval" && (
-                            <div className="space-y-1.5 col-span-1 md:col-span-2">
-                               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">1 LTR Rate</Label>
-                               <Input
-                                 type="number"
-                                 step="0.01"
-                                 value={product.ratePerLtr}
-                                 onChange={(e) => updateProduct(product.id, "ratePerLtr", e.target.value)}
+                                 value={product.rate}
+                                 onChange={(e) => updateProduct(product.id, "rate", e.target.value)}
                                  placeholder="0.00"
                                  className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600"
                                />
                             </div>
-                          )}
-
-                          {/* For Regular Orders Only: Rate (Material) */}
-                          {orderType !== "pre-approval" && (
+                          ) : (
                             <div className="space-y-1.5 col-span-2 md:col-span-1">
-                               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate (Material)</Label>
+                               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate</Label>
                                <Input
                                  type="number"
                                  value={product.rate}

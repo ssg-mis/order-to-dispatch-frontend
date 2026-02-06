@@ -32,6 +32,7 @@ export interface OrderProduct {
   rate_per_ltr?: number;
   sku_name?: string;
   approval_qty?: number;
+  final_rate?: number;
 }
 
 export interface CreateOrderRequest {

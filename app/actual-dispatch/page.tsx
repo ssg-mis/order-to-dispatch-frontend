@@ -24,11 +24,13 @@ export default function ActualDispatchPage() {
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const [skus, setSkus] = useState<any[]>([])
   const [selectedOrders, setSelectedOrders] = useState<string[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [confirmDetails, setConfirmDetails] = useState<Record<string, { qty: string }>>({})
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
-  const [skus, setSkus] = useState<any[]>([])
+  const [selectedGroups, setSelectedGroups] = useState<any[]>([])
+  const [dialogSelectedProducts, setDialogSelectedProducts] = useState<string[]>([])
   
   // Consolidated State for Stages 6 & 7
   const [vehicleNumber, setVehicleNumber] = useState("")
@@ -63,6 +65,65 @@ export default function ActualDispatchPage() {
     remarks: "",
     extraWeight: "0",
   })
+
+  // --- Helper Functions (Moved up to fix initialization errors) ---
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "—";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  const getSkuWeight = (productName: string): number => {
+    if (!productName || skus.length === 0) return 0
+    let matchedSku = skus.find(sku => sku.sku_name?.toUpperCase() === productName.toUpperCase())
+    if (matchedSku) return matchedSku?.sku_weight ? parseFloat(matchedSku.sku_weight) : 0
+    const normalizeSkuName = (name: string) => name.toUpperCase().replace(/KGS/g, 'KG').replace(/LTRS/g, 'LTR').replace(/\s+/g, ' ').trim()
+    const normalizedProductName = normalizeSkuName(productName)
+    matchedSku = skus.find(sku => normalizeSkuName(sku.sku_name || '') === normalizedProductName)
+    if (matchedSku) return matchedSku?.sku_weight ? parseFloat(matchedSku.sku_weight) : 0
+    matchedSku = skus.find(sku => {
+      const normalizedSkuName = normalizeSkuName(sku.sku_name || '')
+      return normalizedSkuName.includes(normalizedProductName) || normalizedProductName.includes(normalizedSkuName)
+    })
+    if (matchedSku) return matchedSku?.sku_weight ? parseFloat(matchedSku.sku_weight) : 0
+    return 0
+  }
+
+  const getSkuGrossWeight = (productName: string): number => {
+    if (!productName || skus.length === 0) return 0
+    const normalizeSkuName = (name: string) => name.toUpperCase().replace(/KGS/g, 'KG').replace(/LTRS/g, 'LTR').replace(/\s+/g, ' ').trim()
+    const normalizedProductName = normalizeSkuName(productName)
+    let matchedSku = skus.find(sku => sku.sku_name?.toUpperCase() === productName.toUpperCase()) ||
+                     skus.find(sku => normalizeSkuName(sku.sku_name || '') === normalizedProductName) ||
+                     skus.find(sku => {
+                       const normalizedSkuName = normalizeSkuName(sku.sku_name || '')
+                       return normalizedSkuName.includes(normalizedProductName) || normalizedProductName.includes(normalizedSkuName)
+                     })
+    return matchedSku?.gross_weight ? parseFloat(matchedSku.gross_weight) : 0
+  }
+
+  const calculateWeight = (productName: string, qty: string | number): number => {
+    const skuWeight = getSkuWeight(productName)
+    const quantity = typeof qty === 'string' ? parseFloat(qty) || 0 : qty
+    return skuWeight * quantity
+  }
+
+  const calculateGrossWeight = (productName: string, qty: string | number): number => {
+    const skuGrossWeight = getSkuGrossWeight(productName)
+    const quantity = typeof qty === 'string' ? parseFloat(qty) || 0 : qty
+    return skuGrossWeight * quantity
+  }
+  // --- End Helpers ---
+
   const PAGE_COLUMNS = [
     { id: "orderNo", label: "DO Number" },
     { id: "customerName", label: "Customer Name" },
@@ -176,44 +237,39 @@ export default function ActualDispatchPage() {
     fetchSkus()
   }, [])
 
-  // Auto-calculate packing weights (Stage 7 Logic)
+  // Auto-calculate Net Weight (Gross - Tare) and sync Packing Audit display
   useEffect(() => {
-    const netPacking = parseFloat(loadData.netWeightPacking) || 0
-    const otherPacking = parseFloat(loadData.otherItemWeight) || 0
-    const grossPacking = netPacking + otherPacking
+    const gross = parseFloat(loadData.grossWeight) || 0
+    const tare = parseFloat(loadData.tareWeight) || 0
+    const net = gross - tare
     
     setLoadData(prev => ({
       ...prev,
-      grossWeightPacking: (loadData.netWeightPacking || loadData.otherItemWeight) ? grossPacking.toFixed(2) : ""
+      netWeightPacking: (loadData.grossWeight || loadData.tareWeight) ? net.toFixed(2) : prev.netWeightPacking,
+      grossWeightPacking: (loadData.grossWeight || loadData.tareWeight) ? net.toFixed(2) : prev.grossWeightPacking
     }))
-  }, [loadData.netWeightPacking, loadData.otherItemWeight])
+  }, [loadData.grossWeight, loadData.tareWeight])
 
-  // Auto-calculate difference (Stage 7 Logic)
+  // Calculate Expected SKU Weight for calculations
+  const totalPackingWeightFromSku = useMemo(() => {
+    return selectedGroups.flatMap(g => g._allProducts)
+      .reduce((total, prod) => {
+        const rowKey = prod._rowKey
+        return total + calculateGrossWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch)
+      }, 0)
+  }, [selectedGroups, confirmDetails, skus])
+
+  // Auto-calculate difference (Net weight - Total SKU weight)
   useEffect(() => {
-    const dharamWeight = parseFloat(loadData.dharamkataWeight) || 0
-    const grossPacking = parseFloat(loadData.grossWeightPacking) || 0
-    const diff = dharamWeight - grossPacking
+    const net = parseFloat(loadData.netWeightPacking) || 0
+    const diff = net - totalPackingWeightFromSku
     
     setLoadData(prev => ({
       ...prev,
-      differanceWeight: (loadData.dharamkataWeight || loadData.grossWeightPacking) ? diff.toFixed(2) : ""
+      differanceWeight: (loadData.netWeightPacking || totalPackingWeightFromSku > 0) ? diff.toFixed(2) : ""
     }))
-  }, [loadData.dharamkataWeight, loadData.grossWeightPacking])
+  }, [loadData.netWeightPacking, totalPackingWeightFromSku])
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return "—";
-    try {
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
-      return date.toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      });
-    } catch (e) {
-      return dateStr;
-    }
-  };
 
   /* Extract unique customer names */
   const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
@@ -371,9 +427,6 @@ export default function ActualDispatchPage() {
     }
   }
 
-  // State for popup selection
-  const [selectedGroups, setSelectedGroups] = useState<any[]>([])
-  const [dialogSelectedProducts, setDialogSelectedProducts] = useState<string[]>([])
 
   const handleOpenDialog = (group?: any) => {
       const targetGroups = group ? [group] : displayRows.filter(r => selectedOrders.includes(r._rowKey));
@@ -410,7 +463,7 @@ export default function ActualDispatchPage() {
             permit2_out_state: "",
           })
           setLoadData({
-            actualQty: "",
+            actualQty: String(targetGroups.flatMap(g => g._allProducts).reduce((sum, p) => sum + parseFloat(p.qtyToDispatch || "0"), 0)),
             weightmentSlip: "",
             rstNo: "",
             grossWeight: "",
@@ -432,67 +485,6 @@ export default function ActualDispatchPage() {
       }
   }
 
-  // Helper function to get SKU weight by matching product name
-  const getSkuWeight = (productName: string): number => {
-    if (!productName || skus.length === 0) {
-      console.warn(`[WEIGHT] Cannot get weight: productName="${productName}", skus.length=${skus.length}`)
-      return 0
-    }
-    
-    // Try 1: Exact match (case-insensitive)
-    let matchedSku = skus.find(sku => 
-      sku.sku_name?.toUpperCase() === productName.toUpperCase()
-    )
-    
-    if (matchedSku) {
-      console.log(`[WEIGHT] ✓ Exact match: "${productName}" -> "${matchedSku.sku_name}" = ${matchedSku.sku_weight} kg`)
-      return matchedSku?.sku_weight ? parseFloat(matchedSku.sku_weight) : 0
-    }
-    
-    // Try 2: Normalized match (KGS->KG, LTRS->LTR)
-    const normalizeSkuName = (name: string) => {
-      return name
-        .toUpperCase()
-        .replace(/KGS/g, 'KG')
-        .replace(/LTRS/g, 'LTR')
-        .replace(/\s+/g, ' ')
-        .trim()
-    }
-    
-    const normalizedProductName = normalizeSkuName(productName)
-    matchedSku = skus.find(sku => 
-      normalizeSkuName(sku.sku_name || '') === normalizedProductName
-    )
-    
-    if (matchedSku) {
-      console.log(`[WEIGHT] ✓ Normalized match: "${productName}" -> "${matchedSku.sku_name}" = ${matchedSku.sku_weight} kg`)
-      return matchedSku?.sku_weight ? parseFloat(matchedSku.sku_weight) : 0
-    }
-    
-    // Try 3: Fuzzy partial match
-    matchedSku = skus.find(sku => {
-      const normalizedSkuName = normalizeSkuName(sku.sku_name || '')
-      return normalizedSkuName.includes(normalizedProductName) || 
-             normalizedProductName.includes(normalizedSkuName)
-    })
-    
-    if (matchedSku) {
-      console.log(`[WEIGHT] ✓ Fuzzy match: "${productName}" -> "${matchedSku.sku_name}" = ${matchedSku.sku_weight} kg`)
-      return matchedSku?.sku_weight ? parseFloat(matchedSku.sku_weight) : 0
-    }
-    
-    // No match found
-    console.error(`[WEIGHT] ✗ No match for "${productName}"`)
-    console.log('[WEIGHT] Available SKUs:', skus.map(s => s.sku_name).slice(0, 10))
-    return 0
-  }
-
-  // Calculate individual weight (qty × sku_weight)
-  const calculateWeight = (productName: string, qty: string | number): number => {
-    const skuWeight = getSkuWeight(productName)
-    const quantity = typeof qty === 'string' ? parseFloat(qty) || 0 : qty
-    return skuWeight * quantity
-  }
 
   const toggleSelectDialogProduct = (key: string) => {
      if (dialogSelectedProducts.includes(key)) {
@@ -953,7 +945,7 @@ export default function ActualDispatchPage() {
                                     </TableCell>
                                     <TableCell className="p-3 text-center">
                                         <div className="font-black text-sm text-purple-700">
-                                            {calculateWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch).toFixed(2)} kg
+                                            {calculateGrossWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch).toFixed(2)} kg
                                         </div>
                                     </TableCell>
                                     <TableCell className="p-3 text-center">
@@ -963,16 +955,30 @@ export default function ActualDispatchPage() {
                             )})}
                             {/* Total Weight Row */}
                             <TableRow className="bg-purple-50 border-t-2 border-purple-200">
-                                <TableCell colSpan={6} className="text-right p-4 font-black text-sm uppercase text-purple-900 tracking-wider">
-                                    Total Weight:
+                                <TableCell colSpan={3} className="text-right p-4 font-black text-xs uppercase text-purple-900 tracking-wider">
+                                    TOTALS:
                                 </TableCell>
                                 <TableCell className="p-4 text-center">
-                                    <div className="font-black text-lg text-purple-700">
-                                        {selectedGroups.flatMap(g => g._allProducts)
-                                            .reduce((total, prod) => {
-                                                const rowKey = prod._rowKey
-                                                return total + calculateWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch)
-                                            }, 0).toFixed(2)} kg
+                                    <div className="font-black text-sm text-purple-700">
+                                        {selectedGroups.flatMap(g => g._allProducts).reduce((sum, p) => sum + parseFloat(p.qtyToDispatch || "0"), 0)}
+                                    </div>
+                                </TableCell>
+                                <TableCell />
+                                <TableCell className="p-4 text-center">
+                                    <div className="font-black text-sm text-purple-700">
+                                        {selectedGroups.flatMap(g => g._allProducts).reduce((sum, p) => sum + parseFloat(confirmDetails[p._rowKey]?.qty || p.qtyToDispatch || "0"), 0)}
+                                    </div>
+                                </TableCell>
+                                <TableCell className="p-4 text-center">
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-[9px] font-black text-purple-400 uppercase tracking-tighter mb-1">TOTAL PACKING WEIGHT</span>
+                                        <div className="font-black text-lg text-purple-700">
+                                            {selectedGroups.flatMap(g => g._allProducts)
+                                                .reduce((total, prod) => {
+                                                    const rowKey = prod._rowKey
+                                                    return total + calculateGrossWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch)
+                                                }, 0).toFixed(2)} kg
+                                        </div>
                                     </div>
                                 </TableCell>
                                 <TableCell colSpan={1} />
@@ -1125,15 +1131,15 @@ export default function ActualDispatchPage() {
                              <div className="space-y-0.5">
                                 <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest leading-none mb-1">Packing Audit</p>
                                 <div className="flex items-baseline gap-2">
-                                  <p className="text-2xl font-black text-blue-900 leading-none">{loadData.grossWeightPacking || "0.00"}</p>
+                                  <p className="text-2xl font-black text-blue-900 leading-none">{loadData.netWeightPacking || "0.00"}</p>
                                   <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">NET KG</span>
                                 </div>
                              </div>
                              <div className="flex gap-2">
                                 <div className="flex flex-col gap-1">
                                   <span className="text-[8px] font-black text-slate-400 text-center uppercase">Net</span>
-                                  <Input type="number" step="0.01" className="h-9 w-20 bg-white border-blue-200 rounded-lg font-bold text-xs" 
-                                    value={loadData.netWeightPacking} onChange={(e) => setLoadData(p => ({...p, netWeightPacking: e.target.value}))} />
+                                  <Input type="number" step="0.01" readOnly className="h-9 w-20 bg-slate-50 border-blue-200 rounded-lg font-black text-xs cursor-not-allowed" 
+                                    value={loadData.netWeightPacking} />
                                 </div>
                                 <div className="flex flex-col gap-1">
                                   <span className="text-[8px] font-black text-slate-400 text-center uppercase">Diff</span>
@@ -1169,16 +1175,24 @@ export default function ActualDispatchPage() {
                                value={loadData.reason} onChange={(e) => setLoadData(p => ({...p, reason: e.target.value}))} />
                           </div>
 
-                          <div className="pt-2 border-t border-slate-100 flex justify-between gap-4">
-                             <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-2.5 flex-1 flex items-center justify-between group cursor-pointer hover:border-blue-400 transition-colors">
-                                <span className="text-[9px] font-black text-slate-500 group-hover:text-blue-600 transition-colors uppercase">Weight Slip</span>
-                                <Input type="file" className="hidden" id="weight-slip" />
-                                <Label htmlFor="weight-slip" className="bg-slate-200 text-[8px] font-black px-2 py-1 rounded-md text-slate-600 group-hover:bg-blue-600 group-hover:text-white transition-all cursor-pointer">SELECT</Label>
-                             </div>
-                             <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-2.5 flex-1 flex items-center justify-between group cursor-pointer hover:border-blue-400 transition-colors">
-                                <span className="text-[9px] font-black text-slate-500 group-hover:text-blue-600 transition-colors uppercase">Plate Image</span>
-                                <Input type="file" className="hidden" id="plate-img" />
-                                <Label htmlFor="plate-img" className="bg-slate-200 text-[8px] font-black px-2 py-1 rounded-md text-slate-600 group-hover:bg-blue-600 group-hover:text-white transition-all cursor-pointer">SELECT</Label>
+
+                          <div className="pt-4 border-t-2 border-blue-100 mt-2">
+                             <div className="flex flex-col items-center bg-blue-900 rounded-2xl p-4 shadow-inner">
+                                 <span className="text-[10px] font-black uppercase text-blue-300 tracking-widest mb-1">Total Weight</span>
+                                 <div className="flex flex-col items-center gap-1">
+                                   <div className="text-3xl font-black text-white leading-none">
+                                     {(
+                                       selectedGroups.flatMap(g => g._allProducts)
+                                       .reduce((total, prod) => {
+                                         const rowKey = prod._rowKey
+                                         return total + calculateGrossWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch)
+                                       }, 0) + (parseFloat(loadData.extraWeight) || 0)
+                                     ).toFixed(2)} kg
+                                   </div>
+                                   <div className="text-[11px] font-black text-white/90 drop-shadow-sm">
+                                    (Target: {totalPackingWeightFromSku.toFixed(2)} kg)
+                                   </div>
+                                </div>
                              </div>
                           </div>
                       </div>

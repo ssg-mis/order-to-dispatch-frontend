@@ -14,6 +14,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -27,11 +28,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus } from "lucide-react"
+import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus, Check, ChevronsUpDown, Search, Package } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { skuApi, preApprovalApi } from "@/lib/api-service"
-import { Check, ChevronsUpDown, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   Command,
@@ -122,7 +122,8 @@ export default function PreApprovalPage() {
   const [showSkuPriceList, setShowSkuPriceList] = useState(false)
   const [skuRates, setSkuRates] = useState<any[]>([])
   const [loadingRates, setLoadingRates] = useState(false)
-  const [calculatedPrices, setCalculatedPrices] = useState<any[]>([])
+  const [calculatedPrices, setCalculatedPrices] = useState<{ [oilType: string]: any[] }>({})
+  const [activeOilTab, setActiveOilTab] = useState<string>("")
 
   // Fetch SKUs
   useEffect(() => {
@@ -195,35 +196,42 @@ export default function PreApprovalPage() {
       if (response.success) {
         setSkuRates(response.data)
         
-        // Get base rates from currently selected orders
-        const selectedItems = displayRows.filter(r => selectedRows.includes(r._rowKey))
-        const firstSelected = selectedItems[0]
+        // Get rates for ALL oil types from selected orders
+        const selectedGroupItems = displayRows.filter(r => selectedRows.includes(r._rowKey))
         
-        console.log("First Selected Order:", firstSelected)
-        console.log("Rate Per 15 KG:", firstSelected?.ratePer15Kg)
-        console.log("Rate Per LTR:", firstSelected?.ratePerLtr)
+        const oilWiseCalculations: { [oilType: string]: any[] } = {}
+        const allOilTypes = new Set<string>()
         
-        // Extract numeric values, handle both string numbers and "—"
-        const rate15kgRaw = firstSelected?.ratePer15Kg
-        const rateLtrRaw = firstSelected?.ratePerLtr
+        selectedGroupItems.forEach(group => {
+          if (group.oilWiseRates) {
+            Object.keys(group.oilWiseRates).forEach(ot => allOilTypes.add(ot))
+          }
+        })
+
+        allOilTypes.forEach(oilType => {
+          // Find base rates for this specific oil type across selected groups
+          let baseRate15kg = 0
+          let baseRateLtr = 0
+
+          for (const group of selectedGroupItems) {
+            if (group.oilWiseRates?.[oilType]) {
+              const rates = group.oilWiseRates[oilType]
+              if (rates.ratePer15Kg && rates.ratePer15Kg !== "—") baseRate15kg = parseFloat(rates.ratePer15Kg)
+              if (rates.ratePerLtr && rates.ratePerLtr !== "—") baseRateLtr = parseFloat(rates.ratePerLtr)
+              if (baseRate15kg > 0 || baseRateLtr > 0) break; // Use rates from first group that has them
+            }
+          }
+
+          oilWiseCalculations[oilType] = calculateSkuPrices(baseRate15kg, baseRateLtr, response.data)
+        })
         
-        let baseRatePer15Kg = 0
-        let baseRatePer1Ltr = 0
+        setCalculatedPrices(oilWiseCalculations)
         
-        if (rate15kgRaw && rate15kgRaw !== "—") {
-          baseRatePer15Kg = parseFloat(rate15kgRaw)
+        // Set first oil type as active tab if none set
+        const oilTypes = Object.keys(oilWiseCalculations)
+        if (oilTypes.length > 0 && (!activeOilTab || !oilTypes.includes(activeOilTab))) {
+          setActiveOilTab(oilTypes[0])
         }
-        
-        if (rateLtrRaw && rateLtrRaw !== "—") {
-          baseRatePer1Ltr = parseFloat(rateLtrRaw)
-        }
-        
-        console.log("Parsed 15KG Rate:", baseRatePer15Kg)
-        console.log("Parsed 1LTR Rate:", baseRatePer1Ltr)
-        
-        // Calculate prices
-        const calculated = calculateSkuPrices(baseRatePer15Kg, baseRatePer1Ltr, response.data)
-        setCalculatedPrices(calculated)
       }
     } catch (error) {
       console.error("Failed to fetch SKU rates:", error)
@@ -509,7 +517,8 @@ export default function PreApprovalPage() {
                 order_quantity: parseFloat(rateData?.orderQty || "0"),
                 rate_of_material: parseFloat(rateData?.rateOfMaterial || "0"),
                 approval_qty: parseFloat(rateData?.approvalQty || "0"),
-                rate_per_ltr: parseFloat(rateData?.rate || "0"),
+                rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : (parseFloat(rateData?.approvalQty || "0") * parseFloat(rateData?.rateOfMaterial || "0")),
+                final_rate: rateData?.rate ? parseFloat(rateData.rate) : (parseFloat(rateData?.approvalQty || "0") * parseFloat(rateData?.rateOfMaterial || "0")),
                 remark: rateData?.remark || "",
                 sku_name: rateData?.skuName
               }]
@@ -552,7 +561,8 @@ export default function PreApprovalPage() {
               product_name: rateData?.productName || rateData?.skuName,
               approval_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
               remaining_dispatch_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
-              rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : null,
+              rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : (rateData?.approvalQty ? (parseFloat(rateData.approvalQty) * (parseFloat(rateData?.rateOfMaterial) || (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : 0))) : null),
+              final_rate: rateData?.rate ? parseFloat(rateData.rate) : (rateData?.approvalQty ? (parseFloat(rateData.approvalQty) * (parseFloat(rateData?.rateOfMaterial) || (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : 0))) : null),
               rate_of_material: rateData?.rateOfMaterial ? parseFloat(rateData.rateOfMaterial) : null,
               remark: rateData?.remark || null,
             }
@@ -784,6 +794,22 @@ export default function PreApprovalPage() {
       
       grp.ratePer15Kg = collected15KgRate
       grp.ratePerLtr = collected1LtrRate
+
+      // Create a map of oil type to rates for this DO group
+      const oilWiseRates: { [key: string]: { ratePer15Kg: string | null, ratePerLtr: string | null } } = {}
+      grp._allProducts?.forEach((product: any) => {
+        const oilType = product.oilType || "Unknown"
+        if (!oilWiseRates[oilType]) {
+          oilWiseRates[oilType] = { ratePer15Kg: null, ratePerLtr: null }
+        }
+        if (product.ratePer15Kg && !oilWiseRates[oilType].ratePer15Kg) {
+          oilWiseRates[oilType].ratePer15Kg = product.ratePer15Kg
+        }
+        if (product.ratePerLtr && !oilWiseRates[oilType].ratePerLtr) {
+          oilWiseRates[oilType].ratePerLtr = product.ratePerLtr
+        }
+      })
+      grp.oilWiseRates = oilWiseRates
     })
     
     return Object.values(grouped)
@@ -1008,8 +1034,13 @@ export default function PreApprovalPage() {
 
                             {/* Render Product Table for this DO */}
                             <div className="px-5 pb-6">
-                              <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
-                                <Table>
+                              {(() => {
+                                const sectionProducts = [...orderDetails._products, ...(dialogNewProducts[baseDo] || [])];
+                                const groupOilTypes = Array.from(new Set(sectionProducts.map((p: any) => (p.oilType || "").toLowerCase())));
+                                
+                                return (
+                                  <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                                    <Table>
                                   <TableHeader>
                                     <TableRow className="bg-slate-50 border-b">
                                       <TableHead className="w-12 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">Select</TableHead>
@@ -1047,7 +1078,7 @@ export default function PreApprovalPage() {
                                           </TableCell>
                                           <TableCell className="p-3">
                                             <div className="flex flex-col">
-                                              <span className="text-xs font-black text-slate-900 leading-none mb-1">{product.oilType || product.productName || "—"}</span>
+                                              <span className="text-xs font-black text-slate-900 leading-none mb-1">{product.productName || product.oilType || "—"}</span>
                                               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{product._originalOrderId}</span>
                                             </div>
                                           </TableCell>
@@ -1105,7 +1136,32 @@ export default function PreApprovalPage() {
                                                       <CommandEmpty className="py-8 text-xs text-slate-400 text-center font-bold">No SKU match found</CommandEmpty>
                                                     )}
                                                     <CommandGroup>
-                                                      {skuMaster.filter(sku => sku.toLowerCase().includes(skuSearch.toLowerCase())).map((sku) => (
+                                                        {skuMaster.filter(sku => {
+                                                          const matchesSearch = sku.toLowerCase().includes(skuSearch.toLowerCase());
+                                                          const skuLower = sku.toLowerCase();
+                                                          
+                                                          // Check if SKU matches ANY oil type present in this order group
+                                                          const matchesAnyOilType = groupOilTypes.some(oilType => {
+                                                            if (oilType.includes("palm")) {
+                                                              return skuLower.includes("palm");
+                                                            } else if (oilType.includes("rice") || oilType.includes("rbo")) {
+                                                              return skuLower.includes("rbo") || skuLower.includes("rice");
+                                                            } else if (oilType.includes("soya") || oilType.includes("sbo")) {
+                                                              return skuLower.includes("sbo") || skuLower.includes("soya");
+                                                            } else if (oilType.includes("sunflower")) {
+                                                              return skuLower.includes("sun");
+                                                            }
+                                                            return false;
+                                                          });
+                                                          
+                                                          // If no specific oil type identified in group, show all (fallback)
+                                                          const hasIdentifiedOilTypes = groupOilTypes.some(ot => 
+                                                            ot.includes("palm") || ot.includes("rice") || ot.includes("rbo") || 
+                                                            ot.includes("soya") || ot.includes("sbo") || ot.includes("sunflower")
+                                                          );
+
+                                                          return matchesSearch && (!hasIdentifiedOilTypes || matchesAnyOilType);
+                                                        }).map((sku) => (
                                                         <CommandItem key={sku} value={sku} className="cursor-pointer py-2.5 px-4 text-xs font-bold hover:bg-blue-50 hover:text-blue-700 transition-colors" onSelect={async () => {
                                                           // Normalize SKU for better matching
                                                           const normalizeSku = (skuName: string) => {
@@ -1161,47 +1217,49 @@ export default function PreApprovalPage() {
                                                           console.log("Normalized Selected:", normalizedSelected);
                                                           console.log("Core Tokens Selected:", coreTokensSelected);
                                                           console.log("Available calculated prices:", calculatedPrices);
-                                                          
-                                                          // Try multiple matching strategies
-                                                          let calculatedRate = null;
-                                                          
-                                                          // Strategy 1: Exact match with extracted SKU
-                                                          calculatedRate = calculatedPrices.find(item => 
-                                                            item.sku.toUpperCase() === skuForRate.toUpperCase()
-                                                          );
-                                                          
-                                                          // Strategy 2: Match with full SKU name
-                                                          if (!calculatedRate) {
-                                                            calculatedRate = calculatedPrices.find(item => 
-                                                              item.sku.toUpperCase() === sku.toUpperCase()
+                                                          const currentOilType = product.oilType || "Unknown";
+                                                            const pricesForOil = calculatedPrices[currentOilType] || [];
+                                                            
+                                                            // Try multiple matching strategies
+                                                            let calculatedRate = null;
+                                                            
+                                                            // Strategy 1: Exact match with extracted SKU
+                                                            calculatedRate = pricesForOil.find((item: any) => 
+                                                              item.sku.toUpperCase() === skuForRate.toUpperCase()
                                                             );
-                                                          }
-                                                          
-                                                          // Strategy 3: Normalized matching
-                                                          if (!calculatedRate) {
-                                                            calculatedRate = calculatedPrices.find(item => {
-                                                              const normalizedItem = normalizeSku(item.sku);
-                                                              console.log(`Comparing normalized "${normalizedSelected}" with "${normalizedItem}"`);
-                                                              return normalizedItem === normalizedSelected;
-                                                            });
-                                                          }
-                                                          
-                                                          // Strategy 4: Core token matching (size + unit + type)
-                                                          if (!calculatedRate) {
-                                                            calculatedRate = calculatedPrices.find(item => {
-                                                              const coreTokensItem = extractCoreTokens(item.sku);
-                                                              console.log(`Comparing core tokens "${coreTokensSelected}" with "${coreTokensItem}"`);
-                                                              return coreTokensItem === coreTokensSelected;
-                                                            });
-                                                          }
-                                                          
-                                                          // Strategy 5: Partial normalized match
-                                                          if (!calculatedRate) {
-                                                            calculatedRate = calculatedPrices.find(item => {
-                                                              const normalizedItem = normalizeSku(item.sku);
-                                                              return normalizedItem.includes(normalizedSelected) || normalizedSelected.includes(normalizedItem);
-                                                            });
-                                                          }
+                                                            
+                                                            // Strategy 2: Match with full SKU name
+                                                            if (!calculatedRate) {
+                                                              calculatedRate = pricesForOil.find((item: any) => 
+                                                                item.sku.toUpperCase() === sku.toUpperCase()
+                                                              );
+                                                            }
+                                                            
+                                                            // Strategy 3: Normalized matching
+                                                            if (!calculatedRate) {
+                                                              calculatedRate = pricesForOil.find((item: any) => {
+                                                                const normalizedItem = normalizeSku(item.sku);
+                                                                console.log(`Comparing normalized "${normalizedSelected}" with "${normalizedItem}"`);
+                                                                return normalizedItem === normalizedSelected;
+                                                              });
+                                                            }
+                                                            
+                                                            // Strategy 4: Core token matching (size + unit + type)
+                                                            if (!calculatedRate) {
+                                                              calculatedRate = pricesForOil.find((item: any) => {
+                                                                const coreTokensItem = extractCoreTokens(item.sku);
+                                                                console.log(`Comparing core tokens "${coreTokensSelected}" with "${coreTokensItem}"`);
+                                                                return coreTokensItem === coreTokensSelected;
+                                                              });
+                                                            }
+                                                            
+                                                            // Strategy 5: Partial normalized match
+                                                            if (!calculatedRate) {
+                                                              calculatedRate = pricesForOil.find((item: any) => {
+                                                                const normalizedItem = normalizeSku(item.sku);
+                                                                return normalizedItem.includes(normalizedSelected) || normalizedSelected.includes(normalizedItem);
+                                                              });
+                                                            }
                                                           
                                                           if (calculatedRate) {
                                                             console.log("✓ Found calculated rate:", calculatedRate);
@@ -1248,7 +1306,7 @@ export default function PreApprovalPage() {
                                               <Input 
                                                 type="number"
                                                 className="h-9 text-xs bg-white pl-5 font-bold border-slate-200 focus:border-blue-500 focus:ring-blue-500"
-                                                 value={productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || ""}
+                                                 value={productRates[rowKey]?.skuName ? (productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || "") : ""}
                                                  onChange={(e) => setProductRates({ 
                                                    ...productRates, 
                                                    [rowKey]: { 
@@ -1322,28 +1380,28 @@ export default function PreApprovalPage() {
                                               <Input 
                                                 type="number" 
                                                 className="h-9 text-xs bg-white font-black text-blue-700 border-slate-200 focus:border-blue-500 focus:ring-blue-500 pl-5"
-                                                value={(() => {
-                                                  // If user has manually entered a rate, use that
-                                                  if (productRates[rowKey]?.rate) {
-                                                    return productRates[rowKey].rate;
-                                                  }
-                                                  // Otherwise auto-calculate
-                                                  const approvalQty = parseFloat(productRates[rowKey]?.approvalQty || "") || 0;
-                                                  const orderQty = parseFloat(productRates[rowKey]?.orderQty || product.orderQty || "0") || 0;
-                                                  const qtyToUse = approvalQty > 0 ? approvalQty : orderQty;
-                                                  const rateOfMaterial = parseFloat(productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || "0") || 0;
-                                                  const finalRate = qtyToUse * rateOfMaterial;
-                                                  return finalRate > 0 ? finalRate.toFixed(2) : "";
-                                                })()}
+                                                 value={(() => {
+                                                   // If user has manually entered a rate, use that
+                                                   if (productRates[rowKey]?.rate) {
+                                                     return productRates[rowKey].rate;
+                                                   }
+                                                   // Otherwise auto-calculate only if approvalQty is filled
+                                                   const approvalQty = parseFloat(productRates[rowKey]?.approvalQty || "") || 0;
+                                                   if (approvalQty <= 0) return "";
+                                                   
+                                                   const rateOfMaterial = parseFloat(productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || "0") || 0;
+                                                   const finalRate = approvalQty * rateOfMaterial;
+                                                   return finalRate > 0 ? finalRate.toFixed(2) : "";
+                                                 })()}
                                                 onChange={(e) => {
                                                   const newValue = e.target.value;
                                                   
-                                                  // Calculate the minimum allowed rate
-                                                  const approvalQty = parseFloat(productRates[rowKey]?.approvalQty || "") || 0;
-                                                  const orderQty = parseFloat(productRates[rowKey]?.orderQty || product.orderQty || "0") || 0;
-                                                  const qtyToUse = approvalQty > 0 ? approvalQty : orderQty;
-                                                  const rateOfMaterial = parseFloat(productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || "0") || 0;
-                                                  const calculatedMinRate = qtyToUse * rateOfMaterial;
+                                                  // Calculate the minimum allowed rate only if approvalQty is present
+                                                   const approvalQty = parseFloat(productRates[rowKey]?.approvalQty || "") || 0;
+                                                   if (approvalQty <= 0) return;
+                                                   
+                                                   const rateOfMaterial = parseFloat(productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || "0") || 0;
+                                                   const calculatedMinRate = approvalQty * rateOfMaterial;
                                                   
                                                   const enteredRate = parseFloat(newValue) || 0;
                                                   
@@ -1445,13 +1503,15 @@ export default function PreApprovalPage() {
                                   </tfoot>
                                 </Table>
                               </div>
-                            </div>
-                          </div>
-                        )
-                      })}
+                                    )
+                                  })()}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
 
 
                 
@@ -1639,91 +1699,157 @@ export default function PreApprovalPage() {
 
       {/* SKU Price List Modal */}
       <Dialog open={showSkuPriceList} onOpenChange={setShowSkuPriceList}>
-        <DialogContent className="w-[95vw] max-h-[85vh]" style={{ width: '95vw', maxWidth: '95vw' }}>
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-blue-700">SKU Price List</DialogTitle>
-            <DialogDescription className="text-sm">
-              Calculated prices based on: <span className="font-semibold text-green-600">15 KG Rate: ₹{(() => {
-                const selectedItems = displayRows.filter(r => selectedRows.includes(r._rowKey))
-                return selectedItems[0]?.ratePer15Kg || "0"
-              })()}</span> | <span className="font-semibold text-blue-600">1 LTR Rate: ₹{(() => {
-                const selectedItems = displayRows.filter(r => selectedRows.includes(r._rowKey))
-                return selectedItems[0]?.ratePerLtr || "0"
-              })()}</span>
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="overflow-auto max-h-[60vh]">
-            {loadingRates ? (
-              <div className="flex flex-col justify-center items-center py-12">
-                <Loader2 className="h-12 w-12 animate-spin text-blue-600 mb-4" />
-                <p className="text-sm text-muted-foreground">Calculating prices...</p>
+        <DialogContent className="w-[95vw] max-w-[95vw] lg:max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-4">
+          <DialogHeader className="px-2 pt-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-2xl font-black text-blue-900 tracking-tight uppercase">SKU Price List Catalog</DialogTitle>
+                <DialogDescription className="text-slate-500 font-bold text-xs mt-1">
+                  Automated rate calculations based on Order Punch inputs.
+                </DialogDescription>
               </div>
-            ) : calculatedPrices.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <p>No SKU rates available.</p>
+              <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200 px-4 py-1.5 font-black text-xs">
+                {Object.keys(calculatedPrices).length} OIL CATEGORIES
+              </Badge>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-hidden mt-6">
+            {loadingRates ? (
+              <div className="h-full flex flex-col justify-center items-center">
+                <div className="relative h-20 w-20">
+                  <div className="absolute inset-0 rounded-full border-4 border-blue-100 opacity-25"></div>
+                  <div className="absolute inset-0 rounded-full border-4 border-t-blue-600 animate-spin"></div>
+                </div>
+                <p className="text-sm font-black text-blue-900 mt-6 uppercase tracking-widest animate-pulse">Calculating Market Rates...</p>
+              </div>
+            ) : Object.keys(calculatedPrices).length === 0 ? (
+              <div className="h-full flex flex-col justify-center items-center text-slate-400">
+                <Search className="h-16 w-16 mb-4 opacity-20" />
+                <p className="text-lg font-bold">No Rate Context Available</p>
+                <p className="text-sm font-medium mt-1">Please ensure rates were defined during Order Punch.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4">
-                {/* Bulk SKUs Section */}
-                <div className="bg-blue-50/50 rounded-lg border border-blue-200 overflow-hidden">
-                  <div className="max-h-[60vh] overflow-auto">
-                    <Table>
-                      <TableBody>
-                        {calculatedPrices
-                          .filter(item => {
-                            const sku = item.sku.toUpperCase();
-                            return sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT');
-                          })
-                          .map((item, idx) => (
-                            <TableRow key={idx} className="hover:bg-blue-100 transition-colors border-b border-blue-100">
-                              <TableCell className="text-center text-xs font-semibold text-blue-400 w-12">{idx + 1}</TableCell>
-                              <TableCell className="font-semibold text-slate-800 py-2 text-sm">{item.sku}</TableCell>
-                              <TableCell className="text-right font-bold text-blue-700 text-base py-2">
-                                ₹{item.calculatedRate}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+              <Tabs value={activeOilTab} onValueChange={setActiveOilTab} className="h-full flex flex-col">
+                <div className="border-b border-slate-100 pb-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+                  <TabsList className="bg-slate-50/50 p-1 rounded-2xl border border-slate-200 inline-flex">
+                    {Object.keys(calculatedPrices).map(oilType => (
+                      <TabsTrigger 
+                        key={oilType} 
+                        value={oilType}
+                        className="rounded-xl px-6 py-2.5 text-xs font-black uppercase tracking-tight data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm transition-all"
+                      >
+                        {oilType}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
                 </div>
 
-                {/* Retail SKUs Section */}
-                <div className="bg-green-50/50 rounded-lg border border-green-200 overflow-hidden">
-                  <div className="max-h-[60vh] overflow-auto">
-                    <Table>
-                      <TableBody>
-                        {calculatedPrices
-                          .filter(item => {
-                            const sku = item.sku.toUpperCase();
-                            // Exclude items that contain KG, TIN, JAR, or BKT (those are in bulk section)
-                            return !(sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT'));
-                          })
-                          .map((item, idx) => (
-                            <TableRow key={idx} className="hover:bg-green-100 transition-colors border-b border-green-100">
-                              <TableCell className="text-center text-xs font-semibold text-green-400 w-12">{idx + 8}</TableCell>
-                              <TableCell className="font-semibold text-slate-800 py-2 text-sm">{item.sku}</TableCell>
-                              <TableCell className="text-right font-bold text-green-700 text-base py-2">
-                                ₹{item.calculatedRate}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                <div className="flex-1 overflow-hidden mt-4">
+                  {Object.entries(calculatedPrices).map(([oilType, prices]) => (
+                    <TabsContent key={oilType} value={oilType} className="h-full focus-visible:ring-0 mt-0 data-[state=inactive]:hidden">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full pb-4">
+                        {/* Bulk SKUs Category */}
+                        <div className="flex flex-col h-full bg-blue-50/30 rounded-[2rem] border-2 border-blue-100/50 overflow-hidden shadow-inner">
+                          <div className="p-5 flex items-center justify-between border-b border-blue-100/50">
+                            <div className="flex items-center gap-3">
+                              <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-200">
+                                <Package className="h-4 w-4 text-white" />
+                              </div>
+                              <span className="text-sm font-black text-blue-900 uppercase tracking-widest">Bulk Packaging</span>
+                            </div>
+                            <Badge variant="outline" className="bg-white border-blue-200 text-blue-700 font-bold px-3">
+                              {prices.filter(item => {
+                                const sku = item.sku.toUpperCase();
+                                return sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT');
+                              }).length} SKUS
+                            </Badge>
+                          </div>
+                          <div className="flex-1 overflow-y-auto px-2 py-2 [&::-webkit-scrollbar]:hidden">
+                            <Table>
+                              <TableBody>
+                                {prices
+                                  .filter(item => {
+                                    const sku = item.sku.toUpperCase();
+                                    return sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT');
+                                  })
+                                  .map((item, idx) => (
+                                    <TableRow key={idx} className="hover:bg-blue-100/50 transition-colors border-none group">
+                                      <TableCell className="font-semibold text-slate-800 py-3 text-sm rounded-l-2xl pl-6">
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-[10px] font-black text-blue-300 w-4 group-hover:text-blue-500 transition-colors">{(idx + 1).toString().padStart(2, '0')}</span>
+                                          {item.sku}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-right font-black text-blue-700 text-lg py-3 pr-6 rounded-r-2xl">
+                                        <span className="text-xs text-blue-300 mr-1 opacity-50 font-normal">₹</span>
+                                        {item.calculatedRate}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+
+                        {/* Retail SKUs Category */}
+                        <div className="flex flex-col h-full bg-green-50/30 rounded-[2rem] border-2 border-green-100/50 overflow-hidden shadow-inner">
+                          <div className="p-5 flex items-center justify-between border-b border-green-100/50">
+                            <div className="flex items-center gap-3">
+                              <div className="bg-green-600 p-2 rounded-xl shadow-lg shadow-green-200">
+                                <Search className="h-4 w-4 text-white" />
+                              </div>
+                              <span className="text-sm font-black text-green-900 uppercase tracking-widest">Retail Packs</span>
+                            </div>
+                            <Badge variant="outline" className="bg-white border-green-200 text-green-700 font-bold px-3">
+                              {prices.filter(item => {
+                                const sku = item.sku.toUpperCase();
+                                return !(sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT'));
+                              }).length} SKUS
+                            </Badge>
+                          </div>
+                          <div className="flex-1 overflow-y-auto px-2 py-2 [&::-webkit-scrollbar]:hidden">
+                            <Table>
+                              <TableBody>
+                                {prices
+                                  .filter(item => {
+                                    const sku = item.sku.toUpperCase();
+                                    return !(sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT'));
+                                  })
+                                  .map((item, idx) => (
+                                    <TableRow key={idx} className="hover:bg-green-100/50 transition-colors border-none group">
+                                      <TableCell className="font-semibold text-slate-800 py-3 text-sm rounded-l-2xl pl-6">
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-[10px] font-black text-green-300 w-4 group-hover:text-green-500 transition-colors">{(idx + 1).toString().padStart(2, '0')}</span>
+                                          {item.sku}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-right font-black text-green-700 text-lg py-3 pr-6 rounded-r-2xl">
+                                        <span className="text-xs text-green-300 mr-1 opacity-50 font-normal">₹</span>
+                                        {item.calculatedRate}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      </div>
+                    </TabsContent>
+                  ))}
                 </div>
-              </div>
+              </Tabs>
             )}
           </div>
           
-          <DialogFooter>
+          <DialogFooter className="px-2 pb-2 mt-4">
             <Button
               type="button"
               variant="outline"
               onClick={() => setShowSkuPriceList(false)}
+              className="rounded-2xl border-2 border-slate-200 font-black text-xs uppercase tracking-widest px-8 hover:bg-slate-50 transition-all h-12"
             >
-              Close
+              Close Catalog
             </Button>
           </DialogFooter>
         </DialogContent>
