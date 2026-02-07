@@ -141,7 +141,7 @@ export default function CommitmentReviewPage() {
         altQty: backendOrder.alternate_qty_kg,
         ratePerLtr: backendOrder.rate_per_ltr,
         rateLtr: backendOrder.rate_per_15kg,
-        rate: backendOrder.rate_of_material,
+        rate: backendOrder.final_rate || backendOrder.rate_of_material,
       }],
       // Keep approval-specific fields
       rateIsRightly: backendOrder.rate_is_rightly_as_per_current_market_rate,
@@ -619,7 +619,7 @@ export default function CommitmentReviewPage() {
                   Verify Selected ({selectedItems.length})
                 </Button>
               </DialogTrigger>
-                <DialogContent className="sm:max-w-6xl !max-w-6xl max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <DialogContent className="max-w-6xl! max-h-[90vh] flex flex-col p-0 overflow-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 <DialogHeader className="border-b pb-4">
                   <DialogTitle className="text-xl font-bold text-slate-900 leading-none">
                     Bulk Approval: {selectedItems.length > 1 ? `${selectedItems.length} Items Selected` : (selectedOrder?.doNumber || "Order Verification")}

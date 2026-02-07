@@ -367,6 +367,36 @@ export default function PreApprovalPage() {
   const handleApprove = async (itemsToApprove: any[]) => {
     setIsApproving(true)
     try {
+      // Preliminary validation
+      for (const item of itemsToApprove) {
+        const productKey = item._rowKey;
+        const rateData = productRates[productKey];
+        const product = item._product;
+        
+        const rateOfMaterial = parseFloat(rateData?.rateOfMaterial || product.rateOfMaterial || "0") || 0;
+        const enteredRate = parseFloat(rateData?.rate) || 0;
+        
+        if (!rateData?.rate) {
+          toast({
+            title: "Rate Required",
+            description: `Please enter a Final Rate for all selected products.`,
+            variant: "destructive"
+          });
+          setIsApproving(false);
+          return;
+        }
+
+        if (enteredRate < rateOfMaterial) {
+          toast({
+            title: "Invalid Rate",
+            description: `Final rate for product in ${item._displayDo} cannot be less than ₹${rateOfMaterial.toFixed(2)}.`,
+            variant: "destructive"
+          });
+          setIsApproving(false);
+          return;
+        }
+      }
+
       const successfulApprovals: any[] = []
       const failedApprovals: any[] = []
       
@@ -383,8 +413,9 @@ export default function PreApprovalPage() {
             product_name: rateData?.productName || rateData?.skuName,  // Include product_name
             approval_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
             remaining_dispatch_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
-            rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : null,
-            rate_of_material: rateData?.rateOfMaterial ? parseFloat(rateData.rateOfMaterial) : null, // Submit to existing rate_of_material column
+            rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null), // Use manual rate or fallback to unit rate
+            final_rate: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null), // Store per-unit approved rate in final_rate
+            rate_of_material: rateData?.rateOfMaterial ? parseFloat(rateData.rateOfMaterial) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
             remark: rateData?.remark || null, // Use individual remark
           }
           
@@ -503,6 +534,36 @@ export default function PreApprovalPage() {
   const handleApproveWithAdditions = async (itemsToApprove: any[]) => {
     setIsApproving(true)
     try {
+      // Preliminary validation
+      for (const item of itemsToApprove) {
+        const productKey = item._rowKey;
+        const rateData = productRates[productKey];
+        const product = item._product;
+        
+        const rateOfMaterial = parseFloat(rateData?.rateOfMaterial || product.rateOfMaterial || "0") || 0;
+        const enteredRate = parseFloat(rateData?.rate) || 0;
+        
+        if (!rateData?.rate) {
+          toast({
+            title: "Rate Required",
+            description: `Please enter a Final Rate for all selected products.`,
+            variant: "destructive"
+          });
+          setIsApproving(false);
+          return;
+        }
+
+        if (enteredRate < rateOfMaterial) {
+          toast({
+            title: "Invalid Rate",
+            description: `Final rate for product in ${item._displayDo} cannot be less than ₹${rateOfMaterial.toFixed(2)}.`,
+            variant: "destructive"
+          });
+          setIsApproving(false);
+          return;
+        }
+      }
+
       const successfulApprovals: any[] = []
       const failedApprovals: any[] = []
       
@@ -523,8 +584,8 @@ export default function PreApprovalPage() {
                 order_quantity: parseFloat(rateData?.orderQty || "0"),
                 rate_of_material: parseFloat(rateData?.rateOfMaterial || "0"),
                 approval_qty: parseFloat(rateData?.approvalQty || "0"),
-                rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : (parseFloat(rateData?.approvalQty || "0") * parseFloat(rateData?.rateOfMaterial || "0")),
-                final_rate: rateData?.rate ? parseFloat(rateData.rate) : (parseFloat(rateData?.approvalQty || "0") * parseFloat(rateData?.rateOfMaterial || "0")),
+                rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : parseFloat(rateData?.rateOfMaterial || "0"),
+                final_rate: rateData?.rate ? parseFloat(rateData.rate) : parseFloat(rateData?.rateOfMaterial || "0"),
                 remark: rateData?.remark || "",
                 sku_name: rateData?.skuName
               }]
@@ -567,9 +628,9 @@ export default function PreApprovalPage() {
               product_name: rateData?.productName || rateData?.skuName,
               approval_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
               remaining_dispatch_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
-              rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : (rateData?.approvalQty ? (parseFloat(rateData.approvalQty) * (parseFloat(rateData?.rateOfMaterial) || (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : 0))) : null),
-              final_rate: rateData?.rate ? parseFloat(rateData.rate) : (rateData?.approvalQty ? (parseFloat(rateData.approvalQty) * (parseFloat(rateData?.rateOfMaterial) || (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : 0))) : null),
-              rate_of_material: rateData?.rateOfMaterial ? parseFloat(rateData.rateOfMaterial) : null,
+              rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
+              final_rate: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
+              rate_of_material: rateData?.rateOfMaterial ? parseFloat(rateData.rateOfMaterial) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
               remark: rateData?.remark || null,
             }
             await preApprovalApi.submit(product.id, submissionData)
@@ -1500,49 +1561,17 @@ export default function PreApprovalPage() {
                                               <Input 
                                                 type="number" 
                                                 className="h-9 text-xs bg-white font-black text-blue-700 border-slate-200 focus:border-blue-500 focus:ring-blue-500 pl-5"
-                                                 value={(() => {
-                                                   // If user has manually entered a rate, use that
-                                                   if (productRates[rowKey]?.rate) {
-                                                     return productRates[rowKey].rate;
-                                                   }
-                                                   // Otherwise auto-calculate only if approvalQty is filled
-                                                   const approvalQty = parseFloat(productRates[rowKey]?.approvalQty || "") || 0;
-                                                   if (approvalQty <= 0) return "";
-                                                   
-                                                   const rateOfMaterial = parseFloat(productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || "0") || 0;
-                                                   const finalRate = approvalQty * rateOfMaterial;
-                                                   return finalRate > 0 ? finalRate.toFixed(2) : "";
-                                                 })()}
-                                                onChange={(e) => {
-                                                  const newValue = e.target.value;
-                                                  
-                                                  // Calculate the minimum allowed rate only if approvalQty is present
-                                                   const approvalQty = parseFloat(productRates[rowKey]?.approvalQty || "") || 0;
-                                                   if (approvalQty <= 0) return;
-                                                   
-                                                   const rateOfMaterial = parseFloat(productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || "0") || 0;
-                                                   const calculatedMinRate = approvalQty * rateOfMaterial;
-                                                  
-                                                  const enteredRate = parseFloat(newValue) || 0;
-                                                  
-                                                  // Only allow values >= calculated rate
-                                                  if (newValue && enteredRate < calculatedMinRate) {
-                                                    toast({
-                                                      title: "Invalid Rate",
-                                                      description: `Final rate cannot be less than ₹${calculatedMinRate.toFixed(2)}. You can only increase the rate.`,
-                                                      variant: "destructive"
-                                                    });
-                                                    return; // Don't update if less than minimum
-                                                  }
-                                                  
-                                                  setProductRates({ 
-                                                    ...productRates, 
-                                                    [rowKey]: { 
-                                                      ...productRates[rowKey], 
-                                                      rate: newValue
-                                                    } 
-                                                  });
-                                                }}
+                                                  value={productRates[rowKey]?.rate || ""}
+                                                 onChange={(e) => {
+                                                   const newValue = e.target.value;
+                                                   setProductRates({ 
+                                                     ...productRates, 
+                                                     [rowKey]: { 
+                                                       ...productRates[rowKey], 
+                                                       rate: newValue
+                                                     } 
+                                                   });
+                                                 }}
                                                 disabled={!isSelected}
                                                 placeholder="0.00"
                                               />

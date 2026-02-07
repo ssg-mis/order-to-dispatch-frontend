@@ -1110,14 +1110,14 @@ export default function ActualDispatchPage() {
 
                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                               <div className="space-y-1.5">
-                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Tare Wt</Label>
-                                 <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold"
-                                   value={loadData.tareWeight} onChange={(e) => setLoadData(p => ({...p, tareWeight: e.target.value}))} />
-                              </div>
-                              <div className="space-y-1.5">
                                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Gross Wt</Label>
                                  <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold text-blue-600"
                                    value={loadData.grossWeight} onChange={(e) => setLoadData(p => ({...p, grossWeight: e.target.value}))} />
+                              </div>
+                              <div className="space-y-1.5">
+                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Tare Wt</Label>
+                                 <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold"
+                                   value={loadData.tareWeight} onChange={(e) => setLoadData(p => ({...p, tareWeight: e.target.value}))} />
                               </div>
                               <div className="space-y-1.5">
                                  <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Net Weight</Label>
