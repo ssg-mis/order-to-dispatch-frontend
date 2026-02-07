@@ -187,6 +187,8 @@ export default function OrderPunchPage() {
   const [futurePeriodDate, setFuturePeriodDate] = useState<string>("") // New state for future period date
   const [orderPunchRemarks, setOrderPunchRemarks] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDeliveryDatePickerOpen, setIsDeliveryDatePickerOpen] = useState(false)
+  const [isFuturePeriodDatePickerOpen, setIsFuturePeriodDatePickerOpen] = useState(false)
 
   // Fetch customers, depots, SKUs, and brokers on mount
   useEffect(() => {
@@ -706,7 +708,7 @@ export default function OrderPunchPage() {
                   {(orderPurpose === "week-on-week" || orderPurpose === "future-period") && (
                     <div className="space-y-2">
                       <Label htmlFor="deliveryDate">Actual Delivery Date</Label>
-                      <Popover>
+                      <Popover open={isDeliveryDatePickerOpen} onOpenChange={setIsDeliveryDatePickerOpen}>
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"
@@ -727,6 +729,7 @@ export default function OrderPunchPage() {
                             onSelect={(date) => {
                               if (date) {
                                 setDeliveryDate(format(date, "yyyy-MM-dd"))
+                                setIsDeliveryDatePickerOpen(false)
                               }
                             }}
                             initialFocus
@@ -753,7 +756,7 @@ export default function OrderPunchPage() {
                   {orderPurpose === "future-period" && (
                     <div className="space-y-2">
                       <Label htmlFor="futurePeriodDate">Future Period Date</Label>
-                      <Popover>
+                      <Popover open={isFuturePeriodDatePickerOpen} onOpenChange={setIsFuturePeriodDatePickerOpen}>
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"
@@ -773,6 +776,7 @@ export default function OrderPunchPage() {
                             onSelect={(date) => {
                               if (date) {
                                 setFuturePeriodDate(format(date, "yyyy-MM-dd"))
+                                setIsFuturePeriodDatePickerOpen(false)
                               }
                             }}
                             initialFocus

@@ -28,24 +28,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus, Check, ChevronsUpDown, Search, Package } from "lucide-react"
+import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus, Check, Search, Package } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { skuApi, preApprovalApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 
 
@@ -116,7 +110,6 @@ export default function PreApprovalPage() {
   
   // SKU State
   const [skuMaster, setSkuMaster] = useState<string[]>([])
-  const [skuSearch, setSkuSearch] = useState("")
   
   // SKU Price List State
   const [showSkuPriceList, setShowSkuPriceList] = useState(false)
@@ -124,6 +117,7 @@ export default function PreApprovalPage() {
   const [loadingRates, setLoadingRates] = useState(false)
   const [calculatedPrices, setCalculatedPrices] = useState<{ [oilType: string]: any[] }>({})
   const [activeOilTab, setActiveOilTab] = useState<string>("")
+  const [catalogContext, setCatalogContext] = useState<{ orderNo: string, oilWiseRates: any } | null>(null)
 
   // Fetch SKUs
   useEffect(() => {
@@ -188,51 +182,58 @@ export default function PreApprovalPage() {
   }
 
   // Fetch SKU rates and calculate prices
-  const fetchAndCalculateRates = async () => {
+  const fetchAndCalculateRates = async (specificOrderContext?: { orderNo: string, oilWiseRates: any }) => {
     setLoadingRates(true)
+    setCatalogContext(specificOrderContext || null)
+    
     try {
       const response = await skuApi.getAllSkuRates()
       
       if (response.success) {
         setSkuRates(response.data)
         
-        // Get rates for ALL oil types from selected orders
-        const selectedGroupItems = displayRows.filter(r => selectedRows.includes(r._rowKey))
-        
         const oilWiseCalculations: { [oilType: string]: any[] } = {}
-        const allOilTypes = new Set<string>()
         
-        selectedGroupItems.forEach(group => {
-          if (group.oilWiseRates) {
-            Object.keys(group.oilWiseRates).forEach(ot => allOilTypes.add(ot))
-          }
-        })
+        if (specificOrderContext) {
+          // Use only the specific order's rates
+          Object.entries(specificOrderContext.oilWiseRates).forEach(([oilType, rates]: [string, any]) => {
+            const baseRate15kg = rates.ratePer15Kg ? parseFloat(rates.ratePer15Kg) : 0
+            const baseRateLtr = rates.ratePerLtr ? parseFloat(rates.ratePerLtr) : 0
+            oilWiseCalculations[oilType] = calculateSkuPrices(baseRate15kg, baseRateLtr, response.data)
+          })
+        } else {
+          // Legacy: Aggregate rates across all selected orders
+          const selectedGroupItems = displayRows.filter(r => selectedRows.includes(r._rowKey))
+          const allOilTypes = new Set<string>()
+          
+          selectedGroupItems.forEach(group => {
+            if (group.oilWiseRates) {
+              Object.keys(group.oilWiseRates).forEach(ot => allOilTypes.add(ot))
+            }
+          })
 
-        allOilTypes.forEach(oilType => {
-          // Find base rates for this specific oil type across selected groups
-          let baseRate15kg = 0
-          let baseRateLtr = 0
+          allOilTypes.forEach(oilType => {
+            let baseRate15kg = 0
+            let baseRateLtr = 0
 
-          for (const group of selectedGroupItems) {
-            const rates = group.oilWiseRates?.[oilType]
-            if (rates && (rates.ratePer15Kg && rates.ratePer15Kg !== "—" || rates.ratePerLtr && rates.ratePerLtr !== "—")) {
-              baseRate15kg = rates.ratePer15Kg ? parseFloat(rates.ratePer15Kg) : 0
-              baseRateLtr = rates.ratePerLtr ? parseFloat(rates.ratePerLtr) : 0
+            for (const group of selectedGroupItems) {
+              const rates = group.oilWiseRates?.[oilType]
+              if (rates && (rates.ratePer15Kg && rates.ratePer15Kg !== "—" || rates.ratePerLtr && rates.ratePerLtr !== "—")) {
+                baseRate15kg = rates.ratePer15Kg ? parseFloat(rates.ratePer15Kg) : 0
+                baseRateLtr = rates.ratePerLtr ? parseFloat(rates.ratePerLtr) : 0
+                if (baseRate15kg > 0 || baseRateLtr > 0) break;
+              }
+              if (baseRate15kg === 0 && group.ratePer15Kg) baseRate15kg = parseFloat(group.ratePer15Kg)
+              if (baseRateLtr === 0 && group.ratePerLtr) baseRateLtr = parseFloat(group.ratePerLtr)
               if (baseRate15kg > 0 || baseRateLtr > 0) break;
             }
-            
-            // Fallback to group-level collected rates if specific oil type rates are missing
-            if (baseRate15kg === 0 && group.ratePer15Kg) baseRate15kg = parseFloat(group.ratePer15Kg)
-            if (baseRateLtr === 0 && group.ratePerLtr) baseRateLtr = parseFloat(group.ratePerLtr)
-            if (baseRate15kg > 0 || baseRateLtr > 0) break;
-          }
 
-          oilWiseCalculations[oilType] = calculateSkuPrices(baseRate15kg, baseRateLtr, response.data)
-        })
+            oilWiseCalculations[oilType] = calculateSkuPrices(baseRate15kg, baseRateLtr, response.data)
+          })
+        }
         
         setCalculatedPrices(oilWiseCalculations)
         
-        // Set first oil type as active tab if none set
         const oilTypes = Object.keys(oilWiseCalculations)
         if (oilTypes.length > 0 && (!activeOilTab || !oilTypes.includes(activeOilTab))) {
           setActiveOilTab(oilTypes[0])
@@ -633,8 +634,201 @@ export default function PreApprovalPage() {
         title: "Delete Failed",
         description: error?.message || "Could not delete the product.",
         variant: "destructive",
+        });
+      }
+    };
+
+  const handleSkuSelection = async (sku: string, rowKey: string, product: any, orderContext: any) => {
+    // Normalize SKU for better matching
+    const normalizeSku = (skuName: string) => {
+      let n = (skuName || "").toUpperCase();
+      // 1. Remove pack info like 1*12 or 1 * 12 before stripping noise
+      n = n.replace(/\d+\s*\*\s*\d+/g, ' '); 
+      // 2. Clear separators
+      n = n.replace(/[\/\(\)\*\-\,]/g, ' ');
+      // 3. Standardize units
+      n = n.replace(/\bKGS\b/g, 'KG');
+      n = n.replace(/\bLTRS\b/g, 'LTR');
+      n = n.replace(/\bMLT\b/g, 'ML');
+      n = n.replace(/\b0+(\d)/g, '$1'); // 01 -> 1
+      // 4. Remove oil types and generic prefixes
+      n = n.replace(/\b(HK|SBO|RBO|PO|PALM|RICE|SOYA|OIL|SUNFLOWER|S\.O\.|R\.O\.|P\.O\.)\b/g, '');
+      return n.replace(/\s+/g, ' ').trim();
+    };
+    
+    // Extract core SKU tokens (size + type)
+    const extractCoreTokens = (skuName: string) => {
+      const normalized = normalizeSku(skuName);
+      // Extract key tokens like "1 LTR PP" or "15 KG JAR"
+      const tokens = normalized.split(' ').filter(t => t.length > 0);
+      // Focus on size + unit + type
+      return tokens.slice(0, 3).join(' ');
+    };
+    
+    // Extract SKU portion from full product name
+    const extractSku = (productName: string) => {
+      const prefixes = ['HK Palm Oil ', 'HK RBO ', 'HK SBO ', 'HK PALM OIL ', 'HK '];
+      let extracted = productName;
+      for (const prefix of prefixes) {
+        if (productName.toUpperCase().startsWith(prefix.toUpperCase())) {
+          extracted = productName.substring(prefix.length).trim();
+          break;
+        }
+      }
+      return extracted.replace(/\bKGS\b/gi, 'KG');
+    };
+    
+    const skuForRate = extractSku(sku);
+    const normalizedSelected = normalizeSku(skuForRate);
+    const coreTokensSelected = extractCoreTokens(skuForRate);
+    
+    // Use calculated rate from SKU Price List if available
+    let rateValue = "";
+    
+    console.log("Selected SKU:", sku);
+    console.log("Extracted SKU:", skuForRate);
+    console.log("Normalized Selected:", normalizedSelected);
+    console.log("Core Tokens Selected:", coreTokensSelected);
+    console.log("Available calculated prices:", calculatedPrices);
+    
+    // Detect oil type from the selected SKU name for accurate rate lookup
+    const detectOilTypeFromSku = (skuName: string) => {
+      const s = (skuName || "").toUpperCase();
+      // Look for Rice keywords first (more specific)
+      if (s.includes("RICE") || s.includes("RBO") || s.includes("R.O.") || s.includes("RO ")) return "RICE OIL";
+      if (s.includes("SOYA") || s.includes("SBO") || s.includes("S.O.") || s.includes("SO ")) return "SOYA OIL";
+      if (s.includes("PALM") || s.includes("P.O.") || s.includes("PO ") || s.includes("P.O ")) return "PALM OIL";
+      return null;
+    };
+    
+    const detectedOilType = detectOilTypeFromSku(sku);
+    const targetOilType = (detectedOilType || product.oilType || "Unknown").toUpperCase();
+    
+    // Use product's DO context for highly accurate calculation
+    let pricesForOil = [];
+    const oilRatesMap = orderContext?.oilWiseRates || {};
+    
+    // Find matching key in oilRatesMap (Palm Oil, Rice Oil, Soya Oil, etc.) with case-insensitive matching
+    const contextOilKey = Object.keys(oilRatesMap).find(k => {
+      const normalizedK = k.toUpperCase().replace(/\s+/g, '');
+      const normalizedTarget = targetOilType.replace(/\s+/g, '');
+      return normalizedK.includes(normalizedTarget) || normalizedTarget.includes(normalizedK);
+    });
+    
+    if (contextOilKey) {
+      const rates = oilRatesMap[contextOilKey];
+      const base15 = parseFloat(rates.ratePer15Kg?.toString().replace('₹', '')) || 0;
+      const baseLtr = parseFloat(rates.ratePerLtr?.toString().replace('₹', '')) || 0;
+      if (base15 > 0 || baseLtr > 0) {
+        console.log(`✓ Context Match: Found ${contextOilKey} rates for ${targetOilType} (15kg=${base15}, Ltr=${baseLtr})`);
+        pricesForOil = calculateSkuPrices(base15, baseLtr, skuRates);
+      }
+    }
+
+    // Fallback 1: Use product's own rates ONLY if its oil type matches the target
+    if (pricesForOil.length === 0) {
+      const prodOilType = (product.oilType || "").toUpperCase().replace(/\s+/g, '');
+      const normTarget = targetOilType.replace(/\s+/g, '');
+      
+      if (prodOilType.includes(normTarget) || normTarget.includes(prodOilType)) {
+        const raw15 = product.rate_per_15kg || product.ratePer15Kg;
+        const rawLtr = product.rate_per_ltr || product.ratePerLtr;
+        
+        if (raw15 && rawLtr && raw15 !== "—" && rawLtr !== "—") {
+          const base15 = parseFloat(raw15.toString().replace('₹', '')) || 0;
+          const baseLtr = parseFloat(rawLtr.toString().replace('₹', '')) || 0;
+          if (base15 > 0 || baseLtr > 0) {
+            console.log(`✓ Product Match: Using row rates for matching oil type ${targetOilType}`);
+            pricesForOil = calculateSkuPrices(base15, baseLtr, skuRates);
+          }
+        }
+      }
+    }
+
+    // Fallback 2: Global calculatedPrices with case-insensitive lookup
+    if (pricesForOil.length === 0) {
+      const matchingKey = Object.keys(calculatedPrices || {}).find(
+        (k: string) => {
+          const nk = k.toUpperCase().replace(/\s+/g, '');
+          const nt = targetOilType.replace(/\s+/g, '');
+          return nk.includes(nt) || nt.includes(nk);
+        }
+      );
+      if (matchingKey) {
+        console.log(`✓ Global Match: Found ${matchingKey} rates in global map`);
+        pricesForOil = calculatedPrices[matchingKey];
+      }
+    }
+      
+    // Try multiple matching strategies
+    let calculatedRateResult = null;
+    
+    // Strategy 1: Exact match with extracted SKU
+    calculatedRateResult = pricesForOil.find((item: any) => 
+      item.sku.toUpperCase() === skuForRate.toUpperCase()
+    );
+    
+    // Strategy 2: Match with full SKU name
+    if (!calculatedRateResult) {
+      calculatedRateResult = pricesForOil.find((item: any) => 
+        item.sku.toUpperCase() === sku.toUpperCase()
+      );
+    }
+    
+    // Strategy 3: Normalized matching
+    if (!calculatedRateResult) {
+      calculatedRateResult = pricesForOil.find((item: any) => {
+        const normalizedItem = normalizeSku(item.sku);
+        console.log(`Comparing normalized "${normalizedSelected}" with "${normalizedItem}"`);
+        return normalizedItem === normalizedSelected;
       });
     }
+    
+    // Strategy 4: Core token matching (size + unit + type)
+    if (!calculatedRateResult) {
+      calculatedRateResult = pricesForOil.find((item: any) => {
+        const coreTokensItem = extractCoreTokens(item.sku);
+        console.log(`Comparing core tokens "${coreTokensSelected}" with "${coreTokensItem}"`);
+        return coreTokensItem === coreTokensSelected;
+      });
+    }
+    
+    // Strategy 5: Token-based containment match (all selected tokens must be in item)
+    if (!calculatedRateResult) {
+      const selectedTokens = normalizedSelected.split(' ').filter(t => t.length > 0);
+      if (selectedTokens.length >= 1) { // At least one identifier like "990" or "13KG"
+        calculatedRateResult = pricesForOil.find((item: any) => {
+          const itemTokens = normalizeSku(item.sku).split(' ').filter(t => t.length > 0);
+          // Match if all selected tokens (like "990" and "PP") exist in the catalog SKU tokens
+          return selectedTokens.every(st => itemTokens.includes(st));
+        });
+      }
+    }
+    
+    if (calculatedRateResult) {
+      console.log("✓ Found calculated rate:", calculatedRateResult);
+      rateValue = calculatedRateResult.calculatedRate;
+    } else {
+      console.log("✗ No calculated rate found, fetching from database...");
+      // Fallback: fetch stored rate from database
+      try {
+        const response = await fetch(`/api/v1/skus/rate/${encodeURIComponent(skuForRate)}`);
+        const data = await response.json();
+        rateValue = data.success && data.rate ? data.rate.toString() : "";
+      } catch (error) {
+        console.error("Failed to fetch rate for SKU:", error);
+      }
+    }
+    
+    setProductRates(prev => ({ 
+      ...prev, 
+      [rowKey]: { 
+        ...prev[rowKey], 
+        skuName: sku,
+        productName: sku,
+        rateOfMaterial: rateValue
+      } 
+    }));
   };
 
 
@@ -650,7 +844,6 @@ export default function PreApprovalPage() {
       endDate: "",
       partyName: ""
   })
-  const [openPopoverId, setOpenPopoverId] = useState<string | null>(null)
 
   const filteredPendingOrders = pendingOrders.filter(order => {
       let matches = true
@@ -815,6 +1008,24 @@ export default function PreApprovalPage() {
         }
       })
       grp.oilWiseRates = oilWiseRates
+
+      // ALSO: Create a map of oil type to rates for EACH baseDo section
+      Object.entries(grp._ordersMap).forEach(([baseDo, orderData]: [string, any]) => {
+        const doOilWiseRates: { [key: string]: { ratePer15Kg: string | null, ratePerLtr: string | null } } = {}
+        orderData._products?.forEach((product: any) => {
+          const oilType = product.oilType || "General"
+          if (!doOilWiseRates[oilType]) {
+            doOilWiseRates[oilType] = { ratePer15Kg: null, ratePerLtr: null }
+          }
+          if (product.ratePer15Kg && !doOilWiseRates[oilType].ratePer15Kg) {
+            doOilWiseRates[oilType].ratePer15Kg = product.ratePer15Kg
+          }
+          if (product.ratePerLtr && !doOilWiseRates[oilType].ratePerLtr) {
+            doOilWiseRates[oilType].ratePerLtr = product.ratePerLtr
+          }
+        })
+        orderData.oilWiseRates = doOilWiseRates
+      })
     })
     
     return Object.values(grouped)
@@ -1023,18 +1234,64 @@ export default function PreApprovalPage() {
                               </div>
                             )}
 
+                            {/* Base Rates Summary Table */}
+                            {orderDetails.oilWiseRates && Object.keys(orderDetails.oilWiseRates).length > 0 && (
+                              <div className="px-5 mb-2">
+                                <div className="border border-blue-100 rounded-2xl overflow-hidden shadow-sm bg-blue-50/30">
+                                  <Table>
+                                    <TableHeader className="bg-blue-600">
+                                      <TableRow className="hover:bg-transparent border-blue-600">
+                                        <TableHead className="h-8 text-[10px] uppercase font-black text-white tracking-widest pl-4">Base Rate Summary</TableHead>
+                                        <TableHead className="h-8 text-[10px] uppercase font-black text-white tracking-widest">Rate / 15KG</TableHead>
+                                        <TableHead className="h-8 text-[10px] uppercase font-black text-white tracking-widest">Rate / 1 LTR</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {Object.entries(orderDetails.oilWiseRates).map(([oilType, rates]: [string, any]) => (
+                                        <TableRow key={oilType} className="hover:bg-blue-100/20 border-blue-100 last:border-0">
+                                          <TableCell className="py-2.5 px-4 text-xs font-black text-blue-900 uppercase tracking-tight">{oilType}</TableCell>
+                                          <TableCell className="py-2.5 px-4 text-xs font-black text-blue-600">
+                                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-md">₹{rates.ratePer15Kg || "—"}</span>
+                                          </TableCell>
+                                          <TableCell className="py-2.5 px-4 text-xs font-black text-blue-600">
+                                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-md">₹{rates.ratePerLtr || "—"}</span>
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </div>
+                            )}
+
                             <div className="flex justify-between items-center px-5 pt-4">
                                 <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
                                     <Badge variant="outline" className="bg-blue-50">SKU LIST</Badge>
                                 </h3>
-                                <Button 
-                                    onClick={() => handleAddProductRow(baseDo, orderDetails)}
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-8 gap-2 bg-white hover:bg-blue-50 text-blue-600 border-blue-200"
-                                >
-                                    <Plus className="h-4 w-4" /> Add SKU
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    <Button 
+                                        onClick={() => {
+                                            fetchAndCalculateRates({
+                                                orderNo: baseDo,
+                                                oilWiseRates: orderDetails.oilWiseRates
+                                            });
+                                            setShowSkuPriceList(true);
+                                        }}
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="h-8 gap-2 bg-white hover:bg-green-50 text-green-600 border-green-200"
+                                    >
+                                        <Search className="h-4 w-4" /> View Catalog
+                                    </Button>
+                                    <Button 
+                                        onClick={() => handleAddProductRow(baseDo, orderDetails)}
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="h-8 gap-2 bg-white hover:bg-blue-50 text-blue-600 border-blue-200"
+                                    >
+                                        <Plus className="h-4 w-4" /> Add SKU
+                                    </Button>
+                                </div>
                             </div>
 
                             {/* Render Product Table for this DO */}
@@ -1122,188 +1379,46 @@ export default function PreApprovalPage() {
                                              )}
                                            </TableCell>
                                           <TableCell className="p-2 min-w-45">
-                                            <Popover open={openPopoverId === rowKey} onOpenChange={(open) => setOpenPopoverId(open ? rowKey : null)}>
-                                              <PopoverTrigger asChild>
-                                                <Button 
-                                                  variant="outline" 
-                                                  className="h-9 w-full justify-between bg-white px-3 border-slate-200 text-xs font-bold shadow-sm"
-                                                  disabled={!isSelected}
-                                                >
-                                                  <span className="truncate">{productRates[rowKey]?.skuName || "Select SKU..."}</span>
-                                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                </Button>
-                                              </PopoverTrigger>
-                                              <PopoverContent className="w-[320px] p-0 shadow-2xl border-slate-200" align="start">
-                                                <Command shouldFilter={false}>
-                                                  <CommandInput placeholder="Search SKU catalog..." value={skuSearch} onValueChange={setSkuSearch} className="h-10 border-none focus:ring-0 text-xs font-bold" />
-                                                  <CommandList>
-                                                    {skuMaster.filter(s => s.toLowerCase().includes(skuSearch.toLowerCase())).length === 0 && (
-                                                      <CommandEmpty className="py-8 text-xs text-slate-400 text-center font-bold">No SKU match found</CommandEmpty>
-                                                    )}
-                                                    <CommandGroup>
-                                                        {skuMaster.filter(sku => {
-                                                          const matchesSearch = sku.toLowerCase().includes(skuSearch.toLowerCase());
-                                                          const skuLower = sku.toLowerCase();
-                                                          
-                                                          // Check if SKU matches ANY oil type present in this order group
-                                                          const matchesAnyOilType = groupOilTypes.some(oilType => {
-                                                            if (oilType.includes("palm")) {
-                                                              return skuLower.includes("palm");
-                                                            } else if (oilType.includes("rice") || oilType.includes("rbo")) {
-                                                              return skuLower.includes("rbo") || skuLower.includes("rice");
-                                                            } else if (oilType.includes("soya") || oilType.includes("sbo")) {
-                                                              return skuLower.includes("sbo") || skuLower.includes("soya");
-                                                            } else if (oilType.includes("sunflower")) {
-                                                              return skuLower.includes("sun");
-                                                            }
-                                                            return false;
-                                                          });
-                                                          
-                                                          // If no specific oil type identified in group, show all (fallback)
-                                                          const hasIdentifiedOilTypes = groupOilTypes.some(ot => 
-                                                            ot.includes("palm") || ot.includes("rice") || ot.includes("rbo") || 
-                                                            ot.includes("soya") || ot.includes("sbo") || ot.includes("sunflower")
-                                                          );
+                                              <Select 
+                                                value={productRates[rowKey]?.skuName || ""} 
+                                                onValueChange={(value: string) => handleSkuSelection(value, rowKey, product, orderDetails)}
+                                                disabled={!isSelected}
+                                              >
+                                              <SelectTrigger className="h-9 w-full bg-white px-3 border-slate-200 text-xs font-bold shadow-sm">
+                                                <SelectValue placeholder="Select SKU..." />
+                                              </SelectTrigger>
+                                              <SelectContent className="max-h-[300px]">
+                                                {skuMaster.filter(sku => {
+                                                  const skuLower = sku.toLowerCase();
+                                                  
+                                                  // Check if SKU matches ANY oil type present in this order group
+                                                  const matchesAnyOilType = groupOilTypes.some(oilType => {
+                                                    if (oilType.includes("palm")) {
+                                                      return skuLower.includes("palm");
+                                                    } else if (oilType.includes("rice") || oilType.includes("rbo")) {
+                                                      return skuLower.includes("rbo") || skuLower.includes("rice");
+                                                    } else if (oilType.includes("soya") || oilType.includes("sbo")) {
+                                                      return skuLower.includes("sbo") || skuLower.includes("soya");
+                                                    } else if (oilType.includes("sunflower")) {
+                                                      return skuLower.includes("sun");
+                                                    }
+                                                    return false;
+                                                  });
+                                                  
+                                                  // If no specific oil type identified in group, show all (fallback)
+                                                  const hasIdentifiedOilTypes = groupOilTypes.some(ot => 
+                                                    ot.includes("palm") || ot.includes("rice") || ot.includes("rbo") || 
+                                                    ot.includes("soya") || ot.includes("sbo") || ot.includes("sunflower")
+                                                  );
 
-                                                          return matchesSearch && (!hasIdentifiedOilTypes || matchesAnyOilType);
-                                                        }).map((sku) => (
-                                                        <CommandItem key={sku} value={sku} className="cursor-pointer py-2.5 px-4 text-xs font-bold hover:bg-blue-50 hover:text-blue-700 transition-colors" onSelect={async () => {
-                                                          // Normalize SKU for better matching
-                                                          const normalizeSku = (skuName: string) => {
-                                                            return skuName
-                                                              .toUpperCase()
-                                                              .replace(/\s+/g, ' ')           // Normalize multiple spaces
-                                                              .replace(/\//g, ' ')            // Replace slashes with spaces
-                                                              .replace(/[()]/g, '')           // Remove parentheses
-                                                              .replace(/\*/g, '')             // Remove asterisks
-                                                              .replace(/\bKGS\b/g, 'KG')      // Normalize KGS to KG
-                                                              .replace(/\bLTRS\b/g, 'LTR')    // Normalize LTRS to LTR
-                                                              .replace(/\b0+(\d)/g, '$1')     // Remove leading zeros (01 -> 1)
-                                                              .replace(/\bML\b/g, '')         // Remove ML
-                                                              .replace(/\bGM\b/g, '')         // Remove GM
-                                                              .replace(/\d+\*\d+/g, '')       // Remove pack info like 1*12
-                                                              .replace(/990/g, '')            // Remove specific weights
-                                                              .replace(/900/g, '')            // Remove specific weights
-                                                              .replace(/\s+/g, ' ')           // Normalize spaces again
-                                                              .trim();
-                                                          };
-                                                          
-                                                          // Extract core SKU tokens (size + type)
-                                                          const extractCoreTokens = (skuName: string) => {
-                                                            const normalized = normalizeSku(skuName);
-                                                            // Extract key tokens like "1 LTR PP" or "15 KG JAR"
-                                                            const tokens = normalized.split(' ').filter(t => t.length > 0);
-                                                            // Focus on size + unit + type
-                                                            return tokens.slice(0, 3).join(' ');
-                                                          };
-                                                          
-                                                          // Extract SKU portion from full product name
-                                                          const extractSku = (productName: string) => {
-                                                            const prefixes = ['HK Palm Oil ', 'HK RBO ', 'HK SBO ', 'HK PALM OIL ', 'HK '];
-                                                            let extracted = productName;
-                                                            for (const prefix of prefixes) {
-                                                              if (productName.toUpperCase().startsWith(prefix.toUpperCase())) {
-                                                                extracted = productName.substring(prefix.length).trim();
-                                                                break;
-                                                              }
-                                                            }
-                                                            return extracted.replace(/\bKGS\b/gi, 'KG');
-                                                          };
-                                                          
-                                                          const skuForRate = extractSku(sku);
-                                                          const normalizedSelected = normalizeSku(skuForRate);
-                                                          const coreTokensSelected = extractCoreTokens(skuForRate);
-                                                          
-                                                          // Use calculated rate from SKU Price List if available
-                                                          let rateValue = "";
-                                                          
-                                                          console.log("Selected SKU:", sku);
-                                                          console.log("Extracted SKU:", skuForRate);
-                                                          console.log("Normalized Selected:", normalizedSelected);
-                                                          console.log("Core Tokens Selected:", coreTokensSelected);
-                                                          console.log("Available calculated prices:", calculatedPrices);
-                                                          const currentOilType = product.oilType || "Unknown";
-                                                            const pricesForOil = calculatedPrices[currentOilType] || [];
-                                                            
-                                                            // Try multiple matching strategies
-                                                            let calculatedRate = null;
-                                                            
-                                                            // Strategy 1: Exact match with extracted SKU
-                                                            calculatedRate = pricesForOil.find((item: any) => 
-                                                              item.sku.toUpperCase() === skuForRate.toUpperCase()
-                                                            );
-                                                            
-                                                            // Strategy 2: Match with full SKU name
-                                                            if (!calculatedRate) {
-                                                              calculatedRate = pricesForOil.find((item: any) => 
-                                                                item.sku.toUpperCase() === sku.toUpperCase()
-                                                              );
-                                                            }
-                                                            
-                                                            // Strategy 3: Normalized matching
-                                                            if (!calculatedRate) {
-                                                              calculatedRate = pricesForOil.find((item: any) => {
-                                                                const normalizedItem = normalizeSku(item.sku);
-                                                                console.log(`Comparing normalized "${normalizedSelected}" with "${normalizedItem}"`);
-                                                                return normalizedItem === normalizedSelected;
-                                                              });
-                                                            }
-                                                            
-                                                            // Strategy 4: Core token matching (size + unit + type)
-                                                            if (!calculatedRate) {
-                                                              calculatedRate = pricesForOil.find((item: any) => {
-                                                                const coreTokensItem = extractCoreTokens(item.sku);
-                                                                console.log(`Comparing core tokens "${coreTokensSelected}" with "${coreTokensItem}"`);
-                                                                return coreTokensItem === coreTokensSelected;
-                                                              });
-                                                            }
-                                                            
-                                                            // Strategy 5: Partial normalized match
-                                                            if (!calculatedRate) {
-                                                              calculatedRate = pricesForOil.find((item: any) => {
-                                                                const normalizedItem = normalizeSku(item.sku);
-                                                                return normalizedItem.includes(normalizedSelected) || normalizedSelected.includes(normalizedItem);
-                                                              });
-                                                            }
-                                                          
-                                                          if (calculatedRate) {
-                                                            console.log("✓ Found calculated rate:", calculatedRate);
-                                                            rateValue = calculatedRate.calculatedRate;
-                                                          } else {
-                                                            console.log("✗ No calculated rate found, fetching from database...");
-                                                            // Fallback: fetch stored rate from database
-                                                            try {
-                                                              const response = await fetch(`/api/v1/skus/rate/${encodeURIComponent(skuForRate)}`);
-                                                              const data = await response.json();
-                                                              rateValue = data.success && data.rate ? data.rate.toString() : "";
-                                                            } catch (error) {
-                                                              console.error("Failed to fetch rate for SKU:", error);
-                                                            }
-                                                          }
-                                                          
-                                                          setProductRates({ 
-                                                            ...productRates, 
-                                                            [rowKey]: { 
-                                                              ...productRates[rowKey], 
-                                                              skuName: sku,
-                                                              productName: sku,
-                                                              rateOfMaterial: rateValue
-                                                            } 
-                                                          });
-                                                          setSkuSearch(""); 
-                                                          setOpenPopoverId(null);
-                                                        }}>
-                                                          <div className="flex items-center justify-between w-full">
-                                                            <span>{sku}</span>
-                                                            <Check className={cn("h-4 w-4 text-blue-600", productRates[rowKey]?.skuName === sku ? "opacity-100" : "opacity-0")} />
-                                                          </div>
-                                                        </CommandItem>
-                                                      ))}
-                                                    </CommandGroup>
-                                                  </CommandList>
-                                                </Command>
-                                              </PopoverContent>
-                                            </Popover>
+                                                  return !hasIdentifiedOilTypes || matchesAnyOilType;
+                                                }).map((sku) => (
+                                                  <SelectItem key={sku} value={sku} className="cursor-pointer py-2.5 px-4 text-xs font-bold hover:bg-blue-50 hover:text-blue-700 transition-colors">
+                                                    {sku.replace(/MLT/g, 'ML')}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
                                           </TableCell>
                                           <TableCell className="p-2">
                                             <div className="relative">
@@ -1523,18 +1638,6 @@ export default function PreApprovalPage() {
 
                 <DialogFooter className="sm:justify-between gap-3 border-t pt-4">
                   {/* SKU Price List Button */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setShowSkuPriceList(true)
-                      fetchAndCalculateRates()
-                    }}
-                    className="bg-gradient-to-r from-green-50 to-blue-50 border-green-300 hover:border-green-400 text-green-700 font-semibold"
-                  >
-                    <Search className="mr-2 h-4 w-4" />
-                    View SKU Price List
-                  </Button>
                   
                   <div className="flex gap-3">
                     <Button variant="outline" onClick={() => {
@@ -1708,7 +1811,9 @@ export default function PreApprovalPage() {
           <DialogHeader className="px-2 pt-2">
             <div className="flex items-center justify-between">
               <div>
-                <DialogTitle className="text-2xl font-black text-blue-900 tracking-tight uppercase">SKU Price List Catalog</DialogTitle>
+                 <DialogTitle className="text-2xl font-black text-blue-900 tracking-tight uppercase">
+                   {catalogContext ? `SKU Price List for ${catalogContext.orderNo}` : "SKU Price List Catalog"}
+                 </DialogTitle>
                 <DialogDescription className="text-slate-500 font-bold text-xs mt-1">
                   Automated rate calculations based on Order Punch inputs.
                 </DialogDescription>
@@ -1764,20 +1869,24 @@ export default function PreApprovalPage() {
                               <span className="text-sm font-black text-blue-900 uppercase tracking-widest">Bulk Packaging</span>
                             </div>
                             <Badge variant="outline" className="bg-white border-blue-200 text-blue-700 font-bold px-3">
-                              {prices.filter(item => {
-                                const sku = item.sku.toUpperCase();
-                                return sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT');
-                              }).length} SKUS
+                               {prices.filter(item => {
+                                 const sku = item.sku.toUpperCase();
+                                 const isLargeSize = sku.includes('12') || sku.includes('13') || sku.includes('15') || sku.includes('20') || sku.includes('25');
+                                 const hasBulkKeyword = sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT') || sku.includes('LTR');
+                                 return isLargeSize && hasBulkKeyword;
+                               }).length} SKUS
                             </Badge>
                           </div>
                           <div className="flex-1 overflow-y-auto px-2 py-2 max-h-[480px] scrollbar-auto border-t border-blue-100/30">
                             <Table>
                               <TableBody>
-                                {prices
-                                  .filter(item => {
-                                    const sku = item.sku.toUpperCase();
-                                    return sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT');
-                                  })
+                                 {prices
+                                   .filter(item => {
+                                     const sku = item.sku.toUpperCase();
+                                     const isLargeSize = sku.includes('12') || sku.includes('13') || sku.includes('15') || sku.includes('20') || sku.includes('25');
+                                     const hasBulkKeyword = sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT') || sku.includes('LTR');
+                                     return isLargeSize && hasBulkKeyword;
+                                   })
                                   .map((item, idx) => (
                                     <TableRow key={idx} className="hover:bg-blue-100/50 transition-colors border-none group">
                                       <TableCell className="font-semibold text-slate-800 py-3 text-sm rounded-l-2xl pl-6">
@@ -1807,20 +1916,24 @@ export default function PreApprovalPage() {
                               <span className="text-sm font-black text-green-900 uppercase tracking-widest">Retail Packs</span>
                             </div>
                             <Badge variant="outline" className="bg-white border-green-200 text-green-700 font-bold px-3">
-                              {prices.filter(item => {
-                                const sku = item.sku.toUpperCase();
-                                return !(sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT'));
-                              }).length} SKUS
+                               {prices.filter(item => {
+                                 const sku = item.sku.toUpperCase();
+                                 const isLargeSize = sku.includes('12') || sku.includes('13') || sku.includes('15') || sku.includes('20') || sku.includes('25');
+                                 const hasBulkKeyword = sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT') || sku.includes('LTR');
+                                 return !(isLargeSize && hasBulkKeyword);
+                               }).length} SKUS
                             </Badge>
                           </div>
                           <div className="flex-1 overflow-y-auto px-2 py-2 max-h-[480px] scrollbar-auto border-t border-green-100/30">
                             <Table>
                               <TableBody>
-                                {prices
-                                  .filter(item => {
-                                    const sku = item.sku.toUpperCase();
-                                    return !(sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT'));
-                                  })
+                                 {prices
+                                   .filter(item => {
+                                     const sku = item.sku.toUpperCase();
+                                     const isLargeSize = sku.includes('12') || sku.includes('13') || sku.includes('15') || sku.includes('20') || sku.includes('25');
+                                     const hasBulkKeyword = sku.includes('KG') || sku.includes('TIN') || sku.includes('JAR') || sku.includes('BKT') || sku.includes('LTR');
+                                     return !(isLargeSize && hasBulkKeyword);
+                                   })
                                   .map((item, idx) => (
                                     <TableRow key={idx} className="hover:bg-green-100/50 transition-colors border-none group">
                                       <TableCell className="font-semibold text-slate-800 py-3 text-sm rounded-l-2xl pl-6">
