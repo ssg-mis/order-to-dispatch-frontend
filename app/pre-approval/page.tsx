@@ -214,12 +214,17 @@ export default function PreApprovalPage() {
           let baseRateLtr = 0
 
           for (const group of selectedGroupItems) {
-            if (group.oilWiseRates?.[oilType]) {
-              const rates = group.oilWiseRates[oilType]
-              if (rates.ratePer15Kg && rates.ratePer15Kg !== "—") baseRate15kg = parseFloat(rates.ratePer15Kg)
-              if (rates.ratePerLtr && rates.ratePerLtr !== "—") baseRateLtr = parseFloat(rates.ratePerLtr)
-              if (baseRate15kg > 0 || baseRateLtr > 0) break; // Use rates from first group that has them
+            const rates = group.oilWiseRates?.[oilType]
+            if (rates && (rates.ratePer15Kg && rates.ratePer15Kg !== "—" || rates.ratePerLtr && rates.ratePerLtr !== "—")) {
+              baseRate15kg = rates.ratePer15Kg ? parseFloat(rates.ratePer15Kg) : 0
+              baseRateLtr = rates.ratePerLtr ? parseFloat(rates.ratePerLtr) : 0
+              if (baseRate15kg > 0 || baseRateLtr > 0) break;
             }
+            
+            // Fallback to group-level collected rates if specific oil type rates are missing
+            if (baseRate15kg === 0 && group.ratePer15Kg) baseRate15kg = parseFloat(group.ratePer15Kg)
+            if (baseRateLtr === 0 && group.ratePerLtr) baseRateLtr = parseFloat(group.ratePerLtr)
+            if (baseRate15kg > 0 || baseRateLtr > 0) break;
           }
 
           oilWiseCalculations[oilType] = calculateSkuPrices(baseRate15kg, baseRateLtr, response.data)
@@ -798,7 +803,7 @@ export default function PreApprovalPage() {
       // Create a map of oil type to rates for this DO group
       const oilWiseRates: { [key: string]: { ratePer15Kg: string | null, ratePerLtr: string | null } } = {}
       grp._allProducts?.forEach((product: any) => {
-        const oilType = product.oilType || "Unknown"
+        const oilType = product.oilType || "General"
         if (!oilWiseRates[oilType]) {
           oilWiseRates[oilType] = { ratePer15Kg: null, ratePerLtr: null }
         }
@@ -1765,7 +1770,7 @@ export default function PreApprovalPage() {
                               }).length} SKUS
                             </Badge>
                           </div>
-                          <div className="flex-1 overflow-y-auto px-2 py-2 [&::-webkit-scrollbar]:hidden">
+                          <div className="flex-1 overflow-y-auto px-2 py-2 max-h-[480px] scrollbar-auto border-t border-blue-100/30">
                             <Table>
                               <TableBody>
                                 {prices
@@ -1808,7 +1813,7 @@ export default function PreApprovalPage() {
                               }).length} SKUS
                             </Badge>
                           </div>
-                          <div className="flex-1 overflow-y-auto px-2 py-2 [&::-webkit-scrollbar]:hidden">
+                          <div className="flex-1 overflow-y-auto px-2 py-2 max-h-[480px] scrollbar-auto border-t border-green-100/30">
                             <Table>
                               <TableBody>
                                 {prices

@@ -237,7 +237,7 @@ export default function ActualDispatchPage() {
     fetchSkus()
   }, [])
 
-  // Auto-calculate Net Weight (Gross - Tare) and sync Packing Audit display
+  // Auto-calculate Net Weight (Gross - Tare)
   useEffect(() => {
     const gross = parseFloat(loadData.grossWeight) || 0
     const tare = parseFloat(loadData.tareWeight) || 0
@@ -245,8 +245,7 @@ export default function ActualDispatchPage() {
     
     setLoadData(prev => ({
       ...prev,
-      netWeightPacking: (loadData.grossWeight || loadData.tareWeight) ? net.toFixed(2) : prev.netWeightPacking,
-      grossWeightPacking: (loadData.grossWeight || loadData.tareWeight) ? net.toFixed(2) : prev.grossWeightPacking
+      netWeightPacking: (loadData.grossWeight || loadData.tareWeight) ? net.toFixed(2) : prev.netWeightPacking
     }))
   }, [loadData.grossWeight, loadData.tareWeight])
 
@@ -259,16 +258,22 @@ export default function ActualDispatchPage() {
       }, 0)
   }, [selectedGroups, confirmDetails, skus])
 
-  // Auto-calculate difference (Net weight - Total SKU weight)
+  // Auto-calculate Total Weight and Difference
+  const totalCombinedWeight = useMemo(() => {
+    const packingWeight = totalPackingWeightFromSku || 0
+    const extraWeight = parseFloat(loadData.extraWeight) || 0
+    return packingWeight + extraWeight
+  }, [totalPackingWeightFromSku, loadData.extraWeight])
+
   useEffect(() => {
     const net = parseFloat(loadData.netWeightPacking) || 0
-    const diff = net - totalPackingWeightFromSku
+    const diff = net - totalCombinedWeight
     
     setLoadData(prev => ({
       ...prev,
-      differanceWeight: (loadData.netWeightPacking || totalPackingWeightFromSku > 0) ? diff.toFixed(2) : ""
+      differanceWeight: (loadData.netWeightPacking || totalCombinedWeight > 0) ? diff.toFixed(2) : ""
     }))
-  }, [loadData.netWeightPacking, totalPackingWeightFromSku])
+  }, [loadData.netWeightPacking, totalCombinedWeight])
 
 
   /* Extract unique customer names */
@@ -1103,51 +1108,45 @@ export default function ActualDispatchPage() {
                              </div>
                           </div>
 
-                          <div className="grid grid-cols-2 @md:grid-cols-3 gap-4">
-                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Gross Wt</Label>
-                                <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold text-red-600"
-                                  value={loadData.grossWeight} onChange={(e) => setLoadData(p => ({...p, grossWeight: e.target.value}))} />
-                             </div>
-                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Tare Wt</Label>
-                                <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold"
-                                  value={loadData.tareWeight} onChange={(e) => setLoadData(p => ({...p, tareWeight: e.target.value}))} />
-                             </div>
+                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                               <div className="space-y-1.5">
-                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Dharamkata</Label>
-                                 <Input type="number" step="0.01" className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-amber-50"
-                                   value={loadData.dharamkataWeight} onChange={(e) => setLoadData(p => ({...p, dharamkataWeight: e.target.value}))} />
+                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Tare Wt</Label>
+                                 <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold"
+                                   value={loadData.tareWeight} onChange={(e) => setLoadData(p => ({...p, tareWeight: e.target.value}))} />
                               </div>
                               <div className="space-y-1.5">
-                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Extra Weight</Label>
+                                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Gross Wt</Label>
+                                 <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold text-blue-600"
+                                   value={loadData.grossWeight} onChange={(e) => setLoadData(p => ({...p, grossWeight: e.target.value}))} />
+                              </div>
+                              <div className="space-y-1.5">
+                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Net Weight</Label>
+                                 <Input type="number" step="0.01" readOnly className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-slate-50"
+                                   value={loadData.netWeightPacking} />
+                              </div>
+                              <div className="space-y-1.5">
+                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Difference</Label>
+                                 <Input type="number" readOnly className={`h-10 border-2 rounded-lg font-bold ${parseFloat(loadData.differanceWeight) < 0 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}
+                                   value={loadData.differanceWeight} />
+                              </div>
+                           </div>
+
+                           <div className="pt-4 border-t-2 border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="space-y-1.5">
+                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Total packing weight</Label>
+                                 <Input readOnly className="h-10 border-slate-200 rounded-lg font-bold bg-slate-50" value={totalPackingWeightFromSku.toFixed(2)} />
+                              </div>
+                              <div className="space-y-1.5">
+                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Extra packing material weight</Label>
                                  <Input type="number" step="0.001" className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-white focus:border-blue-500 transition-colors"
                                    placeholder="0.000"
                                    value={loadData.extraWeight} onChange={(e) => setLoadData(p => ({...p, extraWeight: e.target.value}))} />
                               </div>
+                              <div className="space-y-1.5">
+                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Total Weight</Label>
+                                 <Input readOnly className="h-10 border-slate-200 rounded-lg font-bold bg-blue-50 text-blue-700" value={totalCombinedWeight.toFixed(2)} />
+                              </div>
                            </div>
-
-                          <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100 flex items-center justify-between">
-                             <div className="space-y-0.5">
-                                <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest leading-none mb-1">Packing Audit</p>
-                                <div className="flex items-baseline gap-2">
-                                  <p className="text-2xl font-black text-blue-900 leading-none">{loadData.netWeightPacking || "0.00"}</p>
-                                  <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">NET KG</span>
-                                </div>
-                             </div>
-                             <div className="flex gap-2">
-                                <div className="flex flex-col gap-1">
-                                  <span className="text-[8px] font-black text-slate-400 text-center uppercase">Net</span>
-                                  <Input type="number" step="0.01" readOnly className="h-9 w-20 bg-slate-50 border-blue-200 rounded-lg font-black text-xs cursor-not-allowed" 
-                                    value={loadData.netWeightPacking} />
-                                </div>
-                                <div className="flex flex-col gap-1">
-                                  <span className="text-[8px] font-black text-slate-400 text-center uppercase">Diff</span>
-                                  <Input type="number" readOnly className="h-9 w-20 bg-amber-100 border-amber-200 rounded-lg font-black text-xs text-amber-700" 
-                                    value={loadData.differanceWeight} />
-                                </div>
-                             </div>
-                          </div>
 
                           <div className="grid grid-cols-2 gap-4">
                              <div className="space-y-1.5">
@@ -1176,25 +1175,6 @@ export default function ActualDispatchPage() {
                           </div>
 
 
-                          <div className="pt-4 border-t-2 border-blue-100 mt-2">
-                             <div className="flex flex-col items-center bg-blue-900 rounded-2xl p-4 shadow-inner">
-                                 <span className="text-[10px] font-black uppercase text-blue-300 tracking-widest mb-1">Total Weight</span>
-                                 <div className="flex flex-col items-center gap-1">
-                                   <div className="text-3xl font-black text-white leading-none">
-                                     {(
-                                       selectedGroups.flatMap(g => g._allProducts)
-                                       .reduce((total, prod) => {
-                                         const rowKey = prod._rowKey
-                                         return total + calculateGrossWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch)
-                                       }, 0) + (parseFloat(loadData.extraWeight) || 0)
-                                     ).toFixed(2)} kg
-                                   </div>
-                                   <div className="text-[11px] font-black text-white/90 drop-shadow-sm">
-                                    (Target: {totalPackingWeightFromSku.toFixed(2)} kg)
-                                   </div>
-                                </div>
-                             </div>
-                          </div>
                       </div>
                    </div>
                 </div>

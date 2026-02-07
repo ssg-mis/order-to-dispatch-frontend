@@ -38,6 +38,7 @@ type ProductItem = {
   rate: string
   ratePer15Kg: string
   ratePerLtr: string
+  oilType: string
 }
 
 type PreApprovalProduct = {
@@ -148,7 +149,7 @@ export default function OrderPunchPage() {
   }
 
   const [products, setProducts] = useState<ProductItem[]>([
-    { id: "1", productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "" },
+    { id: "1", productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "", oilType: "" },
   ])
   const [customerType, setCustomerType] = useState<string>("existing")
   const [depoName, setDepoName] = useState<string>("Banari")
@@ -356,20 +357,22 @@ export default function OrderPunchPage() {
           let rateLtr = p.ratePerLtr ? parseFloat(p.ratePerLtr) : null
           let oilTypeVal = ""
 
-          // For pre-approval, if no rates on individual product, pick from the preApprovalProducts list
+          // For pre-approval, pick from the preApprovalProducts list based on detected oil type
           if (orderType === "pre-approval") {
             const productNameLower = (p.productName || "").toLowerCase()
             let matchedRate = null
             
-            if (productNameLower.includes("palm")) {
-              matchedRate = preApprovalProducts.find(pap => pap.oilType === "Palm Oil")
+            // Robust auto-detection of oil type from product name
+            if (productNameLower.includes("palm") || productNameLower.includes("p.o.") || productNameLower.includes(" po ")) {
               oilTypeVal = "Palm Oil"
-            } else if (productNameLower.includes("rice")) {
-              matchedRate = preApprovalProducts.find(pap => pap.oilType === "Rice Oil")
+            } else if (productNameLower.includes("rice") || productNameLower.includes("r.o.") || productNameLower.includes(" ro ") || productNameLower.includes("rbo")) {
               oilTypeVal = "Rice Oil"
-            } else if (productNameLower.includes("soya")) {
-              matchedRate = preApprovalProducts.find(pap => pap.oilType === "soya oil")
-              oilTypeVal = "soya oil"
+            } else if (productNameLower.includes("soya") || productNameLower.includes("s.o.") || productNameLower.includes(" so ") || productNameLower.includes("sbo")) {
+              oilTypeVal = "Soya Oil"
+            }
+
+            if (oilTypeVal) {
+              matchedRate = preApprovalProducts.find(pap => pap.oilType.toLowerCase() === oilTypeVal.toLowerCase())
             }
 
             if (matchedRate) {
@@ -482,7 +485,7 @@ export default function OrderPunchPage() {
   const addProduct = () => {
     setProducts([
       ...products,
-      { id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "" },
+      { id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "", oilType: "" },
     ])
   }
 
@@ -529,6 +532,26 @@ export default function OrderPunchPage() {
       toast({
         title: "Validation Error",
         description: "Please enter at least one rate (15 KG or 1 LTR).",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Row Limit: maximum 3 items
+    if (preApprovalProducts.length >= 3) {
+      toast({
+        title: "Limit Reached",
+        description: "You can add a maximum of 3 oil types (Palm, Rice, and Soya Oil).",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Duplicate Check: ensure same oil type isn't added twice
+    if (preApprovalProducts.some(p => p.oilType === currentPreApproval.oilType)) {
+      toast({
+        title: "Duplicate Entry",
+        description: "Rates for this oil type have already been added. Select a different oil type or edit the existing row.",
         variant: "destructive",
       })
       return
@@ -596,7 +619,7 @@ export default function OrderPunchPage() {
     setAdvanceAmount("")
     setFuturePeriodDate("")
     setOrderPunchRemarks("")
-    setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "" }])
+    setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "", oilType: "" }])
   }
 
   return (
@@ -943,7 +966,7 @@ export default function OrderPunchPage() {
                         <SelectContent>
                           <SelectItem value="Palm Oil">Palm Oil</SelectItem>
                           <SelectItem value="Rice Oil">Rice Oil</SelectItem>
-                          <SelectItem value="soya oil">Soya Oil</SelectItem>
+                          <SelectItem value="Soya Oil">Soya Oil</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1028,25 +1051,25 @@ export default function OrderPunchPage() {
                              Product {idx + 1}
                          </div>
                          <div className="grid grid-cols-2 gap-4 flex-1 md:grid-cols-11">
-                          
-                          <div className={`space-y-1.5 col-span-2 ${orderType === "pre-approval" ? "md:col-span-5" : "md:col-span-6"}`}>
+                          <div className={`space-y-1.5 col-span-2 md:col-span-6`}>
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Name</Label>
                              <Combobox
                                options={skus
                                  .filter(s => s && s.sku_name) // Filter invalid SKUs
-                                 .filter(s => !products.some(p => p.productName === s.sku_name && p.id !== product.id)) // Filter already selected products
                                  .filter(s => {
-                                   if (orderType !== "pre-approval") return true;
-                                   if (preApprovalProducts.length === 0) return true; // Show all if none added yet? User said "when i select... show only", implying filtering.
+                                   // Dynamic Filter: Only show products matching the oil types in the Pre-Approval Rates list
+                                   if (orderType !== "pre-approval" || preApprovalProducts.length === 0) return true;
                                    
                                    const skuNameLower = s.sku_name.toLowerCase();
                                    return preApprovalProducts.some(pap => {
-                                      if (pap.oilType === "Palm Oil") return skuNameLower.includes("palm");
-                                      if (pap.oilType === "Rice Oil") return skuNameLower.includes("rice") || skuNameLower.includes("rbo");
-                                      if (pap.oilType === "soya oil") return skuNameLower.includes("soya") || skuNameLower.includes("sbo");
-                                      return false;
+                                     const oilType = pap.oilType.toLowerCase();
+                                     if (oilType.includes("palm")) return skuNameLower.includes("palm") || skuNameLower.includes("p.o.");
+                                     if (oilType.includes("rice")) return skuNameLower.includes("rice") || skuNameLower.includes("r.o.") || skuNameLower.includes("rbo");
+                                     if (oilType.includes("soya")) return skuNameLower.includes("soya") || skuNameLower.includes("s.o.") || skuNameLower.includes("sbo");
+                                     return false;
                                    });
                                  })
+                                 .filter(s => !products.some(p => p.productName === s.sku_name && p.id !== product.id)) // Filter already selected products
                                  .map((sku) => ({
                                    value: sku.sku_name,
                                    label: sku.sku_name
@@ -1084,29 +1107,16 @@ export default function OrderPunchPage() {
                           </div>
                       
                           {/* Rate field for both types, but auto-filled for Pre-Approval */}
-                          {orderType === "pre-approval" ? (
-                            <div className="space-y-1.5 col-span-2 md:col-span-2">
-                               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate</Label>
-                               <Input
-                                 type="number"
-                                 value={product.rate}
-                                 onChange={(e) => updateProduct(product.id, "rate", e.target.value)}
-                                 placeholder="0.00"
-                                 className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600"
-                               />
-                            </div>
-                          ) : (
-                            <div className="space-y-1.5 col-span-2 md:col-span-1">
-                               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate</Label>
-                               <Input
-                                 type="number"
-                                 value={product.rate}
-                                 onChange={(e) => updateProduct(product.id, "rate", e.target.value)}
-                                 placeholder="0.00"
-                                 className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600"
-                               />
-                            </div>
-                          )}
+                          <div className="space-y-1.5 col-span-2 md:col-span-1">
+                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate</Label>
+                             <Input
+                               type="number"
+                               value={product.rate}
+                               onChange={(e) => updateProduct(product.id, "rate", e.target.value)}
+                               placeholder="0.00"
+                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600"
+                             />
+                          </div>
 
 
                           
