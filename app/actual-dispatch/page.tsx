@@ -400,7 +400,8 @@ export default function ActualDispatchPage() {
           productName: order.product_name || order.productName,
           qtyToDispatch: order.qty_to_be_dispatched || order.qtyToDispatch,
           deliveryFrom: order.dispatch_from || order.deliveryFrom,
-          dsrNumber: order.d_sr_number
+          dsrNumber: order.d_sr_number,
+          rate: order.final_rate || order.rate_of_material
        }
        
        grouped[custName]._ordersMap[baseDo]._products.push(productMeta)

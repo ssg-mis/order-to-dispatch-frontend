@@ -846,7 +846,7 @@ export default function CommitmentReviewPage() {
                  <Button
                    onClick={handleConfirmCommitment}
                    disabled={isConfirming}
-                   className="min-w-[300px] px-8 h-11 text-base font-bold shadow-lg shadow-blue-100 transition-all hover:scale-[1.01] active:scale-[0.99]"
+                   className="min-w-75 px-8 h-11 text-base font-bold shadow-lg shadow-blue-100 transition-all hover:scale-[1.01] active:scale-[0.99]"
                    variant={Object.values(checklistValues).includes("reject") ? "destructive" : "default"}
                  >
                    {isConfirming
@@ -866,7 +866,7 @@ export default function CommitmentReviewPage() {
                 Columns
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[250px] max-h-[400px] overflow-y-auto">
+            <DropdownMenuContent align="end" className="w-62.5 max-h-100 overflow-y-auto">
               <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {PAGE_COLUMNS.map((col) => (
@@ -885,11 +885,11 @@ export default function CommitmentReviewPage() {
           </DropdownMenu>
         </div>
 
-        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
+        <Card className="border-none shadow-sm overflow-auto max-h-150">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>
-                <TableHead className="w-[50px] text-center">
+                <TableHead className="w-12.5 text-center">
                     <Checkbox 
                         checked={displayRows.length > 0 && selectedItems.length === displayRows.length}
                         onCheckedChange={toggleSelectAll}
