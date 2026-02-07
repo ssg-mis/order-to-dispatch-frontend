@@ -91,6 +91,7 @@ export default function PreApprovalPage() {
   const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false)
   const [selectedProductRows, setSelectedProductRows] = useState<string[]>([])
   const [qtyValidationErrors, setQtyValidationErrors] = useState<{ [key: string]: string }>({})
+  const [rateValidationErrors, setRateValidationErrors] = useState<{ [key: string]: string }>({})
 
   const [history, setHistory] = useState<any[]>([])
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
@@ -887,7 +888,8 @@ export default function PreApprovalPage() {
         ...prev[rowKey], 
         skuName: sku,
         productName: sku,
-        rateOfMaterial: rateValue
+        rateOfMaterial: rateValue,
+        rate: rateValue
       } 
     }));
   };
@@ -1155,7 +1157,17 @@ export default function PreApprovalPage() {
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
           {selectedRows.length > 0 && (
-            <Dialog open={isBulkDialogOpen} onOpenChange={setIsBulkDialogOpen}>
+            <Dialog 
+              open={isBulkDialogOpen} 
+              onOpenChange={(open) => {
+                setIsBulkDialogOpen(open)
+                if (!open) {
+                  setQtyValidationErrors({})
+                  setRateValidationErrors({})
+                  setSelectedProductRows([])
+                }
+              }}
+            >
               <DialogTrigger asChild>
                 <Button className="bg-blue-600 hover:bg-blue-700 shadow-md">
                   Process Selected ({selectedRows.length})
@@ -1560,21 +1572,43 @@ export default function PreApprovalPage() {
                                               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-400 text-[10px] font-black">₹</span>
                                               <Input 
                                                 type="number" 
-                                                className="h-9 text-xs bg-white font-black text-blue-700 border-slate-200 focus:border-blue-500 focus:ring-blue-500 pl-5"
-                                                  value={productRates[rowKey]?.rate || ""}
-                                                 onChange={(e) => {
-                                                   const newValue = e.target.value;
-                                                   setProductRates({ 
-                                                     ...productRates, 
-                                                     [rowKey]: { 
-                                                       ...productRates[rowKey], 
-                                                       rate: newValue
-                                                     } 
-                                                   });
-                                                 }}
+                                                className={cn(
+                                                  "h-9 text-xs bg-white font-black text-blue-700 border-slate-200 focus:border-blue-500 focus:ring-blue-500 pl-5",
+                                                  rateValidationErrors[rowKey] && "border-red-500 ring-1 ring-red-500"
+                                                )}
+                                                value={productRates[rowKey]?.rate || ""} 
+                                                onChange={(e) => {
+                                                  const newValue = e.target.value;
+                                                  const enteredRate = parseFloat(newValue) || 0;
+                                                  const rateOfMaterial = parseFloat(productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || "0");
+                                                  
+                                                  if (newValue && enteredRate < rateOfMaterial) {
+                                                    setRateValidationErrors({
+                                                      ...rateValidationErrors,
+                                                      [rowKey]: `Min ₹${rateOfMaterial}`
+                                                    });
+                                                  } else {
+                                                    const newErrors = { ...rateValidationErrors };
+                                                    delete newErrors[rowKey];
+                                                    setRateValidationErrors(newErrors);
+                                                  }
+
+                                                  setProductRates({ 
+                                                    ...productRates, 
+                                                    [rowKey]: { 
+                                                      ...productRates[rowKey], 
+                                                      rate: newValue
+                                                    } 
+                                                  });
+                                                }}
                                                 disabled={!isSelected}
                                                 placeholder="0.00"
                                               />
+                                              {rateValidationErrors[rowKey] && (
+                                                <p className="text-[9px] text-red-600 font-black mt-1 uppercase tracking-tighter text-center">
+                                                  {rateValidationErrors[rowKey]}
+                                                </p>
+                                              )}
                                             </div>
                                           </TableCell>
                                           <TableCell className="p-2">
@@ -1673,6 +1707,7 @@ export default function PreApprovalPage() {
                       setIsBulkDialogOpen(false)
                       setSelectedProductRows([])
                       setQtyValidationErrors({})
+                      setRateValidationErrors({})
                     }}>Cancel</Button>
                     <Button 
                       onClick={() => {
@@ -1690,7 +1725,8 @@ export default function PreApprovalPage() {
                       disabled={
                         isApproving || 
                         selectedProductRows.length === 0 ||
-                        Object.keys(qtyValidationErrors).length > 0
+                        Object.keys(qtyValidationErrors).length > 0 ||
+                        Object.keys(rateValidationErrors).length > 0
                       }
                       className="min-w-50 h-11 bg-blue-600 font-bold shadow-lg"
                     >

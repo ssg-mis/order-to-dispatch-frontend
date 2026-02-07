@@ -56,7 +56,7 @@ export default function CommitmentReviewPage() {
     { id: "ratePerLtr", label: "Rate Per Ltr." }, // Aggregated
     { id: "productName", label: "Product Name" },
     { id: "uom", label: "UOM" },
-    { id: "orderQty", label: "Order Quantity" },
+    { id: "orderQty", label: "Qty" },
     { id: "altUom", label: "Alt UOM" },
     { id: "altQty", label: "Alt Qty (Kg)" },
     { id: "rate", label: "Rate" },
@@ -136,7 +136,7 @@ export default function CommitmentReviewPage() {
         productName: backendOrder.product_name,
         oilType: backendOrder.oil_type,
         uom: backendOrder.uom,
-        orderQty: backendOrder.order_quantity,
+        orderQty: backendOrder.approval_qty || backendOrder.order_quantity,
         altUom: backendOrder.alternate_uom,
         altQty: backendOrder.alternate_qty_kg,
         ratePerLtr: backendOrder.rate_per_ltr,
