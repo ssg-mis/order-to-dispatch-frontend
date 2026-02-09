@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Upload, CheckCircle, Settings2, FileText, IndianRupee } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
-import { damageAdjustmentApi } from "@/lib/api-service"
+import { damageAdjustmentApi, orderApi } from "@/lib/api-service"
 
 export default function DamageAdjustmentPage() {
   const router = useRouter()
@@ -42,13 +42,15 @@ export default function DamageAdjustmentPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   // Adjustment Form State
+  const [isUploading, setIsUploading] = useState<boolean>(false)
   const [adjustmentData, setAdjustmentData] = useState({
     creditNoteDate: "",
     creditNoteNo: "",
     creditNoteQty: "",
     creditNoteAmount: "",
     netBalance: "",
-    creditNoteCopy: null as File | null,
+    creditNoteCopy: "" as string,
+    creditNoteCopyName: "",
   })
 
   // Fetch Pending
@@ -74,6 +76,35 @@ export default function DamageAdjustmentPage() {
         console.error("Failed to fetch history:", error);
     }
   }
+
+  const handleFileUpload = async (file: File) => {
+    if (!file) return;
+    
+    setIsUploading(true);
+    try {
+      const response = await orderApi.uploadFile(file);
+      if (response.success) {
+        setAdjustmentData(p => ({
+          ...p,
+          creditNoteCopy: response.data.url,
+          creditNoteCopyName: file.name
+        }));
+        toast({
+          title: "Upload Successful",
+          description: `${file.name} uploaded successfully.`
+        });
+      }
+    } catch (error: any) {
+      console.error("Upload failed:", error);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload file to S3",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   useEffect(() => {
     fetchPending();
@@ -219,7 +250,8 @@ export default function DamageAdjustmentPage() {
         creditNoteQty: "",
         creditNoteAmount: "",
         netBalance: "",
-        creditNoteCopy: null,
+        creditNoteCopy: "",
+        creditNoteCopyName: "",
       })
       
       setIsDialogOpen(true)
@@ -233,6 +265,15 @@ export default function DamageAdjustmentPage() {
     // Let's enforce basic credit note details if quantities are involved.
     if (!adjustmentData.creditNoteDate || !adjustmentData.creditNoteNo) {
         toast({ title: "Validation Error", description: "Credit Note details are required.", variant: "destructive" })
+        return
+    }
+
+    // Numeric Validation
+    const isInvalidNumber = (val: string) => val !== "" && isNaN(Number(val))
+    if (isInvalidNumber(adjustmentData.creditNoteQty) || 
+        isInvalidNumber(adjustmentData.creditNoteAmount) || 
+        isInvalidNumber(adjustmentData.netBalance)) {
+        toast({ title: "Validation Error", description: "Please enter valid numbers for Qty, Amount, and Balance.", variant: "destructive" })
         return
     }
 
@@ -258,11 +299,11 @@ export default function DamageAdjustmentPage() {
         const submitData = {
             credit_note_date: adjustmentData.creditNoteDate,
             credit_note_no: adjustmentData.creditNoteNo,
-            credit_note_qty: adjustmentData.creditNoteQty || "0",
-            credit_note_amount: adjustmentData.creditNoteAmount || "0",
-            net_banalce: adjustmentData.netBalance || "0",
+            credit_note_qty: adjustmentData.creditNoteQty || 0,
+            credit_note_amount: adjustmentData.creditNoteAmount || 0,
+            net_banalce: adjustmentData.netBalance || 0,
             status_2: "Completed",
-            credit_note_copy: adjustmentData.creditNoteCopy ? adjustmentData.creditNoteCopy.name : null
+            credit_note_copy: adjustmentData.creditNoteCopy || null
         };
 
         try {
@@ -621,6 +662,7 @@ export default function DamageAdjustmentPage() {
                      <div className="space-y-2">
                         <Label>Net Balance</Label>
                         <Input
+                          type="number"
                           value={adjustmentData.netBalance}
                           onChange={(e) => setAdjustmentData({ ...adjustmentData, netBalance: e.target.value })}
                           placeholder="Final balance"
@@ -629,25 +671,25 @@ export default function DamageAdjustmentPage() {
 
                      <div className="space-y-2">
                        <Label>Upload CN Copy</Label>
-                       <div className="border-2 border-dashed rounded-lg p-3 text-center hover:bg-slate-50 transition-colors">
-                         <Input
-                           type="file"
-                           accept="image/*,.pdf"
-                           onChange={(e) => {
-                             if (e.target.files?.[0]) {
-                               setAdjustmentData({ ...adjustmentData, creditNoteCopy: e.target.files[0] })
-                             }
-                           }}
-                           className="hidden"
-                           id="cn-upload"
-                         />
-                         <label htmlFor="cn-upload" className="cursor-pointer">
-                           <Upload className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-                           <p className="text-xs text-muted-foreground">
-                             {adjustmentData.creditNoteCopy ? adjustmentData.creditNoteCopy.name : "Upload Copy"}
-                           </p>
-                         </label>
-                       </div>
+                        <div className="border-2 border-dashed rounded-lg p-3 text-center hover:bg-slate-50 transition-colors bg-blue-50/20">
+                          <Input
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={(e) => {
+                              if (e.target.files?.[0]) {
+                                handleFileUpload(e.target.files[0])
+                              }
+                            }}
+                            className="hidden"
+                            id="cn-upload"
+                          />
+                          <label htmlFor="cn-upload" className="cursor-pointer block">
+                            <Upload className="h-5 w-5 mx-auto mb-1 text-blue-600" />
+                            <p className="text-xs font-bold text-slate-700 uppercase tracking-tight block">
+                              {isUploading ? "UPLOADING..." : (adjustmentData.creditNoteCopyName ? `REPLACE: ${adjustmentData.creditNoteCopyName}` : "Upload Copy")}
+                            </p>
+                          </label>
+                        </div>
                      </div>
                  </div>
               </div>

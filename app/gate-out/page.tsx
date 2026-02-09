@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Upload, CheckCircle, Settings2, ChevronUp, ChevronDown, CheckSquare } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
-import { gateOutApi } from "@/lib/api-service"
+import { gateOutApi, orderApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 
 export default function GateOutPage() {
@@ -44,9 +44,12 @@ export default function GateOutPage() {
   const [expandedOrders, setExpandedOrders] = useState<string[]>([]) // State to manage expanded sections
 
   // Gate Out Form State
+  const [isUploading, setIsUploading] = useState<string | null>(null)
   const [gateOutData, setGateOutData] = useState({
-    gatePassFile: null as File | null,
-    vehicleLoadedImage: null as File | null,
+    gatePassFile: "" as string,
+    gatePassFileName: "",
+    vehicleLoadedImage: "" as string,
+    vehicleLoadedImageName: "",
   })
 
   // Fetch Pending
@@ -72,6 +75,43 @@ export default function GateOutPage() {
         console.error("Failed to fetch history:", error);
     }
   }
+
+  const handleFileUpload = async (file: File, type: 'gatePass' | 'vehicleImage') => {
+    if (!file) return;
+    
+    setIsUploading(type);
+    try {
+      const response = await orderApi.uploadFile(file);
+      if (response.success) {
+        if (type === 'gatePass') {
+          setGateOutData(p => ({
+            ...p,
+            gatePassFile: response.data.url,
+            gatePassFileName: file.name
+          }));
+        } else {
+          setGateOutData(p => ({
+            ...p,
+            vehicleLoadedImage: response.data.url,
+            vehicleLoadedImageName: file.name
+          }));
+        }
+        toast({
+          title: "Upload Successful",
+          description: `${file.name} uploaded successfully.`
+        });
+      }
+    } catch (error: any) {
+      console.error("Upload failed:", error);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload file to S3",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(null);
+    }
+  };
 
   useEffect(() => {
     fetchPending();
@@ -231,7 +271,12 @@ export default function GateOutPage() {
       setSelectedProducts(allProdKeys)
       
       // Reset form
-      setGateOutData({ gatePassFile: null, vehicleLoadedImage: null })
+      setGateOutData({ 
+        gatePassFile: "", 
+        gatePassFileName: "",
+        vehicleLoadedImage: "",
+        vehicleLoadedImageName: "" 
+      })
       setExpandedOrders([]) // Reset expanded state
       
       setIsDialogOpen(true)
@@ -262,8 +307,8 @@ export default function GateOutPage() {
 
       for (const product of productsToSubmit) {
         const submitData = {
-            gate_pass: gateOutData.gatePassFile ? gateOutData.gatePassFile.name : null,
-            vehicle_image: gateOutData.vehicleLoadedImage ? gateOutData.vehicleLoadedImage.name : null,
+            gate_pass: gateOutData.gatePassFile || "",
+            vehicle_image: gateOutData.vehicleLoadedImage || "",
         };
 
         try {
@@ -651,45 +696,45 @@ export default function GateOutPage() {
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div className="space-y-2">
                    <Label>Upload Gate Pass</Label>
-                   <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-slate-50 transition-colors">
+                   <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-slate-50 transition-colors bg-blue-50/20">
                      <Input
                        type="file"
                        accept="image/*,.pdf"
                        onChange={(e) => {
                          if (e.target.files?.[0]) {
-                           setGateOutData({ ...gateOutData, gatePassFile: e.target.files[0] })
+                           handleFileUpload(e.target.files[0], 'gatePass')
                          }
                        }}
                        className="hidden"
                        id="gatepass-upload"
                      />
-                     <label htmlFor="gatepass-upload" className="cursor-pointer">
-                       <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-                       <p className="text-xs text-muted-foreground">
-                         {gateOutData.gatePassFile ? gateOutData.gatePassFile.name : "Click to upload gate pass"}
+                     <label htmlFor="gatepass-upload" className="cursor-pointer block">
+                       <Upload className="h-6 w-6 mx-auto mb-2 text-blue-600" />
+                       <p className="text-xs font-bold text-slate-700 uppercase tracking-tight">
+                         {isUploading === 'gatePass' ? "UPLOADING..." : (gateOutData.gatePassFile ? `REPLACE: ${gateOutData.gatePassFileName}` : "Click to upload gate pass")}
                        </p>
                      </label>
                    </div>
                  </div>
-
+ 
                  <div className="space-y-2">
                    <Label>Upload Vehicle Loaded Image</Label>
-                   <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-slate-50 transition-colors">
+                   <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-slate-50 transition-colors bg-violet-50/20">
                      <Input
                        type="file"
                        accept="image/*"
                        onChange={(e) => {
                          if (e.target.files?.[0]) {
-                           setGateOutData({ ...gateOutData, vehicleLoadedImage: e.target.files[0] })
+                           handleFileUpload(e.target.files[0], 'vehicleImage')
                          }
                        }}
                        className="hidden"
                        id="vehicle-loaded-upload"
                      />
-                     <label htmlFor="vehicle-loaded-upload" className="cursor-pointer">
-                       <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-                       <p className="text-xs text-muted-foreground">
-                         {gateOutData.vehicleLoadedImage ? gateOutData.vehicleLoadedImage.name : "Click to upload vehicle image"}
+                     <label htmlFor="vehicle-loaded-upload" className="cursor-pointer block">
+                       <Upload className="h-6 w-6 mx-auto mb-2 text-violet-600" />
+                       <p className="text-xs font-bold text-slate-700 uppercase tracking-tight">
+                         {isUploading === 'vehicleImage' ? "UPLOADING..." : (gateOutData.vehicleLoadedImage ? `REPLACE: ${gateOutData.vehicleLoadedImageName}` : "Click to upload vehicle image")}
                        </p>
                      </label>
                    </div>

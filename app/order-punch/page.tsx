@@ -186,9 +186,16 @@ export default function OrderPunchPage() {
   const [advanceAmount, setAdvanceAmount] = useState<string>("")
   const [futurePeriodDate, setFuturePeriodDate] = useState<string>("") // New state for future period date
   const [orderPunchRemarks, setOrderPunchRemarks] = useState<string>("")
+  const [soFile, setSoFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeliveryDatePickerOpen, setIsDeliveryDatePickerOpen] = useState(false)
   const [isFuturePeriodDatePickerOpen, setIsFuturePeriodDatePickerOpen] = useState(false)
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSoFile(e.target.files[0])
+    }
+  }
 
   // Fetch customers, depots, SKUs, and brokers on mount
   useEffect(() => {
@@ -324,6 +331,25 @@ export default function OrderPunchPage() {
     setIsSubmitting(true)
 
     try {
+      let uploadedSoUrl = null
+      
+      // Upload SO Copy if selected
+      if (soFile) {
+        try {
+          const uploadResponse = await orderApi.uploadFile(soFile)
+          if (uploadResponse.success) {
+            uploadedSoUrl = uploadResponse.data.url
+          }
+        } catch (uploadError) {
+          console.error('Error uploading SO copy:', uploadError)
+          toast({
+            title: "Upload Error",
+            description: "Failed to upload SO copy. Order will be submitted without it.",
+            variant: "destructive",
+          })
+        }
+      }
+
       // Prepare data for backend API
       const customerNameValue = customerName
       
@@ -350,6 +376,7 @@ export default function OrderPunchPage() {
         order_punch_remarks: orderPunchRemarks || null,
         remark: null,
         futureperioddate: futurePeriodDate || null, // Add future period date
+        upload_so: uploadedSoUrl, // Add uploaded SO copy URL
       }
 
       // Add products array for backend (for regular and pre-approval order types)
@@ -621,6 +648,9 @@ export default function OrderPunchPage() {
     setAdvanceAmount("")
     setFuturePeriodDate("")
     setOrderPunchRemarks("")
+    setSoFile(null)
+    const fileInput = document.getElementById("soFile") as HTMLInputElement
+    if (fileInput) fileInput.value = ""
     setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "", oilType: "" }])
   }
 
@@ -1229,7 +1259,7 @@ export default function OrderPunchPage() {
 
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="soFile">Upload SO Copy</Label>
-                <Input id="soFile" type="file" className="cursor-pointer" />
+                <Input id="soFile" type="file" className="cursor-pointer" onChange={handleFileChange} />
               </div>
 
               <div className="space-y-2 md:col-span-2">
@@ -1239,7 +1269,7 @@ export default function OrderPunchPage() {
                   placeholder="Enter any additional remarks here..." 
                   value={orderPunchRemarks}
                   onChange={(e) => setOrderPunchRemarks(e.target.value)}
-                  className="min-h-[100px]"
+                  className="min-h-25"
                 />
               </div>
             </div>

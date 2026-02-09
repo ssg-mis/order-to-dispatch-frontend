@@ -15,6 +15,7 @@ export const API_ENDPOINTS = {
     getByOrderNumber: (orderNo: string) => `/orders/${orderNo}`,
     update: (id: number) => `/orders/update/${id}`,
     delete: (id: number) => `/orders/delete/${id}`,
+    upload: '/upload',
   },
   
   // Pre-Approval Endpoints

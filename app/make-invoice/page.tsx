@@ -22,7 +22,7 @@ import { Upload, Settings2, FileText, ChevronUp, ChevronDown, Plus, X, Truck } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
-import { makeInvoiceApi } from "@/lib/api-service"
+import { makeInvoiceApi, orderApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 
 export default function MakeInvoicePage() {
@@ -43,6 +43,7 @@ export default function MakeInvoicePage() {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
   
   // Form State
   const [invoiceType, setInvoiceType] = useState<"independent" | "common" | "">("")
@@ -51,10 +52,40 @@ export default function MakeInvoicePage() {
     invoiceDate: new Date().toISOString().split('T')[0], // Default to today
     qty: "",
     billAmount: "",
-    invoiceFile: null as File | null,
+    invoiceFile: "" as string,
+    invoiceFileName: ""
   })
 
   // Fetch pending invoices
+  const handleFileUpload = async (file: File) => {
+    if (!file) return;
+    
+    setIsUploading(true);
+    try {
+      const response = await orderApi.uploadFile(file);
+      if (response.success) {
+        setInvoiceData(p => ({
+          ...p,
+          invoiceFile: response.data.url,
+          invoiceFileName: file.name
+        }));
+        toast({
+          title: "Upload Successful",
+          description: `${file.name} uploaded successfully.`
+        });
+      }
+    } catch (error: any) {
+      console.error("Upload failed:", error);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload file to S3",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const fetchPendingInvoices = async () => {
     try {
       const response = await makeInvoiceApi.getPending({ limit: 1000 });
@@ -244,7 +275,8 @@ export default function MakeInvoicePage() {
         invoiceDate: new Date().toISOString().split('T')[0],
         qty: "",
         billAmount: "",
-        invoiceFile: null,
+        invoiceFile: "",
+        invoiceFileName: "",
       })
       setInvoiceType("")
       
@@ -289,7 +321,7 @@ export default function MakeInvoicePage() {
             invoice_date: invoiceType === 'independent' ? invoiceData.invoiceDate : null,
             qty: invoiceData.qty || null,
             bill_amount: invoiceType === 'independent' ? invoiceData.billAmount : null,
-            invoice_copy: invoiceData.invoiceFile ? invoiceData.invoiceFile.name : null,
+            invoice_copy: invoiceData.invoiceFile || null,
         };
 
         try {
@@ -700,11 +732,18 @@ export default function MakeInvoicePage() {
                            accept=".pdf,.jpg,.png"
                            onChange={(e) => {
                              if (e.target.files?.[0]) {
-                               setInvoiceData({ ...invoiceData, invoiceFile: e.target.files[0] })
+                               handleFileUpload(e.target.files[0])
                              }
                            }}
-                           className="cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
+                           className="hidden"
+                           id="invoice-upload"
                          />
+                         <Label 
+                           htmlFor="invoice-upload"
+                           className="flex-1 cursor-pointer border-2 border-dashed border-slate-200 rounded-xl h-10 flex items-center justify-center bg-violet-50/50 hover:bg-violet-50 hover:border-violet-300 transition-all text-sm font-bold text-violet-700 uppercase tracking-tight"
+                         >
+                            {isUploading ? "UPLOADING..." : (invoiceData.invoiceFile ? `REPLACE: ${invoiceData.invoiceFileName}` : "Select File")}
+                         </Label>
                        </div>
                      </div>
 

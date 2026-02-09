@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input"
 import { Upload, X, Plus, Settings2, ShieldAlert, ShieldCheck, Truck, ChevronDown, ChevronUp } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
-import { securityGuardApprovalApi } from "@/lib/api-service"
+import { securityGuardApprovalApi, orderApi } from "@/lib/api-service"
 
 export default function SecurityApprovalPage() {
   const router = useRouter()
@@ -43,10 +43,13 @@ export default function SecurityApprovalPage() {
   const [selectedGroups, setSelectedGroups] = useState<any[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isUploading, setIsUploading] = useState<string | null>(null)
   const [uploadData, setUploadData] = useState({
     biltyNo: "",
-    biltyImage: null as File | null,
-    vehicleImages: [] as File[],
+    biltyImage: "" as string,
+    biltyImageName: "",
+    vehicleImages: [] as string[],
+    vehicleImageNames: [] as string[],
     checklist: {
       mallLoad: false,
       qtyMatch: false,
@@ -102,6 +105,45 @@ export default function SecurityApprovalPage() {
       setHistoryOrders([]);
     }
   };
+  
+  const handleFileUpload = async (file: File, type: 'bilty' | 'vehicle') => {
+    if (!file) return;
+    
+    const uploadId = type === 'bilty' ? 'bilty' : `vehicle-${Date.now()}`;
+    setIsUploading(uploadId);
+    
+    try {
+      const response = await orderApi.uploadFile(file);
+      if (response.success) {
+        if (type === 'bilty') {
+          setUploadData(p => ({
+            ...p,
+            biltyImage: response.data.url,
+            biltyImageName: file.name
+          }));
+        } else {
+          setUploadData(p => ({
+            ...p,
+            vehicleImages: [...p.vehicleImages, response.data.url],
+            vehicleImageNames: [...p.vehicleImageNames, file.name]
+          }));
+        }
+        toast({
+          title: "Upload Successful",
+          description: `${file.name} uploaded successfully.`
+        });
+      }
+    } catch (error: any) {
+      console.error("Upload failed:", error);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload file to S3",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(null);
+    }
+  };
 
   useEffect(() => {
     fetchPendingApprovals();
@@ -138,8 +180,8 @@ export default function SecurityApprovalPage() {
           if (recordId) {
             const submitData = {
               bilty_no: uploadData.biltyNo || null,
-              bilty_image: uploadData.biltyImage?.name || null,
-              vehicle_image_attachemrnt: uploadData.vehicleImages.length > 0 ? uploadData.vehicleImages.map(f => f.name).join(',') : null,
+              bilty_image: uploadData.biltyImage || null,
+              vehicle_image_attachemrnt: uploadData.vehicleImages.length > 0 ? uploadData.vehicleImages.join(',') : null,
             };
 
             console.log('[SECURITY] Submitting approval for ID:', recordId, submitData);
@@ -173,8 +215,10 @@ export default function SecurityApprovalPage() {
         setIsDialogOpen(false);
         setUploadData({
           biltyNo: "",
-          biltyImage: null,
+          biltyImage: "",
+          biltyImageName: "",
           vehicleImages: [],
+          vehicleImageNames: [],
           checklist: {
             mallLoad: false,
             qtyMatch: false,
@@ -355,8 +399,10 @@ export default function SecurityApprovalPage() {
       
       setUploadData({
         biltyNo: "",
-        biltyImage: null,
+        biltyImage: "",
+        biltyImageName: "",
         vehicleImages: [],
+        vehicleImageNames: [],
         checklist: {
           mallLoad: false,
           qtyMatch: false,
@@ -702,11 +748,11 @@ export default function SecurityApprovalPage() {
                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Bilty Image</Label>
                                <div className="relative h-14">
                                   <Input type="file" className="hidden" id="bilty-img" onChange={(e) => {
-                                      if (e.target.files?.[0]) setUploadData(p => ({...p, biltyImage: e.target.files![0]}))
+                                      if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'bilty')
                                   }} />
                                   <Label htmlFor="bilty-img" className="absolute inset-0 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center bg-white cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all">
                                      <span className="text-[11px] font-black uppercase text-slate-400 tracking-widest">
-                                        {uploadData.biltyImage ? "IMAGE SELECTED" : "UPLOAD SCANNED COPY"}
+                                        {isUploading === 'bilty' ? "UPLOADING..." : (uploadData.biltyImage ? `DONE: ${uploadData.biltyImageName}` : "UPLOAD SCANNED COPY")}
                                      </span>
                                   </Label>
                                </div>
@@ -725,20 +771,24 @@ export default function SecurityApprovalPage() {
                          <div className="space-y-3">
                             <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Vehicle Proof Images</Label>
                             <div className="flex flex-wrap gap-4">
-                               {uploadData.vehicleImages.map((file, idx) => (
+                               {uploadData.vehicleImages.map((url, idx) => (
                                  <div key={idx} className="w-24 h-24 rounded-2xl border-2 border-slate-100 overflow-hidden relative group shadow-sm">
-                                    <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
+                                    <img src={url} className="w-full h-full object-cover" />
                                     <button onClick={() => {
                                       const images = [...uploadData.vehicleImages]
+                                      const names = [...uploadData.vehicleImageNames]
                                       images.splice(idx, 1)
-                                      setUploadData(p => ({...p, vehicleImages: images}))
+                                      names.splice(idx, 1)
+                                      setUploadData(p => ({...p, vehicleImages: images, vehicleImageNames: names}))
                                     }} className="absolute inset-0 bg-red-600/80 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><X className="w-4 h-4" /></button>
                                  </div>
                                ))}
                                <label className="w-24 h-24 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center bg-white cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all">
-                                  <Plus className="w-7 h-7 text-slate-200" />
+                                  {isUploading?.startsWith('vehicle') ? "..." : <Plus className="w-7 h-7 text-slate-200" />}
                                   <input type="file" multiple className="hidden" onChange={(e) => {
-                                      if (e.target.files) setUploadData(p => ({...p, vehicleImages: [...p.vehicleImages, ...Array.from(e.target.files!)]}))
+                                      if (e.target.files) {
+                                        Array.from(e.target.files).forEach(file => handleFileUpload(file, 'vehicle'))
+                                      }
                                   }} />
                                </label>
                             </div>

@@ -72,12 +72,18 @@ async function request<T = any>(
 ): Promise<T> {
   const url = `${API_CONFIG.baseURL}${endpoint}`;
   
+  const headers: any = {
+    ...options.headers,
+  };
+
+  // Only set Content-Type to application/json if not FormData
+  if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const config: RequestInit = {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
   };
 
   try {
@@ -106,6 +112,19 @@ export const orderApi = {
     return request(API_ENDPOINTS.orders.create, {
       method: 'POST',
       body: JSON.stringify(orderData),
+    });
+  },
+
+  /**
+   * Upload file to S3
+   */
+  uploadFile: async (file: File): Promise<ApiResponse<{ url: string }>> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    return request(API_ENDPOINTS.orders.upload, {
+      method: 'POST',
+      body: formData,
     });
   },
 

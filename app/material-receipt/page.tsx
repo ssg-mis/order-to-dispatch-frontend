@@ -23,7 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Upload, CheckCircle, Settings2, AlertTriangle } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
-import { confirmMaterialReceiptApi } from "@/lib/api-service"
+import { confirmMaterialReceiptApi, orderApi } from "@/lib/api-service"
 
 export default function MaterialReceiptPage() {
   const router = useRouter()
@@ -44,13 +44,16 @@ export default function MaterialReceiptPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   // Receipt Form State
+  const [isUploading, setIsUploading] = useState<string | null>(null)
   const [receiptData, setReceiptData] = useState({
     receivedDate: "",
     hasDamage: "no",
     damageSku: "",
     damageQty: "",
-    damageImage: null as File | null,
-    receivedProof: null as File | null,
+    damageImage: "" as string,
+    damageImageName: "",
+    receivedProof: "" as string,
+    receivedProofName: "",
     remarks: "",
   })
 
@@ -77,6 +80,43 @@ export default function MaterialReceiptPage() {
         console.error("Failed to fetch history:", error);
     }
   }
+
+  const handleFileUpload = async (file: File, type: 'damage' | 'proof') => {
+    if (!file) return;
+    
+    setIsUploading(type);
+    try {
+      const response = await orderApi.uploadFile(file);
+      if (response.success) {
+        if (type === 'damage') {
+          setReceiptData(p => ({
+            ...p,
+            damageImage: response.data.url,
+            damageImageName: file.name
+          }));
+        } else {
+          setReceiptData(p => ({
+            ...p,
+            receivedProof: response.data.url,
+            receivedProofName: file.name
+          }));
+        }
+        toast({
+          title: "Upload Successful",
+          description: `${file.name} uploaded successfully.`
+        });
+      }
+    } catch (error: any) {
+      console.error("Upload failed:", error);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload file to S3",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(null);
+    }
+  };
 
   useEffect(() => {
     fetchPending();
@@ -215,8 +255,10 @@ export default function MaterialReceiptPage() {
         hasDamage: "no",
         damageSku: "",
         damageQty: "",
-        damageImage: null,
-        receivedProof: null,
+        damageImage: "",
+        damageImageName: "",
+        receivedProof: "",
+        receivedProofName: "",
         remarks: "",
       })
       
@@ -260,10 +302,10 @@ export default function MaterialReceiptPage() {
         const submitData = {
             material_received_date: receiptData.receivedDate,
             damage_status: receiptData.hasDamage === "yes" ? "Damaged" : "Delivered",
-            received_image_proof: receiptData.receivedProof ? receiptData.receivedProof.name : null,
+            received_image_proof: receiptData.receivedProof || null,
             sku: receiptData.hasDamage === "yes" ? receiptData.damageSku : null,
             damage_qty: receiptData.hasDamage === "yes" ? receiptData.damageQty : null,
-            damage_image: (receiptData.hasDamage === "yes" && receiptData.damageImage) ? receiptData.damageImage.name : null,
+            damage_image: (receiptData.hasDamage === "yes" && receiptData.damageImage) ? receiptData.damageImage : null,
             remarks_3: receiptData.remarks || null
         };
 
@@ -633,16 +675,16 @@ export default function MaterialReceiptPage() {
                                      accept="image/*"
                                      onChange={(e) => {
                                        if (e.target.files?.[0]) {
-                                         setReceiptData({ ...receiptData, damageImage: e.target.files[0] })
+                                         handleFileUpload(e.target.files[0], 'damage')
                                        }
                                      }}
                                      className="hidden"
                                      id="damage-upload"
                                    />
-                                   <label htmlFor="damage-upload" className="cursor-pointer">
+                                   <label htmlFor="damage-upload" className="cursor-pointer block">
                                        <Upload className="h-5 w-5 mx-auto mb-1 text-red-500" />
-                                       <span className="text-xs text-muted-foreground block">
-                                           {receiptData.damageImage ? receiptData.damageImage.name : "Upload Damage Image"}
+                                       <span className="text-xs font-bold text-slate-700 uppercase tracking-tight block">
+                                           {isUploading === 'damage' ? "UPLOADING..." : (receiptData.damageImage ? `REPLACE: ${receiptData.damageImageName}` : "Upload Damage Image")}
                                        </span>
                                    </label>
                                </div>
@@ -650,28 +692,28 @@ export default function MaterialReceiptPage() {
                          </div>
                      )}
 
-                     <div className="space-y-2">
-                       <Label>Received Image (Proof)</Label>
-                       <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-slate-50">
-                           <Input
-                             type="file"
-                             accept="image/*,.pdf"
-                             onChange={(e) => {
-                               if (e.target.files?.[0]) {
-                                 setReceiptData({ ...receiptData, receivedProof: e.target.files[0] })
-                               }
-                             }}
-                             className="hidden"
-                             id="proof-upload"
-                           />
-                           <label htmlFor="proof-upload" className="cursor-pointer">
-                               <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
-                               <span className="text-xs text-muted-foreground block">
-                                   {receiptData.receivedProof ? receiptData.receivedProof.name : "Click to upload Proof"}
-                               </span>
-                           </label>
-                       </div>
-                     </div>
+                      <div className="space-y-2">
+                        <Label>Received Image (Proof)</Label>
+                        <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-slate-50 transition-colors bg-blue-50/20">
+                            <Input
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => {
+                                if (e.target.files?.[0]) {
+                                  handleFileUpload(e.target.files[0], 'proof')
+                                }
+                              }}
+                              className="hidden"
+                              id="proof-upload"
+                            />
+                            <label htmlFor="proof-upload" className="cursor-pointer block">
+                                <Upload className="h-6 w-6 mx-auto mb-1 text-blue-600" />
+                                <span className="text-xs font-bold text-slate-700 uppercase tracking-tight block">
+                                    {isUploading === 'proof' ? "UPLOADING..." : (receiptData.receivedProof ? `REPLACE: ${receiptData.receivedProofName}` : "Click to upload Proof")}
+                                </span>
+                            </label>
+                        </div>
+                      </div>
 
                      <div className="space-y-2">
                        <Label>Remarks</Label>

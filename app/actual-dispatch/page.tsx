@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Settings2, ChevronDown, ChevronUp, Truck, Weight } from "lucide-react"
-import { actualDispatchApi, vehicleDetailsApi, materialLoadApi, skuApi } from "@/lib/api-service"
+import { actualDispatchApi, vehicleDetailsApi, materialLoadApi, skuApi, orderApi } from "@/lib/api-service"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function ActualDispatchPage() {
@@ -73,10 +73,14 @@ export default function ActualDispatchPage() {
     reason: "",
     truckNo: "",
     vehicleNoPlateImage: "",
+    vehicleNoPlateImage_file_name: "",
     checkStatus: "",
     remarks: "",
     extraWeight: "0",
+    weightmentSlip_file_name: "",
   })
+  
+  const [isUploading, setIsUploading] = useState<string | null>(null)
   
   // Date validation for vehicle documents (Min Today + 5 days)
   const minDate = useMemo(() => {
@@ -85,13 +89,40 @@ export default function ActualDispatchPage() {
     return d.toISOString().split("T")[0]
   }, [])
 
-  const handleFileChange = (field: string, fileNameField: string, file: File | null) => {
-    if (file) {
-      setVehicleData(p => ({
-        ...p,
-        [field]: "uploaded", // Or some placeholder
-        [fileNameField]: file.name
-      }))
+  const handleFileChange = async (field: string, fileNameField: string, file: File | null, type: 'vehicle' | 'load' = 'vehicle') => {
+    if (!file) return
+
+    setIsUploading(field)
+    try {
+      const response = await orderApi.uploadFile(file)
+      if (response.success) {
+        if (type === 'vehicle') {
+          setVehicleData(p => ({
+            ...p,
+            [field]: response.data.url,
+            [fileNameField]: file.name
+          }))
+        } else {
+          setLoadData(p => ({
+            ...p,
+            [field]: response.data.url,
+            [fileNameField]: file.name
+          }))
+        }
+        toast({
+          title: "Upload Successful",
+          description: `${file.name} has been uploaded.`,
+        })
+      }
+    } catch (error: any) {
+      console.error("Upload failed:", error)
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload file to S3",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUploading(null)
     }
   }
 
@@ -528,6 +559,8 @@ export default function ActualDispatchPage() {
             checkStatus: "",
             remarks: "",
             extraWeight: "0",
+            weightmentSlip_file_name: "",
+            vehicleNoPlateImage_file_name: "",
           })
       }
   }
@@ -1103,7 +1136,7 @@ export default function ActualDispatchPage() {
                                       <div className="flex items-center gap-2">
                                          <Input type="file" className="hidden" id="fitness-doc" onChange={(e) => handleFileChange('fitness', 'fitness_file_name', e.target.files?.[0] || null)} />
                                          <Label htmlFor="fitness-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                            {vehicleData.fitness_file_name ? 'REPLACE' : 'UPLOAD'}
+                                            {isUploading === 'fitness' ? "..." : (vehicleData.fitness_file_name ? 'REPLACE' : 'UPLOAD')}
                                          </Label>
                                       </div>
                                    </div>
@@ -1123,7 +1156,7 @@ export default function ActualDispatchPage() {
                                       <div className="flex items-center gap-2">
                                          <Input type="file" className="hidden" id="ins-doc" onChange={(e) => handleFileChange('insurance', 'insurance_file_name', e.target.files?.[0] || null)} />
                                          <Label htmlFor="ins-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                            {vehicleData.insurance_file_name ? 'REPLACE' : 'UPLOAD'}
+                                            {isUploading === 'insurance' ? "..." : (vehicleData.insurance_file_name ? 'REPLACE' : 'UPLOAD')}
                                          </Label>
                                       </div>
                                    </div>
@@ -1143,7 +1176,7 @@ export default function ActualDispatchPage() {
                                       <div className="flex items-center gap-2">
                                          <Input type="file" className="hidden" id="tax-doc" onChange={(e) => handleFileChange('tax_copy', 'tax_file_name', e.target.files?.[0] || null)} />
                                          <Label htmlFor="tax-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                            {vehicleData.tax_file_name ? 'REPLACE' : 'UPLOAD'}
+                                            {isUploading === 'tax_copy' ? "..." : (vehicleData.tax_file_name ? 'REPLACE' : 'UPLOAD')}
                                          </Label>
                                       </div>
                                    </div>
@@ -1163,7 +1196,7 @@ export default function ActualDispatchPage() {
                                       <div className="flex items-center gap-2">
                                          <Input type="file" className="hidden" id="poll-doc" onChange={(e) => handleFileChange('polution', 'pollution_file_name', e.target.files?.[0] || null)} />
                                          <Label htmlFor="poll-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                            {vehicleData.pollution_file_name ? 'REPLACE' : 'UPLOAD'}
+                                            {isUploading === 'polution' ? "..." : (vehicleData.pollution_file_name ? 'REPLACE' : 'UPLOAD')}
                                          </Label>
                                       </div>
                                    </div>
@@ -1183,7 +1216,7 @@ export default function ActualDispatchPage() {
                                       <div className="flex items-center gap-2">
                                          <Input type="file" className="hidden" id="permit1-doc" onChange={(e) => handleFileChange('permit1', 'permit1_file_name', e.target.files?.[0] || null)} />
                                          <Label htmlFor="permit1-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                            {vehicleData.permit1_file_name ? 'REPLACE' : 'UPLOAD'}
+                                            {isUploading === 'permit1' ? "..." : (vehicleData.permit1_file_name ? 'REPLACE' : 'UPLOAD')}
                                          </Label>
                                       </div>
                                    </div>
@@ -1203,7 +1236,7 @@ export default function ActualDispatchPage() {
                                       <div className="flex items-center gap-2">
                                          <Input type="file" className="hidden" id="permit2-doc" onChange={(e) => handleFileChange('permit2_out_state', 'permit2_file_name', e.target.files?.[0] || null)} />
                                          <Label htmlFor="permit2-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                            {vehicleData.permit2_file_name ? 'REPLACE' : 'UPLOAD'}
+                                            {isUploading === 'permit2_out_state' ? "..." : (vehicleData.permit2_file_name ? 'REPLACE' : 'UPLOAD')}
                                          </Label>
                                       </div>
                                    </div>
@@ -1269,6 +1302,28 @@ export default function ActualDispatchPage() {
                              <div className="space-y-1.5">
                                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Truck No</Label>
                                 <Input className="h-10 border-slate-200 rounded-lg font-bold bg-slate-50 font-mono uppercase" value={loadData.truckNo || vehicleNumber} readOnly />
+                             </div>
+                             <div className="space-y-1.5">
+                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex justify-between items-center">
+                                   Weightment Slip {loadData.weightmentSlip_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.weightmentSlip_file_name})</span>}
+                                </Label>
+                                <div className="flex gap-2">
+                                   <Input type="file" className="hidden" id="weightment-slip" onChange={(e) => handleFileChange('weightmentSlip', 'weightmentSlip_file_name', e.target.files?.[0] || null, 'load')} />
+                                   <Label htmlFor="weightment-slip" className="h-10 flex-1 flex items-center justify-center bg-slate-100 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-black text-slate-600 cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all">
+                                      {isUploading === 'weightmentSlip' ? "..." : (loadData.weightmentSlip ? 'REPLACE' : 'UPLOAD')}
+                                   </Label>
+                                </div>
+                             </div>
+                             <div className="space-y-1.5">
+                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex justify-between items-center">
+                                   No Plate Image {loadData.vehicleNoPlateImage_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.vehicleNoPlateImage_file_name})</span>}
+                                </Label>
+                                <div className="flex gap-2">
+                                   <Input type="file" className="hidden" id="no-plate" onChange={(e) => handleFileChange('vehicleNoPlateImage', 'vehicleNoPlateImage_file_name', e.target.files?.[0] || null, 'load')} />
+                                   <Label htmlFor="no-plate" className="h-10 flex-1 flex items-center justify-center bg-slate-100 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-black text-slate-600 cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all">
+                                      {isUploading === 'vehicleNoPlateImage' ? "..." : (loadData.vehicleNoPlateImage ? 'REPLACE' : 'UPLOAD')}
+                                   </Label>
+                                </div>
                              </div>
                           </div>
 
