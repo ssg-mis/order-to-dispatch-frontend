@@ -1429,11 +1429,11 @@ export default function PreApprovalPage() {
                                                  onChange={(e) => {
                                                    const newOrderQtyStr = e.target.value;
                                                    const newOrderQty = parseFloat(newOrderQtyStr) || 0;
-                                                   const currentApprQty = parseFloat(productRates[rowKey]?.approvalQty || "0") || 0;
                                                    
-                                                   if (productRates[rowKey]?.approvalQty && currentApprQty > newOrderQty) {
-                                                     setQtyValidationErrors(prev => ({ ...prev, [rowKey]: `Max ${newOrderQty}` }));
-                                                   } else if (qtyValidationErrors[rowKey]) {
+                                                   // Calculate original total order qty budget
+                                                   const originalTotalOrderQty = orderDetails._products.reduce((sum: number, p: any) => sum + (parseFloat(p.orderQty) || 0), 0);
+                                                   
+                                                   if (qtyValidationErrors[rowKey]) {
                                                      const newErrors = { ...qtyValidationErrors };
                                                      delete newErrors[rowKey];
                                                      setQtyValidationErrors(newErrors);
@@ -1528,6 +1528,7 @@ export default function PreApprovalPage() {
                                                 
                                                 // Calculate total order qty for all products in this order
                                                 const allProducts = [...orderDetails._products, ...(dialogNewProducts[baseDo] || [])]
+                                                const originalTotalOrderQty = orderDetails._products.reduce((sum: number, p: any) => sum + (parseFloat(p.orderQty) || 0), 0);
                                                 const totalOrderQty = allProducts.reduce((sum, p) => {
                                                   const pQty = p._isNew 
                                                     ? (parseFloat(productRates[p._rowKey]?.orderQty || '0') || 0) 
@@ -1544,11 +1545,16 @@ export default function PreApprovalPage() {
                                                   return sum + approvalQty
                                                 }, 0)
                                                 
-                                                // Validate against total order qty
-                                                if (value && totalApprovalQty > totalOrderQty) {
+                                                // Validate against total original budget and row max
+                                                if (value && totalApprovalQty > originalTotalOrderQty) {
                                                   setQtyValidationErrors({
                                                     ...qtyValidationErrors,
-                                                    [rowKey]: `Total max ${totalOrderQty}`
+                                                    [rowKey]: `Total Approved exceeds original budget ${originalTotalOrderQty}`
+                                                  })
+                                                } else if (value && qty > maxQty) {
+                                                  setQtyValidationErrors({
+                                                    ...qtyValidationErrors,
+                                                    [rowKey]: `Row max is ${maxQty}`
                                                   })
                                                 } else {
                                                   const newErrors = {...qtyValidationErrors}
@@ -1925,7 +1931,7 @@ export default function PreApprovalPage() {
                     <TabsContent key={oilType} value={oilType} className="h-full focus-visible:ring-0 mt-0 data-[state=inactive]:hidden">
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full pb-4">
                         {/* Bulk SKUs Category */}
-                        <div className="flex flex-col h-full bg-blue-50/30 rounded-[2rem] border-2 border-blue-100/50 overflow-hidden shadow-inner">
+                        <div className="flex flex-col h-full bg-blue-50/30 rounded-4xl border-2 border-blue-100/50 overflow-hidden shadow-inner">
                           <div className="p-5 flex items-center justify-between border-b border-blue-100/50">
                             <div className="flex items-center gap-3">
                               <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-200">
@@ -1942,7 +1948,7 @@ export default function PreApprovalPage() {
                                }).length} SKUS
                             </Badge>
                           </div>
-                          <div className="flex-1 overflow-y-auto px-2 py-2 max-h-[480px] scrollbar-auto border-t border-blue-100/30">
+                          <div className="flex-1 overflow-y-auto px-2 py-2 max-h-120 scrollbar-auto border-t border-blue-100/30">
                             <Table>
                               <TableBody>
                                  {prices
@@ -1972,7 +1978,7 @@ export default function PreApprovalPage() {
                         </div>
 
                         {/* Retail SKUs Category */}
-                        <div className="flex flex-col h-full bg-green-50/30 rounded-[2rem] border-2 border-green-100/50 overflow-hidden shadow-inner">
+                        <div className="flex flex-col h-full bg-green-50/30 rounded-4xl border-2 border-green-100/50 overflow-hidden shadow-inner">
                           <div className="p-5 flex items-center justify-between border-b border-green-100/50">
                             <div className="flex items-center gap-3">
                               <div className="bg-green-600 p-2 rounded-xl shadow-lg shadow-green-200">
@@ -1989,7 +1995,7 @@ export default function PreApprovalPage() {
                                }).length} SKUS
                             </Badge>
                           </div>
-                          <div className="flex-1 overflow-y-auto px-2 py-2 max-h-[480px] scrollbar-auto border-t border-green-100/30">
+                          <div className="flex-1 overflow-y-auto px-2 py-2 max-h-120 scrollbar-auto border-t border-green-100/30">
                             <Table>
                               <TableBody>
                                  {prices

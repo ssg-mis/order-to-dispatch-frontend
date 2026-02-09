@@ -43,6 +43,18 @@ export default function ActualDispatchPage() {
     polution: "",
     permit1: "",
     permit2_out_state: "",
+    fitness_file_name: "",
+    insurance_file_name: "",
+    tax_file_name: "",
+    pollution_file_name: "",
+    permit1_file_name: "",
+    permit2_file_name: "",
+    fitness_end_date: "",
+    insurance_end_date: "",
+    tax_end_date: "",
+    pollution_end_date: "",
+    permit1_end_date: "",
+    permit2_end_date: "",
   })
 
   const [loadData, setLoadData] = useState({
@@ -65,6 +77,23 @@ export default function ActualDispatchPage() {
     remarks: "",
     extraWeight: "0",
   })
+  
+  // Date validation for vehicle documents (Min Today + 5 days)
+  const minDate = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 5)
+    return d.toISOString().split("T")[0]
+  }, [])
+
+  const handleFileChange = (field: string, fileNameField: string, file: File | null) => {
+    if (file) {
+      setVehicleData(p => ({
+        ...p,
+        [field]: "uploaded", // Or some placeholder
+        [fileNameField]: file.name
+      }))
+    }
+  }
 
   // --- Helper Functions (Moved up to fix initialization errors) ---
   const formatDate = (dateStr: string) => {
@@ -467,6 +496,18 @@ export default function ActualDispatchPage() {
             polution: "",
             permit1: "",
             permit2_out_state: "",
+            fitness_file_name: "",
+            insurance_file_name: "",
+            tax_file_name: "",
+            pollution_file_name: "",
+            permit1_file_name: "",
+            permit2_file_name: "",
+            fitness_end_date: "",
+            insurance_end_date: "",
+            tax_end_date: "",
+            pollution_end_date: "",
+            permit1_end_date: "",
+            permit2_end_date: "",
           })
           setLoadData({
             actualQty: String(targetGroups.flatMap(g => g._allProducts).reduce((sum, p) => sum + parseFloat(p.qtyToDispatch || "0"), 0)),
@@ -510,6 +551,28 @@ export default function ActualDispatchPage() {
       return;
     }
 
+    // Validate Document End Dates (Min Today + 5 Days)
+    const dateFields = [
+      { key: 'fitness_end_date', label: 'Fitness' },
+      { key: 'insurance_end_date', label: 'Insurance' },
+      { key: 'tax_end_date', label: 'Tax' },
+      { key: 'pollution_end_date', label: 'Pollution' },
+      { key: 'permit1_end_date', label: 'Permit 1' },
+      { key: 'permit2_end_date', label: 'Permit 2' },
+    ];
+
+    for (const field of dateFields) {
+      const dateVal = vehicleData[field.key as keyof typeof vehicleData];
+      if (dateVal && dateVal < minDate) {
+        toast({ 
+          title: "Date Error", 
+          description: `${field.label} End Date must be at least 5 days from today (Min: ${formatDate(minDate)})`, 
+          variant: "destructive" 
+        });
+        return;
+      }
+    }
+
     setIsProcessing(true)
     try {
       if (selectedGroups.length === 0 || dialogSelectedProducts.length === 0) {
@@ -531,10 +594,8 @@ export default function ActualDispatchPage() {
         const confirmedQty = confirmDetails[rowKey]?.qty || item.qtyToDispatch;
 
         try {
-          console.log('[CONSOLIDATED SUBMIT] for DSR:', dsrNumber);
-          
           // Combine ALL fields into one request
-          const res = await actualDispatchApi.submit(dsrNumber, {
+          const payload = {
             // Stage 5 fields
             product_name_1: item.productName || item.product_name,
             actual_qty_dispatch: confirmedQty || item.qtyToDispatch,
@@ -549,6 +610,14 @@ export default function ActualDispatchPage() {
             polution: vehicleData.polution || "pending",
             permit1: vehicleData.permit1 || "pending",
             permit2_out_state: vehicleData.permit2_out_state || "pending",
+
+            // End Dates
+            fitness_end_date: vehicleData.fitness_end_date || null,
+            insurance_end_date: vehicleData.insurance_end_date || null,
+            tax_end_date: vehicleData.tax_end_date || null,
+            pollution_end_date: vehicleData.pollution_end_date || null,
+            permit1_end_date: vehicleData.permit1_end_date || null,
+            permit2_end_date: vehicleData.permit2_end_date || null,
             
             // Stage 7 fields
             actual_qty: parseFloat(loadData.actualQty) || parseFloat(confirmedQty),
@@ -562,7 +631,11 @@ export default function ActualDispatchPage() {
             truck_no: loadData.truckNo || vehicleNumber,
             vehicle_no_plate_image: loadData.vehicleNoPlateImage || "pending",
             extra_weight: parseFloat(loadData.extraWeight) || 0
-          });
+          };
+
+          console.log('[CONSOLIDATED SUBMIT] Payload for DSR:', dsrNumber, payload);
+          
+          const res = await actualDispatchApi.submit(dsrNumber, payload);
           
           if (!res.success) throw new Error(res.message);
 
@@ -636,7 +709,7 @@ export default function ActualDispatchPage() {
                 Columns
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[250px] max-h-[400px] overflow-y-auto">
+            <DropdownMenuContent align="end" className="w-62.5 max-h-100 overflow-y-auto">
               {PAGE_COLUMNS.map((col) => (
                 <DropdownMenuCheckboxItem
                   key={col.id}
@@ -659,7 +732,7 @@ export default function ActualDispatchPage() {
           </Button>
         </div>
 
-        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
+        <Card className="border-none shadow-sm overflow-auto max-h-150">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>
@@ -889,7 +962,7 @@ export default function ActualDispatchPage() {
                     <Table>
                         <TableHeader className="bg-slate-50 sticky top-0 z-10">
                             <TableRow>
-                                <TableHead className="w-[50px] text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">
+                                <TableHead className="w-12.5 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">
                                     <Checkbox 
                                         checked={dialogSelectedProducts.length > 0 && dialogSelectedProducts.length === selectedGroups.reduce((s, g) => s + g._allProducts.length, 0)}
                                         onCheckedChange={(checked) => {
@@ -906,8 +979,8 @@ export default function ActualDispatchPage() {
                                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">PRODUCT NAME</TableHead>
                                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">PLANNED QTY</TableHead>
                                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">DELIVERY FROM</TableHead>
-                                <TableHead className="w-[180px] text-[10px] uppercase font-black text-slate-500 tracking-wider">ACTUAL QTY DISPATCHED</TableHead>
-                                <TableHead className="w-[120px] text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">WEIGHT (KG)</TableHead>
+                                <TableHead className="w-45 text-[10px] uppercase font-black text-slate-500 tracking-wider">ACTUAL QTY DISPATCHED</TableHead>
+                                <TableHead className="w-30 text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">WEIGHT (KG)</TableHead>
                                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">STATUS</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -1022,36 +1095,126 @@ export default function ActualDispatchPage() {
                          <div className="pt-4 border-t border-slate-200">
                             <p className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest leading-none">Digital Documents (STAGE 6)</p>
                             <div className="grid grid-cols-2 gap-3">
-                               <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex items-center justify-between group cursor-pointer hover:border-purple-400 transition-colors">
-                                  <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">Fitness</span>
-                                  <Input type="file" className="hidden" id="fitness-doc" />
-                                  <Label htmlFor="fitness-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">UPLOAD</Label>
-                               </div>
-                               <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex items-center justify-between group cursor-pointer hover:border-purple-400 transition-colors">
-                                  <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">Insurance</span>
-                                  <Input type="file" className="hidden" id="ins-doc" />
-                                  <Label htmlFor="ins-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">UPLOAD</Label>
-                               </div>
-                               <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex items-center justify-between group cursor-pointer hover:border-purple-400 transition-colors">
-                                  <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">Tax Copy</span>
-                                  <Input type="file" className="hidden" id="tax-doc" />
-                                  <Label htmlFor="tax-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">UPLOAD</Label>
-                               </div>
-                               <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex items-center justify-between group cursor-pointer hover:border-purple-400 transition-colors">
-                                  <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">Pollution</span>
-                                  <Input type="file" className="hidden" id="poll-doc" />
-                                  <Label htmlFor="poll-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">UPLOAD</Label>
-                               </div>
-                               <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex items-center justify-between group cursor-pointer hover:border-purple-400 transition-colors">
-                                  <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">Permit 1</span>
-                                  <Input type="file" className="hidden" id="permit1-doc" />
-                                  <Label htmlFor="permit1-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">UPLOAD</Label>
-                               </div>
-                               <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex items-center justify-between group cursor-pointer hover:border-purple-400 transition-colors">
-                                  <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">Permit 2</span>
-                                  <Input type="file" className="hidden" id="permit2-doc" />
-                                  <Label htmlFor="permit2-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">UPLOAD</Label>
-                               </div>
+                                <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
+                                   <div className="flex items-center justify-between w-full">
+                                      <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                                         Fitness {vehicleData.fitness_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.fitness_file_name})</span>}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                         <Input type="file" className="hidden" id="fitness-doc" onChange={(e) => handleFileChange('fitness', 'fitness_file_name', e.target.files?.[0] || null)} />
+                                         <Label htmlFor="fitness-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                            {vehicleData.fitness_file_name ? 'REPLACE' : 'UPLOAD'}
+                                         </Label>
+                                      </div>
+                                   </div>
+                                   <Input 
+                                      type="date" 
+                                      className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
+                                      min={minDate}
+                                      value={vehicleData.fitness_end_date}
+                                      onChange={(e) => setVehicleData(p => ({...p, fitness_end_date: e.target.value}))}
+                                   />
+                                </div>
+                                <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
+                                   <div className="flex items-center justify-between w-full">
+                                      <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                                         Insurance {vehicleData.insurance_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.insurance_file_name})</span>}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                         <Input type="file" className="hidden" id="ins-doc" onChange={(e) => handleFileChange('insurance', 'insurance_file_name', e.target.files?.[0] || null)} />
+                                         <Label htmlFor="ins-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                            {vehicleData.insurance_file_name ? 'REPLACE' : 'UPLOAD'}
+                                         </Label>
+                                      </div>
+                                   </div>
+                                   <Input 
+                                      type="date" 
+                                      className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
+                                      min={minDate}
+                                      value={vehicleData.insurance_end_date}
+                                      onChange={(e) => setVehicleData(p => ({...p, insurance_end_date: e.target.value}))}
+                                   />
+                                </div>
+                                <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
+                                   <div className="flex items-center justify-between w-full">
+                                      <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                                         Tax Copy {vehicleData.tax_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.tax_file_name})</span>}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                         <Input type="file" className="hidden" id="tax-doc" onChange={(e) => handleFileChange('tax_copy', 'tax_file_name', e.target.files?.[0] || null)} />
+                                         <Label htmlFor="tax-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                            {vehicleData.tax_file_name ? 'REPLACE' : 'UPLOAD'}
+                                         </Label>
+                                      </div>
+                                   </div>
+                                   <Input 
+                                      type="date" 
+                                      className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
+                                      min={minDate}
+                                      value={vehicleData.tax_end_date}
+                                      onChange={(e) => setVehicleData(p => ({...p, tax_end_date: e.target.value}))}
+                                   />
+                                </div>
+                                <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
+                                   <div className="flex items-center justify-between w-full">
+                                      <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                                         Pollution {vehicleData.pollution_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.pollution_file_name})</span>}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                         <Input type="file" className="hidden" id="poll-doc" onChange={(e) => handleFileChange('polution', 'pollution_file_name', e.target.files?.[0] || null)} />
+                                         <Label htmlFor="poll-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                            {vehicleData.pollution_file_name ? 'REPLACE' : 'UPLOAD'}
+                                         </Label>
+                                      </div>
+                                   </div>
+                                   <Input 
+                                      type="date" 
+                                      className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
+                                      min={minDate}
+                                      value={vehicleData.pollution_end_date}
+                                      onChange={(e) => setVehicleData(p => ({...p, pollution_end_date: e.target.value}))}
+                                   />
+                                </div>
+                                <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
+                                   <div className="flex items-center justify-between w-full">
+                                      <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                                         Permit 1 {vehicleData.permit1_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit1_file_name})</span>}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                         <Input type="file" className="hidden" id="permit1-doc" onChange={(e) => handleFileChange('permit1', 'permit1_file_name', e.target.files?.[0] || null)} />
+                                         <Label htmlFor="permit1-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                            {vehicleData.permit1_file_name ? 'REPLACE' : 'UPLOAD'}
+                                         </Label>
+                                      </div>
+                                   </div>
+                                   <Input 
+                                      type="date" 
+                                      className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
+                                      min={minDate}
+                                      value={vehicleData.permit1_end_date}
+                                      onChange={(e) => setVehicleData(p => ({...p, permit1_end_date: e.target.value}))}
+                                   />
+                                </div>
+                                <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
+                                   <div className="flex items-center justify-between w-full">
+                                      <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                                         Permit 2 {vehicleData.permit2_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit2_file_name})</span>}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                         <Input type="file" className="hidden" id="permit2-doc" onChange={(e) => handleFileChange('permit2_out_state', 'permit2_file_name', e.target.files?.[0] || null)} />
+                                         <Label htmlFor="permit2-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                            {vehicleData.permit2_file_name ? 'REPLACE' : 'UPLOAD'}
+                                         </Label>
+                                      </div>
+                                   </div>
+                                   <Input 
+                                      type="date" 
+                                      className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
+                                      min={minDate}
+                                      value={vehicleData.permit2_end_date}
+                                      onChange={(e) => setVehicleData(p => ({...p, permit2_end_date: e.target.value}))}
+                                   />
+                                </div>
                             </div>
                          </div>
 
