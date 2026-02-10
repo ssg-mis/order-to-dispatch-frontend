@@ -92,6 +92,7 @@ export default function PreApprovalPage() {
   const [selectedProductRows, setSelectedProductRows] = useState<string[]>([])
   const [qtyValidationErrors, setQtyValidationErrors] = useState<{ [key: string]: string }>({})
   const [rateValidationErrors, setRateValidationErrors] = useState<{ [key: string]: string }>({})
+  const [qtyInfoNotices, setQtyInfoNotices] = useState<{ [key: string]: string }>({})
 
   const [history, setHistory] = useState<any[]>([])
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
@@ -1417,40 +1418,43 @@ export default function PreApprovalPage() {
                                               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{product._originalOrderId}</span>
                                             </div>
                                           </TableCell>
-                                           <TableCell className="p-3">
-                                             {!isNew ? (
-                                               <Badge variant="outline" className="border-blue-200 text-blue-700 font-black px-2">{maxQty}</Badge>
-                                             ) : (
-                                               <Input 
-                                                 type="number"
-                                                 className="h-9 w-20 text-xs font-black bg-blue-50 border-blue-200 focus:border-blue-500"
-                                                 value={productRates[rowKey]?.orderQty || ""}
-                                                 placeholder="Qty"
-                                                 onChange={(e) => {
-                                                   const newOrderQtyStr = e.target.value;
-                                                   const newOrderQty = parseFloat(newOrderQtyStr) || 0;
-                                                   
-                                                   // Calculate original total order qty budget
-                                                   const originalTotalOrderQty = orderDetails._products.reduce((sum: number, p: any) => sum + (parseFloat(p.orderQty) || 0), 0);
-                                                   
-                                                   if (qtyValidationErrors[rowKey]) {
-                                                     const newErrors = { ...qtyValidationErrors };
-                                                     delete newErrors[rowKey];
-                                                     setQtyValidationErrors(newErrors);
-                                                   }
-
-                                                   setProductRates({
-                                                     ...productRates,
-                                                     [rowKey]: {
-                                                       ...productRates[rowKey],
-                                                       orderQty: newOrderQtyStr
-                                                     }
-                                                   })
-                                                 }}
-                                                 disabled={!isSelected}
-                                               />
+                                          <TableCell className="p-3">
+                                            <div className="flex flex-col gap-1">
+                                              {!isNew ? (
+                                                <>
+                                                  <Badge variant="outline" className="border-blue-200 text-blue-700 font-black px-2">{maxQty}</Badge>
+                                                  {/* Show remaining qty if approval_qty < order_qty */}
+                                                  {product.approvalQty && parseFloat(product.approvalQty) > 0 && parseFloat(product.approvalQty) < maxQty && (
+                                                    <span className="text-[9px] text-amber-600 font-bold">
+                                                      Remaining: {maxQty - parseFloat(product.approvalQty)}
+                                                    </span>
+                                                  )}
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Input 
+                                                  type="number"
+                                                  className="h-9 w-20 text-xs font-black bg-gray-100 border-gray-200"
+                                                  value={(() => {
+                                                    // Auto-fill from parent product's order qty
+                                                    const currentOilType = (productRates[rowKey]?.productName || "").toLowerCase();
+                                                    const sameOilTypeProducts = orderDetails._products.filter((p: any) => {
+                                                      const pOilType = (p.oilType || p.productName || "").toLowerCase();
+                                                      return pOilType.includes("palm") && currentOilType.includes("palm") ||
+                                                             (pOilType.includes("rice") || pOilType.includes("rbo")) && (currentOilType.includes("rice") || currentOilType.includes("rbo")) ||
+                                                             (pOilType.includes("soya") || pOilType.includes("sbo")) && (currentOilType.includes("soya") || currentOilType.includes("sbo")) ||
+                                                             pOilType.includes("sunflower") && currentOilType.includes("sunflower");
+                                                    });
+                                                    return sameOilTypeProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.orderQty) || 0), 0) || "";
+                                                  })()}
+                                                  placeholder="Auto"
+                                                  disabled={true}
+                                                  readOnly={true}
+                                                />
+                                                </>
                                              )}
-                                           </TableCell>
+                                           </div>
+                                          </TableCell>
                                           <TableCell className="p-2 min-w-45">
                                               <Select 
                                                 value={productRates[rowKey]?.skuName || ""} 
@@ -1464,27 +1468,22 @@ export default function PreApprovalPage() {
                                                 {skuMaster.filter(sku => {
                                                   const skuLower = sku.toLowerCase();
                                                   
-                                                  // Check if SKU matches ANY oil type present in this order group
-                                                  const matchesAnyOilType = groupOilTypes.some(oilType => {
-                                                    if (oilType.includes("palm")) {
-                                                      return skuLower.includes("palm");
-                                                    } else if (oilType.includes("rice") || oilType.includes("rbo")) {
-                                                      return skuLower.includes("rbo") || skuLower.includes("rice");
-                                                    } else if (oilType.includes("soya") || oilType.includes("sbo")) {
-                                                      return skuLower.includes("sbo") || skuLower.includes("soya");
-                                                    } else if (oilType.includes("sunflower")) {
-                                                      return skuLower.includes("sun");
-                                                    }
-                                                    return false;
-                                                  });
+                                                  // Get this specific product's oil type
+                                                  const productOilType = (product.oilType || product.productName || "").toLowerCase();
                                                   
-                                                  // If no specific oil type identified in group, show all (fallback)
-                                                  const hasIdentifiedOilTypes = groupOilTypes.some(ot => 
-                                                    ot.includes("palm") || ot.includes("rice") || ot.includes("rbo") || 
-                                                    ot.includes("soya") || ot.includes("sbo") || ot.includes("sunflower")
-                                                  );
-
-                                                  return !hasIdentifiedOilTypes || matchesAnyOilType;
+                                                  // Filter SKU based on this product's oil type only
+                                                  if (productOilType.includes("palm")) {
+                                                    return skuLower.includes("palm");
+                                                  } else if (productOilType.includes("rice") || productOilType.includes("rbo")) {
+                                                    return skuLower.includes("rbo") || skuLower.includes("rice");
+                                                  } else if (productOilType.includes("soya") || productOilType.includes("sbo")) {
+                                                    return skuLower.includes("sbo") || skuLower.includes("soya");
+                                                  } else if (productOilType.includes("sunflower")) {
+                                                    return skuLower.includes("sun");
+                                                  }
+                                                  
+                                                  // If no specific oil type identified, show all SKUs (fallback)
+                                                  return true;
                                                 }).map((sku) => (
                                                   <SelectItem key={sku} value={sku} className="cursor-pointer py-2.5 px-4 text-xs font-bold hover:bg-blue-50 hover:text-blue-700 transition-colors">
                                                     {sku.replace(/MLT/g, 'ML')}
@@ -1545,22 +1544,126 @@ export default function PreApprovalPage() {
                                                   return sum + approvalQty
                                                 }, 0)
                                                 
-                                                // Validate against total original budget and row max
+                                                // Validate only against total original budget (flexible distribution allowed)
                                                 if (value && totalApprovalQty > originalTotalOrderQty) {
                                                   setQtyValidationErrors({
                                                     ...qtyValidationErrors,
-                                                    [rowKey]: `Total Approved exceeds original budget ${originalTotalOrderQty}`
-                                                  })
-                                                } else if (value && qty > maxQty) {
-                                                  setQtyValidationErrors({
-                                                    ...qtyValidationErrors,
-                                                    [rowKey]: `Row max is ${maxQty}`
+                                                    [rowKey]: `Total exceeds budget ${originalTotalOrderQty}`
                                                   })
                                                 } else {
                                                   const newErrors = {...qtyValidationErrors}
                                                   delete newErrors[rowKey]
                                                   setQtyValidationErrors(newErrors)
                                                 }
+                                                
+                                                // Add informational notice if using other oil types' budget
+                                                // Group by oil type to handle multiple SKUs for same product
+                                                const currentOilType = (product.oilType || product.productName || productRates[rowKey]?.productName || "").toLowerCase()
+                                                
+                                                // Calculate total order qty for THIS oil type (ONLY from original products, not new SKUs)
+                                                const sameOilTypeProducts = allProducts.filter(p => {
+                                                  if (p._isNew) return false; // Exclude new SKUs from budget calculation
+                                                  const pOilType = (p.oilType || p.productName || "").toLowerCase()
+                                                  return pOilType.includes("palm") && currentOilType.includes("palm") ||
+                                                         (pOilType.includes("rice") || pOilType.includes("rbo")) && (currentOilType.includes("rice") || currentOilType.includes("rbo")) ||
+                                                         (pOilType.includes("soya") || pOilType.includes("sbo")) && (currentOilType.includes("soya") || currentOilType.includes("sbo")) ||
+                                                         pOilType.includes("sunflower") && currentOilType.includes("sunflower")
+                                                })
+                                                
+                                                const totalOilTypeOrderQty = sameOilTypeProducts.reduce((sum, p) => {
+                                                  return sum + (parseFloat(p.orderQty) || 0)
+                                                }, 0)
+                                                
+                                                // Calculate ALREADY APPROVED qty for THIS oil type (excluding current row)
+                                                const alreadyApprovedQty = allProducts.reduce((sum, p) => {
+                                                  const pKey = p._rowKey
+                                                  if (pKey === rowKey) return sum; // Skip current row
+                                                  
+                                                  // Check if same oil type
+                                                  const pOilType = (p.oilType || p.productName || (p._isNew ? productRates[pKey]?.productName : "")).toLowerCase()
+                                                  const isSameType = 
+                                                    pOilType.includes("palm") && currentOilType.includes("palm") ||
+                                                    (pOilType.includes("rice") || pOilType.includes("rbo")) && (currentOilType.includes("rice") || currentOilType.includes("rbo")) ||
+                                                    (pOilType.includes("soya") || pOilType.includes("sbo")) && (currentOilType.includes("soya") || currentOilType.includes("sbo")) ||
+                                                    pOilType.includes("sunflower") && currentOilType.includes("sunflower")
+                                                  
+                                                  if (!isSameType) return sum;
+                                                  
+                                                  const pApproved = parseFloat(productRates[pKey]?.approvalQty || '0') || 0
+                                                  return sum + pApproved
+                                                }, 0)
+                                                
+                                                // Calculate REMAINING budget for this oil type
+                                                const remainingBudget = totalOilTypeOrderQty - alreadyApprovedQty
+                                                
+                                                // Calculate total approved qty for THIS oil type (including current change)
+                                                const totalOilTypeApprovedQty = alreadyApprovedQty + qty
+                                                
+                                                // Check if exceeding THIS oil type's total budget
+                                                if (value && totalOilTypeApprovedQty > totalOilTypeOrderQty) {
+                                                  // Exceeding budget - need to borrow from other oil types
+                                                  const usedFromSameOil = remainingBudget > 0 ? remainingBudget : 0
+                                                  const borrowedQty = qty - usedFromSameOil
+                                                  
+                                                  // Find products of OTHER oil types (only original products)
+                                                  const otherOilTypeProducts = allProducts.filter(p => {
+                                                    if (p._isNew) return false; // Exclude new SKUs
+                                                    const pOilType = (p.oilType || p.productName || "").toLowerCase()
+                                                    const isSameType = 
+                                                      pOilType.includes("palm") && currentOilType.includes("palm") ||
+                                                      (pOilType.includes("rice") || pOilType.includes("rbo")) && (currentOilType.includes("rice") || currentOilType.includes("rbo")) ||
+                                                      (pOilType.includes("soya") || pOilType.includes("sbo")) && (currentOilType.includes("soya") || currentOilType.includes("sbo")) ||
+                                                      pOilType.includes("sunflower") && currentOilType.includes("sunflower")
+                                                    return !isSameType
+                                                  })
+                                                  
+                                                  // Calculate remaining budget in other oil types
+                                                  const otherOilTypeRemaining = otherOilTypeProducts.reduce((sum, p) => {
+                                                    const pOrderQty = parseFloat(p.orderQty) || 0
+                                                    const pApproved = parseFloat(productRates[p._rowKey]?.approvalQty || '0') || 0
+                                                    return sum + (pOrderQty - pApproved)
+                                                  }, 0)
+                                                  
+                                                  const otherOilTypeName = otherOilTypeProducts[0]?.productName || otherOilTypeProducts[0]?.oilType || 'other product'
+                                                  const sameOilTypeName = sameOilTypeProducts[0]?.productName || sameOilTypeProducts[0]?.oilType || 'product'
+                                                  
+                                                  // Check if we have enough in other oil types
+                                                  if (otherOilTypeRemaining >= borrowedQty) {
+                                                    // Can borrow from other oil types
+                                                    if (usedFromSameOil > 0) {
+                                                      setQtyInfoNotices({
+                                                        ...qtyInfoNotices,
+                                                        [rowKey]: `Using ${usedFromSameOil} from ${sameOilTypeName}, ${borrowedQty} from ${otherOilTypeName}`
+                                                      })
+                                                    } else {
+                                                      setQtyInfoNotices({
+                                                        ...qtyInfoNotices,
+                                                        [rowKey]: `Using ${borrowedQty} from ${otherOilTypeName}`
+                                                      })
+                                                    }
+                                                  } else {
+                                                    // Not enough budget even after borrowing - show exceed message
+                                                    const totalAvailable = remainingBudget + otherOilTypeRemaining
+                                                    setQtyInfoNotices({
+                                                      ...qtyInfoNotices,
+                                                      [rowKey]: `⚠️ Exceeds total available budget (${totalAvailable} available)`
+                                                    })
+                                                  }
+                                                } else if (value && qty > 0) {
+                                                  // Within budget - show informational notice
+                                                  const sameOilTypeName = sameOilTypeProducts[0]?.productName || sameOilTypeProducts[0]?.oilType || 'product'
+                                                  setQtyInfoNotices({
+                                                    ...qtyInfoNotices,
+                                                    [rowKey]: `Using ${qty} from ${sameOilTypeName}'s ${totalOilTypeOrderQty} budget`
+                                                  })
+                                                } else {
+                                                  const newNotices = {...qtyInfoNotices}
+                                                  delete newNotices[rowKey]
+                                                  setQtyInfoNotices(newNotices)
+                                                }
+                                                
+                                                
+                                                
                                                 setProductRates({ 
                                                   ...productRates, 
                                                   [rowKey]: { 
@@ -1572,6 +1675,11 @@ export default function PreApprovalPage() {
                                               disabled={!isSelected}
                                             />
                                             {hasError && <p className="text-[9px] text-red-600 font-black mt-1 uppercase tracking-tighter text-center">{hasError}</p>}
+                                            {!hasError && qtyInfoNotices[rowKey] && (
+                                              <p className="text-[9px] text-blue-600 font-bold mt-1 tracking-tight text-center leading-tight">
+                                                ℹ️ {qtyInfoNotices[rowKey]}
+                                              </p>
+                                            )}
                                           </TableCell>
                                           <TableCell className="p-2">
                                             <div className="relative">
@@ -1672,8 +1780,9 @@ export default function PreApprovalPage() {
                                        <TableCell className="p-3">
                                          <Badge variant="secondary" className="bg-blue-100 text-blue-800 font-black px-2 shadow-sm border-blue-200">
                                            {[...orderDetails._products, ...(dialogNewProducts[baseDo] || [])].reduce((sum: number, p: any) => {
-                                             const rowKey = p._rowKey;
-                                             const qty = p._isNew ? (parseFloat(productRates[rowKey]?.orderQty || "0") || 0) : (parseFloat(p.orderQty) || 0);
+                                             // Only count original products, not new SKUs
+                                             if (p._isNew) return sum;
+                                             const qty = parseFloat(p.orderQty) || 0;
                                              return sum + qty;
                                            }, 0)}
                                          </Badge>
@@ -1714,6 +1823,7 @@ export default function PreApprovalPage() {
                       setSelectedProductRows([])
                       setQtyValidationErrors({})
                       setRateValidationErrors({})
+                      setQtyInfoNotices({})
                     }}>Cancel</Button>
                     <Button 
                       onClick={() => {
