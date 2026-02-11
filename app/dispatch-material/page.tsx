@@ -39,6 +39,7 @@ export default function DispatchMaterialPage() {
 
   const PAGE_COLUMNS = [
     { id: "orderNo", label: "DO Number" },
+    { id: "processId", label: "Process ID" },
     { id: "customerName", label: "Customer Name" },
     { id: "productName", label: "Products Name" },
     { id: "transportType", label: "Type of Transporting" },
@@ -75,6 +76,7 @@ export default function DispatchMaterialPage() {
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
     "orderNo",
+    "processId",
     "customerName",
     "productName",
     "transportType",
@@ -444,6 +446,7 @@ export default function DispatchMaterialPage() {
     return Object.values(grouped).map((group: any) => ({
       ...group,
       orderNo: group._displayDo,
+      processId: group.processid || group._allProducts[0]?.processid || "—",
       transportType: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.transportType))).filter(t => t && t !== "—").join(", ") || "—",
       _productCount: group._allProducts.length
     })).filter(group => group._productCount > 0)

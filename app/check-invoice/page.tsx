@@ -199,7 +199,8 @@ export default function CheckInvoicePage() {
           vehicle_no_plate_image: order.vehicle_no_plate_image,
           bilty_image: order.bilty_image,
           vehicle_image_attachemrnt: order.vehicle_image_attachemrnt,
-          reason_of_difference_in_weight_if_any_speacefic: order.reason_of_difference_in_weight_if_any_speacefic
+          reason_of_difference_in_weight_if_any_speacefic: order.reason_of_difference_in_weight_if_any_speacefic,
+          processid: order.processid || null
        }
        
        group._ordersMap[orderKey]._products.push(product)
@@ -210,7 +211,8 @@ export default function CheckInvoicePage() {
     // Convert Set to string for display
     return Object.values(grouped).map(group => ({
        ...group,
-       doNumber: Array.from(group.doNumberList).join(", ")
+       doNumber: Array.from(group.doNumberList).join(", "),
+       processId: group._allProducts[0]?.processid || "—"
     }))
   }, [filteredPendingOrders])
 
@@ -396,6 +398,7 @@ export default function CheckInvoicePage() {
                     <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
@@ -409,6 +412,7 @@ export default function CheckInvoicePage() {
                         <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                       </TableCell>
                       <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
+                      <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
                       <TableCell className="text-center text-xs">{group.customerName}</TableCell>
                       <TableCell className="text-center">
                         <Badge variant="secondary">{group._productCount} items</Badge>
@@ -420,7 +424,7 @@ export default function CheckInvoicePage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     No invoices pending for review
                   </TableCell>
                 </TableRow>

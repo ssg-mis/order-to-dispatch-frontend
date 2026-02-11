@@ -186,6 +186,7 @@ export default function ActualDispatchPage() {
 
   const PAGE_COLUMNS = [
     { id: "orderNo", label: "DO Number" },
+    { id: "processId", label: "Process ID" },
     { id: "customerName", label: "Customer Name" },
     { id: "qtyToDispatch", label: "Qty to Dispatch" },
     { id: "deliveryFrom", label: "Delivery From" },
@@ -231,6 +232,7 @@ export default function ActualDispatchPage() {
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
     "orderNo",
+    "processId",
     "customerName",
     "qtyToDispatch",
     "deliveryFrom",
@@ -461,7 +463,8 @@ export default function ActualDispatchPage() {
           qtyToDispatch: order.qty_to_be_dispatched || order.qtyToDispatch,
           deliveryFrom: order.dispatch_from || order.deliveryFrom,
           dsrNumber: order.d_sr_number,
-          rate: order.final_rate || order.rate_of_material
+          rate: order.final_rate || order.rate_of_material,
+          processid: order.processid || null
        }
        
        grouped[custName]._ordersMap[baseDo]._products.push(productMeta)
@@ -471,6 +474,7 @@ export default function ActualDispatchPage() {
     return Object.values(grouped).map((group: any) => ({
        ...group,
        orderNo: Array.from(group._allBaseDos).join(", "),
+       processId: group._allProducts[0]?.processid || "—",
        qtyToDispatch: group._allProducts.reduce((sum: number, p: any) => sum + parseFloat(p.qtyToDispatch || 0), 0),
        _productCount: group._allProducts.length
     }))

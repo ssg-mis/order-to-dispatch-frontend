@@ -227,7 +227,8 @@ export default function MakeInvoicePage() {
           remarks: order.remarks,
           weightment_slip_copy: order.weightment_slip_copy,
           reasonForDiff: order.reason_of_difference_in_weight_if_any_speacefic,
-          bilty_no: order.bilty_no
+          bilty_no: order.bilty_no,
+          processid: order.processid || null
        }
        
        group._ordersMap[orderKey]._products.push(product)
@@ -238,7 +239,8 @@ export default function MakeInvoicePage() {
     // Finalize groups
     return Object.values(grouped).map(group => ({
       ...group,
-      doNumber: Array.from(group.doNumberList as Set<string>).join(", ")
+      doNumber: Array.from(group.doNumberList as Set<string>).join(", "),
+      processId: group._allProducts[0]?.processid || "—"
     }))
   }, [filteredPendingOrders])
 
@@ -439,6 +441,7 @@ export default function MakeInvoicePage() {
                     <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
@@ -452,6 +455,7 @@ export default function MakeInvoicePage() {
                         <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                       </TableCell>
                       <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
+                      <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
                       <TableCell className="text-center text-xs">{group.customerName}</TableCell>
                       <TableCell className="text-center">
                         <Badge variant="secondary">{group._productCount} items</Badge>
@@ -463,7 +467,7 @@ export default function MakeInvoicePage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     No orders pending for invoice creation
                   </TableCell>
                 </TableRow>

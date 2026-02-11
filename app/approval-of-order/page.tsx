@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useToast } from "@/hooks/use-toast"
 import { useState, useEffect, useMemo } from "react"
@@ -96,6 +97,8 @@ export default function CommitmentReviewPage() {
     overall: "approve",
     confirm: "approve",
   })
+
+  const [processId, setProcessId] = useState<string>("")
 
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
 
@@ -290,6 +293,7 @@ export default function CommitmentReviewPage() {
               dispatch_date_confirmed: checklistValues.dispatch === "approve",
               overall_status_of_order: checklistValues.overall === "approve" ? "Approved" : "Rejected",
               order_confirmation_with_customer: checklistValues.confirm === "approve",
+              processid: processId || null, // Add Process ID to the submission
             };
 
             console.log('[APPROVAL] Submitting to API:', {
@@ -812,6 +816,25 @@ export default function CommitmentReviewPage() {
                 </div>
 
                 <div className="py-6 space-y-4">
+                  {/* Process ID Input */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 px-1 uppercase tracking-tight">
+                      <div className="w-1.5 h-4 bg-blue-600 rounded-full" />
+                      Process ID
+                    </h3>
+                    <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
+                      <Label className="text-sm font-semibold text-slate-700 mb-2 block">Enter Process ID</Label>
+                      <Input 
+                        type="text"
+                        placeholder="Enter process ID..."
+                        value={processId}
+                        onChange={(e) => setProcessId(e.target.value)}
+                        className="w-full h-11 text-sm font-medium border-slate-200 focus:border-blue-500 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Six-Point Verification */}
                   <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 px-1 uppercase tracking-tight">
                     <div className="w-1.5 h-4 bg-blue-600 rounded-full" />
                     Six-Point Verification
