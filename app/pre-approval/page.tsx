@@ -1174,7 +1174,7 @@ export default function PreApprovalPage() {
                   Process Selected ({selectedRows.length})
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-6xl max-w-6xl! max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-4xl lg:max-w-6xl xl:max-w-7xl max-h-[95vh] overflow-y-auto p-3 sm:p-6">
                 <DialogHeader className="border-b pb-4">
                   <DialogTitle className="text-xl font-bold text-slate-900 leading-none">Complete Pre-Approval ({allProductsFromSelectedOrders.length} Products)</DialogTitle>
                   <DialogDescription className="text-slate-500 mt-1.5">Select and edit products to approve. Only checked products will be processed.</DialogDescription>
@@ -1203,7 +1203,7 @@ export default function PreApprovalPage() {
 
                         return (
                           <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
-                            <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
+                            <div className="bg-blue-600 px-3 sm:px-5 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 cursor-pointer" onClick={toggleExpand}>
                                <div className="flex items-center gap-4">
                                  <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
                                     ORDER: {baseDo}
@@ -1229,7 +1229,7 @@ export default function PreApprovalPage() {
                             {isExpanded && (
                               <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
                                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                                     <div>
                                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Customer Name</p>
                                       <p className="text-sm font-bold text-slate-900 leading-tight">{customerGrp.customerName || "—"}</p>
@@ -1338,11 +1338,11 @@ export default function PreApprovalPage() {
                               </div>
                             )}
 
-                            <div className="flex justify-between items-center px-5 pt-4">
-                                <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-2 sm:px-5 pt-4">
+                                <h3 className="text-xs sm:text-sm font-bold text-slate-700 flex items-center gap-2">
                                     <Badge variant="outline" className="bg-blue-50">SKU LIST</Badge>
                                 </h3>
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
                                     <Button 
                                         onClick={() => {
                                             fetchAndCalculateRates({
@@ -1353,29 +1353,30 @@ export default function PreApprovalPage() {
                                         }}
                                         variant="outline" 
                                         size="sm" 
-                                        className="h-8 gap-2 bg-white hover:bg-green-50 text-green-600 border-green-200"
+                                        className="h-8 gap-2 bg-white hover:bg-green-50 text-green-600 border-green-200 text-xs"
                                     >
-                                        <Search className="h-4 w-4" /> View Catalog
+                                        <Search className="h-3 w-3 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">View Catalog</span><span className="sm:hidden">Catalog</span>
                                     </Button>
                                     <Button 
                                         onClick={() => handleAddProductRow(baseDo, orderDetails)}
                                         variant="outline" 
                                         size="sm" 
-                                        className="h-8 gap-2 bg-white hover:bg-blue-50 text-blue-600 border-blue-200"
+                                        className="h-8 gap-2 bg-white hover:bg-blue-50 text-blue-600 border-blue-200 text-xs"
                                     >
-                                        <Plus className="h-4 w-4" /> Add SKU
+                                        <Plus className="h-3 w-3 sm:h-4 sm:w-4" /> Add SKU
                                     </Button>
                                 </div>
                             </div>
 
                             {/* Render Product Table for this DO */}
-                            <div className="px-5 pb-6">
+                            <div className="px-2 sm:px-5 pb-6">
                               {(() => {
                                 const sectionProducts = [...orderDetails._products, ...(dialogNewProducts[baseDo] || [])];
                                 const groupOilTypes = Array.from(new Set(sectionProducts.map((p: any) => (p.oilType || "").toLowerCase())));
                                 
                                 return (
                                   <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                                    <div className="overflow-x-auto">
                                     <Table>
                                   <TableHeader>
                                     <TableRow className="bg-slate-50 border-b">
@@ -1385,7 +1386,7 @@ export default function PreApprovalPage() {
                                       <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Select SKU</TableHead>
                                       <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Rate (Mat.)</TableHead>
                                       <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Appr. Qty</TableHead>
-                                       <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Final Rate</TableHead>
+                                       <TableHead className="min-w-[140px] text-[10px] uppercase font-black text-slate-500 tracking-wider">Final Rate</TableHead>
                                        <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Remarks</TableHead>
                                        <TableHead className="w-10 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">Action</TableHead>
                                      </TableRow>
@@ -1681,13 +1682,13 @@ export default function PreApprovalPage() {
                                               </p>
                                             )}
                                           </TableCell>
-                                          <TableCell className="p-2">
+                                          <TableCell className="p-2 min-w-[140px]">
                                             <div className="relative">
-                                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-400 text-[10px] font-black">₹</span>
+                                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-400 text-xs font-black">₹</span>
                                               <Input 
                                                 type="number" 
                                                 className={cn(
-                                                  "h-9 text-xs bg-white font-black text-blue-700 border-slate-200 focus:border-blue-500 focus:ring-blue-500 pl-5",
+                                                  "h-11 w-full text-sm bg-white font-black text-blue-700 border-slate-200 focus:border-blue-500 focus:ring-blue-500 pl-6 pr-3",
                                                   rateValidationErrors[rowKey] && "border-red-500 ring-1 ring-red-500"
                                                 )}
                                                 value={productRates[rowKey]?.rate || ""} 
@@ -1800,6 +1801,7 @@ export default function PreApprovalPage() {
                                     </TableRow>
                                   </tfoot>
                                 </Table>
+                                    </div>
                               </div>
                                     )
                                   })()}

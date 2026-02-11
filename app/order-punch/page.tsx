@@ -1141,14 +1141,14 @@ export default function OrderPunchPage() {
                           </div>
                       
                           {/* Rate field for both types, but auto-filled for Pre-Approval */}
-                          <div className="space-y-1.5 col-span-2 md:col-span-1">
+                          <div className="space-y-1.5 col-span-2 md:col-span-2">
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate</Label>
                              <Input
                                type="number"
                                value={product.rate}
                                onChange={(e) => updateProduct(product.id, "rate", e.target.value)}
                                placeholder="0.00"
-                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600"
+                               className="bg-background h-11 min-w-[120px] border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600 text-base px-3"
                              />
                           </div>
 
