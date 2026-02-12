@@ -2143,7 +2143,7 @@ export default function PreApprovalPage() {
             )}
           </div>
           
-          <DialogFooter className="px-2 pb-2 mt-4">
+          {/* <DialogFooter className="px-2 pb-2 mt-4">
             <Button
               type="button"
               variant="outline"
@@ -2152,7 +2152,7 @@ export default function PreApprovalPage() {
             >
               Close Catalog
             </Button>
-          </DialogFooter>
+          </DialogFooter> */}
         </DialogContent>
       </Dialog>
     </WorkflowStageShell>
