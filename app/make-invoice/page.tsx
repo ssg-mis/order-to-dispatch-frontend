@@ -46,7 +46,7 @@ export default function MakeInvoicePage() {
   const [isUploading, setIsUploading] = useState(false)
   
   // Form State
-  const [invoiceType, setInvoiceType] = useState<"independent" | "common" | "">("")
+  const [invoiceType, setInvoiceType] = useState<"independent" | "common" | "">("independent")
   const [invoiceData, setInvoiceData] = useState({
     invoiceNo: "",
     invoiceDate: new Date().toISOString().split('T')[0], // Default to today
@@ -280,17 +280,43 @@ export default function MakeInvoicePage() {
         invoiceFile: "",
         invoiceFileName: "",
       })
-      setInvoiceType("")
+      setInvoiceType("independent")
       
       setIsDialogOpen(true)
     }
   }
 
+  // Auto-fill Qty and Bill Amount based on selected products
+  useEffect(() => {
+    if (!isDialogOpen || selectedGroups.length === 0) return;
+
+    let totalQty = 0;
+    let totalBillAmount = 0;
+
+    selectedGroups.forEach(group => {
+      group._allProducts.forEach((product: any) => {
+        if (selectedProducts.includes(product._rowKey)) {
+          const qty = parseFloat(product.qtyToDispatch) || 0;
+          // Use final_rate if available (from pre-approval stage)
+          const rate = parseFloat(product.final_rate || product.rate_per_ltr || product.rate_per_15kg || product.rate_of_material || 0);
+          totalQty += qty;
+          totalBillAmount += qty * rate;
+        }
+      });
+    });
+
+    setInvoiceData(prev => ({
+      ...prev,
+      qty: totalQty.toString(),
+      billAmount: totalBillAmount.toFixed(2)
+    }));
+  }, [selectedProducts, isDialogOpen, selectedGroups]);
+
   const handleSubmit = async () => {
-    if (selectedGroups.length === 0 || !invoiceType || !invoiceData.invoiceNo) {
+    if (selectedGroups.length === 0 || !invoiceData.invoiceNo || !invoiceData.invoiceFile) {
         toast({
             title: "Validation Error",
-            description: "Please fill all required invoice details.",
+            description: "Please fill all required invoice details (Invoice Number and Copy).",
             variant: "destructive"
         })
         return
@@ -707,19 +733,6 @@ export default function MakeInvoicePage() {
                  
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                      <div className="space-y-2">
-                         <Label>Bill Type <span className="text-red-500">*</span></Label>
-                         <Select value={invoiceType} onValueChange={(val: any) => setInvoiceType(val)}>
-                           <SelectTrigger>
-                             <SelectValue placeholder="Select Type" />
-                           </SelectTrigger>
-                           <SelectContent>
-                             <SelectItem value="independent">Independent</SelectItem>
-                             <SelectItem value="common">Common</SelectItem>
-                           </SelectContent>
-                         </Select>
-                     </div>
-
-                     <div className="space-y-2">
                        <Label>Invoice Number <span className="text-red-500">*</span></Label>
                        <Input
                          value={invoiceData.invoiceNo}
@@ -729,7 +742,7 @@ export default function MakeInvoicePage() {
                      </div>
 
                      <div className="space-y-2">
-                       <Label>Upload Invoice Copy</Label>
+                       <Label>Upload Invoice Copy <span className="text-red-500">*</span></Label>
                        <div className="flex items-center gap-2">
                          <Input
                            type="file"
@@ -751,36 +764,13 @@ export default function MakeInvoicePage() {
                        </div>
                      </div>
 
-                     {invoiceType === "independent" && (
-                       <>
-                        <div className="space-y-2">
-                            <Label>Invoice Date</Label>
-                            <Input 
-                                type="date" 
-                                value={invoiceData.invoiceDate} 
-                                onChange={(e) => setInvoiceData({...invoiceData, invoiceDate: e.target.value})} 
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Bill Amount</Label>
-                            <Input
-                                type="number" 
-                                value={invoiceData.billAmount} 
-                                onChange={(e) => setInvoiceData({...invoiceData, billAmount: e.target.value })} 
-                                placeholder="0.00"
-                            />
-                        </div>
-                       </>
-                     )}
-                     
                      <div className="space-y-2">
-                       <Label>Qty</Label>
-                       <Input
-                         type="number"
-                         value={invoiceData.qty}
-                         onChange={(e) => setInvoiceData({ ...invoiceData, qty: e.target.value })}
-                         placeholder="Quantity"
-                       />
+                         <Label>Invoice Date</Label>
+                         <Input 
+                             type="date" 
+                             value={invoiceData.invoiceDate} 
+                             onChange={(e) => setInvoiceData({...invoiceData, invoiceDate: e.target.value})} 
+                         />
                      </div>
                  </div>
               </div>
@@ -793,7 +783,7 @@ export default function MakeInvoicePage() {
             </Button>
             <Button 
               onClick={handleSubmit} 
-              disabled={isProcessing || !invoiceType || !invoiceData.invoiceNo}
+              disabled={isProcessing || !invoiceData.invoiceNo}
               className="bg-blue-600 hover:bg-blue-700 min-w-[150px]"
             >
               {isProcessing ? "Processing..." : "Generate Invoice"}

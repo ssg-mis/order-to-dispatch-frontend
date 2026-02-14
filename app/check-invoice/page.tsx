@@ -19,7 +19,14 @@ import {
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { CheckCircle, Settings2 } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { CheckCircle, Settings2, Eye, FileText } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { checkInvoiceApi } from "@/lib/api-service"
@@ -255,7 +262,16 @@ export default function CheckInvoicePage() {
     if (selectedGroups.length === 0 || !checkData.status) {
         toast({
             title: "Validation Error",
-            description: "Please enter verification status.",
+            description: "Please select verification status.",
+            variant: "destructive"
+        })
+        return
+    }
+
+    if (checkData.status === "Issue" && !checkData.remarks) {
+        toast({
+            title: "Validation Error",
+            description: "Remarks are mandatory when reporting an issue.",
             variant: "destructive"
         })
         return
@@ -342,7 +358,7 @@ export default function CheckInvoicePage() {
       description="Review and verify invoices grouped by Customer."
       pendingCount={displayRows.length}
       historyData={historyOrders.map((order) => ({
-        date: order.actual_6 ? new Date(order.actual_6).toLocaleDateString("en-GB") : "-",
+        date: order.actual_6 ? new Date(order.actual_6).toLocaleDateString("en-GB") : order.invoice_date || "-",
         stage: "Check Invoice",
         status: order.status_1 || "Verified",
         remarks: order.remarks_2 || "-",
@@ -418,7 +434,11 @@ export default function CheckInvoicePage() {
                         <Badge variant="secondary">{group._productCount} items</Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                         <Badge className="bg-yellow-100 text-yellow-700">Pending Review</Badge>
+                         {group._allProducts.some((p: any) => p.status_1 === "Issue") ? (
+                           <Badge className="bg-red-100 text-red-700">Issue Reported</Badge>
+                         ) : (
+                           <Badge className="bg-yellow-100 text-yellow-700">Pending Review</Badge>
+                         )}
                       </TableCell>
                    </TableRow>
                 ))
@@ -627,7 +647,8 @@ export default function CheckInvoicePage() {
                                   </TableHead>
                                   <TableHead className="text-[10px] uppercase font-black h-10">PRODUCT INFO</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE NO</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">BILL AMOUNT</TableHead>
+                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE COPY</TableHead>
+                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE DATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">ACTUAL QTY</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">TRUCK NO</TableHead>
                                 </TableRow>
@@ -656,8 +677,22 @@ export default function CheckInvoicePage() {
                                     <TableCell className="text-center p-2 text-xs font-bold text-green-700">
                                        {product.invoiceNo || "—"}
                                     </TableCell>
+                                    <TableCell className="text-center p-2">
+                                       {product.invoice_copy ? (
+                                         <Button 
+                                           size="sm" 
+                                           variant="ghost" 
+                                           className="h-7 px-2 text-[10px] font-black text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                           onClick={() => window.open(product.invoice_copy, '_blank')}
+                                         >
+                                           <Eye className="h-3 w-3 mr-1" /> VIEW
+                                         </Button>
+                                       ) : (
+                                         <span className="text-[10px] text-slate-400 font-bold italic tracking-tighter">NO FILE</span>
+                                       )}
+                                    </TableCell>
                                     <TableCell className="text-center p-2 text-xs font-black">
-                                       ₹{product.billAmount || "0"}
+                                       {product.invoiceDate ? new Date(product.invoiceDate).toLocaleDateString("en-GB") : "—"}
                                     </TableCell>
                                     <TableCell className="text-center p-2">
                                       <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">
@@ -690,15 +725,19 @@ export default function CheckInvoicePage() {
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div className="space-y-2">
                    <Label>Verification Status <span className="text-red-500">*</span></Label>
-                   <Input
-                     value={checkData.status}
-                     onChange={(e) => setCheckData({ ...checkData, status: e.target.value })}
-                     placeholder="e.g. Verified, Issues Found"
-                   />
+                   <Select value={checkData.status} onValueChange={(val) => setCheckData({ ...checkData, status: val })}>
+                     <SelectTrigger className="h-10 border-2 focus:ring-2 focus:ring-blue-500 transition-all font-bold tracking-tight bg-white">
+                       <SelectValue placeholder="Select Status" />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="Verified" className="font-bold text-green-600">Verified</SelectItem>
+                       <SelectItem value="Issue" className="font-bold text-red-600">Issue</SelectItem>
+                     </SelectContent>
+                   </Select>
                  </div>
 
                  <div className="space-y-2">
-                   <Label>Remarks</Label>
+                   <Label>Remarks {checkData.status === "Issue" && <span className="text-red-500">*</span>}</Label>
                    <Textarea
                      value={checkData.remarks}
                      onChange={(e) => setCheckData({ ...checkData, remarks: e.target.value })}

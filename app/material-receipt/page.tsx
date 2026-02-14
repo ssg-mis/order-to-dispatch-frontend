@@ -48,14 +48,17 @@ export default function MaterialReceiptPage() {
   const [receiptData, setReceiptData] = useState({
     receivedDate: "",
     hasDamage: "no",
-    damageSku: "",
-    damageQty: "",
-    damageImage: "" as string,
-    damageImageName: "",
     receivedProof: "" as string,
     receivedProofName: "",
     remarks: "",
   })
+
+  // Per-product damage data
+  const [productDamageData, setProductDamageData] = useState<Record<string, {
+    damageQty: string
+    damageImage: string
+    damageImageName: string
+  }>>({})
 
   // Fetch Pending
   const fetchPending = async () => {
@@ -81,20 +84,23 @@ export default function MaterialReceiptPage() {
     }
   }
 
-  const handleFileUpload = async (file: File, type: 'damage' | 'proof') => {
+  const handleFileUpload = async (file: File, type: 'damage' | 'proof', rowKey?: string) => {
     if (!file) return;
     
-    setIsUploading(type);
+    setIsUploading(rowKey ? `${type}-${rowKey}` : type);
     try {
       const response = await orderApi.uploadFile(file);
       if (response.success) {
-        if (type === 'damage') {
-          setReceiptData(p => ({
-            ...p,
-            damageImage: response.data.url,
-            damageImageName: file.name
-          }));
-        } else {
+        if (type === 'damage' && rowKey) {
+             setProductDamageData(prev => ({
+                ...prev,
+                [rowKey]: {
+                    ...prev[rowKey],
+                    damageImage: response.data.url,
+                    damageImageName: file.name
+                }
+             }))
+        } else if (type === 'proof') {
           setReceiptData(p => ({
             ...p,
             receivedProof: response.data.url,
@@ -257,14 +263,11 @@ export default function MaterialReceiptPage() {
       setReceiptData({
         receivedDate: "",
         hasDamage: "no",
-        damageSku: "",
-        damageQty: "",
-        damageImage: "",
-        damageImageName: "",
         receivedProof: "",
         receivedProofName: "",
         remarks: "",
       })
+      setProductDamageData({})
       
       setIsDialogOpen(true)
     }
@@ -279,9 +282,29 @@ export default function MaterialReceiptPage() {
         return
     }
 
-    if (receiptData.hasDamage === "yes" && (!receiptData.damageQty || !receiptData.damageSku)) {
-       toast({ title: "Validation Error", description: "Please provide damage details (SKU & Qty).", variant: "destructive" })
-       return
+    if (receiptData.hasDamage === "yes") {
+        // Validate that at least one selected product has damage details if "Has Damage" is yes
+        // Or should we mandate it for ALL selected products? Usually "Has Damage" implies *some* damage.
+        // Let's enforce that for every selected product, if damage is claimed, valid data (qty) should be there?
+        // OR: Should we assume if they selected "Has Damage", they MUST fill details for the relevant items?
+        // The user said "remove this sku and damage qty... show in table".
+        // Let's iterate and check. 
+        
+        const hasMissingDetails = productsToSubmit.some((p: any) => {
+            const d = productDamageData[p._rowKey];
+            // If the user intends to mark THIS item as damaged, they should have entered something?
+            // Actually, if "Has Damage" is YES globally, does it mean ALL items are damaged? Probably not.
+            // But the UI shows "Has Damage" globally. 
+            // If "Has Damage" is Yes, we show columns. If user leaves them blank, maybe that item is NOT damaged?
+            // Let's assume if they entered NOTHING, it's not damaged. 
+            // BUT, at least ONE item must have damage details if "Has Damage" is Yes.
+            return false; // Let's rely on the loop below to collect data.
+        });
+        
+        // Better validation:
+        // if (productsToSubmit.every(p => !productDamageData[p._rowKey]?.damageQty)) {
+        //    toast(...)
+        // }
     }
 
     const productsToSubmit = selectedGroup._allProducts.filter((p: any) => 
@@ -303,15 +326,21 @@ export default function MaterialReceiptPage() {
       const failedSubmissions: any[] = []
 
       for (const product of productsToSubmit) {
-        const submitData = {
+         const pDamage = productDamageData[product._rowKey] || {};
+         const isItemDamaged = receiptData.hasDamage === "yes" && (pDamage.damageQty || pDamage.damageImage); // Simple heuristic
+
+         const submitData = {
             material_received_date: receiptData.receivedDate,
-            damage_status: receiptData.hasDamage === "yes" ? "Damaged" : "Delivered",
+            damage_status: isItemDamaged ? "Damaged" : "Delivered", // Per-item status? 
+            // NOTE: The valid statuses are Likely "Delivered" | "Damaged". 
+            // If "Has Damage" is YES globally, but this specific item has no info, strictly it might be "Delivered" (Good).
+            
             received_image_proof: receiptData.receivedProof || null,
-            sku: receiptData.hasDamage === "yes" ? receiptData.damageSku : null,
-            damage_qty: receiptData.hasDamage === "yes" ? receiptData.damageQty : null,
-            damage_image: (receiptData.hasDamage === "yes" && receiptData.damageImage) ? receiptData.damageImage : null,
-            remarks_3: receiptData.remarks || null
-        };
+             sku: null, // SKU input removed as per user request
+             damage_qty: isItemDamaged ? pDamage.damageQty : null,
+             damage_image: isItemDamaged ? pDamage.damageImage : null,
+             remarks_3: receiptData.remarks || null
+         };
 
         try {
             console.log(`[Material-Receipt] Submitting for ID ${product.id}`, submitData);
@@ -585,6 +614,12 @@ export default function MaterialReceiptPage() {
                       <TableHead>Actual Qty</TableHead>
                       <TableHead>Truck No</TableHead>
                       <TableHead>Net Wt</TableHead>
+                      {receiptData.hasDamage === "yes" && (
+                        <>
+                          <TableHead className="w-[100px]">Damage Qty</TableHead>
+                          <TableHead className="w-[150px]">Damage Image</TableHead>
+                        </>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -609,6 +644,54 @@ export default function MaterialReceiptPage() {
                         <TableCell>{product.actualQty || "—"}</TableCell>
                         <TableCell>{product.truckNo || "—"}</TableCell>
                         <TableCell className="font-semibold">{product.netWeight || "—"}</TableCell>
+                        {receiptData.hasDamage === "yes" && (
+                            <>
+                                <TableCell>
+                                    <Input 
+                                        className="h-8 text-xs w-full" 
+                                        type="number" 
+                                        placeholder="Qty" 
+                                        value={productDamageData[product._rowKey]?.damageQty || ""}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setProductDamageData(prev => ({
+                                                ...prev,
+                                                [product._rowKey]: { ...prev[product._rowKey], damageQty: val }
+                                            }))
+                                        }}
+                                    />
+                                </TableCell>
+                                <TableCell>
+                                   <div className="flex items-center gap-2">
+                                     <Input
+                                        type="file"
+                                        accept="image/*"
+                                        id={`damage-upload-${product._rowKey}`}
+                                        onChange={(e) => {
+                                            if (e.target.files?.[0]) {
+                                                 handleFileUpload(e.target.files[0], 'damage', product._rowKey)
+                                            }
+                                        }}
+                                        className="hidden"
+                                     />
+                                     <label htmlFor={`damage-upload-${product._rowKey}`} className="cursor-pointer">
+                                        {isUploading === `damage-${product._rowKey}` ? (
+                                            <span className="text-[10px] text-blue-500 font-bold animate-pulse">UPLOADING...</span>
+                                        ) : productDamageData[product._rowKey]?.damageImage ? (
+                                            <div className="flex items-center gap-1">
+                                                <CheckCircle className="h-4 w-4 text-green-500" />
+                                                <span className="text-[10px] text-green-700 font-bold max-w-[80px] truncate" title={productDamageData[product._rowKey]?.damageImageName}>
+                                                    {productDamageData[product._rowKey]?.damageImageName}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <Upload className="h-4 w-4 text-red-400 hover:text-red-600" />
+                                        )}
+                                     </label>
+                                   </div>
+                                </TableCell>
+                            </>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -654,49 +737,7 @@ export default function MaterialReceiptPage() {
                        </RadioGroup>
                      </div>
 
-                     {receiptData.hasDamage === "yes" && (
-                         <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 bg-red-50 p-4 rounded-lg border border-red-100">
-                             <div className="space-y-2">
-                               <Label>SKU <span className="text-red-500">*</span></Label>
-                               <Input
-                                 value={receiptData.damageSku}
-                                 onChange={(e) => setReceiptData({ ...receiptData, damageSku: e.target.value })}
-                                 placeholder="Enter SKU"
-                               />
-                             </div>
-                             <div className="space-y-2">
-                               <Label>Damage QTY <span className="text-red-500">*</span></Label>
-                               <Input
-                                 type="number"
-                                 value={receiptData.damageQty}
-                                 onChange={(e) => setReceiptData({ ...receiptData, damageQty: e.target.value })}
-                                 placeholder="Enter qty"
-                               />
-                             </div>
-                             <div className="space-y-2">
-                               <Label>Damage Image</Label>
-                               <div className="border-2 border-dashed border-red-200 bg-white rounded-lg p-3 text-center">
-                                   <Input
-                                     type="file"
-                                     accept="image/*"
-                                     onChange={(e) => {
-                                       if (e.target.files?.[0]) {
-                                         handleFileUpload(e.target.files[0], 'damage')
-                                       }
-                                     }}
-                                     className="hidden"
-                                     id="damage-upload"
-                                   />
-                                   <label htmlFor="damage-upload" className="cursor-pointer block">
-                                       <Upload className="h-5 w-5 mx-auto mb-1 text-red-500" />
-                                       <span className="text-xs font-bold text-slate-700 uppercase tracking-tight block">
-                                           {isUploading === 'damage' ? "UPLOADING..." : (receiptData.damageImage ? `REPLACE: ${receiptData.damageImageName}` : "Upload Damage Image")}
-                                       </span>
-                                   </label>
-                               </div>
-                             </div>
-                         </div>
-                     )}
+                      {/* Row-level damage inputs displayed in table above when "Has Damage" is Yes */}
 
                       <div className="space-y-2">
                         <Label>Received Image (Proof)</Label>

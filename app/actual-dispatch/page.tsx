@@ -650,6 +650,9 @@ export default function ActualDispatchPage() {
 
     for (const doc of vehicleDocs) {
       const val = vehicleData[doc.key as keyof typeof vehicleData];
+      // Skip required check only for Permit 2 document file
+      if (doc.key === 'permit2_out_state') continue;
+      
       if (!val) {
         toast({ 
           title: "Validation Error", 
@@ -664,8 +667,9 @@ export default function ActualDispatchPage() {
       toast({ title: "Validation Error", description: "Vehicle Check Status is required", variant: "destructive" });
       return;
     }
-    if (!vehicleData.remarks.trim()) {
-      toast({ title: "Validation Error", description: "Vehicle Remarks are required", variant: "destructive" });
+    // Remarks mandatory ONLY if status is Reject
+    if (vehicleData.checkStatus === "Reject" && !vehicleData.remarks.trim()) {
+      toast({ title: "Validation Error", description: "Vehicle Remarks are required for rejection", variant: "destructive" });
       return;
     }
 
@@ -678,14 +682,7 @@ export default function ActualDispatchPage() {
       toast({ title: "Validation Error", description: "RST No is required", variant: "destructive" });
       return;
     }
-    if (!loadData.weightmentSlip) {
-      toast({ title: "Validation Error", description: "Weightment Slip Upload is required", variant: "destructive" });
-      return;
-    }
-    if (!loadData.vehicleNoPlateImage) {
-      toast({ title: "Validation Error", description: "No Plate Image Upload is required", variant: "destructive" });
-      return;
-    }
+    // Weightment Slip and No Plate Image are now optional per user request
     if (!loadData.grossWeight || parseFloat(loadData.grossWeight) <= 0) {
       toast({ title: "Validation Error", description: "Valid Gross Weight is required", variant: "destructive" });
       return;
@@ -702,8 +699,9 @@ export default function ActualDispatchPage() {
       toast({ title: "Validation Error", description: "Transporter Name is required", variant: "destructive" });
       return;
     }
-    if (!loadData.reason.trim()) {
-      toast({ title: "Validation Error", description: "Weight Difference Reason is required", variant: "destructive" });
+    // Reason mandatory ONLY if status is Reject
+    if (loadData.checkStatus === "Reject" && !loadData.reason.trim()) {
+      toast({ title: "Validation Error", description: "Weight Difference Reason is required for load rejection", variant: "destructive" });
       return;
     }
 
@@ -1131,7 +1129,7 @@ export default function ActualDispatchPage() {
                                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">PLANNED QTY</TableHead>
                                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">DELIVERY FROM</TableHead>
                                 <TableHead className="w-45 text-[10px] uppercase font-black text-slate-500 tracking-wider">ACTUAL QTY DISPATCHED</TableHead>
-                                <TableHead className="w-30 text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">WEIGHT (KG)</TableHead>
+                                <TableHead className="w-30 text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">GROSS WEIGHT (KG)</TableHead>
                                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">STATUS</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -1349,7 +1347,7 @@ export default function ActualDispatchPage() {
                                 <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
                                    <div className="flex items-center justify-between w-full">
                                       <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
-                                         Permit 2 <span className="text-red-500">*</span> {vehicleData.permit2_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit2_file_name})</span>}
+                                         Permit 2 {vehicleData.permit2_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit2_file_name})</span>}
                                       </span>
                                       <div className="flex items-center gap-2">
                                          <Input type="file" className="hidden" id="permit2-doc" onChange={(e) => handleFileChange('permit2_out_state', 'permit2_file_name', e.target.files?.[0] || null)} />
@@ -1383,7 +1381,9 @@ export default function ActualDispatchPage() {
                                </Select>
                             </div>
                             <div className="space-y-1.5">
-                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Remarks <span className="text-red-500">*</span></Label>
+                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">
+                                  Remarks {vehicleData.checkStatus === "Reject" ? <span className="text-red-500">*</span> : <span className="text-slate-400 font-normal normal-case">(Optional)</span>}
+                               </Label>
                                <Input 
                                  placeholder="Add notes..." 
                                  className="h-12 border-2 border-slate-200 rounded-xl bg-white font-medium focus:border-purple-500 transition-colors"
@@ -1423,7 +1423,7 @@ export default function ActualDispatchPage() {
                              </div>
                              <div className="space-y-1.5">
                                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex justify-between items-center">
-                                   Weightment Slip <span className="text-red-500">*</span> {loadData.weightmentSlip_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.weightmentSlip_file_name})</span>}
+                                   Weightment Slip <span className="text-slate-400 font-normal normal-case">(Optional)</span> {loadData.weightmentSlip_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.weightmentSlip_file_name})</span>}
                                 </Label>
                                 <div className="flex gap-2">
                                    <Input type="file" className="hidden" id="weightment-slip" onChange={(e) => handleFileChange('weightmentSlip', 'weightmentSlip_file_name', e.target.files?.[0] || null, 'load')} />
@@ -1434,7 +1434,7 @@ export default function ActualDispatchPage() {
                              </div>
                              <div className="space-y-1.5">
                                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex justify-between items-center">
-                                   No Plate Image <span className="text-red-500">*</span> {loadData.vehicleNoPlateImage_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.vehicleNoPlateImage_file_name})</span>}
+                                   No Plate Image <span className="text-slate-400 font-normal normal-case">(Optional)</span> {loadData.vehicleNoPlateImage_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.vehicleNoPlateImage_file_name})</span>}
                                 </Label>
                                 <div className="flex gap-2">
                                    <Input type="file" className="hidden" id="no-plate" onChange={(e) => handleFileChange('vehicleNoPlateImage', 'vehicleNoPlateImage_file_name', e.target.files?.[0] || null, 'load')} />
@@ -1506,7 +1506,9 @@ export default function ActualDispatchPage() {
                           </div>
 
                           <div className="space-y-1.5">
-                             <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Weight Difference Reason <span className="text-red-500">*</span></Label>
+                             <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">
+                                Weight Difference Reason {loadData.checkStatus === "Reject" ? <span className="text-red-500">*</span> : <span className="text-slate-400 font-normal normal-case">(Optional)</span>}
+                             </Label>
                              <Input className="h-10 border-slate-200 rounded-lg font-medium bg-white" placeholder="Specify reason..."
                                value={loadData.reason} onChange={(e) => setLoadData(p => ({...p, reason: e.target.value}))} />
                           </div>

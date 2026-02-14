@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Upload, CheckCircle, Settings2, ChevronUp, ChevronDown, CheckSquare } from "lucide-react"
+import { Upload, CheckCircle, Settings2, ChevronUp, ChevronDown, CheckSquare, Eye } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { gateOutApi, orderApi } from "@/lib/api-service"
@@ -300,6 +300,26 @@ export default function GateOutPage() {
         variant: "destructive"
       })
       return
+    }
+
+    // Validate Mandatory Uploads
+    if (!gateOutData.gatePassFile || !gateOutData.vehicleLoadedImage) {
+        toast({
+            title: "Validation Error",
+            description: "Please upload both Gate Pass and Vehicle Loaded Image.",
+            variant: "destructive"
+        });
+        return;
+    }
+
+    // Validate Mandatory Uploads
+    if (!gateOutData.gatePassFile || !gateOutData.vehicleLoadedImage) {
+        toast({
+            title: "Validation Error",
+            description: "Please upload both Gate Pass and Vehicle Loaded Image.",
+            variant: "destructive"
+        });
+        return;
     }
 
     setIsProcessing(true)
@@ -637,7 +657,7 @@ export default function GateOutPage() {
                                   </TableHead>
                                   <TableHead className="text-[10px] uppercase font-black h-10">PRODUCT INFO</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE NO</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">BILL AMOUNT</TableHead>
+                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE COPY</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">ACTUAL QTY</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">TRUCK NO</TableHead>
                                 </TableRow>
@@ -666,8 +686,19 @@ export default function GateOutPage() {
                                     <TableCell className="text-center p-2 text-xs font-bold text-green-700">
                                        {product.invoiceNo || "—"}
                                     </TableCell>
-                                    <TableCell className="text-center p-2 text-xs font-black">
-                                       ₹{product.billAmount || "0"}
+                                    <TableCell className="text-center p-2">
+                                       {product.invoice_copy ? (
+                                         <Button 
+                                           size="sm" 
+                                           variant="ghost" 
+                                           className="h-7 px-2 text-[10px] font-black text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                           onClick={() => window.open(product.invoice_copy, '_blank')}
+                                         >
+                                           <Eye className="h-3 w-3 mr-1" /> VIEW
+                                         </Button>
+                                       ) : (
+                                         <span className="text-[10px] text-slate-400 font-bold italic tracking-tighter">NO FILE</span>
+                                       )}
                                     </TableCell>
                                     <TableCell className="text-center p-2">
                                       <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">
@@ -699,7 +730,7 @@ export default function GateOutPage() {
              
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div className="space-y-2">
-                   <Label>Upload Gate Pass</Label>
+                   <Label>Upload Gate Pass <span className="text-red-500">*</span></Label>
                    <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-slate-50 transition-colors bg-blue-50/20">
                      <Input
                        type="file"
@@ -722,7 +753,7 @@ export default function GateOutPage() {
                  </div>
  
                  <div className="space-y-2">
-                   <Label>Upload Vehicle Loaded Image</Label>
+                   <Label>Upload Vehicle Loaded Image <span className="text-red-500">*</span></Label>
                    <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-slate-50 transition-colors bg-violet-50/20">
                      <Input
                        type="file"
