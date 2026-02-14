@@ -190,6 +190,7 @@ export default function ActualDispatchPage() {
     { id: "customerName", label: "Customer Name" },
     { id: "qtyToDispatch", label: "Qty to Dispatch" },
     { id: "deliveryFrom", label: "Delivery From" },
+    { id: "orderPunchRemarks", label: "Order Punch Remarks" },
     { id: "status", label: "Status" },
 
     // Requested Options
@@ -236,6 +237,7 @@ export default function ActualDispatchPage() {
     "customerName",
     "qtyToDispatch",
     "deliveryFrom",
+    "orderPunchRemarks",
     "status",
   ])
 
@@ -342,6 +344,7 @@ export default function ActualDispatchPage() {
   const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
+      search: "",
       status: "",
       startDate: "",
       endDate: "",
@@ -394,6 +397,49 @@ export default function ActualDispatchPage() {
   })
 
   // Map backend data to display format with Grouping by Customer
+  const filteredHistory = useMemo(() => {
+    return historyOrders.map(order => ({
+      orderNo: order.actualDispatchData?.orderNo || order.order_no || "-",
+      customerName: order.customerName || "-",
+      timestamp: order.actualDispatchData?.confirmedAt || order.timestamp,
+      date: new Date(order.actualDispatchData?.confirmedAt || order.timestamp || new Date()).toLocaleDateString("en-GB"),
+      stage: "Actual Dispatch",
+      status: "Completed",
+      remarks: "Dispatch Confirmed",
+    })).filter(item => {
+      let matches = true
+      
+      if (filterValues.search) {
+        const search = filterValues.search.toLowerCase()
+        if (!item.orderNo?.toLowerCase().includes(search) && 
+            !item.customerName?.toLowerCase().includes(search)) {
+          matches = false
+        }
+      }
+      
+      if (filterValues.partyName && filterValues.partyName !== "all" && item.customerName !== filterValues.partyName) {
+          matches = false
+      }
+
+      const itemDateStr = item.timestamp
+      if (itemDateStr) {
+          const itemDate = new Date(itemDateStr)
+          if (filterValues.startDate) {
+              const start = new Date(filterValues.startDate)
+              start.setHours(0,0,0,0)
+              if (itemDate < start) matches = false
+          }
+          if (filterValues.endDate) {
+              const end = new Date(filterValues.endDate)
+              end.setHours(23,59,59,999)
+              if (itemDate > end) matches = false
+          }
+      }
+      
+      return matches
+    })
+  }, [historyOrders, filterValues])
+
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
 
@@ -476,6 +522,7 @@ export default function ActualDispatchPage() {
        orderNo: Array.from(group._allBaseDos).join(", "),
        processId: group._allProducts[0]?.processid || "—",
        qtyToDispatch: group._allProducts.reduce((sum: number, p: any) => sum + parseFloat(p.qtyToDispatch || 0), 0),
+       orderPunchRemarks: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.orderPunchRemarks))).filter(Boolean).join("; ") || "—",
        _productCount: group._allProducts.length
     }))
   }, [filteredPendingOrders])
@@ -799,12 +846,7 @@ export default function ActualDispatchPage() {
       title="Stage 5: Actual Dispatch"
       description="Confirm actual dispatch details before vehicle assignment."
       pendingCount={displayRows.length}
-      historyData={historyOrders.map((order) => ({
-        date: new Date(order.actualDispatchData?.confirmedAt || order.timestamp || new Date()).toLocaleDateString("en-GB"),
-        stage: "Actual Dispatch",
-        status: "Completed",
-        remarks: "Dispatch Confirmed",
-      }))}
+      historyData={filteredHistory}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
       remarksColName="Confirmation"

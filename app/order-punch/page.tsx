@@ -478,12 +478,12 @@ export default function OrderPunchPage() {
         // Show success message with prominently displayed order number
         toast({
             title: "✅ Order Created Successfully!",
-            description: `Order Number: ${backendOrderNo}`,
+            description: `Order Number: ${backendOrderNo.replace(/[A-Z]$/i, '')}`,
             duration: 5000,
         })
         
         // Show additional alert for emphasis
-        alert(`Order created successfully!\n\nOrder Number: ${backendOrderNo}\n\nThis order has been saved to the database.`)
+        alert(`Order created successfully!\n\nOrder Number: ${backendOrderNo.replace(/[A-Z]$/i, '')}\n\nThis order has been saved to the database.`)
         
         resetForm()
         

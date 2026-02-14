@@ -69,9 +69,9 @@ export default function PreApprovalPage() {
     { id: "paymentTerms", label: "Payment Terms" },
     { id: "advanceTaken", label: "Advance Payment to be Taken" },
     { id: "advanceAmount", label: "Advance Amount" },
-    { id: "isBroker", label: "Is this order Through Broker" },
     { id: "brokerName", label: "Broker Name (If Order Through Broker)" },
     { id: "uploadSo", label: "Upload DO." },
+    { id: "orderPunchRemarks", label: "Order Punch Remarks" },
   ]
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
@@ -80,7 +80,8 @@ export default function PreApprovalPage() {
     "deliveryPurpose",
     "deliveryDate",
     "oilType",
-    "ratePer15Kg"
+    "ratePer15Kg",
+    "orderPunchRemarks"
   ])
   const [isApproving, setIsApproving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -280,6 +281,7 @@ export default function PreApprovalPage() {
       transportType: backendOrder.type_of_transporting,
       depoName: backendOrder.depo_name,
       orderPunchRemarks: backendOrder.order_punch_remarks,
+      remark: backendOrder.remark,
       totalWithGst: backendOrder.total_with_gst,
       // Product info (for individual row from DB)
       preApprovalProducts: [{
@@ -497,14 +499,54 @@ export default function PreApprovalPage() {
     const fullOrderNo = `${baseDo}${nextSuffix}`;
 
     const newId = `new-${Math.random().toString(36).substr(2, 9)}`;
-    // Get a default oilType from existing products in this group to help with budget matching
-    const defaultOilType = orderData._products?.[0]?.oilType || "";
+    
+    // Improved detection to group oil types
+    const detectOilGroup = (oil: string, product: string) => {
+      const s = (oil || product || "").toUpperCase();
+      if (s.includes("PALM") || s.includes("P.O.")) return "PALM OIL";
+      if (s.includes("RICE") || s.includes("RBO") || s.includes("R.O.")) return "RICE OIL";
+      if (s.includes("SOYA") || s.includes("SBO") || s.includes("S.O.")) return "SOYA OIL";
+      if (s.includes("SUNFLOWER") || s.includes("SUN")) return "SUNFLOWER OIL";
+      return s || "UNKNOWN";
+    };
+
+    // Calculate remaining budget (order qty - approved qty) per oil group
+    const allProducts = [...(orderData._products || []), ...(dialogNewProducts[baseDo] || [])];
+    const budgetMap: Record<string, { total: number, approved: number, bestName: string }> = {};
+    
+    allProducts.forEach(p => {
+      const group = detectOilGroup(p.oilType, p.productName);
+      if (!budgetMap[group]) budgetMap[group] = { total: 0, approved: 0, bestName: p.oilType || p.productName || group };
+      
+      if (!p._isNew) {
+        budgetMap[group].total += parseFloat(String(p.orderQty)) || 0;
+      }
+      
+      const appQty = parseFloat(productRates[p._rowKey]?.approvalQty || p.approvalQty || "0") || 0;
+      budgetMap[group].approved += appQty;
+    });
+
+    console.log("[DEBUG] Budget Calculation for Order:", baseDo, budgetMap);
+
+    let bestOilType = orderData._products?.[0]?.oilType || orderData._products?.[0]?.productName || "PALM OIL";
+    let maxRemaining = -Infinity;
+    
+    Object.entries(budgetMap).forEach(([group, stats]) => {
+      const remaining = stats.total - stats.approved;
+      console.log(`[DEBUG] Group: ${group}, Total: ${stats.total}, Approved: ${stats.approved}, Remaining: ${remaining}`);
+      if (remaining > maxRemaining) {
+        maxRemaining = remaining;
+        bestOilType = stats.bestName;
+      }
+    });
+
+    console.log("[DEBUG] Defaulting new SKU to:", bestOilType);
 
     const newProduct = {
       _pid: newId,
       id: null,
       productName: "",
-      oilType: defaultOilType, // Inherit oil type from parent
+      oilType: bestOilType, // Use the oil type with highest remaining budget
       uom: "Ltr",
       orderQty: "1",
       rateOfMaterial: "0",
@@ -798,10 +840,10 @@ export default function PreApprovalPage() {
     // Detect oil type from the selected SKU name for accurate rate lookup
     const detectOilTypeFromSku = (skuName: string) => {
       const s = (skuName || "").toUpperCase();
-      // Look for Rice keywords first (more specific)
-      if (s.includes("RICE") || s.includes("RBO") || s.includes("R.O.") || s.includes("RO ")) return "RICE OIL";
-      if (s.includes("SOYA") || s.includes("SBO") || s.includes("S.O.") || s.includes("SO ")) return "SOYA OIL";
-      if (s.includes("PALM") || s.includes("P.O.") || s.includes("PO ") || s.includes("P.O ")) return "PALM OIL";
+      // Use the exact casing that the Select options use (found in orderDetails._products)
+      if (s.includes("RICE") || s.includes("RBO") || s.includes("R.O.") || s.includes("RO ")) return "Rice Oil";
+      if (s.includes("SOYA") || s.includes("SBO") || s.includes("S.O.") || s.includes("SO ")) return "Soya Oil";
+      if (s.includes("PALM") || s.includes("P.O.") || s.includes("PO ") || s.includes("P.O ")) return "Palm Oil";
       return null;
     };
     
@@ -935,9 +977,15 @@ export default function PreApprovalPage() {
       } 
     }));
 
-    // Update the product object's oilType if detected
+    // Update the product object's oilType in state if detected
     if (detectedOilType && product._isNew) {
-      product.oilType = detectedOilType;
+      const baseDo = product._baseDo;
+      setDialogNewProducts(prev => ({
+        ...prev,
+        [baseDo]: (prev[baseDo] || []).map(p => 
+          p._pid === product._pid ? { ...p, oilType: detectedOilType } : p
+        )
+      }));
     }
   };
 
@@ -949,11 +997,46 @@ export default function PreApprovalPage() {
   const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
+      search: "",
       status: "",
       startDate: "",
       endDate: "",
       partyName: ""
   })
+
+  const filteredHistory = useMemo(() => {
+    return history.filter(item => {
+      let matches = true
+      
+      if (filterValues.search) {
+        const search = filterValues.search.toLowerCase()
+        if (!item.orderNo?.toLowerCase().includes(search) && 
+            !item.customerName?.toLowerCase().includes(search)) {
+          matches = false
+        }
+      }
+      
+      if (filterValues.partyName && filterValues.partyName !== "all" && item.customerName !== filterValues.partyName) {
+          matches = false
+      }
+
+      if (filterValues.startDate) {
+          const start = new Date(filterValues.startDate)
+          start.setHours(0,0,0,0)
+          const itemDate = new Date(item.timestamp)
+          if (itemDate < start) matches = false
+      }
+      
+      if (filterValues.endDate) {
+          const end = new Date(filterValues.endDate)
+          end.setHours(23,59,59,999)
+          const itemDate = new Date(item.timestamp)
+          if (itemDate > end) matches = false
+      }
+      
+      return matches
+    })
+  }, [history, filterValues])
 
   const filteredPendingOrders = pendingOrders.filter(order => {
       let matches = true
@@ -1051,6 +1134,7 @@ export default function PreApprovalPage() {
           brokerName: order.brokerName,
           depoName: order.depoName,
           orderPunchRemarks: order.orderPunchRemarks,
+          remark: order.remark,
           totalWithGst: order.totalWithGst,
           _products: []
         }
@@ -1084,6 +1168,15 @@ export default function PreApprovalPage() {
           if (order.transportType) allTransports.add(order.transportType)
       })
       grp.transportType = Array.from(allTransports).join(", ")
+      
+      const allPunchRemarks = new Set<string>()
+      const allRemarks = new Set<string>()
+      Object.values(grp._ordersMap).forEach((order: any) => {
+          if (order.orderPunchRemarks) allPunchRemarks.add(order.orderPunchRemarks)
+          if (order.remark) allRemarks.add(order.remark)
+      })
+      grp.orderPunchRemarks = Array.from(allPunchRemarks).join("; ")
+      grp.remark = Array.from(allRemarks).join("; ")
       
       
       // Aggregate rate fields from ALL products for SKU Price List calculations
@@ -1197,7 +1290,7 @@ export default function PreApprovalPage() {
       title="Stage 2: Pre-Approval"
       description="Review and set rates for item requirements."
       pendingCount={displayRows.length}
-      historyData={history}
+      historyData={filteredHistory}
         partyNames={customerNames}
         onFilterChange={setFilterValues}
     >
@@ -1461,8 +1554,47 @@ export default function PreApprovalPage() {
                                           </TableCell>
                                           <TableCell className="p-3">
                                             <div className="flex flex-col">
-                                              <span className="text-xs font-black text-slate-900 leading-none mb-1">{product.productName || product.oilType || "—"}</span>
-                                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{product._originalOrderId}</span>
+                                              {!isNew ? (
+                                                <>
+                                                  <span className="text-xs font-black text-slate-900 leading-none mb-1">{product.productName || product.oilType || "—"}</span>
+                                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{product._originalOrderId}</span>
+                                                </>
+                                              ) : (
+                                                <div className="flex flex-col gap-1">
+                                                  <Select 
+                                                    value={product.oilType || ""} 
+                                                    onValueChange={(value) => {
+                                                      setDialogNewProducts(prev => ({
+                                                        ...prev,
+                                                        [baseDo]: prev[baseDo].map(p => 
+                                                          p._pid === product._pid ? { ...p, oilType: value } : p
+                                                        )
+                                                      }));
+                                                      
+                                                      // Clear SKU and update product rates if oil type changes
+                                                      const updatedRate = { 
+                                                        ...productRates[rowKey], 
+                                                        skuName: "", 
+                                                        rateOfMaterial: "0",
+                                                        rate: "0"
+                                                      };
+                                                      setProductRates(prev => ({ ...prev, [rowKey]: updatedRate }));
+                                                    }}
+                                                  >
+                                                    <SelectTrigger className="h-8 w-full bg-blue-50 border-blue-100 text-[10px] font-black uppercase tracking-tight">
+                                                      <SelectValue placeholder="Select Oil..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                      {Array.from(new Set(orderDetails._products.map((p: any) => p.oilType).filter(Boolean))).map((ot: any) => (
+                                                        <SelectItem key={ot} value={ot} className="text-[10px] font-black uppercase">
+                                                          {ot}
+                                                        </SelectItem>
+                                                      ))}
+                                                    </SelectContent>
+                                                  </Select>
+                                                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{product._originalOrderId}</span>
+                                                </div>
+                                              )}
                                             </div>
                                           </TableCell>
                                           <TableCell className="p-3">
@@ -2009,6 +2141,7 @@ export default function PreApprovalPage() {
                    isBroker: rawOrder.isBrokerOrder || "—",
                    brokerName: rawOrder.brokerName || "—",
                    uploadSo: "so_document.pdf",
+                   orderPunchRemarks: rawOrder.orderPunchRemarks || "—",
                    
                    products: rawOrder._allProducts || [],
                  }

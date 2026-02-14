@@ -43,6 +43,7 @@ export default function DispatchMaterialPage() {
     { id: "customerName", label: "Customer Name" },
     { id: "productName", label: "Products Name" },
     { id: "transportType", label: "Type of Transporting" },
+    { id: "orderPunchRemarks", label: "Order Punch Remarks" },
     { id: "status", label: "Status" },
     
     // Requested Options
@@ -80,6 +81,7 @@ export default function DispatchMaterialPage() {
     "customerName",
     "productName",
     "transportType",
+    "orderPunchRemarks",
     "status",
   ])
 
@@ -365,6 +367,49 @@ export default function DispatchMaterialPage() {
   })
 
   // Group by base DO number (removing uniqueness by Customer Name as per request)
+  const filteredHistory = useMemo(() => {
+    return historyOrders.map(order => ({
+      orderNo: order.dispatchPlanningData?.orderNo || order.order_no || "-",
+      customerName: order.customer_name || "-",
+      timestamp: order.dispatchPlanningData?.confirmedAt || order.timestamp,
+      date: new Date(order.dispatchPlanningData?.confirmedAt || order.timestamp || new Date()).toLocaleDateString("en-GB"),
+      stage: "Dispatch Planning",
+      status: "Completed",
+      remarks: order.dispatchPlanningData?.dispatchDate ? `Date: ${order.dispatchPlanningData.dispatchDate}` : "Dispatch Plannned",
+    })).filter(item => {
+      let matches = true
+      
+      if (filterValues.search) {
+        const search = filterValues.search.toLowerCase()
+        if (!item.orderNo?.toLowerCase().includes(search) && 
+            !item.customerName?.toLowerCase().includes(search)) {
+          matches = false
+        }
+      }
+      
+      if (filterValues.partyName && filterValues.partyName !== "all" && item.customerName !== filterValues.partyName) {
+          matches = false
+      }
+
+      const itemDateStr = item.timestamp
+      if (itemDateStr) {
+          const itemDate = new Date(itemDateStr)
+          if (filterValues.startDate) {
+              const start = new Date(filterValues.startDate)
+              start.setHours(0,0,0,0)
+              if (itemDate < start) matches = false
+          }
+          if (filterValues.endDate) {
+              const end = new Date(filterValues.endDate)
+              end.setHours(23,59,59,999)
+              if (itemDate > end) matches = false
+          }
+      }
+      
+      return matches
+    })
+  }, [historyOrders, filterValues])
+
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
     
@@ -448,6 +493,7 @@ export default function DispatchMaterialPage() {
       orderNo: group._displayDo,
       processId: group.processid || group._allProducts[0]?.processid || "—",
       transportType: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.transportType))).filter(t => t && t !== "—").join(", ") || "—",
+      orderPunchRemarks: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.orderPunchRemarks))).filter(Boolean).join("; ") || "—",
       _productCount: group._allProducts.length
     })).filter(group => group._productCount > 0)
   }, [filteredPendingOrders])
@@ -457,12 +503,7 @@ export default function DispatchMaterialPage() {
       title="Stage 4: Dispatch Planning"
       description="Prepare and Dispatch Plannings for delivery."
       pendingCount={displayRows.length}
-      historyData={historyOrders.map((order) => ({
-        date: new Date(order.dispatchData?.dispatchedAt || order.timestamp || new Date()).toLocaleDateString("en-GB"),
-        stage: "Dispatch Planning",
-        status: "Completed",
-        remarks: order.dispatchData?.dispatchDate ? `Dispatched: ${order.dispatchData.dispatchDate}` : "Dispatched",
-      }))}
+      historyData={filteredHistory}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
       showStatusFilter={true}
@@ -734,7 +775,6 @@ export default function DispatchMaterialPage() {
                               </TableHead>
                               <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Sub-Order</TableHead>
                               <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Product Name</TableHead>
-                              <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Ordered</TableHead>
                               <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Approval</TableHead>
                               <TableHead className="w-32 text-[10px] uppercase font-black text-slate-500 tracking-wider">Qty to Dispatch</TableHead>
                               <TableHead className="w-40 text-[10px] uppercase font-black text-slate-500 tracking-wider">Delivery From</TableHead>
@@ -755,7 +795,7 @@ export default function DispatchMaterialPage() {
                                   </TableCell>
                                   <TableCell className="text-[10px] font-semibold text-slate-700 p-1">{prod.orderNo || "—"}</TableCell>
                                   <TableCell className="font-medium text-[11px] p-2">{prod.productName || "—"}</TableCell>
-                                  <TableCell className="text-[10px] font-bold p-2 text-center">{prod.orderQty}</TableCell>
+
                                   <TableCell className="text-[10px] font-bold text-blue-600 p-2 text-center">{prod.approvalQty || "—"}</TableCell>
                                   <TableCell className="p-2">
                                     <Input type="number" className="h-7 text-[10px] font-bold" value={currentDispatchQty} onChange={(e) => {
@@ -787,11 +827,7 @@ export default function DispatchMaterialPage() {
                               <TableCell colSpan={3} className="p-3 text-right">
                                 <span className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Totals:</span>
                               </TableCell>
-                              <TableCell className="p-3 text-center">
-                                <Badge variant="secondary" className="bg-blue-100 text-blue-800 font-black px-2 shadow-sm border-blue-200">
-                                  {items.flatMap(i => i._allProducts).reduce((sum, p) => sum + (parseFloat(p.orderQty) || 0), 0)}
-                                </Badge>
-                              </TableCell>
+
                               <TableCell className="p-3 text-center">
                                 <Badge variant="secondary" className="bg-blue-100 text-blue-800 font-black px-2 shadow-sm border-blue-200">
                                   {items.flatMap(i => i._allProducts).reduce((sum, p) => sum + (parseFloat(p.approvalQty) || 0), 0)}

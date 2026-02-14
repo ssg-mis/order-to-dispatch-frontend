@@ -72,6 +72,7 @@ export default function CommitmentReviewPage() {
     { id: "isBroker", label: "Is this order Through Broker" },
     { id: "brokerName", label: "Broker Name (If Order Through Broker)" },
     { id: "uploadSo", label: "Upload DO." },
+    { id: "orderPunchRemarks", label: "Order Punch Remarks" },
     { id: "status", label: "Status" },
   ]
 
@@ -80,6 +81,7 @@ export default function CommitmentReviewPage() {
     "customerName",
     "productName",
     "rate",
+    "orderPunchRemarks",
     "status",
   ])
   
@@ -130,6 +132,7 @@ export default function CommitmentReviewPage() {
       transportType: backendOrder.type_of_transporting,
       depoName: backendOrder.depo_name,
       orderPunchRemarks: backendOrder.order_punch_remarks,
+      remark: backendOrder.remark,
       totalWithGst: backendOrder.total_amount_with_gst,
       serial: backendOrder.serial,
       // Product info (for individual row from DB)
@@ -194,7 +197,8 @@ export default function CommitmentReviewPage() {
           orderNo: order.order_no,
           customerName: order.customer_name,
           stage: "Approval Of Order",
-          status: "Completed" as const,
+          status: order.overall_status_of_order === true ? "Approved" : 
+                  order.overall_status_of_order === false ? "Rejected" : "Completed",
           processedBy: "System",
           timestamp: order.actual_2,
           date: order.actual_2 ? new Date(order.actual_2).toLocaleDateString("en-GB") : "-",
@@ -458,6 +462,7 @@ export default function CommitmentReviewPage() {
   const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
+      search: "",
       status: "",
       startDate: "",
       endDate: "",
@@ -516,6 +521,40 @@ export default function CommitmentReviewPage() {
 
       return matches
   })
+  
+  const filteredHistory = useMemo(() => {
+    return history.filter(item => {
+      let matches = true
+      
+      if (filterValues.search) {
+        const search = filterValues.search.toLowerCase()
+        if (!item.orderNo?.toLowerCase().includes(search) && 
+            !item.customerName?.toLowerCase().includes(search)) {
+          matches = false
+        }
+      }
+      
+      if (filterValues.partyName && filterValues.partyName !== "all" && item.customerName !== filterValues.partyName) {
+          matches = false
+      }
+
+      if (filterValues.startDate) {
+          const start = new Date(filterValues.startDate)
+          start.setHours(0,0,0,0)
+          const itemDate = new Date(item.timestamp)
+          if (itemDate < start) matches = false
+      }
+      
+      if (filterValues.endDate) {
+          const end = new Date(filterValues.endDate)
+          end.setHours(23,59,59,999)
+          const itemDate = new Date(item.timestamp)
+          if (itemDate > end) matches = false
+      }
+      
+      return matches
+    })
+  }, [history, filterValues])
 
   // Group by base DO number (removing uniqueness by Customer Name)
   const displayRows = useMemo(() => {
@@ -566,6 +605,7 @@ export default function CommitmentReviewPage() {
           brokerName: order.brokerName,
           depoName: order.depoName,
           orderPunchRemarks: order.orderPunchRemarks,
+          remark: order.remark,
           _products: []
         }
       }
@@ -598,7 +638,9 @@ export default function CommitmentReviewPage() {
     return Object.values(grouped).map((group: any) => ({
       ...group,
       orderNo: group._displayDo,
-      transportType: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.transportType))).filter(Boolean).join(", ")
+      transportType: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.transportType))).filter(Boolean).join(", "),
+      orderPunchRemarks: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.orderPunchRemarks))).filter(Boolean).join("; "),
+      remark: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.remark))).filter(Boolean).join("; ")
     })).filter(group => group._productCount > 0)
   }, [filteredPendingOrders, history])
 
@@ -607,7 +649,7 @@ export default function CommitmentReviewPage() {
       title="Stage 3: Approval Of Order"
       description="Six-point verification check before commitment entry."
       pendingCount={displayRows.length}
-      historyData={history}
+      historyData={filteredHistory}
         partyNames={customerNames}
         onFilterChange={setFilterValues}
     >
@@ -984,6 +1026,7 @@ export default function CommitmentReviewPage() {
                      isBroker: orderDetails.isBrokerOrder ? "YES" : "NO",
                      brokerName: orderDetails.brokerName || "—",
                      uploadSo: "do_document.pdf",
+                     orderPunchRemarks: order.orderPunchRemarks || "—",
                      
                      status: "Pending",
                    }
