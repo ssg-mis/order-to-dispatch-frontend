@@ -579,16 +579,88 @@ export default function ActualDispatchPage() {
   }
 
   const performDispatchConfirmation = async () => {
+    // 1. Basic Vehicle Check
     if (!vehicleNumber.trim()) {
-      toast({ title: "Error", description: "Vehicle number is required", variant: "destructive" });
-      return;
-    }
-    if (!vehicleData.checkStatus || !loadData.checkStatus) {
-      toast({ title: "Error", description: "Please complete both Vehicle and Material Load status checks", variant: "destructive" });
+      toast({ title: "Validation Error", description: "Vehicle Registration Number is required", variant: "destructive" });
       return;
     }
 
-    // Validate Document End Dates (Min Today + 5 Days)
+    // 2. Stage 6: Vehicle Documents Validation
+    const vehicleDocs = [
+      { key: 'fitness', label: 'Fitness Document', isFile: true },
+      { key: 'fitness_end_date', label: 'Fitness End Date' },
+      { key: 'insurance', label: 'Insurance Document', isFile: true },
+      { key: 'insurance_end_date', label: 'Insurance End Date' },
+      { key: 'tax_copy', label: 'Tax Copy Document', isFile: true },
+      { key: 'tax_end_date', label: 'Tax End Date' },
+      { key: 'polution', label: 'Pollution Document', isFile: true },
+      { key: 'pollution_end_date', label: 'Pollution End Date' },
+      { key: 'permit1', label: 'Permit 1 Document', isFile: true },
+      { key: 'permit1_end_date', label: 'Permit 1 End Date' },
+      { key: 'permit2_out_state', label: 'Permit 2 Document', isFile: true },
+      { key: 'permit2_end_date', label: 'Permit 2 End Date' },
+    ];
+
+    for (const doc of vehicleDocs) {
+      const val = vehicleData[doc.key as keyof typeof vehicleData];
+      if (!val) {
+        toast({ 
+          title: "Validation Error", 
+          description: `${doc.label} is required (Stage 6)`, 
+          variant: "destructive" 
+        });
+        return;
+      }
+    }
+
+    if (!vehicleData.checkStatus) {
+      toast({ title: "Validation Error", description: "Vehicle Check Status is required", variant: "destructive" });
+      return;
+    }
+    if (!vehicleData.remarks.trim()) {
+      toast({ title: "Validation Error", description: "Vehicle Remarks are required", variant: "destructive" });
+      return;
+    }
+
+    // 3. Stage 7: Weightment Audit Validation
+    if (!loadData.actualQty || parseFloat(loadData.actualQty) <= 0) {
+      toast({ title: "Validation Error", description: "Valid Actual Qty is required", variant: "destructive" });
+      return;
+    }
+    if (!loadData.rstNo.trim()) {
+      toast({ title: "Validation Error", description: "RST No is required", variant: "destructive" });
+      return;
+    }
+    if (!loadData.weightmentSlip) {
+      toast({ title: "Validation Error", description: "Weightment Slip Upload is required", variant: "destructive" });
+      return;
+    }
+    if (!loadData.vehicleNoPlateImage) {
+      toast({ title: "Validation Error", description: "No Plate Image Upload is required", variant: "destructive" });
+      return;
+    }
+    if (!loadData.grossWeight || parseFloat(loadData.grossWeight) <= 0) {
+      toast({ title: "Validation Error", description: "Valid Gross Weight is required", variant: "destructive" });
+      return;
+    }
+    if (!loadData.tareWeight || parseFloat(loadData.tareWeight) <= 0) {
+      toast({ title: "Validation Error", description: "Valid Tare Weight is required", variant: "destructive" });
+      return;
+    }
+    if (!loadData.checkStatus) {
+      toast({ title: "Validation Error", description: "Quality Status (STG 7) is required", variant: "destructive" });
+      return;
+    }
+    if (!loadData.transporterName.trim()) {
+      toast({ title: "Validation Error", description: "Transporter Name is required", variant: "destructive" });
+      return;
+    }
+    if (!loadData.reason.trim()) {
+      toast({ title: "Validation Error", description: "Weight Difference Reason is required", variant: "destructive" });
+      return;
+    }
+
+    // 4. Validate Document End Dates (Min Today + 5 Days)
     const dateFields = [
       { key: 'fitness_end_date', label: 'Fitness' },
       { key: 'insurance_end_date', label: 'Insurance' },
@@ -1119,7 +1191,7 @@ export default function ActualDispatchPage() {
                       <div className="bg-slate-50 border-2 border-slate-200 rounded-3xl p-6 space-y-6 shadow-md transition-all hover:shadow-lg">
                          <div className="space-y-4">
                             <div className="space-y-1.5">
-                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Vehicle Registration Number</Label>
+                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Vehicle Registration Number <span className="text-red-500">*</span></Label>
                                <Input 
                                  placeholder="e.g. MH-12-AB-1234" 
                                  className="h-12 border-2 border-slate-200 rounded-xl px-4 font-black text-lg focus:border-purple-500 transition-colors uppercase bg-white"
@@ -1135,7 +1207,7 @@ export default function ActualDispatchPage() {
                                 <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
                                    <div className="flex items-center justify-between w-full">
                                       <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
-                                         Fitness {vehicleData.fitness_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.fitness_file_name})</span>}
+                                         Fitness <span className="text-red-500">*</span> {vehicleData.fitness_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.fitness_file_name})</span>}
                                       </span>
                                       <div className="flex items-center gap-2">
                                          <Input type="file" className="hidden" id="fitness-doc" onChange={(e) => handleFileChange('fitness', 'fitness_file_name', e.target.files?.[0] || null)} />
@@ -1155,7 +1227,7 @@ export default function ActualDispatchPage() {
                                 <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
                                    <div className="flex items-center justify-between w-full">
                                       <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
-                                         Insurance {vehicleData.insurance_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.insurance_file_name})</span>}
+                                         Insurance <span className="text-red-500">*</span> {vehicleData.insurance_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.insurance_file_name})</span>}
                                       </span>
                                       <div className="flex items-center gap-2">
                                          <Input type="file" className="hidden" id="ins-doc" onChange={(e) => handleFileChange('insurance', 'insurance_file_name', e.target.files?.[0] || null)} />
@@ -1175,7 +1247,7 @@ export default function ActualDispatchPage() {
                                 <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
                                    <div className="flex items-center justify-between w-full">
                                       <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
-                                         Tax Copy {vehicleData.tax_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.tax_file_name})</span>}
+                                         Tax Copy <span className="text-red-500">*</span> {vehicleData.tax_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.tax_file_name})</span>}
                                       </span>
                                       <div className="flex items-center gap-2">
                                          <Input type="file" className="hidden" id="tax-doc" onChange={(e) => handleFileChange('tax_copy', 'tax_file_name', e.target.files?.[0] || null)} />
@@ -1195,7 +1267,7 @@ export default function ActualDispatchPage() {
                                 <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
                                    <div className="flex items-center justify-between w-full">
                                       <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
-                                         Pollution {vehicleData.pollution_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.pollution_file_name})</span>}
+                                         Pollution <span className="text-red-500">*</span> {vehicleData.pollution_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.pollution_file_name})</span>}
                                       </span>
                                       <div className="flex items-center gap-2">
                                          <Input type="file" className="hidden" id="poll-doc" onChange={(e) => handleFileChange('polution', 'pollution_file_name', e.target.files?.[0] || null)} />
@@ -1215,7 +1287,7 @@ export default function ActualDispatchPage() {
                                 <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
                                    <div className="flex items-center justify-between w-full">
                                       <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
-                                         Permit 1 {vehicleData.permit1_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit1_file_name})</span>}
+                                         Permit 1 <span className="text-red-500">*</span> {vehicleData.permit1_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit1_file_name})</span>}
                                       </span>
                                       <div className="flex items-center gap-2">
                                          <Input type="file" className="hidden" id="permit1-doc" onChange={(e) => handleFileChange('permit1', 'permit1_file_name', e.target.files?.[0] || null)} />
@@ -1235,7 +1307,7 @@ export default function ActualDispatchPage() {
                                 <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
                                    <div className="flex items-center justify-between w-full">
                                       <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
-                                         Permit 2 {vehicleData.permit2_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit2_file_name})</span>}
+                                         Permit 2 <span className="text-red-500">*</span> {vehicleData.permit2_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit2_file_name})</span>}
                                       </span>
                                       <div className="flex items-center gap-2">
                                          <Input type="file" className="hidden" id="permit2-doc" onChange={(e) => handleFileChange('permit2_out_state', 'permit2_file_name', e.target.files?.[0] || null)} />
@@ -1257,7 +1329,7 @@ export default function ActualDispatchPage() {
 
                          <div className="pt-4 border-t border-slate-200 grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
-                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Check Status</Label>
+                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Check Status <span className="text-red-500">*</span></Label>
                                <Select value={vehicleData.checkStatus} onValueChange={(v) => setVehicleData(p => ({...p, checkStatus: v}))}>
                                   <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl font-bold bg-white focus:ring-2 focus:ring-purple-500">
                                      <SelectValue placeholder="Status" />
@@ -1269,7 +1341,7 @@ export default function ActualDispatchPage() {
                                </Select>
                             </div>
                             <div className="space-y-1.5">
-                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Remarks</Label>
+                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Remarks <span className="text-red-500">*</span></Label>
                                <Input 
                                  placeholder="Add notes..." 
                                  className="h-12 border-2 border-slate-200 rounded-xl bg-white font-medium focus:border-purple-500 transition-colors"
@@ -1294,12 +1366,12 @@ export default function ActualDispatchPage() {
                       <div className="bg-white border-2 border-slate-200 rounded-3xl p-6 space-y-5 shadow-md overflow-hidden relative group hover:shadow-lg transition-all">
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                              <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Actual Qty</Label>
+                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Actual Qty <span className="text-red-500">*</span></Label>
                                 <Input type="number" step="0.01" className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-white focus:border-blue-500 transition-colors" 
                                   value={loadData.actualQty} onChange={(e) => setLoadData(p => ({...p, actualQty: e.target.value}))} />
                              </div>
                              <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">RST No</Label>
+                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">RST No <span className="text-red-500">*</span></Label>
                                 <Input className="h-10 border-slate-200 rounded-lg font-bold"
                                   value={loadData.rstNo} onChange={(e) => setLoadData(p => ({...p, rstNo: e.target.value}))} />
                              </div>
@@ -1309,7 +1381,7 @@ export default function ActualDispatchPage() {
                              </div>
                              <div className="space-y-1.5">
                                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex justify-between items-center">
-                                   Weightment Slip {loadData.weightmentSlip_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.weightmentSlip_file_name})</span>}
+                                   Weightment Slip <span className="text-red-500">*</span> {loadData.weightmentSlip_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.weightmentSlip_file_name})</span>}
                                 </Label>
                                 <div className="flex gap-2">
                                    <Input type="file" className="hidden" id="weightment-slip" onChange={(e) => handleFileChange('weightmentSlip', 'weightmentSlip_file_name', e.target.files?.[0] || null, 'load')} />
@@ -1320,7 +1392,7 @@ export default function ActualDispatchPage() {
                              </div>
                              <div className="space-y-1.5">
                                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex justify-between items-center">
-                                   No Plate Image {loadData.vehicleNoPlateImage_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.vehicleNoPlateImage_file_name})</span>}
+                                   No Plate Image <span className="text-red-500">*</span> {loadData.vehicleNoPlateImage_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.vehicleNoPlateImage_file_name})</span>}
                                 </Label>
                                 <div className="flex gap-2">
                                    <Input type="file" className="hidden" id="no-plate" onChange={(e) => handleFileChange('vehicleNoPlateImage', 'vehicleNoPlateImage_file_name', e.target.files?.[0] || null, 'load')} />
@@ -1333,12 +1405,12 @@ export default function ActualDispatchPage() {
 
                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                               <div className="space-y-1.5">
-                                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Gross Wt</Label>
+                                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Gross Wt <span className="text-red-500">*</span></Label>
                                  <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold text-blue-600"
                                    value={loadData.grossWeight} onChange={(e) => setLoadData(p => ({...p, grossWeight: e.target.value}))} />
                               </div>
                               <div className="space-y-1.5">
-                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Tare Wt</Label>
+                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Tare Wt <span className="text-red-500">*</span></Label>
                                  <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold"
                                    value={loadData.tareWeight} onChange={(e) => setLoadData(p => ({...p, tareWeight: e.target.value}))} />
                               </div>
@@ -1373,7 +1445,7 @@ export default function ActualDispatchPage() {
 
                           <div className="grid grid-cols-2 gap-4">
                              <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Status (STG 7)</Label>
+                                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Status (STG 7) <span className="text-red-500">*</span></Label>
                                 <Select value={loadData.checkStatus} onValueChange={(v) => setLoadData(p => ({...p, checkStatus: v}))}>
                                    <SelectTrigger className="h-10 border-2 border-slate-200 rounded-xl font-bold bg-white">
                                       <SelectValue placeholder="Decision" />
@@ -1385,14 +1457,14 @@ export default function ActualDispatchPage() {
                                 </Select>
                              </div>
                              <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Transporter</Label>
+                                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Transporter <span className="text-red-500">*</span></Label>
                                 <Input className="h-10 border-slate-200 rounded-lg font-medium bg-white" placeholder="Carrier Name"
                                   value={loadData.transporterName} onChange={(e) => setLoadData(p => ({...p, transporterName: e.target.value}))} />
                              </div>
                           </div>
 
                           <div className="space-y-1.5">
-                             <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Weight Difference Reason (If any)</Label>
+                             <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Weight Difference Reason <span className="text-red-500">*</span></Label>
                              <Input className="h-10 border-slate-200 rounded-lg font-medium bg-white" placeholder="Specify reason..."
                                value={loadData.reason} onChange={(e) => setLoadData(p => ({...p, reason: e.target.value}))} />
                           </div>

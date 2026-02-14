@@ -557,10 +557,10 @@ export default function OrderPunchPage() {
 
   // Pre-Approval Product Helpers
   const addPreApprovalProduct = () => {
-    if (!currentPreApproval.ratePer15Kg && !currentPreApproval.ratePerLtr) {
+    if (!currentPreApproval.ratePer15Kg || !currentPreApproval.ratePerLtr) {
       toast({
         title: "Validation Error",
-        description: "Please enter at least one rate (15 KG or 1 LTR).",
+        description: "Both 15 KG and 1 LTR rates are mandatory for Pre-Approval orders.",
         variant: "destructive",
       })
       return
@@ -843,7 +843,7 @@ export default function OrderPunchPage() {
                 </div>
               )}
 
-              <div className="space-y-2">
+              <div className="space-y-2 hidden">
                 <Label htmlFor="customerType">Customer Type</Label>
                 <Select value={customerType} onValueChange={setCustomerType}>
                   <SelectTrigger id="customerType">

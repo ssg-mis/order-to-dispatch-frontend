@@ -283,15 +283,16 @@ export default function CommitmentReviewPage() {
 
         // Try submitting to backend API
         try {
-          if (product?.id && !hasRejection) {
+          if (product?.id) {
             // Prepare approval data for backend
-            // Convert to boolean values for boolean columns in database
+            // Convert to boolean values as requested by USER
             const approvalData = {
               rate_is_rightly_as_per_current_market_rate: checklistValues.rate === "approve",
               we_are_dealing_in_ordered_sku: checklistValues.sku === "approve",
-              party_credit_status: checklistValues.credit === "approve" ? "Good" : "Poor",
+              party_credit_status: checklistValues.credit === "approve", // Submit boolean true/false
               dispatch_date_confirmed: checklistValues.dispatch === "approve",
-              overall_status_of_order: checklistValues.overall === "approve" ? "Approved" : "Rejected",
+              // Auto-reject if ANY checklist item is 'reject'
+              overall_status_of_order: !hasRejection && checklistValues.overall === "approve",
               order_confirmation_with_customer: checklistValues.confirm === "approve",
               processid: processId || null, // Add Process ID to the submission
             };
@@ -308,8 +309,7 @@ export default function CommitmentReviewPage() {
           } else {
             console.warn('[APPROVAL] Skipping API submission:', {
               productId: product?.id,
-              hasRejection,
-              reason: !product?.id ? 'Missing product ID' : 'Has rejection'
+              reason: !product?.id ? 'Missing product ID' : 'Unknown'
             });
           }
         } catch (error: any) {

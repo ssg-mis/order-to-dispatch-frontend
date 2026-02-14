@@ -497,11 +497,14 @@ export default function PreApprovalPage() {
     const fullOrderNo = `${baseDo}${nextSuffix}`;
 
     const newId = `new-${Math.random().toString(36).substr(2, 9)}`;
+    // Get a default oilType from existing products in this group to help with budget matching
+    const defaultOilType = orderData._products?.[0]?.oilType || "";
+
     const newProduct = {
       _pid: newId,
       id: null,
       productName: "",
-      oilType: "",
+      oilType: defaultOilType, // Inherit oil type from parent
       uom: "Ltr",
       orderQty: "1",
       rateOfMaterial: "0",
@@ -582,8 +585,9 @@ export default function PreApprovalPage() {
               order_no: product._originalOrderId, // Use suffixed order number (DO-065C etc)
               products: [{
                 product_name: rateData?.skuName || rateData?.productName,
+                oil_type: product.oilType || "", // Fix: Send oil_type for new products
                 uom: product.uom,
-                order_quantity: parseFloat(rateData?.orderQty || "0"),
+                order_quantity: parseFloat(rateData?.approvalQty || "0"), // Use approvalQty for new SKUs
                 rate_of_material: parseFloat(rateData?.rateOfMaterial || "0"),
                 approval_qty: parseFloat(rateData?.approvalQty || "0"),
                 rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : parseFloat(rateData?.rateOfMaterial || "0"),
@@ -595,7 +599,8 @@ export default function PreApprovalPage() {
             
             // Map keys back to snake_case if they were camelCase
             const mappedOrderData: any = {
-              planned_1: new Date().toISOString() // Mark as passed Step 1 so it shows in Pre-Approval
+              planned_1: new Date().toISOString(), // Mark as passed Step 1
+              actual_1: new Date().toISOString()   // Immediately approve new SKUs to move to next stage
             };
             Object.entries(orderData).forEach(([key, val]) => {
               if (key === 'customerName') mappedOrderData.customer_name = val;
@@ -625,9 +630,45 @@ export default function PreApprovalPage() {
             await orderApi.create(mappedOrderData);
           } else {
             // Existing logic for existing products
+            const normalizeType = (t: string) => {
+              const s = (t || "").toLowerCase();
+              if (s.includes("palm") || s.includes("p.o")) return "palm";
+              if (s.includes("rice") || s.includes("rbo") || s.includes("r.o")) return "rice";
+              if (s.includes("soya") || s.includes("sbo") || s.includes("s.o")) return "soya";
+              if (s.includes("sunflower") || s.includes("sun")) return "sunflower";
+              return s;
+            };
+            const currentOilCategory = normalizeType(product.oilType || product.productName);
+            console.log(`Processing existing row ${product._originalOrderId}, category: ${currentOilCategory}`);
+            
+            // Find all NEW SKUs that were added for this specific original product's budget
+            const newSkusForThisOil = itemsToApprove.filter(item => {
+              const p = item._product;
+              if (!p._isNew) return false;
+              
+              const pOilType = (p.oilType || productRates[item._rowKey]?.productName || "").toLowerCase();
+              const isSameType = normalizeType(pOilType) === currentOilCategory;
+              const isSameDo = p._baseDo === product._baseDo;
+              
+              if (isSameType && isSameDo) console.log(`  Matching new SKU found: ${p._originalOrderId}`);
+              return isSameType && isSameDo;
+            });
+
+            const totalNewApprovedFromThisBudget = newSkusForThisOil.reduce((sum, item) => 
+              sum + (parseFloat(productRates[item._rowKey]?.approvalQty || "0") || 0), 0
+            );
+
+            // The new "budget" for this specific row is (Original Qty) - (Qty allocated to new SKUs)
+            // Use fallback for property name since backend might return order_quantity or orderQty
+            const originalQty = parseFloat(product.order_quantity || product.orderQty || "0") || 0;
+            const residualOrderQty = Math.max(0, originalQty - totalNewApprovedFromThisBudget);
+            
+            console.log(`  Original Budget: ${originalQty}, Allocated to New: ${totalNewApprovedFromThisBudget}, Residual: ${residualOrderQty}`);
+
             const submissionData = {
               sku_name: rateData?.skuName,
               product_name: rateData?.productName || rateData?.skuName,
+              order_quantity: residualOrderQty, // Crucial: Inform backend of remaining budget for this row
               approval_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
               remaining_dispatch_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
               rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
@@ -893,6 +934,11 @@ export default function PreApprovalPage() {
         rate: rateValue
       } 
     }));
+
+    // Update the product object's oilType if detected
+    if (detectedOilType && product._isNew) {
+      product.oilType = detectedOilType;
+    }
   };
 
 
