@@ -59,7 +59,7 @@ const PAGE_ACCESS_OPTIONS = [
   "Master"
 ]
 
-const ROLES = ["admin", "user"]
+const ROLES = ["admin", "user", "guard"]
 const STATUSES = ["active", "inactive"]
 
 export default function SettingsPage() {
@@ -127,10 +127,10 @@ export default function SettingsPage() {
 
   // Handle add user
   const handleAddUser = async () => {
-    if (!formData.username || !formData.password || !formData.email || !formData.role) {
+    if (!formData.username || !formData.password || !formData.role) {
       toast({
         title: "Validation Error",
-        description: "Username, password, email, and role are required",
+        description: "Username, password, and role are required",
         variant: "destructive",
       })
       return
@@ -307,7 +307,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="add-email">Email *</Label>
+                    <Label htmlFor="add-email">Email</Label>
                     <Input
                       id="add-email"
                       type="email"
@@ -595,7 +595,7 @@ export default function SettingsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-email">Email *</Label>
+                <Label htmlFor="edit-email">Email</Label>
                 <Input
                   id="edit-email"
                   type="email"
