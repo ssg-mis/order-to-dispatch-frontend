@@ -1060,6 +1060,15 @@ export const skuDetailsApi = {
   },
 };
 
+/**
+ * Common API
+ */
+export const commonApi = {
+  getNextId: async (type: 'customer' | 'depot' | 'broker' | 'sku'): Promise<ApiResponse<{ nextId: string; type: string; prefix: string }>> => {
+    return request(`/common/next-id?type=${type}`);
+  },
+};
+
 
 export default {
   order: orderApi,
@@ -1074,12 +1083,7 @@ export default {
   checkInvoice: checkInvoiceApi,
   gateOut: gateOutApi,
   confirmMaterialReceipt: confirmMaterialReceiptApi,
-  damageAdjustment: damageAdjustmentApi,
-  user: userApi,
-  customer: customerApi,
-  sku: skuApi,
-  depot: depotApi,
-  broker: brokerApi,
   skuDetails: skuDetailsApi,
+  common: commonApi,
 };
 

@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { customerApi, depotApi, brokerApi, skuDetailsApi } from "@/lib/api-service"
+import { customerApi, depotApi, brokerApi, skuDetailsApi, commonApi } from "@/lib/api-service"
+
 import { useAuth } from "@/hooks/use-auth"
 import { Plus, Pencil, Trash2, Loader2, RefreshCw, Users, Warehouse, Briefcase, Search, Download, Package } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
@@ -329,6 +330,39 @@ export default function MasterPage() {
     }
   }
 
+  const fetchNextId = async (type: 'customer' | 'depot' | 'broker' | 'sku') => {
+    try {
+      const res = await commonApi.getNextId(type)
+      if (res.success) {
+        return res.data.nextId
+      }
+    } catch (error) {
+      console.error("Failed to fetch next ID", error)
+    }
+    return ""
+  }
+
+  const handleOpenAddDialog = async () => {
+    resetForms()
+    setIsDialogOpen(true)
+    
+    // Fetch next ID based on active tab
+    let nextId = ""
+    if (activeTab === "customers") {
+      nextId = await fetchNextId('customer')
+      setCustomerForm(prev => ({ ...prev, customer_id: nextId }))
+    } else if (activeTab === "depots") {
+      nextId = await fetchNextId('depot')
+      setDepotForm(prev => ({ ...prev, depot_id: nextId }))
+    } else if (activeTab === "brokers") {
+      nextId = await fetchNextId('broker')
+      setBrokerForm(prev => ({ ...prev, broker_id: nextId }))
+    } else if (activeTab === "sku_details") {
+      nextId = await fetchNextId('sku')
+      setSkuDetailsForm(prev => ({ ...prev, sku_code: nextId }))
+    }
+  }
+
   const openEditDialog = (item: any) => {
     setEditingItem(item)
     if (activeTab === "customers") {
@@ -372,7 +406,7 @@ export default function MasterPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="customer_id">Customer ID *</Label>
-          <Input id="customer_id" value={customerForm.customer_id} onChange={e => setCustomerForm({...customerForm, customer_id: e.target.value})} placeholder="e.g. C-001" />
+          <Input id="customer_id" value={customerForm.customer_id} readOnly className="bg-slate-100" placeholder="Auto-generated" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="customer_name">Customer Name *</Label>
@@ -436,7 +470,7 @@ export default function MasterPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="depot_id">Depot ID *</Label>
-          <Input id="depot_id" value={depotForm.depot_id} onChange={e => setDepotForm({...depotForm, depot_id: e.target.value})} placeholder="e.g. D-001" />
+          <Input id="depot_id" value={depotForm.depot_id} readOnly className="bg-slate-100" placeholder="Auto-generated" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="depot_name">Depot Name *</Label>
@@ -474,7 +508,7 @@ export default function MasterPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="broker_id">Broker ID *</Label>
-          <Input id="broker_id" value={brokerForm.broker_id} onChange={e => setBrokerForm({...brokerForm, broker_id: e.target.value})} placeholder="e.g. B-001" />
+          <Input id="broker_id" value={brokerForm.broker_id} readOnly className="bg-slate-100" placeholder="Auto-generated" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="salesman_name">Salesman Name *</Label>
@@ -518,7 +552,7 @@ export default function MasterPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="sku_code">SKU Code *</Label>
-          <Input id="sku_code" value={skuDetailsForm.sku_code} onChange={e => setSkuDetailsForm({...skuDetailsForm, sku_code: e.target.value})} placeholder="e.g. SKU001" />
+          <Input id="sku_code" value={skuDetailsForm.sku_code} readOnly className="bg-slate-100" placeholder="Auto-generated" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="sku_name">SKU Name *</Label>
@@ -622,7 +656,7 @@ export default function MasterPage() {
             if (!open) resetForms()
           }}>
             <DialogTrigger asChild>
-              <Button className="bg-primary hover:bg-primary/90 shadow-lg" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : `Add New ${activeTab.slice(0, -1)}`}>
+              <Button className="bg-primary hover:bg-primary/90 shadow-lg" disabled={isReadOnly} onClick={handleOpenAddDialog} title={isReadOnly ? "View Only Access" : `Add New ${activeTab.slice(0, -1)}`}>
                 <Plus className="mr-2 h-4 w-4" />
                 Add New {activeTab === "customers" ? "Customer" : activeTab === "depots" ? "Depot" : activeTab === "sku_details" ? "SKU" : "Broker"}
               </Button>
