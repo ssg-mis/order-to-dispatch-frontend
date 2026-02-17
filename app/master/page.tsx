@@ -11,9 +11,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { customerApi, depotApi, brokerApi } from "@/lib/api-service"
+import { customerApi, depotApi, brokerApi, skuDetailsApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
-import { Plus, Pencil, Trash2, Loader2, RefreshCw, Users, Warehouse, Briefcase, Search, Download } from "lucide-react"
+import { Plus, Pencil, Trash2, Loader2, RefreshCw, Users, Warehouse, Briefcase, Search, Download, Package } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
 import {
   AlertDialog,
@@ -64,6 +64,25 @@ interface Broker {
   depot_id: string
 }
 
+interface SkuDetail {
+  id: number
+  status: string
+  sku_code: string
+  sku_name: string
+  main_uom: string
+  alternate_uom: string
+  nos_per_main_uom: number | string
+  units: string
+  oil_filling_per_unit: number | string
+  filling_units: string
+  converted_kg: number | string
+  packing_weight_per_main_unit: number | string
+  weight_difference: number | string
+  sku_weight: number | string
+  packing_weight: number | string
+  gross_weight: number | string
+}
+
 // --- Constants ---
 
 const STATUS_OPTIONS = ["Active", "Inactive"]
@@ -80,6 +99,7 @@ export default function MasterPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [depots, setDepots] = useState<Depot[]>([])
   const [brokers, setBrokers] = useState<Broker[]>([])
+  const [skuDetails, setSkuDetails] = useState<SkuDetail[]>([])
 
   // Dialog states
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -123,6 +143,24 @@ export default function MasterPage() {
     depot_id: ""
   })
 
+  const [skuDetailsForm, setSkuDetailsForm] = useState<Partial<SkuDetail>>({
+    status: "Active",
+    sku_code: "",
+    sku_name: "",
+    main_uom: "",
+    alternate_uom: "",
+    nos_per_main_uom: "",
+    units: "",
+    oil_filling_per_unit: "",
+    filling_units: "",
+    converted_kg: "",
+    packing_weight_per_main_unit: "",
+    weight_difference: "",
+    sku_weight: "",
+    packing_weight: "",
+    gross_weight: ""
+  })
+
   // --- Data Fetching ---
 
   const fetchData = async () => {
@@ -138,6 +176,9 @@ export default function MasterPage() {
       } else if (activeTab === "brokers") {
         const res = await brokerApi.getAll(params)
         if (res.success) setBrokers(res.data)
+      } else if (activeTab === "sku_details") {
+        const res = await skuDetailsApi.getAll(params)
+        if (res.success) setSkuDetails(res.data)
       }
     } catch (error: any) {
       toast({
@@ -189,6 +230,23 @@ export default function MasterPage() {
       depot_name: "",
       depot_id: ""
     })
+    setSkuDetailsForm({
+      status: "Active",
+      sku_code: "",
+      sku_name: "",
+      main_uom: "",
+      alternate_uom: "",
+      nos_per_main_uom: "",
+      units: "",
+      oil_filling_per_unit: "",
+      filling_units: "",
+      converted_kg: "",
+      packing_weight_per_main_unit: "",
+      weight_difference: "",
+      sku_weight: "",
+      packing_weight: "",
+      gross_weight: ""
+    })
     setEditingItem(null)
   }
 
@@ -213,6 +271,12 @@ export default function MasterPage() {
           res = await brokerApi.update(editingItem.broker_id, brokerForm)
         } else {
           res = await brokerApi.create(brokerForm)
+        }
+      } else if (activeTab === "sku_details") {
+        if (editingItem) {
+          res = await skuDetailsApi.update(editingItem.id, skuDetailsForm)
+        } else {
+          res = await skuDetailsApi.create(skuDetailsForm)
         }
       }
 
@@ -244,6 +308,8 @@ export default function MasterPage() {
         res = await depotApi.delete(deletingItem.depot_id)
       } else if (activeTab === "brokers") {
         res = await brokerApi.delete(deletingItem.broker_id)
+      } else if (activeTab === "sku_details") {
+        res = await skuDetailsApi.delete(deletingItem.id)
       }
 
       if (res?.success) {
@@ -271,6 +337,8 @@ export default function MasterPage() {
       setDepotForm({ ...item })
     } else if (activeTab === "brokers") {
       setBrokerForm({ ...item })
+    } else if (activeTab === "sku_details") {
+      setSkuDetailsForm({ ...item })
     }
     setIsDialogOpen(true)
   }
@@ -290,6 +358,11 @@ export default function MasterPage() {
   const filteredBrokers = brokers.filter(b => 
     b.salesman_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
     b.broker_id?.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  const filteredSkuDetails = skuDetails.filter(s => 
+    s.sku_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    s.sku_code?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   // --- Render Helpers ---
@@ -440,6 +513,90 @@ export default function MasterPage() {
     </div>
   )
 
+  const renderSkuDetailsForm = () => (
+    <div className="grid gap-4 py-4 px-1 max-h-[70vh] overflow-y-auto">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="sku_code">SKU Code *</Label>
+          <Input id="sku_code" value={skuDetailsForm.sku_code} onChange={e => setSkuDetailsForm({...skuDetailsForm, sku_code: e.target.value})} placeholder="e.g. SKU001" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="sku_name">SKU Name *</Label>
+          <Input id="sku_name" value={skuDetailsForm.sku_name} onChange={e => setSkuDetailsForm({...skuDetailsForm, sku_name: e.target.value})} placeholder="Enter name" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="status">Status</Label>
+          <Select value={skuDetailsForm.status} onValueChange={val => setSkuDetailsForm({...skuDetailsForm, status: val})}>
+            <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="main_uom">Main UOM</Label>
+          <Input id="main_uom" value={skuDetailsForm.main_uom} onChange={e => setSkuDetailsForm({...skuDetailsForm, main_uom: e.target.value})} placeholder="e.g. Box" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="alternate_uom">Alternate UOM</Label>
+          <Input id="alternate_uom" value={skuDetailsForm.alternate_uom} onChange={e => setSkuDetailsForm({...skuDetailsForm, alternate_uom: e.target.value})} placeholder="e.g. Pcs" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="nos_per_main_uom">Nos per Main UOM</Label>
+          <Input id="nos_per_main_uom" type="number" value={skuDetailsForm.nos_per_main_uom} onChange={e => setSkuDetailsForm({...skuDetailsForm, nos_per_main_uom: e.target.value})} placeholder="0" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="units">Units</Label>
+          <Input id="units" value={skuDetailsForm.units} onChange={e => setSkuDetailsForm({...skuDetailsForm, units: e.target.value})} placeholder="e.g. Kg" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="oil_filling_per_unit">Oil Filling per Unit</Label>
+          <Input id="oil_filling_per_unit" type="number" value={skuDetailsForm.oil_filling_per_unit} onChange={e => setSkuDetailsForm({...skuDetailsForm, oil_filling_per_unit: e.target.value})} placeholder="0.00" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="filling_units">Filling Units</Label>
+          <Input id="filling_units" value={skuDetailsForm.filling_units} onChange={e => setSkuDetailsForm({...skuDetailsForm, filling_units: e.target.value})} placeholder="e.g. Ltr" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="converted_kg">Converted Kg</Label>
+          <Input id="converted_kg" type="number" value={skuDetailsForm.converted_kg} onChange={e => setSkuDetailsForm({...skuDetailsForm, converted_kg: e.target.value})} placeholder="0.00" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="packing_weight_per_main_unit">Packing Weight/Main Unit</Label>
+          <Input id="packing_weight_per_main_unit" type="number" value={skuDetailsForm.packing_weight_per_main_unit} onChange={e => setSkuDetailsForm({...skuDetailsForm, packing_weight_per_main_unit: e.target.value})} placeholder="0.00" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="weight_difference">Weight Difference</Label>
+          <Input id="weight_difference" type="number" value={skuDetailsForm.weight_difference} onChange={e => setSkuDetailsForm({...skuDetailsForm, weight_difference: e.target.value})} placeholder="0.00" />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="sku_weight">SKU Weight</Label>
+          <Input id="sku_weight" type="number" value={skuDetailsForm.sku_weight} onChange={e => setSkuDetailsForm({...skuDetailsForm, sku_weight: e.target.value})} placeholder="0.00" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="packing_weight">Packing Weight</Label>
+          <Input id="packing_weight" type="number" value={skuDetailsForm.packing_weight} onChange={e => setSkuDetailsForm({...skuDetailsForm, packing_weight: e.target.value})} placeholder="0.00" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="gross_weight">Gross Weight</Label>
+          <Input id="gross_weight" type="number" value={skuDetailsForm.gross_weight} onChange={e => setSkuDetailsForm({...skuDetailsForm, gross_weight: e.target.value})} placeholder="0.00" />
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div className="p-8 max-w-7xl mx-auto min-h-screen space-y-8 animate-in fade-in duration-700">
       <PageHeader 
@@ -467,17 +624,17 @@ export default function MasterPage() {
             <DialogTrigger asChild>
               <Button className="bg-primary hover:bg-primary/90 shadow-lg" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : `Add New ${activeTab.slice(0, -1)}`}>
                 <Plus className="mr-2 h-4 w-4" />
-                Add New {activeTab === "customers" ? "Customer" : activeTab === "depots" ? "Depot" : "Broker"}
+                Add New {activeTab === "customers" ? "Customer" : activeTab === "depots" ? "Depot" : activeTab === "sku_details" ? "SKU" : "Broker"}
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-xl">
               <DialogHeader>
-                <DialogTitle>{editingItem ? "Edit" : "Add New"} {activeTab.slice(0, -1)}</DialogTitle>
+                <DialogTitle>{editingItem ? "Edit" : "Add New"} {activeTab === "sku_details" ? "SKU" : activeTab.slice(0, -1)}</DialogTitle>
                 <DialogDescription>
-                  Enter the details for the {activeTab.slice(0, -1)} record.
+                  Enter the details for the {activeTab === "sku_details" ? "SKU" : activeTab.slice(0, -1)} record.
                 </DialogDescription>
               </DialogHeader>
-              {activeTab === "customers" ? renderCustomerForm() : activeTab === "depots" ? renderDepotForm() : renderBrokerForm()}
+              {activeTab === "customers" ? renderCustomerForm() : activeTab === "depots" ? renderDepotForm() : activeTab === "sku_details" ? renderSkuDetailsForm() : renderBrokerForm()}
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button onClick={handleCreateOrUpdate} disabled={isSubmitting}>
@@ -503,6 +660,10 @@ export default function MasterPage() {
           <TabsTrigger value="brokers" className="flex items-center gap-2 px-6 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-300">
             <Briefcase className="h-4 w-4" />
             Broker Details
+          </TabsTrigger>
+          <TabsTrigger value="sku_details" className="flex items-center gap-2 px-6 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-300">
+            <Package className="h-4 w-4" />
+            SKU Details
           </TabsTrigger>
         </TabsList>
 
@@ -687,6 +848,71 @@ export default function MasterPage() {
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete Broker"}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="sku_details">
+          <Card className="shadow-xl border-none rounded-2xl overflow-hidden bg-white">
+            <CardHeader className="bg-slate-50/50 border-b p-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="text-xl font-bold flex items-center gap-2">
+                    <Package className="h-5 w-5 text-primary" />
+                    SKU Details List
+                  </CardTitle>
+                  <CardDescription className="mt-1">Manage your SKU database</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-slate-50/50">
+                  <TableRow>
+                    <TableHead className="pl-6">ID</TableHead>
+                    <TableHead>SKU Code</TableHead>
+                    <TableHead>SKU Name</TableHead>
+                    <TableHead>Main UOM</TableHead>
+                    <TableHead>Alt. UOM</TableHead>
+                    <TableHead>Packing Wt</TableHead>
+                    <TableHead>Gross Wt</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right pr-6">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow><TableCell colSpan={9} className="text-center py-20"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
+                  ) : filteredSkuDetails.length === 0 ? (
+                    <TableRow><TableCell colSpan={9} className="text-center py-20 text-slate-400">No SKUs found</TableCell></TableRow>
+                  ) : filteredSkuDetails.map(item => (
+                    <TableRow key={item.id} className="hover:bg-slate-50/30 transition-colors">
+                      <TableCell className="font-medium pl-6">{item.id}</TableCell>
+                      <TableCell className="font-semibold text-slate-900">{item.sku_code}</TableCell>
+                      <TableCell>{item.sku_name}</TableCell>
+                      <TableCell>{item.main_uom}</TableCell>
+                      <TableCell>{item.alternate_uom}</TableCell>
+                      <TableCell>{item.packing_weight}</TableCell>
+                      <TableCell>{item.gross_weight}</TableCell>
+                      <TableCell>
+                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
+                          {item.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-6">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit SKU"}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete SKU"}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>

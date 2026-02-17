@@ -1024,6 +1024,43 @@ export const brokerApi = {
   },
 };
 
+/**
+ * SKU Details API
+ */
+export const skuDetailsApi = {
+  getAll: async (params?: any): Promise<ApiResponse> => {
+    const queryString = params 
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`/sku-details${queryString}`);
+  },
+
+  getById: async (id: number): Promise<ApiResponse> => {
+    return request(`/sku-details/${id}`);
+  },
+
+  create: async (data: any): Promise<ApiResponse> => {
+    return request('/sku-details', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (id: number, data: any): Promise<ApiResponse> => {
+    return request(`/sku-details/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: number): Promise<ApiResponse> => {
+    return request(`/sku-details/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+
 export default {
   order: orderApi,
   preApproval: preApprovalApi,
@@ -1043,4 +1080,6 @@ export default {
   sku: skuApi,
   depot: depotApi,
   broker: brokerApi,
+  skuDetails: skuDetailsApi,
 };
+
