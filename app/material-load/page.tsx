@@ -24,10 +24,12 @@ import { Settings2, Truck, Weight } from "lucide-react"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { Checkbox } from "@/components/ui/checkbox"
 import { materialLoadApi } from "@/lib/api-service"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function MaterialLoadPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { isReadOnly } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -392,8 +394,9 @@ export default function MaterialLoadPage() {
         <div className="flex justify-end gap-2">
           <Button 
             onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0} 
+            disabled={selectedItems.length === 0 || isReadOnly} 
             className="bg-blue-600 hover:bg-blue-700"
+            title={isReadOnly ? "View Only Access" : "Load Material"}
           >
             <Weight className="mr-2 h-4 w-4" />
             Load Material ({selectedItems.length})

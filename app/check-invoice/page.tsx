@@ -31,10 +31,12 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { checkInvoiceApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function CheckInvoicePage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { isReadOnly } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -372,8 +374,9 @@ export default function CheckInvoicePage() {
         <div className="flex justify-end gap-2">
            <Button 
             onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0} 
+            disabled={selectedItems.length === 0 || isReadOnly} 
             className="bg-blue-600 hover:bg-blue-700"
+            title={isReadOnly ? "View Only Access" : "Verify Invoice"}
           >
             <CheckCircle className="mr-2 h-4 w-4" />
             Verify Invoice ({selectedItems.length})
@@ -754,8 +757,9 @@ export default function CheckInvoicePage() {
             </Button>
             <Button 
               onClick={handleSubmit} 
-              disabled={isProcessing || !checkData.status}
+              disabled={isProcessing || !checkData.status || isReadOnly}
               className="bg-blue-600 hover:bg-blue-700 min-w-[150px]"
+              title={isReadOnly ? "View Only Access" : "Complete Verification"}
             >
               {isProcessing ? "Processing..." : "Complete Verification"}
             </Button>

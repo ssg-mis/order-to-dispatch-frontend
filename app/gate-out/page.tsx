@@ -23,10 +23,12 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { gateOutApi, orderApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function GateOutPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { isReadOnly } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -403,8 +405,9 @@ export default function GateOutPage() {
         <div className="flex justify-end gap-2">
            <Button 
             onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0} 
+            disabled={selectedItems.length === 0 || isReadOnly} 
             className="bg-blue-600 hover:bg-blue-700"
+            title={isReadOnly ? "View Only Access" : "Complete Gate Out"}
           >
             <CheckCircle className="mr-2 h-4 w-4" />
             Complete Gate Out ({selectedItems.length})

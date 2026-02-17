@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Save, FileUp, Plus, Trash2, CalendarIcon } from "lucide-react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/hooks/use-auth"
 import { customerApi, depotApi, skuApi, brokerApi, orderApi } from "@/lib/api-service"
 import { Combobox } from "@/components/ui/combobox"
 import { format } from "date-fns"
@@ -50,6 +51,7 @@ type PreApprovalProduct = {
 
 export default function OrderPunchPage() {
   const { toast } = useToast()
+  const { isReadOnly } = useAuth()
   const router = useRouter()
 
   // New state for customers
@@ -1029,7 +1031,9 @@ export default function OrderPunchPage() {
                     <Button 
                       type="button" 
                       onClick={addPreApprovalProduct}
+                      disabled={isReadOnly}
                       className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                      title={isReadOnly ? "View Only Access" : "Add to List"}
                     >
                       <Plus className="h-4 w-4 mr-2" /> Add to List
                     </Button>
@@ -1176,7 +1180,9 @@ export default function OrderPunchPage() {
                         variant="outline"
                         size="sm"
                         onClick={addProduct}
+                        disabled={isReadOnly}
                         className="gap-2 bg-white hover:bg-blue-50 text-blue-600 border-blue-200 shadow-sm"
+                        title={isReadOnly ? "View Only Access" : "Add Product"}
                       >
                         <Plus className="h-4 w-4" /> Add Product
                       </Button>
@@ -1280,7 +1286,7 @@ export default function OrderPunchPage() {
           <Button variant="ghost" type="button" disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" className="gap-2 px-8" disabled={isSubmitting}>
+          <Button type="submit" className="gap-2 px-8" disabled={isSubmitting || isReadOnly} title={isReadOnly ? "View Only Access" : "Save Order"}>
             <Save className="h-4 w-4" /> {isSubmitting ? "Saving..." : "Save Order"}
           </Button>
         </div>

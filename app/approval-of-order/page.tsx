@@ -19,11 +19,13 @@ import { Settings2, CheckCircle2, Loader2, ChevronDown, ChevronUp, ChevronsUpDow
 import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { approvalApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/hooks/use-auth"
 
 
 export default function CommitmentReviewPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { isReadOnly } = useAuth()
   const [isConfirming, setIsConfirming] = useState(false)
 
   const formatDate = (dateStr: string) => {
@@ -658,8 +660,9 @@ export default function CommitmentReviewPage() {
           <Dialog open={selectedOrder !== null} onOpenChange={handleBulkVerifyOpen}>
               <DialogTrigger asChild>
                 <Button 
-                  disabled={selectedItems.length === 0}
+                  disabled={selectedItems.length === 0 || isReadOnly}
                   className="bg-blue-600 hover:bg-blue-700 shadow-md transition-all active:scale-95"
+                  title={isReadOnly ? "View Only Access" : "Verify Selected"}
                 >
                   <CheckCircle2 className="mr-2 h-4 w-4" />
                   Verify Selected ({selectedItems.length})

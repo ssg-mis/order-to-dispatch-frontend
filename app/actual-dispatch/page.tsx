@@ -17,10 +17,12 @@ import { Input } from "@/components/ui/input"
 import { Settings2, ChevronDown, ChevronUp, Truck, Weight } from "lucide-react"
 import { actualDispatchApi, vehicleDetailsApi, materialLoadApi, skuApi, orderApi } from "@/lib/api-service"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function ActualDispatchPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { isReadOnly } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -875,7 +877,8 @@ export default function ActualDispatchPage() {
           </DropdownMenu>
           <Button
             onClick={() => handleOpenDialog()}
-            disabled={selectedOrders.length === 0}
+            disabled={selectedOrders.length === 0 || isReadOnly}
+            title={isReadOnly ? "View Only Access" : "Confirm Dispatch"}
           >
              Confirm Dispatch ({selectedOrders.length})
           </Button>
@@ -1523,7 +1526,7 @@ export default function ActualDispatchPage() {
 
           <DialogFooter className="mt-4 border-t pt-4 px-8 pb-8">
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-            <Button onClick={performDispatchConfirmation} disabled={isProcessing || dialogSelectedProducts.length === 0}>
+            <Button onClick={performDispatchConfirmation} disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly} title={isReadOnly ? "View Only Access" : "Confirm Dispatch"}>
                {isProcessing ? "Processing..." : `Confirm Dispatch (${dialogSelectedProducts.length})`}
             </Button>
           </DialogFooter>

@@ -24,10 +24,12 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { makeInvoiceApi, orderApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function MakeInvoicePage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { isReadOnly } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -425,8 +427,9 @@ export default function MakeInvoicePage() {
         <div className="flex justify-end gap-2">
            <Button 
             onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0} 
+            disabled={selectedItems.length === 0 || isReadOnly} 
             className="bg-blue-600 hover:bg-blue-700"
+            title={isReadOnly ? "View Only Access" : "Create Invoice"}
           >
             <FileText className="mr-2 h-4 w-4" />
             Create Invoice ({selectedItems.length})
@@ -783,8 +786,9 @@ export default function MakeInvoicePage() {
             </Button>
             <Button 
               onClick={handleSubmit} 
-              disabled={isProcessing || !invoiceData.invoiceNo}
+              disabled={isProcessing || !invoiceData.invoiceNo || isReadOnly}
               className="bg-blue-600 hover:bg-blue-700 min-w-[150px]"
+              title={isReadOnly ? "View Only Access" : "Generate Invoice"}
             >
               {isProcessing ? "Processing..." : "Generate Invoice"}
             </Button>

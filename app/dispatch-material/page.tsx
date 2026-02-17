@@ -17,10 +17,12 @@ import { Label } from "@/components/ui/label"
 import { Settings2, ChevronDown, ChevronUp } from "lucide-react"
 import { dispatchPlanningApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function DispatchMaterialPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { isReadOnly } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -536,7 +538,8 @@ export default function DispatchMaterialPage() {
 
         <Button
           onClick={handleOpenDialog}
-          disabled={selectedItems.length === 0}
+          disabled={selectedItems.length === 0 || isReadOnly}
+          title={isReadOnly ? "View Only Access" : "Dispatch Selected"}
         >
           {selectedItems.length > 1 ? `Select 1 Group to Dispatch` : `Dispatch Selected (${selectedItems.length})`}
         </Button>

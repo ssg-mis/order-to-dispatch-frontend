@@ -32,6 +32,7 @@ import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus, Check, Search
 import { useState, useEffect, useMemo } from "react"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { skuApi, preApprovalApi } from "@/lib/api-service"
+import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import {
   Select,
@@ -46,6 +47,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 
 export default function PreApprovalPage() {
   const { toast } = useToast()
+  const { isReadOnly } = useAuth()
   const router = useRouter()
   const PAGE_COLUMNS = [
     { id: "soNo", label: "DO No." },
@@ -1309,7 +1311,7 @@ export default function PreApprovalPage() {
               }}
             >
               <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700 shadow-md">
+                <Button className="bg-blue-600 hover:bg-blue-700 shadow-md" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Process Selected"}>
                   Process Selected ({selectedRows.length})
                 </Button>
               </DialogTrigger>

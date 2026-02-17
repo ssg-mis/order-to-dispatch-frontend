@@ -22,10 +22,12 @@ import { Upload, CheckCircle, Settings2, FileText, IndianRupee } from "lucide-re
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { damageAdjustmentApi, orderApi } from "@/lib/api-service"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function DamageAdjustmentPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { isReadOnly } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -380,8 +382,9 @@ export default function DamageAdjustmentPage() {
         <div className="flex justify-end gap-2">
            <Button 
             onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0} 
+            disabled={selectedItems.length === 0 || isReadOnly} 
             className="bg-blue-600 hover:bg-blue-700"
+            title={isReadOnly ? "View Only Access" : "Process Adjustment"}
           >
             <CheckCircle className="mr-2 h-4 w-4" />
             Process Adjustment ({selectedItems.length})
@@ -708,8 +711,9 @@ export default function DamageAdjustmentPage() {
             </Button>
             <Button 
               onClick={handleSubmit} 
-              disabled={isProcessing}
+              disabled={isProcessing || isReadOnly}
               className="bg-blue-600 hover:bg-blue-700 min-w-37.5"
+              title={isReadOnly ? "View Only Access" : "Complete Adjustment"}
             >
               {isProcessing ? "Processing..." : "Complete Adjustment"}
             </Button>

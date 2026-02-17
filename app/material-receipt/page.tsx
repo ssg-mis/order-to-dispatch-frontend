@@ -24,10 +24,12 @@ import { Upload, CheckCircle, Settings2, AlertTriangle } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { confirmMaterialReceiptApi, orderApi } from "@/lib/api-service"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function MaterialReceiptPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { isReadOnly } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -413,8 +415,9 @@ export default function MaterialReceiptPage() {
         <div className="flex justify-end gap-2">
            <Button 
             onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0} 
+            disabled={selectedItems.length === 0 || isReadOnly} 
             className="bg-blue-600 hover:bg-blue-700"
+            title={isReadOnly ? "View Only Access" : "Confirm Receipt"}
           >
             <CheckCircle className="mr-2 h-4 w-4" />
             Confirm Receipt ({selectedItems.length})
@@ -782,8 +785,9 @@ export default function MaterialReceiptPage() {
             </Button>
             <Button 
               onClick={handleSubmit} 
-              disabled={isProcessing}
+              disabled={isProcessing || isReadOnly}
               className={`min-w-37.5 ${receiptData.hasDamage === "yes" ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"}`}
+              title={isReadOnly ? "View Only Access" : "Confirm Receipt"}
             >
               {isProcessing ? "Processing..." : "Confirm Receipt"}
             </Button>

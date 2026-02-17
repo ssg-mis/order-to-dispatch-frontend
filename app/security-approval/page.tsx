@@ -25,10 +25,12 @@ import { Upload, X, Plus, Settings2, ShieldAlert, ShieldCheck, Truck, ChevronDow
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { securityGuardApprovalApi, orderApi } from "@/lib/api-service"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function SecurityApprovalPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { isReadOnly } = useAuth()
   const [confirmDetails, setConfirmDetails] = useState<Record<string, { qty: string }>>({})
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
@@ -454,8 +456,9 @@ export default function SecurityApprovalPage() {
 
           <Button 
             onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0} 
+            disabled={selectedItems.length === 0 || isReadOnly} 
             className="bg-purple-600 hover:bg-purple-700 shadow-lg font-black uppercase tracking-tighter italic"
+            title={isReadOnly ? "View Only Access" : "Process Security"}
           >
             <Upload className="mr-2 h-4 w-4" />
             Process Security ({selectedItems.length})

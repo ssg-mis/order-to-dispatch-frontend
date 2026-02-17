@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { userApi } from "@/lib/api-service"
+import { useAuth } from "@/hooks/use-auth"
 import { Plus, Pencil, Trash2, Loader2, RefreshCw, Users, Shield, Eye, EyeOff } from "lucide-react"
 import {
   AlertDialog,
@@ -59,11 +60,12 @@ const PAGE_ACCESS_OPTIONS = [
   "Master"
 ]
 
-const ROLES = ["admin", "user", "guard"]
+const ROLES = ["admin", "user", "guard", "pc"]
 const STATUSES = ["active", "inactive"]
 
 export default function SettingsPage() {
   const { toast } = useToast()
+  const { isReadOnly } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -282,7 +284,7 @@ export default function SettingsPage() {
           if (!open) resetForm()
         }}>
           <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90">
+            <Button className="bg-primary hover:bg-primary/90" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Add User"}>
               <Plus className="mr-2 h-4 w-4" />
               Add User
             </Button>
@@ -539,6 +541,8 @@ export default function SettingsPage() {
                           size="icon"
                           onClick={() => openEditDialog(user)}
                           className="h-8 w-8 hover:bg-blue-50 hover:text-blue-600"
+                          disabled={isReadOnly}
+                          title={isReadOnly ? "View Only Access" : "Edit User"}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -547,6 +551,8 @@ export default function SettingsPage() {
                           size="icon"
                           onClick={() => openDeleteDialog(user)}
                           className="h-8 w-8 text-destructive hover:bg-red-50 hover:text-red-600"
+                          disabled={isReadOnly}
+                          title={isReadOnly ? "View Only Access" : "Delete User"}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
