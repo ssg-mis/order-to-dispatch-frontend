@@ -31,5 +31,6 @@ export const ALL_WORKFLOW_COLUMNS = [
   { id: "deliveryDate", label: "Expected Delivery Date" },
   { id: "qtyToDispatch", label: "Qty to Dispatch" },
   { id: "deliveryFrom", label: "Delivery From" },
+  { id: "vehicleNo", label: "Vehicle No." },
   { id: "status", label: "Status" },
 ]

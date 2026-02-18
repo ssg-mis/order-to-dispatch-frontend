@@ -220,7 +220,9 @@ export default function DamageAdjustmentPage() {
 
     return Object.values(grouped).map(g => ({
       ...g,
-      processId: g._allProducts[0]?.processid || "—"
+      processId: g._allProducts[0]?.processid || "—",
+      vehicleNo: g._allProducts[0]?.truckNo || "—",
+      orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—"
     }))
   }, [filteredPendingOrders])
 
@@ -428,6 +430,8 @@ export default function DamageAdjustmentPage() {
                 <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Damage Info</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
@@ -446,6 +450,12 @@ export default function DamageAdjustmentPage() {
                         <Badge variant="secondary">{group._productCount} items</Badge>
                       </TableCell>
                       <TableCell className="text-center">
+                        <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
                          {/* Show summary of damage if available in first product or count */}
                          <div className="text-xs text-red-600 font-medium">
                             {group._allProducts.filter((p:any) => p.damageStatus === "Damaged").length} damaged items
@@ -458,7 +468,7 @@ export default function DamageAdjustmentPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     No pending damage adjustments
                   </TableCell>
                 </TableRow>

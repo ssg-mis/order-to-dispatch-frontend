@@ -232,7 +232,9 @@ export default function MaterialReceiptPage() {
 
     return Object.values(grouped).map(g => ({
       ...g,
-      processId: g._allProducts[0]?.processid || "—"
+      processId: g._allProducts[0]?.processid || "—",
+      vehicleNo: g._allProducts[0]?.truckNo || "—",
+      orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—"
     }))
   }, [filteredPendingOrders])
 
@@ -461,6 +463,8 @@ export default function MaterialReceiptPage() {
                 <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -478,13 +482,19 @@ export default function MaterialReceiptPage() {
                         <Badge variant="secondary">{group._productCount} items</Badge>
                       </TableCell>
                       <TableCell className="text-center">
+                        <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
                          <Badge className="bg-sky-100 text-sky-700">In Transit</Badge>
                       </TableCell>
                    </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     No orders pending for receipt confirmation
                   </TableCell>
                 </TableRow>

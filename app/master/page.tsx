@@ -911,8 +911,7 @@ export default function MasterPage() {
               <Table>
                 <TableHeader className="bg-slate-50/50">
                   <TableRow>
-                    <TableHead className="pl-6">ID</TableHead>
-                    <TableHead>SKU Code</TableHead>
+                    <TableHead className="pl-6">SKU Code</TableHead>
                     <TableHead>SKU Name</TableHead>
                     <TableHead>Main UOM</TableHead>
                     <TableHead>Alt. UOM</TableHead>
@@ -929,8 +928,7 @@ export default function MasterPage() {
                     <TableRow><TableCell colSpan={9} className="text-center py-20 text-slate-400">No SKUs found</TableCell></TableRow>
                   ) : filteredSkuDetails.map(item => (
                     <TableRow key={item.id} className="hover:bg-slate-50/30 transition-colors">
-                      <TableCell className="font-medium pl-6">{item.id}</TableCell>
-                      <TableCell className="font-semibold text-slate-900">{item.sku_code}</TableCell>
+                      <TableCell className="font-semibold text-slate-900 pl-6">{item.sku_code}</TableCell>
                       <TableCell>{item.sku_name}</TableCell>
                       <TableCell>{item.main_uom}</TableCell>
                       <TableCell>{item.alternate_uom}</TableCell>

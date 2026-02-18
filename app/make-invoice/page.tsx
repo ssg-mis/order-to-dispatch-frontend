@@ -242,7 +242,9 @@ export default function MakeInvoicePage() {
     return Object.values(grouped).map(group => ({
       ...group,
       doNumber: Array.from(group.doNumberList as Set<string>).join(", "),
-      processId: group._allProducts[0]?.processid || "—"
+      processId: group._allProducts[0]?.processid || "—",
+      vehicleNo: group._allProducts[0]?.truckNo || "—",
+      orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—"
     }))
   }, [filteredPendingOrders])
 
@@ -473,6 +475,8 @@ export default function MakeInvoicePage() {
                 <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -490,13 +494,19 @@ export default function MakeInvoicePage() {
                         <Badge variant="secondary">{group._productCount} items</Badge>
                       </TableCell>
                       <TableCell className="text-center">
+                        <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
                         <Badge className="bg-cyan-100 text-cyan-700">Pending Invoice</Badge>
                       </TableCell>
                    </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     No orders pending for invoice creation
                   </TableCell>
                 </TableRow>

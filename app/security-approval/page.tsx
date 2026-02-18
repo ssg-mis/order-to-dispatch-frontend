@@ -339,7 +339,7 @@ export default function SecurityApprovalPage() {
            isBroker: order.is_order_through_broker || false,
            brokerName: order.broker_name || "—",
            partyCredit: order.party_credit_status || "Good",
-           orderPunchRemarks: order.remark || "—"
+           orderPunchRemarks: order.order_punch_remarks || "—"
          }
        }
        
@@ -371,7 +371,9 @@ export default function SecurityApprovalPage() {
     return Object.values(grouped).map(group => ({
       ...group,
       doNumber: Array.from(group.doNumberList as Set<string>).join(", "),
-      processId: group._allProducts[0]?.processid || "—"
+      processId: group._allProducts[0]?.processid || "—",
+      vehicleNo: group._allProducts[0]?.truckNo || "—",
+      orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—"
     }))
   }, [filteredPendingOrders])
 
@@ -476,6 +478,8 @@ export default function SecurityApprovalPage() {
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">PROCESS ID</TableHead>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">CUSTOMER NAME</TableHead>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">ITEM COUNT</TableHead>
+                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">VEHICLE NO.</TableHead>
+                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">ORDER PUNCH REMARKS</TableHead>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">STATUS</TableHead>
                 <TableHead className="text-center text-[10px] uppercase font-black">ACTIONS</TableHead>
               </TableRow>
@@ -505,6 +509,12 @@ export default function SecurityApprovalPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-center p-4">
+                        <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
+                      </TableCell>
+                      <TableCell className="text-center p-4">
+                        <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
+                      </TableCell>
+                      <TableCell className="text-center p-4">
                         <Badge className="bg-orange-100 text-orange-700 border-orange-200 font-black text-[10px] uppercase">Pending Guard</Badge>
                       </TableCell>
                       <TableCell className="text-center p-4">
@@ -519,7 +529,7 @@ export default function SecurityApprovalPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-20">
+                  <TableCell colSpan={9} className="text-center py-20">
                     <div className="flex flex-col items-center gap-2">
                        <ShieldAlert className="w-12 h-12 text-slate-200" />
                        <p className="text-slate-400 font-black uppercase tracking-widest text-xs">No vehicles pending for security check</p>
