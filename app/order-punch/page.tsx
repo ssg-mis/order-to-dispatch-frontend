@@ -281,10 +281,25 @@ export default function OrderPunchPage() {
     // Validate based on Order Type
     if (orderType === "regular" || orderType === "pre-approval") {
       // For regular and pre-approval, validate products
-      if (depoName && products.some((p) => !p.productName)) {
+      const invalidProduct = products.find((p) => 
+        !p.productName || 
+        !p.orderQty || parseFloat(p.orderQty) <= 0 || 
+        !p.rate || parseFloat(p.rate) <= 0
+      )
+
+      if (depoName && invalidProduct) {
+        let errorDesc = "Please fill in product details for all rows."
+        if (!invalidProduct.productName) {
+           errorDesc = "Please select a product for all rows."
+        } else if (!invalidProduct.orderQty || parseFloat(invalidProduct.orderQty) <= 0) {
+           errorDesc = `Order Quantity is mandatory and must be greater than 0 for ${invalidProduct.productName || 'the selected product'}.`
+        } else if (!invalidProduct.rate || parseFloat(invalidProduct.rate) <= 0) {
+           errorDesc = `Rate is mandatory and must be greater than 0 for ${invalidProduct.productName || 'the selected product'}.`
+        }
+
         toast({
           title: "Validation Error",
-          description: "Please fill in product details for all rows.",
+          description: errorDesc,
           variant: "destructive",
         })
         return
@@ -1089,7 +1104,7 @@ export default function OrderPunchPage() {
                              Product {idx + 1}
                          </div>
                          <div className="grid grid-cols-2 gap-4 flex-1 md:grid-cols-11">
-                          <div className={`space-y-1.5 col-span-2 md:col-span-6`}>
+                          <div className={`space-y-1.5 col-span-2 md:col-span-5`}>
                              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Name</Label>
                              <Combobox
                                options={skus
@@ -1134,7 +1149,7 @@ export default function OrderPunchPage() {
                           </div>
 
                           <div className="space-y-1.5 col-span-1 md:col-span-2">
-                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Order Qty</Label>
+                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Order Qty <span className="text-red-500">*</span></Label>
                              <Input
                                type="number"
                                value={product.orderQty}
@@ -1146,7 +1161,7 @@ export default function OrderPunchPage() {
                       
                           {/* Rate field for both types, but auto-filled for Pre-Approval */}
                           <div className="space-y-1.5 col-span-2 md:col-span-2">
-                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate</Label>
+                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate <span className="text-red-500">*</span></Label>
                              <Input
                                type="number"
                                value={product.rate}

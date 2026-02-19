@@ -48,9 +48,6 @@ export default function DamageAdjustmentPage() {
   const [adjustmentData, setAdjustmentData] = useState({
     creditNoteDate: "",
     creditNoteNo: "",
-    creditNoteQty: "",
-    creditNoteAmount: "",
-    netBalance: "",
     creditNoteCopy: "" as string,
     creditNoteCopyName: "",
   })
@@ -255,9 +252,6 @@ export default function DamageAdjustmentPage() {
       setAdjustmentData({
         creditNoteDate: "",
         creditNoteNo: "",
-        creditNoteQty: "",
-        creditNoteAmount: "",
-        netBalance: "",
         creditNoteCopy: "",
         creditNoteCopyName: "",
       })
@@ -276,14 +270,7 @@ export default function DamageAdjustmentPage() {
         return
     }
 
-    // Numeric Validation
-    const isInvalidNumber = (val: string) => val !== "" && isNaN(Number(val))
-    if (isInvalidNumber(adjustmentData.creditNoteQty) || 
-        isInvalidNumber(adjustmentData.creditNoteAmount) || 
-        isInvalidNumber(adjustmentData.netBalance)) {
-        toast({ title: "Validation Error", description: "Please enter valid numbers for Qty, Amount, and Balance.", variant: "destructive" })
-        return
-    }
+    // Numeric Validation - Removed since quantity/amount/balance fields were removed
 
     const productsToSubmit = selectedGroup._allProducts.filter((p: any) => 
       selectedProducts.includes(p._rowKey)
@@ -307,9 +294,9 @@ export default function DamageAdjustmentPage() {
         const submitData = {
             credit_note_date: adjustmentData.creditNoteDate,
             credit_note_no: adjustmentData.creditNoteNo,
-            credit_note_qty: adjustmentData.creditNoteQty || 0,
-            credit_note_amount: adjustmentData.creditNoteAmount || 0,
-            net_banalce: adjustmentData.netBalance || 0,
+            credit_note_qty: 0,
+            credit_note_amount: 0,
+            net_banalce: 0,
             status_2: "Completed",
             credit_note_copy: adjustmentData.creditNoteCopy || null
         };
@@ -656,36 +643,6 @@ export default function DamageAdjustmentPage() {
                          onChange={(e) => setAdjustmentData({ ...adjustmentData, creditNoteNo: e.target.value })}
                          placeholder="e.g. CN-2023-001"
                        />
-                     </div>
-
-                     <div className="space-y-2">
-                       <Label>Credit Note Qty</Label>
-                       <Input
-                         type="number"
-                         value={adjustmentData.creditNoteQty}
-                         onChange={(e) => setAdjustmentData({ ...adjustmentData, creditNoteQty: e.target.value })}
-                         placeholder="Qty adjusted"
-                       />
-                     </div>
-
-                     <div className="space-y-2">
-                       <Label className="flex items-center gap-1"><IndianRupee className="h-3 w-3" /> Credit Note Amount</Label>
-                       <Input
-                         type="number"
-                         value={adjustmentData.creditNoteAmount}
-                         onChange={(e) => setAdjustmentData({ ...adjustmentData, creditNoteAmount: e.target.value })}
-                         placeholder="Amount in ₹"
-                       />
-                     </div>
-
-                     <div className="space-y-2">
-                        <Label>Net Balance</Label>
-                        <Input
-                          type="number"
-                          value={adjustmentData.netBalance}
-                          onChange={(e) => setAdjustmentData({ ...adjustmentData, netBalance: e.target.value })}
-                          placeholder="Final balance"
-                        />
                      </div>
 
                      <div className="space-y-2">
