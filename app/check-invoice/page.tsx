@@ -43,6 +43,7 @@ export default function CheckInvoicePage() {
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
     "orderNo",
     "customerName",
+    "invoiceNo",
     "status",
   ])
 
@@ -197,7 +198,6 @@ export default function CheckInvoicePage() {
           tareWeight: order.tare_weight,
           netWeight: order.net_weight,
           transporterName: order.transporter_name,
-          // Newly requested fields
           fitness: order.fitness,
           insurance: order.insurance,
           tax_copy: order.tax_copy,
@@ -209,7 +209,8 @@ export default function CheckInvoicePage() {
           bilty_image: order.bilty_image,
           vehicle_image_attachemrnt: order.vehicle_image_attachemrnt,
           reason_of_difference_in_weight_if_any_speacefic: order.reason_of_difference_in_weight_if_any_speacefic,
-          processid: order.processid || null
+          processid: order.processid || null,
+          actual_5: order.actual_5, // Track whether record has been reverted
        }
        
        group._ordersMap[orderKey]._products.push(product)
@@ -222,8 +223,11 @@ export default function CheckInvoicePage() {
        ...group,
        doNumber: Array.from(group.doNumberList).join(", "),
        processId: group._allProducts[0]?.processid || "—",
-       vehicleNo: group._allProducts[0]?.truckNo || "—",
-      orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—"
+       vehicleNo: (group._allProducts[0]?.truckNo || "—").toUpperCase(),
+       invoiceNo: group._allProducts[0]?.invoice_no || "—",
+       orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—",
+       // Group is reverted if ALL products have actual_5 = null (pushed back to Make Invoice)
+       isReverted: group._allProducts.every((p: any) => !p.actual_5),
     }))
   }, [filteredPendingOrders])
 
@@ -422,6 +426,7 @@ export default function CheckInvoicePage() {
                 <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
+                {visibleColumns.includes("invoiceNo") && <TableHead className="whitespace-nowrap text-center">Invoice No.</TableHead>}
                 <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
@@ -430,9 +435,17 @@ export default function CheckInvoicePage() {
             <TableBody>
               {displayRows.length > 0 ? (
                 displayRows.map((group) => (
-                   <TableRow key={group._rowKey} className={selectedItems.includes(group._rowKey) ? "bg-blue-50/50" : ""}>
+                   <TableRow 
+                     key={group._rowKey} 
+                     className={`${selectedItems.includes(group._rowKey) ? "bg-blue-50/50" : ""} ${group.isReverted ? "opacity-60 bg-amber-50/40" : ""}`}
+                   >
                       <TableCell className="text-center">
-                        <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
+                        <Checkbox 
+                          checked={selectedItems.includes(group._rowKey)} 
+                          onCheckedChange={() => toggleSelectItem(group._rowKey)} 
+                          disabled={group.isReverted}
+                          title={group.isReverted ? "Reverted to Make Invoice stage — awaiting re-issue" : ""}
+                        />
                       </TableCell>
                       <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
                       <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
@@ -440,6 +453,7 @@ export default function CheckInvoicePage() {
                       <TableCell className="text-center">
                         <Badge variant="secondary">{group._productCount} items</Badge>
                       </TableCell>
+                      {visibleColumns.includes("invoiceNo") && <TableCell className="text-center text-xs font-medium">{group.invoiceNo}</TableCell>}
                       <TableCell className="text-center">
                         <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
                       </TableCell>
@@ -447,7 +461,9 @@ export default function CheckInvoicePage() {
                         <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
                       </TableCell>
                       <TableCell className="text-center">
-                         {group._allProducts.some((p: any) => p.status_1 === "Issue") ? (
+                         {group.isReverted ? (
+                           <Badge className="bg-red-100 text-red-700">Issue Reported</Badge>
+                         ) : group._allProducts.some((p: any) => p.status_1 === "Issue") ? (
                            <Badge className="bg-red-100 text-red-700">Issue Reported</Badge>
                          ) : (
                            <Badge className="bg-yellow-100 text-yellow-700">Pending Review</Badge>
@@ -559,7 +575,7 @@ export default function CheckInvoicePage() {
                                       {/* Dispatch Info */}
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Truck No</p>
-                                        <p className="text-sm font-black text-blue-800">{firstProd.truckNo || "—"}</p>
+                                        <p className="text-sm font-black text-blue-800">{(firstProd.truckNo || "—").toUpperCase()}</p>
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Bilty No</p>
@@ -713,7 +729,7 @@ export default function CheckInvoicePage() {
                                       </Badge>
                                     </TableCell>
                                     <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
-                                       {product.truckNo || "—"}
+                                       {(product.truckNo || "—").toUpperCase()}
                                     </TableCell>
                                   </TableRow>
                                 ))}

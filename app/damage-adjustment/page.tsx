@@ -34,6 +34,7 @@ export default function DamageAdjustmentPage() {
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
     "orderNo",
     "customerName",
+    "invoiceNo",
     "status",
   ])
 
@@ -218,7 +219,8 @@ export default function DamageAdjustmentPage() {
     return Object.values(grouped).map(g => ({
       ...g,
       processId: g._allProducts[0]?.processid || "—",
-      vehicleNo: g._allProducts[0]?.truckNo || "—",
+      vehicleNo: (g._allProducts[0]?.truckNo || "—").toUpperCase(),
+      invoiceNo: g._allProducts[0]?.invoice_no || "—",
       orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—"
     }))
   }, [filteredPendingOrders])
@@ -417,6 +419,7 @@ export default function DamageAdjustmentPage() {
                 <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
+                {visibleColumns.includes("invoiceNo") && <TableHead className="whitespace-nowrap text-center">Invoice No.</TableHead>}
                 <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Damage Info</TableHead>
@@ -436,6 +439,7 @@ export default function DamageAdjustmentPage() {
                       <TableCell className="text-center">
                         <Badge variant="secondary">{group._productCount} items</Badge>
                       </TableCell>
+                      {visibleColumns.includes("invoiceNo") && <TableCell className="text-center text-xs font-medium">{group.invoiceNo}</TableCell>}
                       <TableCell className="text-center">
                         <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
                       </TableCell>
@@ -529,7 +533,7 @@ export default function DamageAdjustmentPage() {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Truck No</Label>
-                    <p className="font-medium">{selectedGroup.truckNo}</p>
+                    <p className="font-medium">{(selectedGroup.truckNo || "—").toUpperCase()}</p>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Transporter</Label>

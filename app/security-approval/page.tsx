@@ -372,7 +372,7 @@ export default function SecurityApprovalPage() {
       ...group,
       doNumber: Array.from(group.doNumberList as Set<string>).join(", "),
       processId: group._allProducts[0]?.processid || "—",
-      vehicleNo: group._allProducts[0]?.truckNo || "—",
+      vehicleNo: (group._allProducts[0]?.truckNo || "—").toUpperCase(),
       orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—"
     }))
   }, [filteredPendingOrders])
@@ -606,7 +606,7 @@ export default function SecurityApprovalPage() {
                               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 grid grid-cols-2 md:grid-cols-4 gap-6 shadow-inner mt-2 animate-in slide-in-from-top-2 duration-300">
                                   <div>
                                     <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Truck No</p>
-                                    <p className="text-sm font-black text-blue-800">{firstProd.truck_no || firstProd.truckNo || "—"}</p>
+                                    <p className="text-sm font-black text-blue-800">{(firstProd.truck_no || firstProd.truckNo || "—").toUpperCase()}</p>
                                   </div>
                                   <div>
                                     <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transporter</p>

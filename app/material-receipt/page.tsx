@@ -36,6 +36,7 @@ export default function MaterialReceiptPage() {
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
     "orderNo",
     "customerName",
+    "invoiceNo",
     "status",
   ])
 
@@ -213,6 +214,13 @@ export default function MaterialReceiptPage() {
           }
        }
        
+       const rate = parseFloat(order.rate_of_material) || 0;
+       const nosPerMainUom = parseFloat(order.nos_per_main_uom) || 1;
+       const actualQty = parseFloat(order.actual_qty_dispatch) || 0;
+       const computedBillAmount = rate && nosPerMainUom && actualQty
+         ? (rate * nosPerMainUom * actualQty).toFixed(2)
+         : null;
+
        grouped[baseDo]._allProducts.push({
           ...order,
           _rowKey: `${baseDo}-${order.id}`,
@@ -220,7 +228,7 @@ export default function MaterialReceiptPage() {
           specificOrderNo: order.so_no,
           productName: order.product_name,
           invoiceNo: order.invoice_no,
-          billAmount: order.bill_amount,
+          billAmount: computedBillAmount,
           actualQty: order.actual_qty_dispatch,
           truckNo: order.truck_no,
           netWeight: order.net_weight,
@@ -233,7 +241,8 @@ export default function MaterialReceiptPage() {
     return Object.values(grouped).map(g => ({
       ...g,
       processId: g._allProducts[0]?.processid || "—",
-      vehicleNo: g._allProducts[0]?.truckNo || "—",
+      vehicleNo: (g._allProducts[0]?.truckNo || "—").toUpperCase(),
+      invoiceNo: g._allProducts[0]?.invoice_no || "—",
       orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—"
     }))
   }, [filteredPendingOrders])
@@ -335,15 +344,13 @@ export default function MaterialReceiptPage() {
 
          const submitData = {
             material_received_date: receiptData.receivedDate,
-            damage_status: isItemDamaged ? "Damaged" : "Delivered", // Per-item status? 
-            // NOTE: The valid statuses are Likely "Delivered" | "Damaged". 
-            // If "Has Damage" is YES globally, but this specific item has no info, strictly it might be "Delivered" (Good).
-            
+            damage_status: isItemDamaged ? "Damaged" : "Delivered",
             received_image_proof: receiptData.receivedProof || null,
-             sku: null, // SKU input removed as per user request
-             damage_qty: isItemDamaged ? pDamage.damageQty : null,
-             damage_image: isItemDamaged ? pDamage.damageImage : null,
-             remarks_3: receiptData.remarks || null
+            sku: null,
+            damage_qty: isItemDamaged ? pDamage.damageQty : null,
+            damage_image: isItemDamaged ? pDamage.damageImage : null,
+            remarks_3: receiptData.remarks || null,
+            bill_amount: product.billAmount ? parseFloat(product.billAmount) : null,
          };
 
         try {
@@ -463,6 +470,7 @@ export default function MaterialReceiptPage() {
                 <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
+                {visibleColumns.includes("invoiceNo") && <TableHead className="whitespace-nowrap text-center">Invoice No.</TableHead>}
                 <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
@@ -481,6 +489,7 @@ export default function MaterialReceiptPage() {
                       <TableCell className="text-center">
                         <Badge variant="secondary">{group._productCount} items</Badge>
                       </TableCell>
+                      {visibleColumns.includes("invoiceNo") && <TableCell className="text-center text-xs font-medium">{group.invoiceNo}</TableCell>}
                       <TableCell className="text-center">
                         <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
                       </TableCell>
@@ -655,7 +664,7 @@ export default function MaterialReceiptPage() {
                         <TableCell className="font-medium text-blue-700">{product.invoiceNo || "—"}</TableCell>
                         <TableCell>{product.billAmount || "—"}</TableCell>
                         <TableCell>{product.actualQty || "—"}</TableCell>
-                        <TableCell>{product.truckNo || "—"}</TableCell>
+                        <TableCell>{(product.truckNo || "—").toUpperCase()}</TableCell>
                         <TableCell className="font-semibold">{product.netWeight || "—"}</TableCell>
                         {receiptData.hasDamage === "yes" && (
                             <>

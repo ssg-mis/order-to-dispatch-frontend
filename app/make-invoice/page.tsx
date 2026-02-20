@@ -243,7 +243,7 @@ export default function MakeInvoicePage() {
       ...group,
       doNumber: Array.from(group.doNumberList as Set<string>).join(", "),
       processId: group._allProducts[0]?.processid || "—",
-      vehicleNo: group._allProducts[0]?.truckNo || "—",
+      vehicleNo: (group._allProducts[0]?.truckNo || "—").toUpperCase(),
       orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—"
     }))
   }, [filteredPendingOrders])
@@ -588,7 +588,7 @@ export default function MakeInvoicePage() {
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Truck No</p>
-                                        <p className="text-sm font-black text-blue-800">{firstProd.truckNo || "—"}</p>
+                                        <p className="text-sm font-black text-blue-800">{(firstProd.truckNo || "—").toUpperCase()}</p>
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transporter</p>
@@ -720,7 +720,7 @@ export default function MakeInvoicePage() {
                                     <TableCell className="text-center p-2">
                                        <div className="flex items-center justify-center gap-1.5">
                                           <Truck className="h-3 w-3 text-slate-400" />
-                                          <span className="text-xs font-bold text-slate-700">{product.truckNo || "—"}</span>
+                                          <span className="text-xs font-bold text-slate-700">{(product.truckNo || "—").toUpperCase()}</span>
                                        </div>
                                     </TableCell>
                                     <TableCell className="text-center p-2">

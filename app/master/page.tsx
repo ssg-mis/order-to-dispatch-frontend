@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast"
 import { customerApi, depotApi, brokerApi, skuDetailsApi, commonApi } from "@/lib/api-service"
 
 import { useAuth } from "@/hooks/use-auth"
-import { Plus, Pencil, Trash2, Loader2, RefreshCw, Users, Warehouse, Briefcase, Search, Download, Package } from "lucide-react"
+import { Plus, Pencil, Trash2, Loader2, RefreshCw, Users, Warehouse, Briefcase, Search, Download, Package, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
 import {
   AlertDialog,
@@ -101,6 +101,12 @@ export default function MasterPage() {
   const [depots, setDepots] = useState<Depot[]>([])
   const [brokers, setBrokers] = useState<Broker[]>([])
   const [skuDetails, setSkuDetails] = useState<SkuDetail[]>([])
+
+  // Sort states
+  const [customerSort, setCustomerSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'customer_id', dir: 'asc' })
+  const [depotSort, setDepotSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'depot_id', dir: 'asc' })
+  const [brokerSort, setBrokerSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'broker_id', dir: 'asc' })
+  const [skuSort, setSkuSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'sku_code', dir: 'asc' })
 
   // Dialog states
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -399,7 +405,41 @@ export default function MasterPage() {
     s.sku_code?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  // --- Sort helpers ---
+  type SortDir = 'asc' | 'desc'
+
+  const sortData = <T extends Record<string, any>>(data: T[], col: string, dir: SortDir): T[] => {
+    return [...data].sort((a, b) => {
+      const av = a[col] ?? ''
+      const bv = b[col] ?? ''
+      return dir === 'asc'
+        ? String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' })
+        : String(bv).localeCompare(String(av), undefined, { numeric: true, sensitivity: 'base' })
+    })
+  }
+
+  const toggleSort = (
+    col: string,
+    current: { col: string; dir: SortDir },
+    setter: React.Dispatch<React.SetStateAction<{ col: string; dir: SortDir }>>
+  ) => {
+    setter(current.col === col ? { col, dir: current.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' })
+  }
+
+  const SortIcon = ({ col, sort }: { col: string; sort: { col: string; dir: SortDir } }) => {
+    if (sort.col !== col) return <ArrowUpDown className="ml-1 h-3 w-3 opacity-40 inline" />
+    return sort.dir === 'asc'
+      ? <ArrowUp className="ml-1 h-3 w-3 text-blue-600 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 text-blue-600 inline" />
+  }
+
+  const sortedCustomers = sortData(filteredCustomers, customerSort.col, customerSort.dir)
+  const sortedDepots = sortData(filteredDepots, depotSort.col, depotSort.dir)
+  const sortedBrokers = sortData(filteredBrokers, brokerSort.col, brokerSort.dir)
+  const sortedSkuDetails = sortData(filteredSkuDetails, skuSort.col, skuSort.dir)
+
   // --- Render Helpers ---
+
 
   const renderCustomerForm = () => (
     <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto px-1">
@@ -718,21 +758,21 @@ export default function MasterPage() {
               <Table>
                 <TableHeader className="bg-slate-50/50">
                   <TableRow>
-                    <TableHead className="pl-6">ID</TableHead>
-                    <TableHead>Customer Name</TableHead>
-                    <TableHead>Contact Person</TableHead>
-                    <TableHead>Email/Contact</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('customer_id', customerSort, setCustomerSort)}>ID <SortIcon col="customer_id" sort={customerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('customer_name', customerSort, setCustomerSort)}>Customer Name <SortIcon col="customer_name" sort={customerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('contact_person', customerSort, setCustomerSort)}>Contact Person <SortIcon col="contact_person" sort={customerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('email', customerSort, setCustomerSort)}>Email/Contact <SortIcon col="email" sort={customerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('state', customerSort, setCustomerSort)}>Location <SortIcon col="state" sort={customerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('status', customerSort, setCustomerSort)}>Status <SortIcon col="status" sort={customerSort} /></TableHead>
                     <TableHead className="text-right pr-6">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-20"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                  ) : filteredCustomers.length === 0 ? (
+                  ) : sortedCustomers.length === 0 ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-20 text-slate-400">No customers found</TableCell></TableRow>
-                  ) : filteredCustomers.map(item => (
+                  ) : sortedCustomers.map(item => (
                     <TableRow key={item.id} className="hover:bg-slate-50/30 transition-colors">
                       <TableCell className="font-medium pl-6">{item.customer_id}</TableCell>
                       <TableCell className="font-semibold text-slate-900">{item.customer_name}</TableCell>
@@ -784,21 +824,21 @@ export default function MasterPage() {
               <Table>
                 <TableHeader className="bg-slate-50/50">
                   <TableRow>
-                    <TableHead className="pl-6">ID</TableHead>
-                    <TableHead>Depot Name</TableHead>
-                    <TableHead>Address</TableHead>
-                    <TableHead>State</TableHead>
-                    <TableHead>Salesman/Broker</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('depot_id', depotSort, setDepotSort)}>ID <SortIcon col="depot_id" sort={depotSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('depot_name', depotSort, setDepotSort)}>Depot Name <SortIcon col="depot_name" sort={depotSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('depot_address', depotSort, setDepotSort)}>Address <SortIcon col="depot_address" sort={depotSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('state', depotSort, setDepotSort)}>State <SortIcon col="state" sort={depotSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('salesman_broker_name', depotSort, setDepotSort)}>Salesman/Broker <SortIcon col="salesman_broker_name" sort={depotSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('status', depotSort, setDepotSort)}>Status <SortIcon col="status" sort={depotSort} /></TableHead>
                     <TableHead className="text-right pr-6">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-20"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                  ) : filteredDepots.length === 0 ? (
+                  ) : sortedDepots.length === 0 ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-20 text-slate-400">No depots found</TableCell></TableRow>
-                  ) : filteredDepots.map(item => (
+                  ) : sortedDepots.map(item => (
                     <TableRow key={item.depot_id} className="hover:bg-slate-50/30 transition-colors">
                       <TableCell className="font-medium pl-6">{item.depot_id}</TableCell>
                       <TableCell className="font-semibold text-slate-900">{item.depot_name}</TableCell>
@@ -845,21 +885,21 @@ export default function MasterPage() {
               <Table>
                 <TableHeader className="bg-slate-50/50">
                   <TableRow>
-                    <TableHead className="pl-6">ID</TableHead>
-                    <TableHead>Salesman Name</TableHead>
-                    <TableHead>Contact (Mobile/Email)</TableHead>
-                    <TableHead>Depot Name</TableHead>
-                    <TableHead>Depot ID</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('broker_id', brokerSort, setBrokerSort)}>ID <SortIcon col="broker_id" sort={brokerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('salesman_name', brokerSort, setBrokerSort)}>Salesman Name <SortIcon col="salesman_name" sort={brokerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('mobile_no', brokerSort, setBrokerSort)}>Contact (Mobile/Email) <SortIcon col="mobile_no" sort={brokerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('depot_name', brokerSort, setBrokerSort)}>Depot Name <SortIcon col="depot_name" sort={brokerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('depot_id', brokerSort, setBrokerSort)}>Depot ID <SortIcon col="depot_id" sort={brokerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('status', brokerSort, setBrokerSort)}>Status <SortIcon col="status" sort={brokerSort} /></TableHead>
                     <TableHead className="text-right pr-6">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-20"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                  ) : filteredBrokers.length === 0 ? (
+                  ) : sortedBrokers.length === 0 ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-20 text-slate-400">No brokers found</TableCell></TableRow>
-                  ) : filteredBrokers.map(item => (
+                  ) : sortedBrokers.map(item => (
                     <TableRow key={item.broker_id} className="hover:bg-slate-50/30 transition-colors">
                       <TableCell className="font-medium pl-6">{item.broker_id}</TableCell>
                       <TableCell className="font-semibold text-slate-900">{item.salesman_name}</TableCell>
@@ -911,22 +951,22 @@ export default function MasterPage() {
               <Table>
                 <TableHeader className="bg-slate-50/50">
                   <TableRow>
-                    <TableHead className="pl-6">SKU Code</TableHead>
-                    <TableHead>SKU Name</TableHead>
-                    <TableHead>Main UOM</TableHead>
-                    <TableHead>Alt. UOM</TableHead>
-                    <TableHead>Packing Wt</TableHead>
-                    <TableHead>Gross Wt</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('sku_code', skuSort, setSkuSort)}>SKU Code <SortIcon col="sku_code" sort={skuSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('sku_name', skuSort, setSkuSort)}>SKU Name <SortIcon col="sku_name" sort={skuSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('main_uom', skuSort, setSkuSort)}>Main UOM <SortIcon col="main_uom" sort={skuSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('alternate_uom', skuSort, setSkuSort)}>Alt. UOM <SortIcon col="alternate_uom" sort={skuSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('packing_weight', skuSort, setSkuSort)}>Packing Wt <SortIcon col="packing_weight" sort={skuSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('gross_weight', skuSort, setSkuSort)}>Gross Wt <SortIcon col="gross_weight" sort={skuSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('status', skuSort, setSkuSort)}>Status <SortIcon col="status" sort={skuSort} /></TableHead>
                     <TableHead className="text-right pr-6">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow><TableCell colSpan={9} className="text-center py-20"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                  ) : filteredSkuDetails.length === 0 ? (
+                  ) : sortedSkuDetails.length === 0 ? (
                     <TableRow><TableCell colSpan={9} className="text-center py-20 text-slate-400">No SKUs found</TableCell></TableRow>
-                  ) : filteredSkuDetails.map(item => (
+                  ) : sortedSkuDetails.map(item => (
                     <TableRow key={item.id} className="hover:bg-slate-50/30 transition-colors">
                       <TableCell className="font-semibold text-slate-900 pl-6">{item.sku_code}</TableCell>
                       <TableCell>{item.sku_name}</TableCell>
