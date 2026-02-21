@@ -303,8 +303,8 @@ export default function SecurityApprovalPage() {
 
     filteredPendingOrders.forEach((order: any) => {
        const partyName = order.party_name || order.partyName || "Unknown Customer"
-       const doNumber = order.so_no || order.soNo || "—"
-       
+       const rawDoNumber = order.so_no || order.soNo || "—"
+       const doNumber = rawDoNumber.replace(/[A-Z]+$/, '')
        if (!grouped[partyName]) {
           grouped[partyName] = {
              _rowKey: partyName,

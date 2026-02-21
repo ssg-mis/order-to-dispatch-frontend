@@ -162,7 +162,8 @@ export default function MakeInvoicePage() {
 
     filteredPendingOrders.forEach((order: any) => {
        const partyName = order.party_name || order.partyName || "Unknown Customer"
-       const doNumber = order.so_no || order.soNo || "—"
+       const rawDoNumber = order.so_no || order.soNo || "—"
+       const doNumber = rawDoNumber.replace(/[A-Z]+$/, "")
        
        if (!grouped[partyName]) {
           grouped[partyName] = {
@@ -179,7 +180,7 @@ export default function MakeInvoicePage() {
        group.doNumberList.add(doNumber)
        
        // Use base DO (stripping A, B, C suffixes) as the key to prevent duplicate detail blocks
-       const orderKey = doNumber.replace(/[A-Z]$/, "");
+       const orderKey = doNumber;
        
        if (!group._ordersMap[orderKey]) {
          group._ordersMap[orderKey] = {
