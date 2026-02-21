@@ -1159,8 +1159,7 @@ export default function ActualDispatchPage() {
                                     <TableCell className="p-3">
                                         <Input
                                             type="number"
-                                            readOnly
-                                            className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-slate-50 cursor-not-allowed focus:ring-0 transition-colors shadow-sm"
+                                            className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 transition-colors shadow-sm"
                                             placeholder="Actual Qty"
                                             value={confirmDetails[rowKey]?.qty || ""}
                                             onChange={(e) =>
