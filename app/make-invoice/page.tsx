@@ -211,7 +211,7 @@ export default function MakeInvoicePage() {
           id: order.id,
           specificOrderNo: doNumber,
           productName: order.product_name,
-          // Use qty_to_be_dispatched exactly as requested
+          rate: order.final_rate || order.rate_per_ltr || order.rate_per_15kg || order.rate_of_material || 0,
           qtyToDispatch: order.qty_to_be_dispatched || order.qty_to_dispatch || order.actual_qty_dispatch || 0,
           truckNo: order.truck_no,
           rstNo: order.rst_no,
@@ -687,6 +687,7 @@ export default function MakeInvoicePage() {
                                     />
                                   </TableHead>
                                   <TableHead className="text-[10px] uppercase font-black h-10">PRODUCT INFO</TableHead>
+                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">QTY TO BE DISPATCHED</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">VEHICLE NUMBER</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">STATUS</TableHead>
@@ -712,6 +713,9 @@ export default function MakeInvoicePage() {
                                         <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{product.productName}</span>
                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{product.specificOrderNo}</span>
                                       </div>
+                                    </TableCell>
+                                    <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
+                                       {product.rate ? `₹${product.rate}` : "—"}
                                     </TableCell>
                                     <TableCell className="text-center p-2">
                                       <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">

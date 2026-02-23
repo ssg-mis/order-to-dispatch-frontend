@@ -188,6 +188,7 @@ export default function CheckInvoicePage() {
           id: order.id,
           specificOrderNo: doNumber,
           productName: order.product_name,
+          rate: order.final_rate || order.rate_per_ltr || order.rate_per_15kg || order.rate_of_material || 0,
           invoiceNo: order.invoice_no,
           invoiceDate: order.invoice_date,
           billAmount: order.bill_amount,
@@ -676,6 +677,7 @@ export default function CheckInvoicePage() {
                                     />
                                   </TableHead>
                                   <TableHead className="text-[10px] uppercase font-black h-10">PRODUCT INFO</TableHead>
+                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE NO</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE COPY</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE DATE</TableHead>
@@ -703,6 +705,9 @@ export default function CheckInvoicePage() {
                                         <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{product.productName}</span>
                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{product.specificOrderNo}</span>
                                       </div>
+                                    </TableCell>
+                                    <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
+                                       {product.rate ? `₹${product.rate}` : "—"}
                                     </TableCell>
                                     <TableCell className="text-center p-2 text-xs font-bold text-green-700">
                                        {product.invoiceNo || "—"}
