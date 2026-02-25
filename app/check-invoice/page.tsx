@@ -36,7 +36,7 @@ import { useAuth } from "@/hooks/use-auth"
 export default function CheckInvoicePage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isReadOnly } = useAuth()
+  const { isReadOnly, user } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -310,6 +310,7 @@ export default function CheckInvoicePage() {
         const submitData = {
             status_1: checkData.status,
             remarks_2: checkData.remarks,
+            username: user?.username || null // Add username for tracking
         };
 
         try {

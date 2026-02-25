@@ -47,7 +47,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 
 export default function PreApprovalPage() {
   const { toast } = useToast()
-  const { isReadOnly } = useAuth()
+  const { isReadOnly, user } = useAuth()
   const router = useRouter()
   const PAGE_COLUMNS = [
     { id: "soNo", label: "DO No." },
@@ -423,6 +423,7 @@ export default function PreApprovalPage() {
             final_rate: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null), // Store per-unit approved rate in final_rate
             rate_of_material: rateData?.rateOfMaterial ? parseFloat(rateData.rateOfMaterial) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
             remark: rateData?.remark || null, // Use individual remark
+            username: user?.username || null, // Add username for tracking
           }
           
           // Call backend API to submit pre-approval
@@ -637,7 +638,8 @@ export default function PreApprovalPage() {
                 rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : parseFloat(rateData?.rateOfMaterial || "0"),
                 final_rate: rateData?.rate ? parseFloat(rateData.rate) : parseFloat(rateData?.rateOfMaterial || "0"),
                 remark: rateData?.remark || "",
-                sku_name: rateData?.skuName
+                sku_name: rateData?.skuName,
+                username: user?.username || null // Add username for tracking
               }]
             };
             
@@ -719,6 +721,7 @@ export default function PreApprovalPage() {
               final_rate: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
               rate_of_material: rateData?.rateOfMaterial ? parseFloat(rateData.rateOfMaterial) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
               remark: rateData?.remark || null,
+              username: user?.username || null, // Add username for tracking
             }
             await preApprovalApi.submit(product.id, submissionData)
           }

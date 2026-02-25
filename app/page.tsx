@@ -4,7 +4,8 @@ import { useEffect, useState, useMemo } from "react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { 
-  Package, 
+  Package,
+  Package as Box,
   Clock, 
   CheckCircle2, 
   AlertCircle, 
@@ -28,7 +29,10 @@ import {
   Layers,
   Zap,
   Filter,
-  ChevronDown
+  ChevronDown,
+  RefreshCw,
+  Send,
+  Car
 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -38,6 +42,7 @@ import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useAuth } from "@/hooks/use-auth"
 import { 
   BarChart, 
   Bar, 
@@ -68,13 +73,12 @@ const STAGES = [
   { id: "Make Invoice", label: "Invoice (Proforma)", icon: FileText, color: "text-amber-600", bg: "bg-amber-50", url: "/make-invoice" },
   { id: "Check Invoice", label: "Check Invoice", icon: CheckCircle2, color: "text-yellow-600", bg: "bg-yellow-50", url: "/check-invoice" },
   { id: "Gate Out", label: "Gate Out", icon: LogOut, color: "text-lime-600", bg: "bg-lime-50", url: "/gate-out" },
-  { id: "Material Receipt", label: "Confirm Material Receipt", icon: Package, color: "text-emerald-600", bg: "bg-emerald-50", url: "/material-receipt" },
+  { id: "Material Receipt", label: "Confirm Material Receipt", icon: Box, color: "text-emerald-600", bg: "bg-emerald-50", url: "/material-receipt" },
   { id: "Damage Adjustment", label: "Damage Adjustment", icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50", url: "/damage-adjustment" },
   { id: "Final Delivery", label: "Final Delivery", icon: CheckCircle2, color: "text-green-600", bg: "bg-green-50", url: "/" }
 ]
 
-// Icons were missing from my import, let's add them
-import { Package as Box, Send, Car } from "lucide-react"
+// --- Constants ---
 
 const ROLES = [
   { id: "admin", label: "Admin", description: "Full visibility and control" },
@@ -96,6 +100,7 @@ const ROLE_STAGE_MAPPING: Record<string, string[]> = {
 
 export default function Dashboard() {
   const router = useRouter()
+  const { user, role: authRole } = useAuth()
   const [role, setRole] = useState("admin")
   const [timeRange, setTimeRange] = useState("today") 
   const [history, setHistory] = useState<any[]>([])
@@ -110,6 +115,12 @@ export default function Dashboard() {
   const [isRejectedDialogOpen, setIsRejectedDialogOpen] = useState(false)
   const [isTotalDialogOpen, setIsTotalDialogOpen] = useState(false)
   const [backendData, setBackendData] = useState<any>(null)
+
+  useEffect(() => {
+    if (authRole) {
+      setRole(authRole)
+    }
+  }, [authRole])
 
   useEffect(() => {
     setIsMounted(true)
@@ -127,12 +138,6 @@ export default function Dashboard() {
                     const transformedHistory = result.data.recentOrders || []
                     setHistory(transformedHistory)
                 }
-            }
-            
-            // Load User Role from localStorage
-            const storedRole = localStorage.getItem("userRole")
-            if (storedRole) {
-                setRole(storedRole)
             }
         } catch (error) {
             console.error("Failed to fetch dashboard data:", error)
@@ -250,7 +255,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-4 group cursor-pointer self-start md:self-center">
             <div className="flex flex-col items-end text-right hidden sm:flex">
                 <span className="text-base font-black text-slate-900 capitalize tracking-tight leading-none">
-                    {role || "Administrator"}
+                    {user?.username || role || "Administrator"}
                 </span>
             </div>
             <div className="relative">

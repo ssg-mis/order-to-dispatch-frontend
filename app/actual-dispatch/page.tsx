@@ -22,7 +22,7 @@ import { useAuth } from "@/hooks/use-auth"
 export default function ActualDispatchPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isReadOnly } = useAuth()
+  const { isReadOnly, user } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -786,7 +786,8 @@ export default function ActualDispatchPage() {
             reason_of_difference_in_weight_if_any_speacefic: loadData.reason,
             truck_no: loadData.truckNo || vehicleNumber,
             vehicle_no_plate_image: loadData.vehicleNoPlateImage || "pending",
-            extra_weight: parseFloat(loadData.extraWeight) || 0
+            extra_weight: parseFloat(loadData.extraWeight) || 0,
+            username: user?.username || null // Add username for tracking
           };
 
           console.log('[CONSOLIDATED SUBMIT] Payload for DSR:', dsrNumber, payload);

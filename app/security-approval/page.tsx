@@ -30,7 +30,7 @@ import { useAuth } from "@/hooks/use-auth"
 export default function SecurityApprovalPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isReadOnly } = useAuth()
+  const { isReadOnly, user } = useAuth()
   const [confirmDetails, setConfirmDetails] = useState<Record<string, { qty: string }>>({})
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
@@ -184,6 +184,7 @@ export default function SecurityApprovalPage() {
               bilty_no: uploadData.biltyNo || null,
               bilty_image: uploadData.biltyImage || null,
               vehicle_image_attachemrnt: uploadData.vehicleImages.length > 0 ? uploadData.vehicleImages.join(',') : null,
+              username: user?.username || null // Add username for tracking
             };
 
             console.log('[SECURITY] Submitting approval for ID:', recordId, submitData);

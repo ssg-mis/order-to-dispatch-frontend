@@ -4,6 +4,8 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { User } from "lucide-react"
 
+import { useAuth } from "@/hooks/use-auth"
+
 interface PageHeaderProps {
   title: string
   description?: string
@@ -11,6 +13,8 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ title, description, children }: PageHeaderProps) {
+  const { user } = useAuth()
+  
   return (
     <div className="flex items-center justify-between gap-6 border-b border-slate-100 pb-6 mb-6">
       <div className="flex items-center gap-4 flex-1">
@@ -34,7 +38,7 @@ export function PageHeader({ title, description, children }: PageHeaderProps) {
         <div className="flex items-center gap-3 cursor-pointer group">
           <div className="flex flex-col items-end text-right hidden sm:flex">
             <span className="text-sm font-bold text-slate-900 capitalize tracking-tight leading-none">
-              Admin
+              {user?.username || "Admin"}
             </span>
             <span className="text-xs text-slate-500">
               OMS Enterprise

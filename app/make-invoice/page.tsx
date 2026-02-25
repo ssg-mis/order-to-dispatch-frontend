@@ -29,7 +29,7 @@ import { useAuth } from "@/hooks/use-auth"
 export default function MakeInvoicePage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isReadOnly } = useAuth()
+  const { isReadOnly, user } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -355,6 +355,7 @@ export default function MakeInvoicePage() {
             qty: invoiceData.qty || null,
             bill_amount: invoiceType === 'independent' ? invoiceData.billAmount : null,
             invoice_copy: invoiceData.invoiceFile || null,
+            username: user?.username || null, // Add username for tracking
         };
 
         try {

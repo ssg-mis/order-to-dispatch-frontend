@@ -25,7 +25,7 @@ import { useAuth } from "@/hooks/use-auth"
 export default function CommitmentReviewPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isReadOnly } = useAuth()
+  const { isReadOnly, user } = useAuth()
   const [isConfirming, setIsConfirming] = useState(false)
 
   const formatDate = (dateStr: string) => {
@@ -301,6 +301,7 @@ export default function CommitmentReviewPage() {
               overall_status_of_order: !hasRejection && checklistValues.overall === "approve",
               order_confirmation_with_customer: checklistValues.confirm === "approve",
               processid: processId || null, // Add Process ID to the submission
+              username: user?.username || null // Add username for tracking
             };
 
             console.log('[APPROVAL] Submitting to API:', {

@@ -29,7 +29,7 @@ import { useAuth } from "@/hooks/use-auth"
 export default function MaterialReceiptPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isReadOnly } = useAuth()
+  const { isReadOnly, user } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -295,34 +295,16 @@ export default function MaterialReceiptPage() {
         return
     }
 
-    if (receiptData.hasDamage === "yes") {
-        // Validate that at least one selected product has damage details if "Has Damage" is yes
-        // Or should we mandate it for ALL selected products? Usually "Has Damage" implies *some* damage.
-        // Let's enforce that for every selected product, if damage is claimed, valid data (qty) should be there?
-        // OR: Should we assume if they selected "Has Damage", they MUST fill details for the relevant items?
-        // The user said "remove this sku and damage qty... show in table".
-        // Let's iterate and check. 
-        
-        const hasMissingDetails = productsToSubmit.some((p: any) => {
-            const d = productDamageData[p._rowKey];
-            // If the user intends to mark THIS item as damaged, they should have entered something?
-            // Actually, if "Has Damage" is YES globally, does it mean ALL items are damaged? Probably not.
-            // But the UI shows "Has Damage" globally. 
-            // If "Has Damage" is Yes, we show columns. If user leaves them blank, maybe that item is NOT damaged?
-            // Let's assume if they entered NOTHING, it's not damaged. 
-            // BUT, at least ONE item must have damage details if "Has Damage" is Yes.
-            return false; // Let's rely on the loop below to collect data.
-        });
-        
-        // Better validation:
-        // if (productsToSubmit.every(p => !productDamageData[p._rowKey]?.damageQty)) {
-        //    toast(...)
-        // }
-    }
-
     const productsToSubmit = selectedGroup._allProducts.filter((p: any) => 
       selectedProducts.includes(p._rowKey)
     )
+
+    if (receiptData.hasDamage === "yes") {
+        const hasMissingDetails = productsToSubmit.some((p: any) => {
+            const d = productDamageData[p._rowKey];
+            return false;
+        });
+    }
     
     if (productsToSubmit.length === 0) {
       toast({
@@ -351,6 +333,7 @@ export default function MaterialReceiptPage() {
             damage_image: isItemDamaged ? pDamage.damageImage : null,
             remarks_3: receiptData.remarks || null,
             bill_amount: product.billAmount ? parseFloat(product.billAmount) : null,
+            username: user?.username || null // Add username for tracking
          };
 
         try {

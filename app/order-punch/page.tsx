@@ -51,7 +51,7 @@ type PreApprovalProduct = {
 
 export default function OrderPunchPage() {
   const { toast } = useToast()
-  const { isReadOnly } = useAuth()
+  const { isReadOnly, user } = useAuth()
   const router = useRouter()
 
   // New state for customers
@@ -394,6 +394,7 @@ export default function OrderPunchPage() {
         remark: null,
         futureperioddate: futurePeriodDate || null, // Add future period date
         upload_so: uploadedSoUrl, // Add uploaded SO copy URL
+        username: user?.username || null, // Add username for tracking
       }
 
       // Add products array for backend (for regular and pre-approval order types)

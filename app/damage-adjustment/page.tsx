@@ -27,7 +27,7 @@ import { useAuth } from "@/hooks/use-auth"
 export default function DamageAdjustmentPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isReadOnly } = useAuth()
+  const { isReadOnly, user } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -300,7 +300,8 @@ export default function DamageAdjustmentPage() {
             credit_note_amount: 0,
             net_banalce: 0,
             status_2: "Completed",
-            credit_note_copy: adjustmentData.creditNoteCopy || null
+            credit_note_copy: adjustmentData.creditNoteCopy || null,
+            username: user?.username || null // Add username for tracking
         };
 
         try {
