@@ -93,7 +93,9 @@ const ROLE_STAGE_MAPPING: Record<string, string[]> = {
   approver: ["Pre-Approval", "Approval Of Order"],
   dispatcher: ["Dispatch Planning", "Actual Dispatch", "Vehicle Details", "Material Load"],
   security: ["Security Approval", "Gate Out"],
-  finance: ["Make Invoice", "Check Invoice"]
+  finance: ["Make Invoice", "Check Invoice"],
+  user: STAGES.map(s => s.id),
+  pc: STAGES.map(s => s.id)
 }
 
 // --- Dashboard Component ---
@@ -223,7 +225,7 @@ export default function Dashboard() {
         "Damage Adjustment"
     ]
     return stats.stageCounts.filter(s => 
-        ROLE_STAGE_MAPPING[role].includes(s.id) && IMPORTANT_STAGES.includes(s.id)
+        (ROLE_STAGE_MAPPING[role] || []).includes(s.id) && IMPORTANT_STAGES.includes(s.id)
     )
   }, [role, stats.stageCounts])
 
