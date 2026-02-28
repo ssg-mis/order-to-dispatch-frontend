@@ -318,11 +318,12 @@ export default function ActualDispatchPage() {
   // Calculate Expected SKU Weight for calculations
   const totalPackingWeightFromSku = useMemo(() => {
     return selectedGroups.flatMap(g => g._allProducts)
+      .filter((prod: any) => dialogSelectedProducts.includes(prod._rowKey))
       .reduce((total, prod) => {
         const rowKey = prod._rowKey
         return total + calculateGrossWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch)
       }, 0)
-  }, [selectedGroups, confirmDetails, skus])
+  }, [selectedGroups, confirmDetails, skus, dialogSelectedProducts])
 
   // Auto-calculate Total Weight and Difference
   const totalCombinedWeight = useMemo(() => {
@@ -340,6 +341,19 @@ export default function ActualDispatchPage() {
       differanceWeight: (loadData.netWeightPacking || totalCombinedWeight > 0) ? diff.toFixed(2) : ""
     }))
   }, [loadData.netWeightPacking, totalCombinedWeight])
+
+  // Auto-update Actual Qty when selected products or their confirmed quantities change
+  useEffect(() => {
+    if (selectedGroups.length === 0) return;
+    const totalQty = selectedGroups.flatMap(g => g._allProducts)
+      .filter((p: any) => dialogSelectedProducts.includes(p._rowKey))
+      .reduce((sum, p) => sum + parseFloat(confirmDetails[p._rowKey]?.qty || p.qtyToDispatch || "0"), 0);
+
+    setLoadData(prev => ({
+      ...prev,
+      actualQty: String(totalQty)
+    }));
+  }, [dialogSelectedProducts, confirmDetails, selectedGroups]);
 
 
   /* Extract unique customer names */
