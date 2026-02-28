@@ -1314,7 +1314,7 @@ export default function PreApprovalPage() {
               }}
             >
               <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700 shadow-md" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Process Selected"}>
+                <Button className="bg-blue-600 hover:bg-blue-700 shadow-md">
                   Process Selected ({selectedRows.length})
                 </Button>
               </DialogTrigger>
@@ -1682,7 +1682,9 @@ export default function PreApprovalPage() {
                                               <Input 
                                                 type="number"
                                                 className="h-9 text-xs bg-white pl-5 font-bold border-slate-200 focus:border-blue-500 focus:ring-blue-500"
-                                                 value={productRates[rowKey]?.skuName ? (productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || "") : ""}
+                                                 value={isNew
+                                                   ? (productRates[rowKey]?.rateOfMaterial || "")
+                                                   : (productRates[rowKey]?.skuName ? (productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || "") : "")}
                                                  onChange={(e) => setProductRates({ 
                                                    ...productRates, 
                                                    [rowKey]: { 
@@ -1690,8 +1692,8 @@ export default function PreApprovalPage() {
                                                      rateOfMaterial: e.target.value 
                                                    } 
                                                  })}
-                                                 disabled={!isNew && true}
-                                                 readOnly={!isNew}
+                                                 disabled={true}
+                                                 readOnly
                                                  placeholder="0.00"
                                                />
                                             </div>
@@ -2024,6 +2026,7 @@ export default function PreApprovalPage() {
                         handleApproveWithAdditions(itemsToApprove)
                       }} 
                       disabled={
+                        isReadOnly ||
                         isApproving || 
                         selectedProductRows.length === 0 ||
                         Object.keys(qtyValidationErrors).length > 0 ||

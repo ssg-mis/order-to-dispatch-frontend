@@ -652,8 +652,8 @@ export default function ActualDispatchPage() {
 
     for (const doc of vehicleDocs) {
       const val = vehicleData[doc.key as keyof typeof vehicleData];
-      // Skip required check only for Permit 2 document file
-      if (doc.key === 'permit2_out_state') continue;
+      // Skip required check for Permit 2 (both file and date are optional)
+      if (doc.key === 'permit2_out_state' || doc.key === 'permit2_end_date') continue;
       
       if (!val) {
         toast({ 
@@ -1107,7 +1107,7 @@ export default function ActualDispatchPage() {
                   <div className="flex items-center justify-between border-b-2 border-slate-100 pb-4">
                     <h3 className="text-xl font-black text-slate-800 flex items-center gap-2 uppercase tracking-tight">
                       Consolidated Product List
-                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 text-sm px-3">{selectedGroups.reduce((s, g) => s + g._allProducts.length, 0)} Items</Badge>
+                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 text-sm px-3">{dialogSelectedProducts.length} / {selectedGroups.reduce((s, g) => s + g._allProducts.length, 0)} Items</Badge>
                     </h3>
                   </div>
 
@@ -1184,20 +1184,20 @@ export default function ActualDispatchPage() {
                                     </TableCell>
                                 </TableRow>
                             )})}
-                            {/* Total Weight Row */}
+                            {/* Total Weight Row - only includes SELECTED products */}
                             <TableRow className="bg-purple-50 border-t-2 border-purple-200">
                                 <TableCell colSpan={3} className="text-right p-4 font-black text-xs uppercase text-purple-900 tracking-wider">
                                     TOTALS:
                                 </TableCell>
                                 <TableCell className="p-4 text-center">
                                     <div className="font-black text-sm text-purple-700">
-                                        {selectedGroups.flatMap(g => g._allProducts).reduce((sum, p) => sum + parseFloat(p.qtyToDispatch || "0"), 0)}
+                                        {selectedGroups.flatMap(g => g._allProducts).filter((p: any) => dialogSelectedProducts.includes(p._rowKey)).reduce((sum, p) => sum + parseFloat(p.qtyToDispatch || "0"), 0)}
                                     </div>
                                 </TableCell>
                                 <TableCell />
                                 <TableCell className="p-4 text-center">
                                     <div className="font-black text-sm text-purple-700">
-                                        {selectedGroups.flatMap(g => g._allProducts).reduce((sum, p) => sum + parseFloat(confirmDetails[p._rowKey]?.qty || p.qtyToDispatch || "0"), 0)}
+                                        {selectedGroups.flatMap(g => g._allProducts).filter((p: any) => dialogSelectedProducts.includes(p._rowKey)).reduce((sum, p) => sum + parseFloat(confirmDetails[p._rowKey]?.qty || p.qtyToDispatch || "0"), 0)}
                                     </div>
                                 </TableCell>
                                 <TableCell className="p-4 text-center">
@@ -1205,6 +1205,7 @@ export default function ActualDispatchPage() {
                                         <span className="text-[9px] font-black text-purple-400 uppercase tracking-tighter mb-1">TOTAL PACKING WEIGHT</span>
                                         <div className="font-black text-lg text-purple-700">
                                             {selectedGroups.flatMap(g => g._allProducts)
+                                                .filter((prod: any) => dialogSelectedProducts.includes(prod._rowKey))
                                                 .reduce((total, prod) => {
                                                     const rowKey = prod._rowKey
                                                     return total + calculateGrossWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch)
@@ -1466,7 +1467,7 @@ export default function ActualDispatchPage() {
                               </div>
                               <div className="space-y-1.5">
                                  <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Difference</Label>
-                                 <Input type="number" readOnly className={`h-10 border-2 rounded-lg font-bold ${parseFloat(loadData.differanceWeight) < 0 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}
+                                 <Input type="number" readOnly className={`h-10 border-2 rounded-lg font-bold ${Math.abs(parseFloat(loadData.differanceWeight) || 0) > 20 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}
                                    value={loadData.differanceWeight} />
                               </div>
                            </div>
@@ -1508,13 +1509,15 @@ export default function ActualDispatchPage() {
                              </div>
                           </div>
 
-                          <div className="space-y-1.5">
-                             <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">
-                                Weight Difference Reason {loadData.checkStatus === "Reject" ? <span className="text-red-500">*</span> : <span className="text-slate-400 font-normal normal-case">(Optional)</span>}
-                             </Label>
-                             <Input className="h-10 border-slate-200 rounded-lg font-medium bg-white" placeholder="Specify reason..."
-                               value={loadData.reason} onChange={(e) => setLoadData(p => ({...p, reason: e.target.value}))} />
-                          </div>
+                           <div className="space-y-1.5">
+                              <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">
+                                 Weight Difference Reason {Math.abs(parseFloat(loadData.differanceWeight) || 0) > 20 ? <span className="text-red-500">* (Required)</span> : <span className="text-slate-400 font-normal normal-case">(Optional)</span>}
+                              </Label>
+                              <Input
+                                className={`h-10 rounded-lg font-medium bg-white ${Math.abs(parseFloat(loadData.differanceWeight) || 0) > 20 ? 'border-2 border-red-400 focus:border-red-500' : 'border-slate-200'}`}
+                                placeholder={Math.abs(parseFloat(loadData.differanceWeight) || 0) > 20 ? "Required: explain weight difference..." : "Specify reason..."}
+                                value={loadData.reason} onChange={(e) => setLoadData(p => ({...p, reason: e.target.value}))} />
+                           </div>
 
 
                       </div>

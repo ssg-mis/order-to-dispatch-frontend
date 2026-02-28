@@ -742,7 +742,7 @@ export default function MasterPage() {
         </TabsList>
 
         <TabsContent value="customers">
-          <Card className="shadow-xl border-none rounded-2xl overflow-hidden bg-white">
+          <Card className="shadow-xl border-none rounded-2xl bg-white">
             <CardHeader className="bg-slate-50/50 border-b p-6">
               <div className="flex justify-between items-center">
                 <div>
@@ -755,16 +755,17 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-slate-50/50">
+              <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
+              <table className="w-full caption-bottom text-sm">
+                <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('customer_id', customerSort, setCustomerSort)}>ID <SortIcon col="customer_id" sort={customerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('customer_name', customerSort, setCustomerSort)}>Customer Name <SortIcon col="customer_name" sort={customerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('contact_person', customerSort, setCustomerSort)}>Contact Person <SortIcon col="contact_person" sort={customerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('email', customerSort, setCustomerSort)}>Email/Contact <SortIcon col="email" sort={customerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('state', customerSort, setCustomerSort)}>Location <SortIcon col="state" sort={customerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('status', customerSort, setCustomerSort)}>Status <SortIcon col="status" sort={customerSort} /></TableHead>
-                    <TableHead className="text-right pr-6">Actions</TableHead>
+                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('customer_id', customerSort, setCustomerSort)}>ID <SortIcon col="customer_id" sort={customerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('customer_name', customerSort, setCustomerSort)}>Customer Name <SortIcon col="customer_name" sort={customerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('contact_person', customerSort, setCustomerSort)}>Contact Person <SortIcon col="contact_person" sort={customerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('email', customerSort, setCustomerSort)}>Email/Contact <SortIcon col="email" sort={customerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('state', customerSort, setCustomerSort)}>Location <SortIcon col="state" sort={customerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('status', customerSort, setCustomerSort)}>Status <SortIcon col="status" sort={customerSort} /></TableHead>
+                    <TableHead className="text-right pr-6 sticky top-0 z-10 bg-slate-50">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -802,13 +803,14 @@ export default function MasterPage() {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+              </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="depots">
-          <Card className="shadow-xl border-none rounded-2xl overflow-hidden bg-white">
+          <Card className="shadow-xl border-none rounded-2xl bg-white">
             <CardHeader className="bg-slate-50/50 border-b p-6">
               <div className="flex justify-between items-center">
                 <div>
@@ -821,16 +823,17 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-slate-50/50">
+              <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
+              <table className="w-full caption-bottom text-sm">
+                <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('depot_id', depotSort, setDepotSort)}>ID <SortIcon col="depot_id" sort={depotSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('depot_name', depotSort, setDepotSort)}>Depot Name <SortIcon col="depot_name" sort={depotSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('depot_address', depotSort, setDepotSort)}>Address <SortIcon col="depot_address" sort={depotSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('state', depotSort, setDepotSort)}>State <SortIcon col="state" sort={depotSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('salesman_broker_name', depotSort, setDepotSort)}>Salesman/Broker <SortIcon col="salesman_broker_name" sort={depotSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('status', depotSort, setDepotSort)}>Status <SortIcon col="status" sort={depotSort} /></TableHead>
-                    <TableHead className="text-right pr-6">Actions</TableHead>
+                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('depot_id', depotSort, setDepotSort)}>ID <SortIcon col="depot_id" sort={depotSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('depot_name', depotSort, setDepotSort)}>Depot Name <SortIcon col="depot_name" sort={depotSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('depot_address', depotSort, setDepotSort)}>Address <SortIcon col="depot_address" sort={depotSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('state', depotSort, setDepotSort)}>State <SortIcon col="state" sort={depotSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('salesman_broker_name', depotSort, setDepotSort)}>Salesman/Broker <SortIcon col="salesman_broker_name" sort={depotSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('status', depotSort, setDepotSort)}>Status <SortIcon col="status" sort={depotSort} /></TableHead>
+                    <TableHead className="text-right pr-6 sticky top-0 z-10 bg-slate-50">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -863,13 +866,14 @@ export default function MasterPage() {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+              </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="brokers">
-          <Card className="shadow-xl border-none rounded-2xl overflow-hidden bg-white">
+          <Card className="shadow-xl border-none rounded-2xl bg-white">
             <CardHeader className="bg-slate-50/50 border-b p-6">
               <div className="flex justify-between items-center">
                 <div>
@@ -882,16 +886,17 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-slate-50/50">
+              <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
+              <table className="w-full caption-bottom text-sm">
+                <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('broker_id', brokerSort, setBrokerSort)}>ID <SortIcon col="broker_id" sort={brokerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('salesman_name', brokerSort, setBrokerSort)}>Salesman Name <SortIcon col="salesman_name" sort={brokerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('mobile_no', brokerSort, setBrokerSort)}>Contact (Mobile/Email) <SortIcon col="mobile_no" sort={brokerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('depot_name', brokerSort, setBrokerSort)}>Depot Name <SortIcon col="depot_name" sort={brokerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('depot_id', brokerSort, setBrokerSort)}>Depot ID <SortIcon col="depot_id" sort={brokerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('status', brokerSort, setBrokerSort)}>Status <SortIcon col="status" sort={brokerSort} /></TableHead>
-                    <TableHead className="text-right pr-6">Actions</TableHead>
+                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('broker_id', brokerSort, setBrokerSort)}>ID <SortIcon col="broker_id" sort={brokerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('salesman_name', brokerSort, setBrokerSort)}>Salesman Name <SortIcon col="salesman_name" sort={brokerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('mobile_no', brokerSort, setBrokerSort)}>Contact (Mobile/Email) <SortIcon col="mobile_no" sort={brokerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('depot_name', brokerSort, setBrokerSort)}>Depot Name <SortIcon col="depot_name" sort={brokerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('depot_id', brokerSort, setBrokerSort)}>Depot ID <SortIcon col="depot_id" sort={brokerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('status', brokerSort, setBrokerSort)}>Status <SortIcon col="status" sort={brokerSort} /></TableHead>
+                    <TableHead className="text-right pr-6 sticky top-0 z-10 bg-slate-50">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -929,13 +934,14 @@ export default function MasterPage() {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+              </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="sku_details">
-          <Card className="shadow-xl border-none rounded-2xl overflow-hidden bg-white">
+          <Card className="shadow-xl border-none rounded-2xl bg-white">
             <CardHeader className="bg-slate-50/50 border-b p-6">
               <div className="flex justify-between items-center">
                 <div>
@@ -947,18 +953,19 @@ export default function MasterPage() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="p-0 overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-slate-50/50">
+            <CardContent className="p-0">
+              <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
+              <table className="w-full caption-bottom text-sm">
+                <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('sku_code', skuSort, setSkuSort)}>SKU Code <SortIcon col="sku_code" sort={skuSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('sku_name', skuSort, setSkuSort)}>SKU Name <SortIcon col="sku_name" sort={skuSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('main_uom', skuSort, setSkuSort)}>Main UOM <SortIcon col="main_uom" sort={skuSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('alternate_uom', skuSort, setSkuSort)}>Alt. UOM <SortIcon col="alternate_uom" sort={skuSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('packing_weight', skuSort, setSkuSort)}>Packing Wt <SortIcon col="packing_weight" sort={skuSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('gross_weight', skuSort, setSkuSort)}>Gross Wt <SortIcon col="gross_weight" sort={skuSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100" onClick={() => toggleSort('status', skuSort, setSkuSort)}>Status <SortIcon col="status" sort={skuSort} /></TableHead>
-                    <TableHead className="text-right pr-6">Actions</TableHead>
+                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('sku_code', skuSort, setSkuSort)}>ID <SortIcon col="sku_code" sort={skuSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('sku_name', skuSort, setSkuSort)}>SKU Name <SortIcon col="sku_name" sort={skuSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('main_uom', skuSort, setSkuSort)}>Main UOM <SortIcon col="main_uom" sort={skuSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('alternate_uom', skuSort, setSkuSort)}>Alt. UOM <SortIcon col="alternate_uom" sort={skuSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('packing_weight', skuSort, setSkuSort)}>Packing Wt <SortIcon col="packing_weight" sort={skuSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('gross_weight', skuSort, setSkuSort)}>Gross Wt <SortIcon col="gross_weight" sort={skuSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('status', skuSort, setSkuSort)}>Status <SortIcon col="status" sort={skuSort} /></TableHead>
+                    <TableHead className="text-right pr-6 sticky top-0 z-10 bg-slate-50">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -992,7 +999,8 @@ export default function MasterPage() {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+              </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

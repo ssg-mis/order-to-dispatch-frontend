@@ -172,17 +172,15 @@ export default function MaterialReceiptPage() {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order: any) => {
-       // Prioritize SO Number (DO Number) for grouping
+       // Group by Invoice Number
+       const invoiceNo = order.invoice_no || "No Invoice"
        const doNumber = order.so_no || order.d_sr_number || "DO-XXX"
        
-       // Group by Base DO (e.g. DO-022 from DO-022A)
-       const baseDoMatch = doNumber.match(/^(DO-\d+)/i)
-       const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
-
-       if (!grouped[baseDo]) {
-          grouped[baseDo] = {
-             _rowKey: baseDo,
-             doNumber: baseDo,
+       if (!grouped[invoiceNo]) {
+          grouped[invoiceNo] = {
+             _rowKey: invoiceNo,
+             doNumber: doNumber,
+             invoiceNo: invoiceNo,
              customerName: order.party_name || "—",
              
              // Order Details from JOIN
@@ -198,7 +196,6 @@ export default function MaterialReceiptPage() {
              totalAmount: order.total_amount_with_gst || "—",
 
              // Additional Details for Header (as requested)
-             invoiceNo: order.invoice_no || "—",
              invoiceDate: order.invoice_date ? new Date(order.invoice_date).toLocaleDateString("en-IN") : "—",
              biltyNo: order.bilty_no || "—",
              rstNo: order.rst_no || "—",
@@ -221,9 +218,9 @@ export default function MaterialReceiptPage() {
          ? (rate * nosPerMainUom * actualQty).toFixed(2)
          : null;
 
-       grouped[baseDo]._allProducts.push({
+       grouped[invoiceNo]._allProducts.push({
           ...order,
-          _rowKey: `${baseDo}-${order.id}`,
+          _rowKey: `${invoiceNo}-${order.id}`,
           id: order.id,
           specificOrderNo: order.so_no,
           productName: order.product_name,
@@ -235,14 +232,13 @@ export default function MaterialReceiptPage() {
           processid: order.processid || null
        })
        
-       grouped[baseDo]._productCount = grouped[baseDo]._allProducts.length
+       grouped[invoiceNo]._productCount = grouped[invoiceNo]._allProducts.length
     })
 
     return Object.values(grouped).map(g => ({
       ...g,
       processId: g._allProducts[0]?.processid || "—",
       vehicleNo: (g._allProducts[0]?.truckNo || "—").toUpperCase(),
-      invoiceNo: g._allProducts[0]?.invoice_no || "—",
       orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—"
     }))
   }, [filteredPendingOrders])
@@ -407,9 +403,8 @@ export default function MaterialReceiptPage() {
         <div className="flex justify-end gap-2">
            <Button 
             onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0 || isReadOnly} 
+            disabled={selectedItems.length === 0} 
             className="bg-blue-600 hover:bg-blue-700"
-            title={isReadOnly ? "View Only Access" : "Confirm Receipt"}
           >
             <CheckCircle className="mr-2 h-4 w-4" />
             Confirm Receipt ({selectedItems.length})
@@ -502,7 +497,7 @@ export default function MaterialReceiptPage() {
           <div className="p-6">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-900">
-              Confirm Receipt - {selectedGroup?.doNumber}
+              Confirm Receipt - Invoice: {selectedGroup?.invoiceNo} <span className="text-sm font-medium text-slate-500">({selectedGroup?.customerName})</span>
             </DialogTitle>
           </DialogHeader>
 

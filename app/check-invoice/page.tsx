@@ -128,14 +128,16 @@ export default function CheckInvoicePage() {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order: any) => {
+       const invoiceNo = order.invoice_no || "No Invoice"
        const partyName = order.party_name || order.partyName || "Unknown Customer"
        const rawDoNumber = order.so_no || order.soNo || "—"
        const doNumber = rawDoNumber.replace(/[A-Z]+$/, "")
        
-       if (!grouped[partyName]) {
-          grouped[partyName] = {
-             _rowKey: partyName,
+       if (!grouped[invoiceNo]) {
+          grouped[invoiceNo] = {
+             _rowKey: invoiceNo,
              customerName: partyName,
+             invoiceNo: invoiceNo,
              doNumberList: new Set<string>(),
              _allProducts: [],
              _ordersMap: {}, // Group items by specific DO for interleaved view
@@ -143,7 +145,7 @@ export default function CheckInvoicePage() {
           }
        }
        
-       const group = grouped[partyName]
+       const group = grouped[invoiceNo]
        group.doNumberList.add(doNumber)
        
        const orderKey = doNumber;
@@ -188,7 +190,8 @@ export default function CheckInvoicePage() {
           id: order.id,
           specificOrderNo: doNumber,
           productName: order.product_name,
-          rate: order.final_rate || order.rate_per_ltr || order.rate_per_15kg || order.rate_of_material || 0,
+          rate: (parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1),
+          amount: ((parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1)) * (parseFloat(order.actual_qty_dispatch || order.actual_qty || order.qty) || 0),
           invoiceNo: order.invoice_no,
           invoiceDate: order.invoice_date,
           billAmount: order.bill_amount,
@@ -383,9 +386,8 @@ export default function CheckInvoicePage() {
         <div className="flex justify-end gap-2">
            <Button 
             onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0 || isReadOnly} 
+            disabled={selectedItems.length === 0} 
             className="bg-blue-600 hover:bg-blue-700"
-            title={isReadOnly ? "View Only Access" : "Verify Invoice"}
           >
             <CheckCircle className="mr-2 h-4 w-4" />
             Verify Invoice ({selectedItems.length})
@@ -492,7 +494,7 @@ export default function CheckInvoicePage() {
           <div className="p-6">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-900 border-b pb-4 mb-4">
-              Verify Invoices - {selectedGroups.length > 1 ? `${selectedGroups.length} Parties Selected` : selectedGroups[0]?.customerName}
+              Verify Invoices - {selectedGroups.length > 1 ? `${selectedGroups.length} Invoices Selected` : selectedGroups[0]?.invoiceNo}
             </DialogTitle>
           </DialogHeader>
 
@@ -511,7 +513,7 @@ export default function CheckInvoicePage() {
                  return (
                    <div key={group._rowKey} className="space-y-6">
                       <h2 className="text-xl font-black text-slate-800 border-b-4 border-slate-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
-                        {group.customerName}
+                         Invoice: {group.invoiceNo} <span className="text-sm font-medium text-slate-500 ml-2">({group.customerName})</span>
                         <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
                           {group._productCount} PRODUCTS
                         </Badge>
@@ -600,19 +602,39 @@ export default function CheckInvoicePage() {
                                       {/* Security Audit Info */}
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Fitness</p>
-                                        <p className="text-xs font-bold text-slate-700">{firstProd.fitness || "—"}</p>
+                                        {firstProd.fitness ? (
+                                          <a href={firstProd.fitness} target="_blank" rel="noopener noreferrer" className="block">
+                                            <img src={firstProd.fitness} alt="Fitness" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
+                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                          </a>
+                                        ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Insurance</p>
-                                        <p className="text-xs font-bold text-slate-700">{firstProd.insurance || "—"}</p>
+                                        {firstProd.insurance ? (
+                                          <a href={firstProd.insurance} target="_blank" rel="noopener noreferrer" className="block">
+                                            <img src={firstProd.insurance} alt="Insurance" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
+                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                          </a>
+                                        ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Pollution</p>
-                                        <p className="text-xs font-bold text-slate-700">{firstProd.polution || "—"}</p>
+                                        {firstProd.polution ? (
+                                          <a href={firstProd.polution} target="_blank" rel="noopener noreferrer" className="block">
+                                            <img src={firstProd.polution} alt="Pollution" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
+                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                          </a>
+                                        ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Tax Copy</p>
-                                        <p className="text-xs font-bold text-slate-700">{firstProd.tax_copy || "—"}</p>
+                                        {firstProd.tax_copy ? (
+                                          <a href={firstProd.tax_copy} target="_blank" rel="noopener noreferrer" className="block">
+                                            <img src={firstProd.tax_copy} alt="Tax Copy" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
+                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                          </a>
+                                        ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
 
                                       <div>
@@ -641,14 +663,14 @@ export default function CheckInvoicePage() {
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Slip</p>
                                         <p className="text-xs font-bold text-slate-700">{firstProd.weightment_slip_copy || "—"}</p>
                                       </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
-                                        <p className="text-xs font-black text-slate-900">{firstProd.grossWeight || "0"} / {firstProd.tareWeight || "0"} / <span className="text-blue-600">{firstProd.netWeight || "0"}</span></p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff Reason</p>
-                                        <p className="text-[10px] font-bold text-red-500 italic">{firstProd.reason_of_difference_in_weight_if_any_speacefic || "—"}</p>
-                                      </div>
+                                       <div>
+                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
+                                         <p className="text-xs font-black text-slate-900">{firstProd.grossWeight || "0"} / {firstProd.tareWeight || "0"} / <span className="text-blue-600">{firstProd.netWeight ? firstProd.netWeight : (firstProd.grossWeight && firstProd.tareWeight ? (parseFloat(firstProd.grossWeight) - parseFloat(firstProd.tareWeight)).toFixed(0) : "0")}</span></p>
+                                       </div>
+                                       <div>
+                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff Reason</p>
+                                         <p className="text-[10px] font-bold text-red-500 italic">{firstProd.reason_of_difference_in_weight_if_any_speacefic || firstProd.reasonForDiff || "—"}</p>
+                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transporter Name</p>
                                         <p className="text-xs font-bold text-slate-700 truncate" title={firstProd.transporterName}>{firstProd.transporterName || "—"}</p>
@@ -678,11 +700,12 @@ export default function CheckInvoicePage() {
                                     />
                                   </TableHead>
                                   <TableHead className="text-[10px] uppercase font-black h-10">PRODUCT INFO</TableHead>
+                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">ACTUAL QTY</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE</TableHead>
+                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">AMOUNT</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE NO</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE COPY</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE DATE</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">ACTUAL QTY</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">TRUCK NO</TableHead>
                                 </TableRow>
                               </TableHeader>
@@ -707,33 +730,32 @@ export default function CheckInvoicePage() {
                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{product.specificOrderNo}</span>
                                       </div>
                                     </TableCell>
-                                    <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
-                                       {product.rate ? `₹${product.rate}` : "—"}
-                                    </TableCell>
-                                    <TableCell className="text-center p-2 text-xs font-bold text-green-700">
-                                       {product.invoiceNo || "—"}
-                                    </TableCell>
-                                    <TableCell className="text-center p-2">
-                                       {product.invoice_copy ? (
-                                         <Button 
-                                           size="sm" 
-                                           variant="ghost" 
-                                           className="h-7 px-2 text-[10px] font-black text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                           onClick={() => window.open(product.invoice_copy, '_blank')}
-                                         >
-                                           <Eye className="h-3 w-3 mr-1" /> VIEW
-                                         </Button>
-                                       ) : (
-                                         <span className="text-[10px] text-slate-400 font-bold italic tracking-tighter">NO FILE</span>
-                                       )}
-                                    </TableCell>
-                                    <TableCell className="text-center p-2 text-xs font-black">
-                                       {product.invoiceDate ? new Date(product.invoiceDate).toLocaleDateString("en-GB") : "—"}
-                                    </TableCell>
                                     <TableCell className="text-center p-2">
                                       <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">
                                         {product.actualQty || "0"}
                                       </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
+                                       {product.rate ? `₹${product.rate.toFixed(2)}` : "—"}
+                                    </TableCell>
+                                    <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
+                                       {product.amount ? `₹${product.amount.toFixed(2)}` : "—"}
+                                    </TableCell>
+                                    <TableCell className="text-center p-2 text-xs font-bold text-green-700">
+                                       {product.invoiceNo || "—"}
+                                    </TableCell>
+                                     <TableCell className="text-center p-2">
+                                        {product.invoice_copy ? (
+                                          <a href={product.invoice_copy} target="_blank" rel="noopener noreferrer" className="inline-block">
+                                            <img src={product.invoice_copy} alt="Invoice" className="h-10 w-14 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer mx-auto" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='inline'; }} />
+                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline font-bold">View Invoice</span>
+                                          </a>
+                                        ) : (
+                                          <span className="text-[10px] text-slate-400 font-bold italic tracking-tighter">NO FILE</span>
+                                        )}
+                                     </TableCell>
+                                    <TableCell className="text-center p-2 text-xs font-black">
+                                       {product.invoiceDate ? new Date(product.invoiceDate).toLocaleDateString("en-GB") : "—"}
                                     </TableCell>
                                     <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
                                        {(product.truckNo || "—").toUpperCase()}

@@ -539,8 +539,7 @@ export default function DispatchMaterialPage() {
 
         <Button
           onClick={handleOpenDialog}
-          disabled={selectedItems.length === 0 || isReadOnly}
-          title={isReadOnly ? "View Only Access" : "Dispatch Selected"}
+          disabled={selectedItems.length === 0}
         >
           {selectedItems.length > 1 ? `Select 1 Group to Dispatch` : `Dispatch Selected (${selectedItems.length})`}
         </Button>
@@ -870,7 +869,7 @@ export default function DispatchMaterialPage() {
 
           <DialogFooter className="mt-4 border-t pt-4">
              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-             <Button onClick={handleBulkDispatch} disabled={isProcessing || dialogSelectedProducts.length === 0}>
+             <Button onClick={handleBulkDispatch} disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly}>
                 {isProcessing ? "Processing..." : `Dispatch ${dialogSelectedProducts.length} Item(s)`}
             </Button>
           </DialogFooter>

@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { Geist, Geist_Mono } from "next/font/google"
+import { Geist, Geist_Mono, Inter } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 import { SidebarProvider } from "@/components/ui/sidebar"
@@ -10,8 +10,9 @@ import { usePathname, useRouter } from "next/navigation"
 import { Toaster } from "@/components/ui/toaster"
 import { useEffect, useState } from "react"
 
-const geistSans = Geist({ subsets: ["latin"], variable: "--font-sans" })
-const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" })
+const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" })
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" })
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans", weight: ["400", "500", "600", "700", "800", "900"] })
 
 export default function RootLayout({
   children,
@@ -76,7 +77,7 @@ export default function RootLayout({
   if (!isReady && !isLoginPage) {
     return (
       <html lang="en">
-        <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased bg-muted/30`}>
+        <body className={`${inter.variable} ${geistSans.variable} ${geistMono.variable} font-sans antialiased`} style={{ background: "oklch(0.97 0.012 245)" }}>
           <div className="flex min-h-screen w-full items-center justify-center">
             <div className="animate-pulse text-muted-foreground font-medium">Loading session...</div>
           </div>
@@ -91,7 +92,7 @@ export default function RootLayout({
         <title>Enterprise Order Management</title>
         <meta name="description" content="Professional multi-stage order tracking system" />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} ${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
         {isLoginPage ? (
           // Login page without sidebar
           <>
@@ -103,7 +104,12 @@ export default function RootLayout({
           <SidebarProvider defaultOpen={true}>
             <div className="flex min-h-screen w-full">
               <AppSidebar />
-              <main className="flex-1 overflow-y-auto bg-muted/30">{children}</main>
+              <main
+                className="flex-1 overflow-y-auto overflow-x-hidden"
+                style={{ background: "oklch(0.97 0.012 245)" }}
+              >
+                {children}
+              </main>
             </div>
             <Toaster />
           </SidebarProvider>

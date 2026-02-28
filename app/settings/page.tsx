@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { userApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
-import { Plus, Pencil, Trash2, Loader2, RefreshCw, Users, Shield, Eye, EyeOff } from "lucide-react"
+import { Plus, Pencil, Trash2, Loader2, RefreshCw, Users, Shield, Eye, EyeOff, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +28,9 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { PageHeader } from "@/components/page-header"
 
+type AccessLevel = 'view_only' | 'modify'
+type PageAccessMap = Record<string, AccessLevel>
+
 interface User {
   id: number
   username: string
@@ -36,7 +39,7 @@ interface User {
   phone_no: string | null
   status: string
   role: string
-  page_access: string[] | null
+  page_access: string[] | PageAccessMap | null
   created_at: string
   updated_at: string
 }
@@ -57,7 +60,8 @@ const PAGE_ACCESS_OPTIONS = [
   "Confirm Material Receipt",
   "Damage Adjustment",
   "Settings",
-  "Master"
+  "Master",
+  "Reports"
 ]
 
 const ROLES = ["admin", "user", "guard", "pc"]
@@ -67,6 +71,9 @@ export default function SettingsPage() {
   const { toast } = useToast()
   const { isReadOnly } = useAuth()
   const [users, setUsers] = useState<User[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [sortField, setSortField] = useState<string>("id")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   
@@ -84,7 +91,7 @@ export default function SettingsPage() {
     phone_no: "",
     status: "active",
     role: "user",
-    page_access: [] as string[]
+    page_access: {} as PageAccessMap
   })
   
   const [showPassword, setShowPassword] = useState(false)
@@ -113,6 +120,55 @@ export default function SettingsPage() {
     fetchUsers()
   }, [])
 
+  // Sort helper
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setSortField(field)
+      setSortDirection("asc")
+    }
+  }
+
+  const SortIcon = ({ field }: { field: string }) => {
+    if (sortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-400 inline" />
+    return sortDirection === "asc"
+      ? <ArrowUp className="ml-1 h-3 w-3 text-blue-600 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 text-blue-600 inline" />
+  }
+
+  // Filter + Sort
+  const filteredAndSortedUsers = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim()
+    let filtered = q
+      ? users.filter(u =>
+          u.username.toLowerCase().includes(q) ||
+          (u.email || "").toLowerCase().includes(q) ||
+          (u.phone_no || "").includes(q) ||
+          u.role.toLowerCase().includes(q) ||
+          u.status.toLowerCase().includes(q) ||
+          String(u.id).includes(q)
+        )
+      : [...users]
+
+    filtered.sort((a, b) => {
+      let aVal: any = (a as any)[sortField] ?? ""
+      let bVal: any = (b as any)[sortField] ?? ""
+      if (sortField === "id") {
+        aVal = Number(aVal); bVal = Number(bVal)
+      } else if (sortField === "created_at") {
+        aVal = new Date(aVal).getTime(); bVal = new Date(bVal).getTime()
+      } else {
+        aVal = String(aVal).toLowerCase(); bVal = String(bVal).toLowerCase()
+      }
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1
+      return 0
+    })
+
+    return filtered
+  }, [users, searchQuery, sortField, sortDirection])
+
   // Reset form
   const resetForm = () => {
     setFormData({
@@ -122,7 +178,7 @@ export default function SettingsPage() {
       phone_no: "",
       status: "active",
       role: "user",
-      page_access: []
+      page_access: {}
     })
     setShowPassword(false)
   }
@@ -140,7 +196,7 @@ export default function SettingsPage() {
 
     setIsSubmitting(true)
     try {
-      const response = await userApi.create(formData)
+      const response = await userApi.create({ ...formData, page_access: formData.page_access as any })
       if (response.success) {
         toast({
           title: "Success",
@@ -169,6 +225,7 @@ export default function SettingsPage() {
     try {
       const updateData = {
         ...formData,
+        page_access: formData.page_access as any,
         password: formData.password === "••••••••" ? undefined : formData.password
       }
       
@@ -224,6 +281,13 @@ export default function SettingsPage() {
   // Open edit dialog with user data
   const openEditDialog = (user: User) => {
     setSelectedUser(user)
+    // Normalize page_access to PageAccessMap format
+    let pa: PageAccessMap = {}
+    if (Array.isArray(user.page_access)) {
+      user.page_access.forEach(p => { pa[p] = 'modify' })
+    } else if (user.page_access && typeof user.page_access === 'object') {
+      pa = { ...user.page_access } as PageAccessMap
+    }
     setFormData({
       username: user.username,
       password: user.password,
@@ -231,7 +295,7 @@ export default function SettingsPage() {
       phone_no: user.phone_no || "",
       status: user.status,
       role: user.role,
-      page_access: user.page_access || []
+      page_access: pa
     })
     setIsEditDialogOpen(true)
   }
@@ -242,30 +306,56 @@ export default function SettingsPage() {
     setIsDeleteDialogOpen(true)
   }
 
-  // Toggle page access
+  // Toggle page access on/off (default to 'modify' when first enabled)
   const togglePageAccess = (page: string) => {
+    setFormData(prev => {
+      const pa = { ...(prev.page_access as PageAccessMap) }
+      if (pa[page]) {
+        delete pa[page]
+      } else {
+        pa[page] = 'modify'
+      }
+      return { ...prev, page_access: pa }
+    })
+  }
+
+  // Set access level for a page
+  const setPageAccessLevel = (page: string, level: AccessLevel) => {
     setFormData(prev => ({
       ...prev,
-      page_access: prev.page_access.includes(page)
-        ? prev.page_access.filter(p => p !== page)
-        : [...prev.page_access, page]
+      page_access: { ...(prev.page_access as PageAccessMap), [page]: level }
     }))
   }
 
-  // Select all pages
+  // Select all pages (all as 'modify')
   const selectAllPages = () => {
-    setFormData(prev => ({
-      ...prev,
-      page_access: PAGE_ACCESS_OPTIONS
-    }))
+    const pa: PageAccessMap = {}
+    PAGE_ACCESS_OPTIONS.forEach(p => { pa[p] = 'modify' })
+    setFormData(prev => ({ ...prev, page_access: pa }))
   }
 
   // Deselect all pages
   const deselectAllPages = () => {
-    setFormData(prev => ({
-      ...prev,
-      page_access: []
-    }))
+    setFormData(prev => ({ ...prev, page_access: {} }))
+  }
+
+  // Helper: is a page enabled in the form
+  const isPageEnabled = (page: string) => {
+    return !!(formData.page_access as PageAccessMap)[page]
+  }
+
+  // Helper: get level for a page in the form
+  const getPageLevel = (page: string): AccessLevel => {
+    return (formData.page_access as PageAccessMap)[page] || 'modify'
+  }
+
+  // Helper: get readable page access for display in table
+  const getDisplayPageAccess = (user: User): { page: string; level: AccessLevel }[] => {
+    if (!user.page_access) return []
+    if (Array.isArray(user.page_access)) {
+      return user.page_access.map(p => ({ page: p, level: 'modify' as AccessLevel }))
+    }
+    return Object.entries(user.page_access as PageAccessMap).map(([page, level]) => ({ page, level }))
   }
 
   return (
@@ -404,17 +494,45 @@ export default function SettingsPage() {
                       </Button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-y-auto border rounded-lg p-3">
+                  <div className="space-y-1.5 max-h-[260px] overflow-y-auto border rounded-lg p-3">
                     {PAGE_ACCESS_OPTIONS.map((page) => (
-                      <div key={page} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`add-page-${page}`}
-                          checked={formData.page_access.includes(page)}
-                          onCheckedChange={() => togglePageAccess(page)}
-                        />
-                        <Label htmlFor={`add-page-${page}`} className="text-sm cursor-pointer">
-                          {page}
-                        </Label>
+                      <div key={page} className="flex items-center justify-between py-1 px-1 rounded hover:bg-slate-50">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id={`add-page-${page}`}
+                            checked={isPageEnabled(page)}
+                            onCheckedChange={() => togglePageAccess(page)}
+                          />
+                          <Label htmlFor={`add-page-${page}`} className="text-sm cursor-pointer font-normal">
+                            {page}
+                          </Label>
+                        </div>
+                        {isPageEnabled(page) && (
+                          <div className="flex rounded-md border overflow-hidden text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setPageAccessLevel(page, 'view_only')}
+                              className={`px-2 py-0.5 font-medium transition-colors ${
+                                getPageLevel(page) === 'view_only'
+                                  ? 'bg-amber-100 text-amber-700 border-amber-300'
+                                  : 'bg-white text-slate-500 hover:bg-slate-50'
+                              }`}
+                            >
+                              View
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPageAccessLevel(page, 'modify')}
+                              className={`px-2 py-0.5 font-medium transition-colors border-l ${
+                                getPageLevel(page) === 'modify'
+                                  ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                                  : 'bg-white text-slate-500 hover:bg-slate-50'
+                              }`}
+                            >
+                              Modify
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -435,45 +553,72 @@ export default function SettingsPage() {
 
       {/* User Management Card */}
       <Card className="shadow-xl border-none rounded-2xl overflow-hidden bg-white">
-        <CardHeader className="border-b bg-slate-50/50 flex flex-row items-center justify-between py-4 px-6">
-          <div>
-            <CardTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" />
-              User Management
-            </CardTitle>
-            <CardDescription className="mt-1">
-              {users.length} user{users.length !== 1 ? 's' : ''} registered
-            </CardDescription>
+        <CardHeader className="border-b bg-slate-50/50 py-4 px-6">
+          <div className="flex flex-row items-center justify-between gap-4 flex-wrap">
+            <div>
+              <CardTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" />
+                User Management
+              </CardTitle>
+              <CardDescription className="mt-1">
+                {filteredAndSortedUsers.length} of {users.length} user{users.length !== 1 ? 's' : ''} shown
+              </CardDescription>
+            </div>
+            {/* Search Box */}
+            <div className="relative w-full max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search by name, email, role..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-9 text-sm bg-white border-slate-200 focus:border-blue-400"
+              />
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-slate-50/50">
-              <TableRow>
-                <TableHead className="w-[60px] pl-6">ID</TableHead>
-                <TableHead>Username</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-center">Role</TableHead>
-                <TableHead>Page Access</TableHead>
-                <TableHead>Created At</TableHead>
-                <TableHead className="text-center w-[100px] pr-6">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+        <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
+          <table className="w-full caption-bottom text-sm">
+            <thead className="[&_tr]:border-b">
+              <tr>
+                <th className="sticky top-0 left-0 z-30 bg-slate-50 w-[60px] pl-6 cursor-pointer whitespace-nowrap select-none border-r border-b border-slate-200 h-10 px-2 text-left align-middle font-medium text-sm" onClick={() => handleSort("id")}>
+                  ID <SortIcon field="id" />
+                </th>
+                <th className="sticky top-0 left-[60px] z-30 bg-slate-50 cursor-pointer whitespace-nowrap select-none border-r border-b border-slate-200 h-10 px-2 text-left align-middle font-medium text-sm" onClick={() => handleSort("username")}>
+                  Username <SortIcon field="username" />
+                </th>
+                <th className="sticky top-0 left-[120px] z-30 bg-slate-50 cursor-pointer whitespace-nowrap select-none border-r border-b border-slate-200 h-10 px-2 text-left align-middle font-medium text-sm" onClick={() => handleSort("email")}>
+                  Email <SortIcon field="email" />
+                </th>
+                <th className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 cursor-pointer whitespace-nowrap select-none h-10 px-2 text-left align-middle font-medium text-sm" onClick={() => handleSort("phone_no")}>
+                  Phone <SortIcon field="phone_no" />
+                </th>
+                <th className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 text-center cursor-pointer whitespace-nowrap select-none h-10 px-2 align-middle font-medium text-sm" onClick={() => handleSort("status")}>
+                  Status <SortIcon field="status" />
+                </th>
+                <th className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 text-center cursor-pointer whitespace-nowrap select-none h-10 px-2 align-middle font-medium text-sm" onClick={() => handleSort("role")}>
+                  Role <SortIcon field="role" />
+                </th>
+                <th className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 h-10 px-2 text-left align-middle font-medium text-sm">Page Access</th>
+                <th className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 cursor-pointer whitespace-nowrap select-none h-10 px-2 text-left align-middle font-medium text-sm" onClick={() => handleSort("created_at")}>
+                  Created At <SortIcon field="created_at" />
+                </th>
+                <th className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 text-center w-[100px] pr-6 h-10 px-2 align-middle font-medium text-sm">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="[&_tr:last-child]:border-0">
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-16">
+                <tr>
+                  <td colSpan={9} className="text-center py-16 p-2 align-middle">
                     <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                       <span className="text-sm font-medium">Loading users...</span>
                     </div>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               ) : users.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-16">
+                <tr>
+                  <td colSpan={9} className="text-center py-16 p-2 align-middle">
                     <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
                       <Users className="h-12 w-12 text-slate-300" />
                       <div>
@@ -481,24 +626,34 @@ export default function SettingsPage() {
                         <p className="text-sm text-slate-400">Click "Add User" to create one.</p>
                       </div>
                     </div>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
+              ) : filteredAndSortedUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="text-center py-16 p-2 align-middle">
+                    <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                      <Search className="h-10 w-10 text-slate-300" />
+                      <p className="font-medium text-slate-600">No users match your search</p>
+                      <p className="text-sm text-slate-400">Try a different keyword</p>
+                    </div>
+                  </td>
+                </tr>
               ) : (
-                users.map((user) => (
-                  <TableRow key={user.id} className="hover:bg-slate-50/50">
-                    <TableCell className="font-medium pl-6">{user.id}</TableCell>
-                    <TableCell className="font-semibold text-slate-800">{user.username}</TableCell>
-                    <TableCell className="text-slate-600">{user.email}</TableCell>
-                    <TableCell className="text-slate-600">{user.phone_no || "—"}</TableCell>
-                    <TableCell className="text-center">
+                filteredAndSortedUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-slate-50/50 border-b transition-colors">
+                    <td className="sticky left-0 z-10 bg-white font-medium pl-6 p-2 align-middle whitespace-nowrap border-r border-slate-100">{user.id}</td>
+                    <td className="sticky left-[60px] z-10 bg-white font-semibold text-slate-800 p-2 align-middle whitespace-nowrap border-r border-slate-100">{user.username}</td>
+                    <td className="sticky left-[120px] z-10 bg-white text-slate-600 p-2 align-middle whitespace-nowrap border-r border-slate-100 max-w-[200px] truncate">{user.email}</td>
+                    <td className="text-slate-600 p-2 align-middle whitespace-nowrap">{user.phone_no || "—"}</td>
+                    <td className="text-center p-2 align-middle whitespace-nowrap">
                       <Badge 
                         variant={user.status === "active" ? "default" : "secondary"}
                         className={user.status === "active" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : ""}
                       >
                         {user.status}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
+                    </td>
+                    <td className="text-center p-2 align-middle whitespace-nowrap">
                       <Badge 
                         variant="outline" 
                         className={user.role === "admin" ? "border-blue-500 text-blue-600 bg-blue-50" : "border-slate-300"}
@@ -506,35 +661,37 @@ export default function SettingsPage() {
                         <Shield className="h-3 w-3 mr-1" />
                         {user.role}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1 max-w-[200px]">
-                        {user.page_access && user.page_access.length > 0 ? (
-                          user.page_access.length <= 2 ? (
-                            user.page_access.map((page, idx) => (
-                              <Badge key={idx} variant="secondary" className="text-xs bg-slate-100">
-                                {page}
-                              </Badge>
-                            ))
-                          ) : (
+                    </td>
+                    <td className="p-2 align-middle">
+                      <div className="flex flex-wrap gap-1 max-w-[220px]">
+                        {(() => {
+                          const pages = getDisplayPageAccess(user)
+                          if (pages.length === 0) return <span className="text-muted-foreground text-sm">None</span>
+                          const shown = pages.slice(0, 1)
+                          const rest = pages.length - 1
+                          return (
                             <>
-                              <Badge variant="secondary" className="text-xs bg-slate-100">
-                                {user.page_access[0]}
-                              </Badge>
-                              <Badge variant="secondary" className="text-xs bg-slate-100">
-                                +{user.page_access.length - 1} more
-                              </Badge>
+                              {shown.map(({ page, level }) => (
+                                <Badge key={page} variant="secondary" className={`text-xs ${
+                                  level === 'view_only' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {page} {level === 'view_only' ? '👁' : ''}
+                                </Badge>
+                              ))}
+                              {rest > 0 && (
+                                <Badge variant="secondary" className="text-xs bg-slate-100">
+                                  +{rest} more
+                                </Badge>
+                              )}
                             </>
                           )
-                        ) : (
-                          <span className="text-muted-foreground text-sm">None</span>
-                        )}
+                        })()}
                       </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-slate-500">
+                    </td>
+                    <td className="p-2 align-middle whitespace-nowrap text-sm text-slate-500">
                       {new Date(user.created_at).toLocaleDateString("en-GB")}
-                    </TableCell>
-                    <TableCell className="pr-6">
+                    </td>
+                    <td className="pr-6 p-2 align-middle">
                       <div className="flex justify-center gap-1">
                         <Button
                           variant="ghost"
@@ -557,12 +714,13 @@ export default function SettingsPage() {
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 ))
               )}
-            </TableBody>
-          </Table>
+            </tbody>
+          </table>
+        </div>
         </CardContent>
       </Card>
 
@@ -696,17 +854,45 @@ export default function SettingsPage() {
                   </Button>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-y-auto border rounded-lg p-3">
+              <div className="space-y-1.5 max-h-[260px] overflow-y-auto border rounded-lg p-3">
                 {PAGE_ACCESS_OPTIONS.map((page) => (
-                  <div key={page} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`edit-page-${page}`}
-                      checked={formData.page_access.includes(page)}
-                      onCheckedChange={() => togglePageAccess(page)}
-                    />
-                    <Label htmlFor={`edit-page-${page}`} className="text-sm cursor-pointer">
-                      {page}
-                    </Label>
+                  <div key={page} className="flex items-center justify-between py-1 px-1 rounded hover:bg-slate-50">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id={`edit-page-${page}`}
+                        checked={isPageEnabled(page)}
+                        onCheckedChange={() => togglePageAccess(page)}
+                      />
+                      <Label htmlFor={`edit-page-${page}`} className="text-sm cursor-pointer font-normal">
+                        {page}
+                      </Label>
+                    </div>
+                    {isPageEnabled(page) && (
+                      <div className="flex rounded-md border overflow-hidden text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setPageAccessLevel(page, 'view_only')}
+                          className={`px-2 py-0.5 font-medium transition-colors ${
+                            getPageLevel(page) === 'view_only'
+                              ? 'bg-amber-100 text-amber-700 border-amber-300'
+                              : 'bg-white text-slate-500 hover:bg-slate-50'
+                          }`}
+                        >
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPageAccessLevel(page, 'modify')}
+                          className={`px-2 py-0.5 font-medium transition-colors border-l ${
+                            getPageLevel(page) === 'modify'
+                              ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                              : 'bg-white text-slate-500 hover:bg-slate-50'
+                          }`}
+                        >
+                          Modify
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -661,9 +661,8 @@ export default function CommitmentReviewPage() {
           <Dialog open={selectedOrder !== null} onOpenChange={handleBulkVerifyOpen}>
               <DialogTrigger asChild>
                 <Button 
-                  disabled={selectedItems.length === 0 || isReadOnly}
+                  disabled={selectedItems.length === 0}
                   className="bg-blue-600 hover:bg-blue-700 shadow-md transition-all active:scale-95"
-                  title={isReadOnly ? "View Only Access" : "Verify Selected"}
                 >
                   <CheckCircle2 className="mr-2 h-4 w-4" />
                   Verify Selected ({selectedItems.length})
@@ -813,7 +812,8 @@ export default function CommitmentReviewPage() {
                                             onCheckedChange={(checked) => {
                                                 const productKeys = orderDetails._products.map((p: any) => p._rowKey);
                                                 if (checked) {
-                                                  setDialogSelectedProducts(prev => Array.from(new Set([...prev, ...productKeys])))
+                                                  setDialogSelectedProducts(prev => Array.from(new Set([...prev, ...productKeys]))
+                                                  )
                                                 } else {
                                                   setDialogSelectedProducts(prev => prev.filter(k => !productKeys.includes(k)))
                                                 }
@@ -914,7 +914,7 @@ export default function CommitmentReviewPage() {
                <DialogFooter className="border-t pt-4 sm:justify-center">
                  <Button
                    onClick={handleConfirmCommitment}
-                   disabled={isConfirming}
+                   disabled={isConfirming || isReadOnly}
                    className="min-w-75 px-8 h-11 text-base font-bold shadow-lg shadow-blue-100 transition-all hover:scale-[1.01] active:scale-[0.99]"
                    variant={Object.values(checklistValues).includes("reject") ? "destructive" : "default"}
                  >

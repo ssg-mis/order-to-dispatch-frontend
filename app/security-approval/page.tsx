@@ -459,9 +459,8 @@ export default function SecurityApprovalPage() {
 
           <Button 
             onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0 || isReadOnly} 
+            disabled={selectedItems.length === 0} 
             className="bg-purple-600 hover:bg-purple-700 shadow-lg font-black uppercase tracking-tighter italic"
-            title={isReadOnly ? "View Only Access" : "Process Security"}
           >
             <Upload className="mr-2 h-4 w-4" />
             Process Security ({selectedItems.length})
@@ -822,7 +821,7 @@ export default function SecurityApprovalPage() {
             <Button variant="ghost" className="font-bold text-slate-500" onClick={() => setIsDialogOpen(false)}>Discard</Button>
             <Button 
                onClick={handleBulkSubmit} 
-               disabled={isProcessing || selectedProducts.length === 0}
+               disabled={isProcessing || selectedProducts.length === 0 || isReadOnly}
                className="bg-purple-600 hover:bg-purple-700 h-12 px-8 rounded-xl shadow-lg font-black uppercase tracking-tighter italic text-lg"
             >
               {isProcessing ? "Verifying..." : `Authorize Security Gatepass (${selectedProducts.length})`}
