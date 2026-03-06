@@ -640,10 +640,10 @@ export default function MaterialReceiptPage() {
                         <TableCell className="font-medium text-xs">{product.specificOrderNo || "—"}</TableCell>
                         <TableCell className="font-medium">{product.productName}</TableCell>
                         <TableCell className="font-medium text-blue-700">{product.invoiceNo || "—"}</TableCell>
-                        <TableCell>{product.billAmount || "—"}</TableCell>
-                        <TableCell>{product.actualQty || "—"}</TableCell>
+                        <TableCell>{product.billAmount || "0.00"}</TableCell>
+                        <TableCell>{product.actualQty || "0"}</TableCell>
                         <TableCell>{(product.truckNo || "—").toUpperCase()}</TableCell>
-                        <TableCell className="font-semibold">{product.netWeight || "—"}</TableCell>
+                        <TableCell className="font-semibold">{product.netWeight || "0"}</TableCell>
                         {receiptData.hasDamage === "yes" && (
                             <>
                                 <TableCell>
@@ -694,6 +694,26 @@ export default function MaterialReceiptPage() {
                         )}
                       </TableRow>
                     ))}
+
+                    {/* Summary Footer Row */}
+                    <TableRow className="bg-slate-50 font-black h-12 border-t-2 border-slate-200">
+                      <TableCell />
+                      <TableCell colSpan={2} className="text-[10px] uppercase font-black text-slate-900">Total</TableCell>
+                      <TableCell />
+                      <TableCell className="text-xs text-blue-700 font-black">
+                        ₹{selectedGroup._allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.billAmount) || 0), 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="bg-blue-600 text-white font-black text-xs px-3">
+                          {selectedGroup._allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.actualQty) || 0), 0)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell />
+                      <TableCell className="text-xs font-black">
+                        {selectedGroup._allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.netWeight) || 0), 0)}
+                      </TableCell>
+                      {receiptData.hasDamage === "yes" && <TableCell colSpan={2} />}
+                    </TableRow>
                   </TableBody>
                 </Table>
                 </div>

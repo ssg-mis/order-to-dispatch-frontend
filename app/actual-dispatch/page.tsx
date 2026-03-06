@@ -464,11 +464,14 @@ export default function ActualDispatchPage() {
        const doNumber = order.so_no || order.soNo || "DO-XXX"
        const baseDoMatch = doNumber.match(/^(DO-\d+)/i)
        const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
+       
+       // Use unique ID as the primary grouping key for truly individual view
+       const groupKey = order.id.toString();
 
-       if (!grouped[custName]) {
-          grouped[custName] = {
+       if (!grouped[groupKey]) {
+          grouped[groupKey] = {
              customerName: custName,
-             _rowKey: custName,
+             _rowKey: groupKey,
              _allProducts: [],
              _productCount: 0,
              _ordersMap: {},
@@ -476,13 +479,13 @@ export default function ActualDispatchPage() {
           }
        }
        
-       grouped[custName]._allBaseDos.add(baseDo)
+       grouped[groupKey]._allBaseDos.add(baseDo)
 
-       if (!grouped[custName]._ordersMap[baseDo]) {
+       if (!grouped[groupKey]._ordersMap[baseDo]) {
           const internalOrder = order.data?.orderData || order;
           const checklist = order.data?.checklistResults || {};
           
-          grouped[custName]._ordersMap[baseDo] = {
+          grouped[groupKey]._ordersMap[baseDo] = {
              ...order,
              baseDo,
              _products: [],
@@ -529,18 +532,22 @@ export default function ActualDispatchPage() {
           processid: order.processid || null
        }
        
-       grouped[custName]._ordersMap[baseDo]._products.push(productMeta)
-       grouped[custName]._allProducts.push(productMeta)
+       grouped[groupKey]._ordersMap[baseDo]._products.push(productMeta)
+       grouped[groupKey]._allProducts.push(productMeta)
     })
 
-    return Object.values(grouped).map((group: any) => ({
-       ...group,
-       orderNo: Array.from(group._allBaseDos).join(", "),
-       processId: group._allProducts[0]?.processid || "—",
-       qtyToDispatch: group._allProducts.reduce((sum: number, p: any) => sum + parseFloat(p.qtyToDispatch || 0), 0),
-       orderPunchRemarks: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.orderPunchRemarks))).filter(Boolean).join("; ") || "—",
-       _productCount: group._allProducts.length
-    }))
+    return Object.values(grouped).map((group: any) => {
+       const firstOrderDetails = Object.values(group._ordersMap)[0] as any || {};
+       return {
+          ...group,
+          ...firstOrderDetails, // Flatten all detail fields into the group object
+          orderNo: Array.from(group._allBaseDos).join(", "),
+          processId: group._allProducts[0]?.processid || "—",
+          qtyToDispatch: group._allProducts.reduce((sum: number, p: any) => sum + parseFloat(p.qtyToDispatch || 0), 0),
+          orderPunchRemarks: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.orderPunchRemarks))).filter(Boolean).join("; ") || "—",
+          _productCount: group._allProducts.length
+       };
+    })
   }, [filteredPendingOrders])
 
   const toggleSelectAll = () => {
@@ -914,7 +921,7 @@ export default function ActualDispatchPage() {
                     {col.label}
                   </TableHead>
                 ))}
-                <TableHead className="text-center">Action</TableHead>
+
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -944,24 +951,16 @@ export default function ActualDispatchPage() {
                                       {row._productCount > 1 && <span className="text-[10px] text-slate-500">(Total)</span>}
                                   </div>
                               ) : (
-                                 row[col.id as keyof typeof row]
+                                 row[col.id as keyof typeof row] || "—"
                               )}
                            </TableCell>
                          ))}
-                         <TableCell>
-                             <Button variant="ghost" size="sm" onClick={() => {
-                                 setSelectedOrders([rowKey])
-                                 handleOpenDialog(row)
-                             }}>
-                                 <Settings2 className="w-4 h-4 text-slate-400 hover:text-blue-600" />
-                             </Button>
-                         </TableCell>
                        </TableRow>
                      )
                   })
                ) : (
                  <TableRow>
-                   <TableCell colSpan={visibleColumns.length + 2} className="text-center py-8 text-muted-foreground">
+                   <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
                      No orders pending for actual dispatch
                    </TableCell>
                  </TableRow>

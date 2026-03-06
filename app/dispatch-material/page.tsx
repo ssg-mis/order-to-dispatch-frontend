@@ -491,14 +491,18 @@ export default function DispatchMaterialPage() {
       grouped[groupKey]._allProducts.push(productWithMeta)
     })
     
-    return Object.values(grouped).map((group: any) => ({
-      ...group,
-      orderNo: group._displayDo,
-      processId: group.processid || group._allProducts[0]?.processid || "—",
-      transportType: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.transportType))).filter(t => t && t !== "—").join(", ") || "—",
-      orderPunchRemarks: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.orderPunchRemarks))).filter(Boolean).join("; ") || "—",
-      _productCount: group._allProducts.length
-    })).filter(group => group._productCount > 0)
+    return Object.values(grouped).map((group: any) => {
+      const firstOrderDetails = Object.values(group._ordersMap)[0] as any || {};
+      return {
+        ...group,
+        ...firstOrderDetails, // Flatten all detail fields into the group object
+        orderNo: group._displayDo,
+        processId: group.processid || group._allProducts[0]?.processid || "—",
+        transportType: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.transportType))).filter(t => t && t !== "—").join(", ") || "—",
+        orderPunchRemarks: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.orderPunchRemarks))).filter(Boolean).join("; ") || "—",
+        _productCount: group._allProducts.length
+      };
+    }).filter(group => group._productCount > 0)
   }, [filteredPendingOrders])
 
   return (
@@ -561,7 +565,7 @@ export default function DispatchMaterialPage() {
                   {col.label}
                 </TableHead>
               ))}
-              <TableHead className="w-12"></TableHead>
+
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -599,21 +603,12 @@ export default function DispatchMaterialPage() {
                           )}
                        </TableCell>
                      ))}
-                     
-                     <TableCell>
-                         <Button variant="ghost" size="sm" onClick={() => {
-                             setSelectedItems([row])
-                             handleOpenDialog()
-                         }}>
-                             <Settings2 className="w-4 h-4 text-slate-400 hover:text-blue-600" />
-                         </Button>
-                     </TableCell>
                    </TableRow>
                    )
                  })
                ) : (
               <TableRow>
-                <TableCell colSpan={visibleColumns.length + 2} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
                   No orders pending for dispatch
                 </TableCell>
               </TableRow>

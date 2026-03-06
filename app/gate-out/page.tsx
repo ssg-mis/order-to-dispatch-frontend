@@ -165,11 +165,16 @@ export default function GateOutPage() {
        const partyName = order.party_name || order.partyName || "Unknown Customer"
        const doNumber = order.so_no || order.soNo || "—"
        
-       if (!grouped[invoiceNo]) {
-          grouped[invoiceNo] = {
-             _rowKey: invoiceNo,
+       // Extract date from actual_6 (Stage 10 completion date)
+       const actual6Date = order.actual_6 ? new Date(order.actual_6).toISOString().split('T')[0] : "No Date"
+       const groupKey = `${invoiceNo}-${actual6Date}`
+       
+       if (!grouped[groupKey]) {
+          grouped[groupKey] = {
+             _rowKey: groupKey,
              customerName: partyName,
              invoiceNo: invoiceNo,
+             actual6Date: actual6Date,
              doNumberList: new Set<string>(),
              _allProducts: [],
              _ordersMap: {}, // Group items by specific DO for interleaved view
@@ -177,7 +182,7 @@ export default function GateOutPage() {
           }
        }
        
-       const group = grouped[invoiceNo]
+       const group = grouped[groupKey]
        group.doNumberList.add(doNumber)
        
        const orderKey = doNumber;
@@ -750,6 +755,24 @@ export default function GateOutPage() {
                                     </TableCell>
                                   </TableRow>
                                 ))}
+
+                                {/* Summary Footer Row */}
+                                <TableRow className="bg-slate-50 font-black h-12 border-t-2 border-slate-200">
+                                  <TableCell />
+                                  <TableCell className="text-[10px] uppercase font-black text-slate-900">Total</TableCell>
+                                  <TableCell className="text-center">
+                                    <Badge className="bg-blue-600 text-white font-black text-xs px-3">
+                                      {allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.actualQty) || 0), 0)}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-center text-xs text-slate-700">
+                                    ₹{allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.rate) || 0), 0).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell className="text-center text-xs text-blue-700 font-black">
+                                    ₹{allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell colSpan={3} />
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </div>

@@ -160,82 +160,85 @@ export default function MakeInvoicePage() {
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
 
-    filteredPendingOrders.forEach((order: any) => {
-       const partyName = order.party_name || order.partyName || "Unknown Customer"
-       const rawDoNumber = order.so_no || order.soNo || "—"
-       const doNumber = rawDoNumber.replace(/[A-Z]+$/, "")
-       
-       if (!grouped[partyName]) {
-          grouped[partyName] = {
-             _rowKey: partyName,
-             customerName: partyName,
-             doNumberList: new Set<string>(),
-             _allProducts: [],
-             _ordersMap: {}, // Group items by specific DO for interleaved view
-             _productCount: 0
-          }
-       }
-       
-       const group = grouped[partyName]
+     filteredPendingOrders.forEach((order: any) => {
+        const partyName = order.party_name || order.partyName || "Unknown Customer"
+        const rawDoNumber = order.so_no || order.soNo || "—"
+        const doNumber = rawDoNumber.replace(/[A-Z]+$/, "")
+        
+        // Use unique ID as the primary grouping key for truly individual view
+        const groupKey = order.id.toString();
+
+        if (!grouped[groupKey]) {
+           grouped[groupKey] = {
+              _rowKey: groupKey,
+              customerName: partyName,
+              doNumberList: new Set<string>(),
+              _allProducts: [],
+              _ordersMap: {}, // Still keep map structure for compatibility with existing dialog logic
+              _productCount: 0
+           }
+        }
+        
+        const group = grouped[groupKey]
        group.doNumberList.add(doNumber)
        
        // Use base DO (stripping A, B, C suffixes) as the key to prevent duplicate detail blocks
        const orderKey = doNumber;
-       
-       if (!group._ordersMap[orderKey]) {
-         group._ordersMap[orderKey] = {
-           _products: [],
-           depoName: order.depo_name || order.depoName || "—",
-           deliveryPurpose: order.order_type_delivery_purpose || "—",
-           orderType: order.order_type || "—",
-           startDate: order.start_date,
-           endDate: order.end_date,
-           deliveryDate: order.delivery_date,
-           transportType: order.type_of_transporting || "—",
-           contactPerson: order.customer_contact_person_name || "—",
-           whatsapp: order.customer_contact_person_whatsapp_no || "—",
-           address: order.customer_address || "—",
-           paymentTerms: order.payment_terms || "—",
-           advanceAmount: order.advance_amount || 0,
-           isBroker: order.is_order_through_broker || false,
-           brokerName: order.broker_name || "—",
-           partyCredit: order.party_credit_status || "Good",
-           totalAmount: order.total_amount_with_gst || "—",
-           oilType: order.oil_type || "—"
-         }
-       }
-       
-       const product = {
-          ...order,
-          _rowKey: `${partyName}-${order.id}`,
-          id: order.id,
-          specificOrderNo: doNumber,
-          productName: order.product_name,
-          rate: (parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1),
-          amount: ((parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1)) * (parseFloat(order.qty_to_be_dispatched || order.qty_to_dispatch || order.actual_qty_dispatch) || 0),
-          qtyToDispatch: order.qty_to_be_dispatched || order.qty_to_dispatch || order.actual_qty_dispatch || 0,          truckNo: order.truck_no,
-          rstNo: order.rst_no,
-          grossWeight: order.gross_weight,
-          tareWeight: order.tare_weight,
-          netWeight: order.net_weight,
-          transporterName: order.transporter_name,
-          driverName: order.driver_name,
-          fitness: order.fitness,
-          insurance: order.insurance,
-          polution: order.polution,
-          tax_copy: order.tax_copy,
-          permit1: order.permit1,
-          permit2_out_state: order.permit2_out_state,
-          check_status: order.check_status,
-          remarks: order.remarks,
-          weightment_slip_copy: order.weightment_slip_copy,
-          reasonForDiff: order.reason_of_difference_in_weight_if_any_speacefic,
-          bilty_no: order.bilty_no,
-          processid: order.processid || null
-       }
-       
-       group._ordersMap[orderKey]._products.push(product)
-       group._allProducts.push(product)
+              if (!grouped[groupKey]._ordersMap[orderKey]) {
+          group._ordersMap[orderKey] = {
+            _products: [],
+            depoName: order.depo_name || order.depoName || "—",
+            deliveryPurpose: order.order_type_delivery_purpose || "—",
+            orderType: order.order_type || "—",
+            startDate: order.start_date,
+            endDate: order.end_date,
+            deliveryDate: order.delivery_date,
+            transportType: order.type_of_transporting || "—",
+            contactPerson: order.customer_contact_person_name || "—",
+            whatsapp: order.customer_contact_person_whatsapp_no || "—",
+            address: order.customer_address || "—",
+            paymentTerms: order.payment_terms || "—",
+            advanceAmount: order.advance_amount || 0,
+            isBroker: order.is_order_through_broker || false,
+            brokerName: order.broker_name || "—",
+            partyCredit: order.party_credit_status || "Good",
+            totalAmount: order.total_amount_with_gst || "—",
+            oilType: order.oil_type || "—"
+          }
+        }
+        
+        const product = {
+           ...order,
+           _rowKey: `${partyName}-${order.id}`,
+           id: order.id,
+           specificOrderNo: doNumber,
+           productName: order.product_name,
+           rate: (parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1),
+           amount: ((parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1)) * (parseFloat(order.actual_qty_dispatch || order.qty_to_be_dispatched || order.qty_to_dispatch) || 0),
+           qtyToDispatch: order.actual_qty_dispatch || order.qty_to_be_dispatched || order.qty_to_dispatch || 0,
+           truckNo: order.truck_no,
+           rstNo: order.rst_no,
+           grossWeight: order.gross_weight,
+           tareWeight: order.tare_weight,
+           netWeight: order.net_weight,
+           transporterName: order.transporter_name,
+           driverName: order.driver_name,
+           fitness: order.fitness,
+           insurance: order.insurance,
+           polution: order.polution,
+           tax_copy: order.tax_copy,
+           permit1: order.permit1,
+           permit2_out_state: order.permit2_out_state,
+           check_status: order.check_status,
+           remarks: order.remarks,
+           weightment_slip_copy: order.weightment_slip_copy,
+           reasonForDiff: order.reason_of_difference_in_weight_if_any_speacefic,
+           bilty_no: order.bilty_no,
+           processid: order.processid || null
+        }
+        
+        grouped[groupKey]._ordersMap[orderKey]._products.push(product)
+        grouped[groupKey]._allProducts.push(product)
        group._productCount = group._allProducts.length
     })
 
@@ -492,7 +495,9 @@ export default function MakeInvoicePage() {
                       <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
                       <TableCell className="text-center text-xs">{group.customerName}</TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="secondary">{group._productCount} items</Badge>
+                        <span className="text-[10px] font-black text-slate-700 uppercase leading-tight block max-w-[150px] mx-auto">
+                          {group._allProducts[0]?.productName || "—"}
+                        </span>
                       </TableCell>
                       <TableCell className="text-center">
                         <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
@@ -647,11 +652,21 @@ export default function MakeInvoicePage() {
 
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 1</p>
-                                        <p className="text-xs font-bold text-slate-700">{firstProd.permit1 || "—"}</p>
+                                        {firstProd.permit1 ? (
+                                          <a href={firstProd.permit1} target="_blank" rel="noopener noreferrer" className="block">
+                                            <img src={firstProd.permit1} alt="Permit 1" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
+                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                          </a>
+                                        ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 2 (Out State)</p>
-                                        <p className="text-xs font-bold text-slate-700">{firstProd.permit2_out_state || "—"}</p>
+                                        {firstProd.permit2_out_state ? (
+                                          <a href={firstProd.permit2_out_state} target="_blank" rel="noopener noreferrer" className="block">
+                                            <img src={firstProd.permit2_out_state} alt="Permit 2" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
+                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                          </a>
+                                        ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Audit Status</p>
@@ -672,7 +687,12 @@ export default function MakeInvoicePage() {
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Slip</p>
-                                        <p className="text-xs font-bold text-slate-700">{firstProd.weightment_slip_copy || "—"}</p>
+                                        {firstProd.weightment_slip_copy ? (
+                                          <a href={firstProd.weightment_slip_copy} target="_blank" rel="noopener noreferrer" className="block">
+                                            <img src={firstProd.weightment_slip_copy} alt="Weight Slip" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
+                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                          </a>
+                                        ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                        <div>
                                          <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
@@ -715,48 +735,66 @@ export default function MakeInvoicePage() {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {allProducts.map((product: any) => (
-                                  <TableRow key={product._rowKey} className={cn(selectedProducts.includes(product._rowKey) ? "bg-blue-50/20" : "", "h-14")}>
-                                    <TableCell className="text-center p-2">
-                                      <Checkbox 
-                                        checked={selectedProducts.includes(product._rowKey)}
-                                        onCheckedChange={() => {
-                                          if (selectedProducts.includes(product._rowKey)) {
-                                            setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
-                                          } else {
-                                            setSelectedProducts(prev => [...prev, product._rowKey])
-                                          }
-                                        }}
-                                      />
-                                    </TableCell>
-                                    <TableCell className="p-2">
-                                      <div className="flex flex-col">
-                                        <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{product.productName}</span>
-                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{product.specificOrderNo}</span>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell className="text-center p-2">
-                                      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">
-                                        {product.qtyToDispatch || "0"}
+                                  {allProducts.map((product: any) => (
+                                    <TableRow key={product._rowKey} className={cn(selectedProducts.includes(product._rowKey) ? "bg-blue-50/20" : "", "h-14")}>
+                                      <TableCell className="text-center p-2">
+                                        <Checkbox 
+                                          checked={selectedProducts.includes(product._rowKey)}
+                                          onCheckedChange={() => {
+                                            if (selectedProducts.includes(product._rowKey)) {
+                                              setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
+                                            } else {
+                                              setSelectedProducts(prev => [...prev, product._rowKey])
+                                            }
+                                          }}
+                                        />
+                                      </TableCell>
+                                      <TableCell className="p-2">
+                                        <div className="flex flex-col">
+                                          <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{product.productName}</span>
+                                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{product.specificOrderNo}</span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-center p-2">
+                                        <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">
+                                          {product.qtyToDispatch || "0"}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
+                                         {product.rate ? `₹${product.rate.toFixed(2)}` : "—"}
+                                      </TableCell>
+                                      <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
+                                         {product.amount ? `₹${product.amount.toFixed(2)}` : "—"}
+                                      </TableCell>
+                                      <TableCell className="text-center p-2">
+                                         <div className="flex items-center justify-center gap-1.5">
+                                            <Truck className="h-3 w-3 text-slate-400" />
+                                            <span className="text-xs font-bold text-slate-700">{(product.truckNo || "—").toUpperCase()}</span>
+                                         </div>
+                                      </TableCell>
+                                      <TableCell className="text-center p-2">
+                                        <Badge className="bg-green-100 text-green-700 border-green-200 font-black text-[9px] uppercase">Ready for Invoice</Badge>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                  
+                                  {/* Summary Footer Row */}
+                                  <TableRow className="bg-slate-50 font-black h-12 border-t-2 border-slate-200">
+                                    <TableCell />
+                                    <TableCell className="text-[10px] uppercase font-black text-slate-900">Total</TableCell>
+                                    <TableCell className="text-center">
+                                      <Badge className="bg-blue-600 text-white font-black text-xs px-3">
+                                        {allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.qtyToDispatch) || 0), 0)}
                                       </Badge>
                                     </TableCell>
-                                    <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
-                                       {product.rate ? `₹${product.rate.toFixed(2)}` : "—"}
+                                    <TableCell className="text-center text-xs text-slate-700">
+                                      ₹{allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.rate) || 0), 0).toFixed(2)}
                                     </TableCell>
-                                    <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
-                                       {product.amount ? `₹${product.amount.toFixed(2)}` : "—"}
+                                    <TableCell className="text-center text-xs text-blue-700 font-black">
+                                      ₹{allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0).toFixed(2)}
                                     </TableCell>
-                                    <TableCell className="text-center p-2">
-                                       <div className="flex items-center justify-center gap-1.5">
-                                          <Truck className="h-3 w-3 text-slate-400" />
-                                          <span className="text-xs font-bold text-slate-700">{(product.truckNo || "—").toUpperCase()}</span>
-                                       </div>
-                                    </TableCell>
-                                    <TableCell className="text-center p-2">
-                                      <Badge className="bg-green-100 text-green-700 border-green-200 font-black text-[9px] uppercase">Ready for Invoice</Badge>
-                                    </TableCell>
+                                    <TableCell colSpan={2} />
                                   </TableRow>
-                                ))}
                               </TableBody>
                             </Table>
                           </div>
