@@ -74,12 +74,12 @@ export default function CheckInvoicePage() {
   // Fetch History
   const fetchHistory = async () => {
     try {
-        const response = await checkInvoiceApi.getHistory({ limit: 1000 });
-        if (response.success && response.data.invoices) {
-          setHistoryOrders(response.data.invoices);
-        }
+      const response = await checkInvoiceApi.getHistory({ limit: 1000 });
+      if (response.success && response.data.invoices) {
+        setHistoryOrders(response.data.invoices);
+      }
     } catch (error) {
-        console.error("Failed to fetch history:", error);
+      console.error("Failed to fetch history:", error);
     }
   }
 
@@ -90,37 +90,37 @@ export default function CheckInvoicePage() {
 
   /* Filter Logic */
   const [filterValues, setFilterValues] = useState({
-      status: "",
-      startDate: "",
-      endDate: "",
-      partyName: ""
+    status: "",
+    startDate: "",
+    endDate: "",
+    partyName: ""
   })
 
   const filteredPendingOrders = pendingOrders.filter(order => {
-      let matches = true
-      
-      // Filter by Party Name
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) {
-          matches = false
-      }
+    let matches = true
 
-      // Filter by Date Range
-      const orderDateStr = order.timestamp || order.planned_6
-      if (orderDateStr) {
-          const orderDate = new Date(orderDateStr)
-          if (filterValues.startDate) {
-              const start = new Date(filterValues.startDate)
-              start.setHours(0,0,0,0)
-              if (orderDate < start) matches = false
-          }
-          if (filterValues.endDate) {
-              const end = new Date(filterValues.endDate)
-              end.setHours(23,59,59,999)
-              if (orderDate > end) matches = false
-          }
-      }
+    // Filter by Party Name
+    if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) {
+      matches = false
+    }
 
-      return matches
+    // Filter by Date Range
+    const orderDateStr = order.timestamp || order.planned_6
+    if (orderDateStr) {
+      const orderDate = new Date(orderDateStr)
+      if (filterValues.startDate) {
+        const start = new Date(filterValues.startDate)
+        start.setHours(0, 0, 0, 0)
+        if (orderDate < start) matches = false
+      }
+      if (filterValues.endDate) {
+        const end = new Date(filterValues.endDate)
+        end.setHours(23, 59, 59, 999)
+        if (orderDate > end) matches = false
+      }
+    }
+
+    return matches
   })
 
   /* Grouping Logic */
@@ -128,117 +128,117 @@ export default function CheckInvoicePage() {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order: any) => {
-       const invoiceNo = order.invoice_no || "No Invoice"
-       const partyName = order.party_name || order.partyName || "Unknown Customer"
-       const rawDoNumber = order.so_no || order.soNo || "—"
-       const doNumber = rawDoNumber.replace(/[A-Z]+$/, "")
-       
-       if (!grouped[invoiceNo]) {
-          grouped[invoiceNo] = {
-             _rowKey: invoiceNo,
-             customerName: partyName,
-             invoiceNo: invoiceNo,
-             doNumberList: new Set<string>(),
-             _allProducts: [],
-             _ordersMap: {}, // Group items by specific DO for interleaved view
-             _productCount: 0
-          }
-       }
-       
-       const group = grouped[invoiceNo]
-       group.doNumberList.add(doNumber)
-       
-       const orderKey = doNumber;
-       
-       if (!group._ordersMap[orderKey]) {
-         group._ordersMap[orderKey] = {
-           _products: [],
-           depoName: order.depo_name || order.depoName || "—",
-           deliveryPurpose: order.order_type_delivery_purpose || "—",
-           orderType: order.order_type || "—",
-           startDate: order.start_date,
-           endDate: order.end_date,
-           deliveryDate: order.delivery_date,
-           transportType: order.type_of_transporting || "—",
-           contactPerson: order.customer_contact_person_name || "—",
-           whatsapp: order.customer_contact_person_whatsapp_no || "—",
-           address: order.customer_address || "—",
-           paymentTerms: order.payment_terms || "—",
-           advanceAmount: order.advance_amount || 0,
-           isBroker: order.is_order_through_broker || false,
-           brokerName: order.broker_name || "—",
-           partyCredit: order.party_credit_status || "Good",
-           totalAmount: order.total_amount_with_gst || "—",
-           oilType: order.oil_type || "—",
-           // Check Invoice specific data
-           invoiceNo: order.invoice_no,
-           invoiceDate: order.invoice_date,
-           biltyNo: order.bilty_no,
-           rstNo: order.rst_no,
-           grossWeight: order.gross_weight,
-           tareWeight: order.tare_weight,
-           netWeight: order.net_weight,
-           transporterName: order.transporter_name,
-           truckNo: order.truck_no,
-           diffReason: order.reason_of_difference_in_weight_if_any_speacefic
-         }
-       }
-       
-       const product = {
-          ...order,
-          _rowKey: `${partyName}-${order.id}`,
-          id: order.id,
-          specificOrderNo: doNumber,
-          productName: order.product_name,
-          rate: (parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1),
-          amount: ((parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1)) * (parseFloat(order.actual_qty_dispatch || order.actual_qty || order.qty) || 0),
+      const invoiceNo = order.invoice_no || "No Invoice"
+      const partyName = order.party_name || order.partyName || "Unknown Customer"
+      const rawDoNumber = order.so_no || order.soNo || "—"
+      const doNumber = rawDoNumber.replace(/[A-Z]+$/, "")
+
+      if (!grouped[invoiceNo]) {
+        grouped[invoiceNo] = {
+          _rowKey: invoiceNo,
+          customerName: partyName,
+          invoiceNo: invoiceNo,
+          doNumberList: new Set<string>(),
+          _allProducts: [],
+          _ordersMap: {}, // Group items by specific DO for interleaved view
+          _productCount: 0
+        }
+      }
+
+      const group = grouped[invoiceNo]
+      group.doNumberList.add(doNumber)
+
+      const orderKey = doNumber;
+
+      if (!group._ordersMap[orderKey]) {
+        group._ordersMap[orderKey] = {
+          _products: [],
+          depoName: order.depo_name || order.depoName || "—",
+          deliveryPurpose: order.order_type_delivery_purpose || "—",
+          orderType: order.order_type || "—",
+          startDate: order.start_date,
+          endDate: order.end_date,
+          deliveryDate: order.delivery_date,
+          transportType: order.type_of_transporting || "—",
+          contactPerson: order.customer_contact_person_name || "—",
+          whatsapp: order.customer_contact_person_whatsapp_no || "—",
+          address: order.customer_address || "—",
+          paymentTerms: order.payment_terms || "—",
+          advanceAmount: order.advance_amount || 0,
+          isBroker: order.is_order_through_broker || false,
+          brokerName: order.broker_name || "—",
+          partyCredit: order.party_credit_status || "Good",
+          totalAmount: order.total_amount_with_gst || "—",
+          oilType: order.oil_type || "—",
+          // Check Invoice specific data
           invoiceNo: order.invoice_no,
           invoiceDate: order.invoice_date,
-          billAmount: order.bill_amount,
-          qty: order.qty,
-          actualQty: order.actual_qty_dispatch || order.actual_qty,
-          truckNo: order.truck_no,
+          biltyNo: order.bilty_no,
           rstNo: order.rst_no,
           grossWeight: order.gross_weight,
           tareWeight: order.tare_weight,
           netWeight: order.net_weight,
           transporterName: order.transporter_name,
-          fitness: order.fitness,
-          insurance: order.insurance,
-          tax_copy: order.tax_copy,
-          polution: order.polution,
-          permit1: order.permit1,
-          permit2_out_state: order.permit2_out_state,
-          weightment_slip_copy: order.weightment_slip_copy,
-          vehicle_no_plate_image: order.vehicle_no_plate_image,
-          bilty_image: order.bilty_image,
-          vehicle_image_attachemrnt: order.vehicle_image_attachemrnt,
-          reason_of_difference_in_weight_if_any_speacefic: order.reason_of_difference_in_weight_if_any_speacefic,
-          processid: order.processid || null,
-          actual_5: order.actual_5, // Track whether record has been reverted
-       }
-       
-       group._ordersMap[orderKey]._products.push(product)
-       group._allProducts.push(product)
-       group._productCount = group._allProducts.length
+          truckNo: order.truck_no,
+          diffReason: order.reason_of_difference_in_weight_if_any_speacefic
+        }
+      }
+
+      const product = {
+        ...order,
+        _rowKey: `${partyName}-${order.id}`,
+        id: order.id,
+        specificOrderNo: doNumber,
+        productName: order.product_name,
+        rate: (parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1),
+        amount: ((parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1)) * (parseFloat(order.actual_qty_dispatch || order.actual_qty || order.qty) || 0),
+        invoiceNo: order.invoice_no,
+        invoiceDate: order.invoice_date,
+        billAmount: order.bill_amount,
+        qty: order.qty,
+        actualQty: order.actual_qty_dispatch || order.actual_qty,
+        truckNo: order.truck_no,
+        rstNo: order.rst_no,
+        grossWeight: order.gross_weight,
+        tareWeight: order.tare_weight,
+        netWeight: order.net_weight,
+        transporterName: order.transporter_name,
+        fitness: order.fitness,
+        insurance: order.insurance,
+        tax_copy: order.tax_copy,
+        polution: order.polution,
+        permit1: order.permit1,
+        permit2_out_state: order.permit2_out_state,
+        weightment_slip_copy: order.weightment_slip_copy,
+        vehicle_no_plate_image: order.vehicle_no_plate_image,
+        bilty_image: order.bilty_image,
+        vehicle_image_attachemrnt: order.vehicle_image_attachemrnt,
+        reason_of_difference_in_weight_if_any_speacefic: order.reason_of_difference_in_weight_if_any_speacefic,
+        processid: order.processid || null,
+        actual_5: order.actual_5, // Track whether record has been reverted
+      }
+
+      group._ordersMap[orderKey]._products.push(product)
+      group._allProducts.push(product)
+      group._productCount = group._allProducts.length
     })
 
     // Convert Set to string for display
     return Object.values(grouped).map(group => ({
-       ...group,
-       doNumber: Array.from(group.doNumberList).join(", "),
-       processId: group._allProducts[0]?.processid || "—",
-       vehicleNo: (group._allProducts[0]?.truckNo || "—").toUpperCase(),
-       invoiceNo: group._allProducts[0]?.invoice_no || "—",
-       orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—",
-       // Group is reverted if ALL products have actual_5 = null (pushed back to Make Invoice)
-       isReverted: group._allProducts.every((p: any) => !p.actual_5),
+      ...group,
+      doNumber: Array.from(group.doNumberList).join(", "),
+      processId: group._allProducts[0]?.processid || "—",
+      vehicleNo: (group._allProducts[0]?.truckNo || "—").toUpperCase(),
+      invoiceNo: group._allProducts[0]?.invoice_no || "—",
+      orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—",
+      // Group is reverted if ALL products have actual_5 = null (pushed back to Make Invoice)
+      isReverted: group._allProducts.every((p: any) => !p.actual_5),
     }))
   }, [filteredPendingOrders])
 
   const toggleSelectItem = (itemKey: string) => {
-    setSelectedItems(prev => 
-      prev.includes(itemKey) 
+    setSelectedItems(prev =>
+      prev.includes(itemKey)
         ? prev.filter(k => k !== itemKey)
         : [...prev, itemKey]
     )
@@ -254,7 +254,7 @@ export default function CheckInvoicePage() {
 
   const handleOpenDialog = () => {
     if (selectedItems.length === 0) return
-    
+
     // Get all selected groups
     const targets = displayRows.filter(r => selectedItems.includes(r._rowKey))
     if (targets.length > 0) {
@@ -262,39 +262,39 @@ export default function CheckInvoicePage() {
       // Select all products by default from all selected groups
       const allProdKeys = targets.flatMap(g => g._allProducts.map((p: any) => p._rowKey))
       setSelectedProducts(allProdKeys)
-      
+
       // Reset form
       setCheckData({ status: "", remarks: "" })
       setExpandedOrders([]) // Reset expanded state
-      
+
       setIsDialogOpen(true)
     }
   }
 
   const handleSubmit = async () => {
     if (selectedGroups.length === 0 || !checkData.status) {
-        toast({
-            title: "Validation Error",
-            description: "Please select verification status.",
-            variant: "destructive"
-        })
-        return
+      toast({
+        title: "Validation Error",
+        description: "Please select verification status.",
+        variant: "destructive"
+      })
+      return
     }
 
     if (checkData.status === "Issue" && !checkData.remarks) {
-        toast({
-            title: "Validation Error",
-            description: "Remarks are mandatory when reporting an issue.",
-            variant: "destructive"
-        })
-        return
+      toast({
+        title: "Validation Error",
+        description: "Remarks are mandatory when reporting an issue.",
+        variant: "destructive"
+      })
+      return
     }
 
     // Flatten all selected products from all selected groups
-    const productsToSubmit = selectedGroups.flatMap(group => 
+    const productsToSubmit = selectedGroups.flatMap(group =>
       group._allProducts.filter((p: any) => selectedProducts.includes(p._rowKey))
     )
-    
+
     if (productsToSubmit.length === 0) {
       toast({
         title: "Error",
@@ -311,23 +311,23 @@ export default function CheckInvoicePage() {
 
       for (const product of productsToSubmit) {
         const submitData = {
-            status_1: checkData.status,
-            remarks_2: checkData.remarks,
-            username: user?.username || null // Add username for tracking
+          status_1: checkData.status,
+          remarks_2: checkData.remarks,
+          username: user?.username || null // Add username for tracking
         };
 
         try {
-            console.log(`[CHECK] Submitting for ID ${product.id}`, submitData);
-            const response = await checkInvoiceApi.submit(product.id, submitData);
-            
-            if (response.success) {
-                successfulSubmissions.push(product);
-            } else {
-                failedSubmissions.push({ product, error: response.message });
-            }
+          console.log(`[CHECK] Submitting for ID ${product.id}`, submitData);
+          const response = await checkInvoiceApi.submit(product.id, submitData);
+
+          if (response.success) {
+            successfulSubmissions.push(product);
+          } else {
+            failedSubmissions.push({ product, error: response.message });
+          }
         } catch (err: any) {
-             console.error(`[CHECK] Failed for ID ${product.id}`, err);
-             failedSubmissions.push({ product, error: err.message });
+          console.error(`[CHECK] Failed for ID ${product.id}`, err);
+          failedSubmissions.push({ product, error: err.message });
         }
       }
 
@@ -336,19 +336,19 @@ export default function CheckInvoicePage() {
           title: "Invoices Verified",
           description: `Successfully verified ${successfulSubmissions.length} items.`,
         })
-        
+
         await fetchPending();
         await fetchHistory();
-        
+
         setIsDialogOpen(false)
         setSelectedItems([])
       }
 
       if (failedSubmissions.length > 0) {
         toast({
-            title: "Partial Failure",
-            description: `Failed to process ${failedSubmissions.length} items.`,
-            variant: "destructive"
+          title: "Partial Failure",
+          description: `Failed to process ${failedSubmissions.length} items.`,
+          variant: "destructive"
         })
       }
 
@@ -384,9 +384,9 @@ export default function CheckInvoicePage() {
       <div className="space-y-4">
         {/* Action Bar */}
         <div className="flex justify-end gap-2">
-           <Button 
+          <Button
             onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0} 
+            disabled={selectedItems.length === 0}
             className="bg-blue-600 hover:bg-blue-700"
           >
             <CheckCircle className="mr-2 h-4 w-4" />
@@ -425,7 +425,7 @@ export default function CheckInvoicePage() {
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>
                 <TableHead className="w-12 text-center">
-                    <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
+                  <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
@@ -440,41 +440,41 @@ export default function CheckInvoicePage() {
             <TableBody>
               {displayRows.length > 0 ? (
                 displayRows.map((group) => (
-                   <TableRow 
-                     key={group._rowKey} 
-                     className={`${selectedItems.includes(group._rowKey) ? "bg-blue-50/50" : ""} ${group.isReverted ? "opacity-60 bg-amber-50/40" : ""}`}
-                   >
-                      <TableCell className="text-center">
-                        <Checkbox 
-                          checked={selectedItems.includes(group._rowKey)} 
-                          onCheckedChange={() => toggleSelectItem(group._rowKey)} 
-                          disabled={group.isReverted}
-                          title={group.isReverted ? "Reverted to Make Invoice stage — awaiting re-issue" : ""}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
-                      <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
-                      <TableCell className="text-center text-xs">{group.customerName}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="secondary">{group._productCount} items</Badge>
-                      </TableCell>
-                      {visibleColumns.includes("invoiceNo") && <TableCell className="text-center text-xs font-medium">{group.invoiceNo}</TableCell>}
-                      <TableCell className="text-center">
-                        <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                         {group.isReverted ? (
-                           <Badge className="bg-red-100 text-red-700">Issue Reported</Badge>
-                         ) : group._allProducts.some((p: any) => p.status_1 === "Issue") ? (
-                           <Badge className="bg-red-100 text-red-700">Issue Reported</Badge>
-                         ) : (
-                           <Badge className="bg-yellow-100 text-yellow-700">Pending Review</Badge>
-                         )}
-                      </TableCell>
-                   </TableRow>
+                  <TableRow
+                    key={group._rowKey}
+                    className={`${selectedItems.includes(group._rowKey) ? "bg-blue-50/50" : ""} ${group.isReverted ? "opacity-60 bg-amber-50/40" : ""}`}
+                  >
+                    <TableCell className="text-center">
+                      <Checkbox
+                        checked={selectedItems.includes(group._rowKey)}
+                        onCheckedChange={() => toggleSelectItem(group._rowKey)}
+                        disabled={group.isReverted}
+                        title={group.isReverted ? "Reverted to Make Invoice stage — awaiting re-issue" : ""}
+                      />
+                    </TableCell>
+                    <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
+                    <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
+                    <TableCell className="text-center text-xs">{group.customerName}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="secondary">{group._productCount} items</Badge>
+                    </TableCell>
+                    {visibleColumns.includes("invoiceNo") && <TableCell className="text-center text-xs font-medium">{group.invoiceNo}</TableCell>}
+                    <TableCell className="text-center">
+                      <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {group.isReverted ? (
+                        <Badge className="bg-red-100 text-red-700">Issue Reported</Badge>
+                      ) : group._allProducts.some((p: any) => p.status_1 === "Issue") ? (
+                        <Badge className="bg-red-100 text-red-700">Issue Reported</Badge>
+                      ) : (
+                        <Badge className="bg-yellow-100 text-yellow-700">Pending Review</Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
                 ))
               ) : (
                 <TableRow>
@@ -488,32 +488,32 @@ export default function CheckInvoicePage() {
         </Card>
       </div>
 
-       {/* Split-View Dialog */}
-       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      {/* Split-View Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="!max-w-[95vw] w-full max-h-[95vh] overflow-y-auto p-0">
           <div className="p-6">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-900 border-b pb-4 mb-4">
-              Verify Invoices - {selectedGroups.length > 1 ? `${selectedGroups.length} Invoices Selected` : selectedGroups[0]?.invoiceNo}
-            </DialogTitle>
-          </DialogHeader>
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-slate-900 border-b pb-4 mb-4">
+                Verify Invoices - {selectedGroups.length > 1 ? `${selectedGroups.length} Invoices Selected` : selectedGroups[0]?.invoiceNo}
+              </DialogTitle>
+            </DialogHeader>
 
-          {selectedGroups.length > 0 && (
-            <div className="space-y-12 mt-6">
-               {selectedGroups.map((group, groupIdx) => {
-                 const allProducts = group._allProducts;
-                 const allSelected = allProducts.every((p: any) => selectedProducts.includes(p._rowKey));
-                 const isExpanded = expandedOrders.includes(group._rowKey);
-                 const toggleExpand = () => {
-                   setExpandedOrders(prev => isExpanded ? prev.filter(id => id !== group._rowKey) : [...prev, group._rowKey]);
-                 };
+            {selectedGroups.length > 0 && (
+              <div className="space-y-12 mt-6">
+                {selectedGroups.map((group, groupIdx) => {
+                  const allProducts = group._allProducts;
+                  const allSelected = allProducts.every((p: any) => selectedProducts.includes(p._rowKey));
+                  const isExpanded = expandedOrders.includes(group._rowKey);
+                  const toggleExpand = () => {
+                    setExpandedOrders(prev => isExpanded ? prev.filter(id => id !== group._rowKey) : [...prev, group._rowKey]);
+                  };
 
-                 const uniqueOrderDetails = Object.values(group._ordersMap);
+                  const uniqueOrderDetails = Object.values(group._ordersMap);
 
-                 return (
-                   <div key={group._rowKey} className="space-y-6">
+                  return (
+                    <div key={group._rowKey} className="space-y-6">
                       <h2 className="text-xl font-black text-slate-800 border-b-4 border-slate-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
-                         Invoice: {group.invoiceNo} <span className="text-sm font-medium text-slate-500 ml-2">({group.customerName})</span>
+                        Invoice: {group.invoiceNo} <span className="text-sm font-medium text-slate-500 ml-2">({group.customerName})</span>
                         <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
                           {group._productCount} PRODUCTS
                         </Badge>
@@ -521,22 +521,22 @@ export default function CheckInvoicePage() {
 
                       <div className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm">
                         <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
-                           <div className="flex items-center gap-4">
-                             <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-sm font-black tracking-tight rounded-full shadow-sm uppercase">
-                                DISPATCH DETAILS
-                             </Badge>
-                             <div className="flex flex-col">
-                               <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">GROUP {groupIdx + 1} | {group.doNumber}</span>
-                               <span className="text-xs text-blue-100 font-bold leading-none">
-                                 {allProducts.filter((p: any) => selectedProducts.includes(p._rowKey)).length} Items Checked
-                               </span>
-                             </div>
-                           </div>
-                           <div className="flex items-center gap-3">
-                             <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2 leading-none">
-                               {isExpanded ? 'HIDE AUDIT DATA ▲' : 'SHOW AUDIT DATA ▼'}
-                             </div>
-                           </div>
+                          <div className="flex items-center gap-4">
+                            <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-sm font-black tracking-tight rounded-full shadow-sm uppercase">
+                              DISPATCH DETAILS
+                            </Badge>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">GROUP {groupIdx + 1} | {group.doNumber}</span>
+                              <span className="text-xs text-blue-100 font-bold leading-none">
+                                {allProducts.filter((p: any) => selectedProducts.includes(p._rowKey)).length} Items Checked
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2 leading-none">
+                              {isExpanded ? 'HIDE AUDIT DATA ▲' : 'SHOW AUDIT DATA ▼'}
+                            </div>
+                          </div>
                         </div>
 
                         <div className="px-5 pb-5 space-y-4">
@@ -561,7 +561,7 @@ export default function CheckInvoicePage() {
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Start Date / End Date</p>
                                         <p className="text-xs font-bold text-slate-900 leading-none">
-                                            {orderDetails.startDate ? new Date(orderDetails.startDate).toLocaleDateString("en-GB") : "—"} / {orderDetails.endDate ? new Date(orderDetails.endDate).toLocaleDateString("en-GB") : "—"}
+                                          {orderDetails.startDate ? new Date(orderDetails.startDate).toLocaleDateString("en-GB") : "—"} / {orderDetails.endDate ? new Date(orderDetails.endDate).toLocaleDateString("en-GB") : "—"}
                                         </p>
                                       </div>
                                       <div>
@@ -571,7 +571,7 @@ export default function CheckInvoicePage() {
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Credit Status</p>
                                         <Badge className={cn("text-[10px] font-black px-2 py-0.5", orderDetails.partyCredit === 'Good' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
-                                            {orderDetails.partyCredit}
+                                          {orderDetails.partyCredit}
                                         </Badge>
                                       </div>
 
@@ -593,7 +593,7 @@ export default function CheckInvoicePage() {
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Invoice Date</p>
                                         <p className="text-xs font-bold text-slate-700">
-                                            {firstProd.invoiceDate ? new Date(firstProd.invoiceDate).toLocaleDateString("en-GB") : "—"}
+                                          {firstProd.invoiceDate ? new Date(firstProd.invoiceDate).toLocaleDateString("en-GB") : "—"}
                                         </p>
                                       </div>
 
@@ -604,8 +604,8 @@ export default function CheckInvoicePage() {
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Fitness</p>
                                         {firstProd.fitness ? (
                                           <a href={firstProd.fitness} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.fitness} alt="Fitness" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
-                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                            <img src={firstProd.fitness} alt="Fitness" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
@@ -613,8 +613,8 @@ export default function CheckInvoicePage() {
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Insurance</p>
                                         {firstProd.insurance ? (
                                           <a href={firstProd.insurance} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.insurance} alt="Insurance" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
-                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                            <img src={firstProd.insurance} alt="Insurance" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
@@ -622,8 +622,8 @@ export default function CheckInvoicePage() {
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Pollution</p>
                                         {firstProd.polution ? (
                                           <a href={firstProd.polution} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.polution} alt="Pollution" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
-                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                            <img src={firstProd.polution} alt="Pollution" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
@@ -631,8 +631,8 @@ export default function CheckInvoicePage() {
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Tax Copy</p>
                                         {firstProd.tax_copy ? (
                                           <a href={firstProd.tax_copy} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.tax_copy} alt="Tax Copy" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
-                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                            <img src={firstProd.tax_copy} alt="Tax Copy" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
@@ -641,8 +641,8 @@ export default function CheckInvoicePage() {
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 1</p>
                                         {firstProd.permit1 ? (
                                           <a href={firstProd.permit1} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.permit1} alt="Permit 1" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
-                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                            <img src={firstProd.permit1} alt="Permit 1" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
@@ -650,8 +650,8 @@ export default function CheckInvoicePage() {
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 2 (Out State)</p>
                                         {firstProd.permit2_out_state ? (
                                           <a href={firstProd.permit2_out_state} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.permit2_out_state} alt="Permit 2" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
-                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                            <img src={firstProd.permit2_out_state} alt="Permit 2" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
@@ -673,19 +673,19 @@ export default function CheckInvoicePage() {
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Slip</p>
                                         {firstProd.weightment_slip_copy ? (
                                           <a href={firstProd.weightment_slip_copy} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.weightment_slip_copy} alt="Weight Slip" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} />
-                                            <span style={{display:'none'}} className="text-[10px] text-blue-600 underline">View</span>
+                                            <img src={firstProd.weightment_slip_copy} alt="Weight Slip" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
-                                       <div>
-                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
-                                         <p className="text-xs font-black text-slate-900">{firstProd.grossWeight || "0"} / {firstProd.tareWeight || "0"} / <span className="text-blue-600">{firstProd.netWeight ? firstProd.netWeight : (firstProd.grossWeight && firstProd.tareWeight ? (parseFloat(firstProd.grossWeight) - parseFloat(firstProd.tareWeight)).toFixed(0) : "0")}</span></p>
-                                       </div>
-                                       <div>
-                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff Reason</p>
-                                         <p className="text-[10px] font-bold text-red-500 italic">{firstProd.reason_of_difference_in_weight_if_any_speacefic || firstProd.reasonForDiff || "—"}</p>
-                                       </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
+                                        <p className="text-xs font-black text-slate-900">{firstProd.grossWeight || "0"} / {firstProd.tareWeight || "0"} / <span className="text-blue-600">{firstProd.netWeight ? firstProd.netWeight : (firstProd.grossWeight && firstProd.tareWeight ? (parseFloat(firstProd.grossWeight) - parseFloat(firstProd.tareWeight)).toFixed(0) : "0")}</span></p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff Reason</p>
+                                        <p className="text-[10px] font-bold text-red-500 italic">{firstProd.reason_of_difference_in_weight_if_any_speacefic || firstProd.reasonForDiff || "—"}</p>
+                                      </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transporter Name</p>
                                         <p className="text-xs font-bold text-slate-700 truncate" title={firstProd.transporterName}>{firstProd.transporterName || "—"}</p>
@@ -703,7 +703,7 @@ export default function CheckInvoicePage() {
                               <TableHeader className="bg-slate-50">
                                 <TableRow>
                                   <TableHead className="w-12 text-center h-10">
-                                    <Checkbox 
+                                    <Checkbox
                                       checked={allSelected}
                                       onCheckedChange={(checked) => {
                                         if (checked) {
@@ -725,133 +725,131 @@ export default function CheckInvoicePage() {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                  {allProducts.map((product: any) => (
-                                    <TableRow key={product._rowKey} className={cn(selectedProducts.includes(product._rowKey) ? "bg-blue-50/20" : "", "h-14")}>
-                                      <TableCell className="text-center p-2">
-                                        <Checkbox 
-                                          checked={selectedProducts.includes(product._rowKey)}
-                                          onCheckedChange={() => {
-                                            if (selectedProducts.includes(product._rowKey)) {
-                                              setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
-                                            } else {
-                                              setSelectedProducts(prev => [...prev, product._rowKey])
-                                            }
-                                          }}
-                                        />
-                                      </TableCell>
-                                      <TableCell className="p-2">
-                                        <div className="flex flex-col">
-                                          <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{product.productName}</span>
-                                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{product.specificOrderNo}</span>
-                                        </div>
-                                      </TableCell>
-                                      <TableCell className="text-center p-2">
-                                        <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">
-                                          {product.actualQty || "0"}
-                                        </Badge>
-                                      </TableCell>
-                                      <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
-                                         {product.rate ? `₹${product.rate.toFixed(2)}` : "—"}
-                                      </TableCell>
-                                      <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
-                                         {product.amount ? `₹${product.amount.toFixed(2)}` : "—"}
-                                      </TableCell>
-                                      <TableCell className="text-center p-2 text-xs font-bold text-green-700">
-                                         {product.invoiceNo || "—"}
-                                      </TableCell>
-                                       <TableCell className="text-center p-2">
-                                          {product.invoice_copy ? (
-                                            <a href={product.invoice_copy} target="_blank" rel="noopener noreferrer" className="inline-block">
-                                              <img src={product.invoice_copy} alt="Invoice" className="h-10 w-14 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer mx-auto" onError={(e: any) => { e.target.style.display='none'; e.target.nextSibling.style.display='inline'; }} />
-                                              <span style={{display:'none'}} className="text-[10px] text-blue-600 underline font-bold">View Invoice</span>
-                                            </a>
-                                          ) : (
-                                            <span className="text-[10px] text-slate-400 font-bold italic tracking-tighter">NO FILE</span>
-                                          )}
-                                       </TableCell>
-                                      <TableCell className="text-center p-2 text-xs font-black">
-                                         {product.invoiceDate ? new Date(product.invoiceDate).toLocaleDateString("en-GB") : "—"}
-                                      </TableCell>
-                                      <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
-                                         {(product.truckNo || "—").toUpperCase()}
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
-
-                                  {/* Summary Footer Row */}
-                                  <TableRow className="bg-slate-50 font-black h-12 border-t-2 border-slate-200">
-                                    <TableCell />
-                                    <TableCell className="text-[10px] uppercase font-black text-slate-900">Total</TableCell>
-                                    <TableCell className="text-center">
-                                      <Badge className="bg-blue-600 text-white font-black text-xs px-3">
-                                        {allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.actualQty) || 0), 0)}
+                                {allProducts.map((product: any) => (
+                                  <TableRow key={product._rowKey} className={cn(selectedProducts.includes(product._rowKey) ? "bg-blue-50/20" : "", "h-14")}>
+                                    <TableCell className="text-center p-2">
+                                      <Checkbox
+                                        checked={selectedProducts.includes(product._rowKey)}
+                                        onCheckedChange={() => {
+                                          if (selectedProducts.includes(product._rowKey)) {
+                                            setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
+                                          } else {
+                                            setSelectedProducts(prev => [...prev, product._rowKey])
+                                          }
+                                        }}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="p-2">
+                                      <div className="flex flex-col">
+                                        <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{product.productName}</span>
+                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{product.specificOrderNo}</span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-center p-2">
+                                      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">
+                                        {product.actualQty || "0"}
                                       </Badge>
                                     </TableCell>
-                                    <TableCell className="text-center text-xs text-slate-700">
-                                      ₹{allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.rate) || 0), 0).toFixed(2)}
+                                    <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
+                                      {product.rate ? `₹${product.rate.toFixed(2)}` : "—"}
                                     </TableCell>
-                                    <TableCell className="text-center text-xs text-blue-700 font-black">
-                                      ₹{allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0).toFixed(2)}
+                                    <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
+                                      {product.amount ? `₹${product.amount.toFixed(2)}` : "—"}
                                     </TableCell>
-                                    <TableCell colSpan={4} />
+                                    <TableCell className="text-center p-2 text-xs font-bold text-green-700">
+                                      {product.invoiceNo || "—"}
+                                    </TableCell>
+                                    <TableCell className="text-center p-2">
+                                      {product.invoice_copy ? (
+                                        <a href={product.invoice_copy} target="_blank" rel="noopener noreferrer" className="inline-block">
+                                          <img src={product.invoice_copy} alt="Invoice" className="h-10 w-14 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer mx-auto" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'inline'; }} />
+                                          <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline font-bold">View Invoice</span>
+                                        </a>
+                                      ) : (
+                                        <span className="text-[10px] text-slate-400 font-bold italic tracking-tighter">NO FILE</span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-center p-2 text-xs font-black">
+                                      {product.invoiceDate ? new Date(product.invoiceDate).toLocaleDateString("en-GB") : "—"}
+                                    </TableCell>
+                                    <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
+                                      {(product.truckNo || "—").toUpperCase()}
+                                    </TableCell>
                                   </TableRow>
+                                ))}
+
+                                {/* Summary Footer Row */}
+                                <TableRow className="bg-slate-50 font-black h-12 border-t-2 border-slate-200">
+                                  <TableCell />
+                                  <TableCell className="text-[10px] uppercase font-black text-slate-900">Total</TableCell>
+                                  <TableCell className="text-center">
+                                    <Badge className="bg-blue-600 text-white font-black text-xs px-3">
+                                      {allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.actualQty) || 0), 0)}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-center text-xs text-slate-700"></TableCell>
+                                  <TableCell className="text-center text-xs text-blue-700 font-black">
+                                    ₹{allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell colSpan={4} />
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </div>
                         </div>
                       </div>
-                   </div>
-                 );
-               })}
-            </div>
-          )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
-          {/* Verification Form (Bottom) */}
-          <div className="mt-8 space-y-6 border rounded-lg p-6 bg-white shadow-sm">
-             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
+            {/* Verification Form (Bottom) */}
+            <div className="mt-8 space-y-6 border rounded-lg p-6 bg-white shadow-sm">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
                 <CheckCircle className="h-4 w-4 text-blue-600" />
                 Final Verification Logic
-             </h3>
-             
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <div className="space-y-2">
-                   <Label>Verification Status <span className="text-red-500">*</span></Label>
-                   <Select value={checkData.status} onValueChange={(val) => setCheckData({ ...checkData, status: val })}>
-                     <SelectTrigger className="h-10 border-2 focus:ring-2 focus:ring-blue-500 transition-all font-bold tracking-tight bg-white">
-                       <SelectValue placeholder="Select Status" />
-                     </SelectTrigger>
-                     <SelectContent>
-                       <SelectItem value="Verified" className="font-bold text-green-600">Verified</SelectItem>
-                       <SelectItem value="Issue" className="font-bold text-red-600">Issue</SelectItem>
-                     </SelectContent>
-                   </Select>
-                 </div>
+              </h3>
 
-                 <div className="space-y-2">
-                   <Label>Remarks {checkData.status === "Issue" && <span className="text-red-500">*</span>}</Label>
-                   <Textarea
-                     value={checkData.remarks}
-                     onChange={(e) => setCheckData({ ...checkData, remarks: e.target.value })}
-                     placeholder="Enter verification remarks..."
-                     className="h-[38px] min-h-[38px]"
-                   />
-                 </div>
-             </div>
-          </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>Verification Status <span className="text-red-500">*</span></Label>
+                  <Select value={checkData.status} onValueChange={(val) => setCheckData({ ...checkData, status: val })}>
+                    <SelectTrigger className="h-10 border-2 focus:ring-2 focus:ring-blue-500 transition-all font-bold tracking-tight bg-white">
+                      <SelectValue placeholder="Select Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Verified" className="font-bold text-green-600">Verified</SelectItem>
+                      <SelectItem value="Issue" className="font-bold text-red-600">Issue</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-          <DialogFooter className="mt-8 border-t pt-4 bg-gray-50 -mx-6 -mb-6 px-6 py-4">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isProcessing}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleSubmit} 
-              disabled={isProcessing || !checkData.status || isReadOnly}
-              className="bg-blue-600 hover:bg-blue-700 min-w-[150px]"
-              title={isReadOnly ? "View Only Access" : "Complete Verification"}
-            >
-              {isProcessing ? "Processing..." : "Complete Verification"}
-            </Button>
-          </DialogFooter>
+                <div className="space-y-2">
+                  <Label>Remarks {checkData.status === "Issue" && <span className="text-red-500">*</span>}</Label>
+                  <Textarea
+                    value={checkData.remarks}
+                    onChange={(e) => setCheckData({ ...checkData, remarks: e.target.value })}
+                    placeholder="Enter verification remarks..."
+                    className="h-[38px] min-h-[38px]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="mt-8 border-t pt-4 bg-gray-50 -mx-6 -mb-6 px-6 py-4">
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isProcessing}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={isProcessing || !checkData.status || isReadOnly}
+                className="bg-blue-600 hover:bg-blue-700 min-w-[150px]"
+                title={isReadOnly ? "View Only Access" : "Complete Verification"}
+              >
+                {isProcessing ? "Processing..." : "Complete Verification"}
+              </Button>
+            </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>

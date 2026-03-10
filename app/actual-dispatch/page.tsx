@@ -33,7 +33,7 @@ export default function ActualDispatchPage() {
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
   const [selectedGroups, setSelectedGroups] = useState<any[]>([])
   const [dialogSelectedProducts, setDialogSelectedProducts] = useState<string[]>([])
-  
+
   // Consolidated State for Stages 6 & 7
   const [vehicleNumber, setVehicleNumber] = useState("")
   const [vehicleData, setVehicleData] = useState({
@@ -81,9 +81,9 @@ export default function ActualDispatchPage() {
     extraWeight: "0",
     weightmentSlip_file_name: "",
   })
-  
+
   const [isUploading, setIsUploading] = useState<string | null>(null)
-  
+
   // Date validation for vehicle documents (Min Today + 5 days)
   const minDate = useMemo(() => {
     const d = new Date()
@@ -165,11 +165,11 @@ export default function ActualDispatchPage() {
     const normalizeSkuName = (name: string) => name.toUpperCase().replace(/KGS/g, 'KG').replace(/LTRS/g, 'LTR').replace(/\s+/g, ' ').trim()
     const normalizedProductName = normalizeSkuName(productName)
     let matchedSku = skus.find(sku => sku.sku_name?.toUpperCase() === productName.toUpperCase()) ||
-                     skus.find(sku => normalizeSkuName(sku.sku_name || '') === normalizedProductName) ||
-                     skus.find(sku => {
-                       const normalizedSkuName = normalizeSkuName(sku.sku_name || '')
-                       return normalizedSkuName.includes(normalizedProductName) || normalizedProductName.includes(normalizedSkuName)
-                     })
+      skus.find(sku => normalizeSkuName(sku.sku_name || '') === normalizedProductName) ||
+      skus.find(sku => {
+        const normalizedSkuName = normalizeSkuName(sku.sku_name || '')
+        return normalizedSkuName.includes(normalizedProductName) || normalizedProductName.includes(normalizedSkuName)
+      })
     return matchedSku?.gross_weight ? parseFloat(matchedSku.gross_weight) : 0
   }
 
@@ -205,7 +205,7 @@ export default function ActualDispatchPage() {
     { id: "customerType", label: "Customer Type" },
     { id: "partySoDate", label: "Party DO Date" },
     { id: "oilType", label: "Oil Type" },
-    { id: "ratePer15Kg", label: "Rate Per 15 kg" }, 
+    { id: "ratePer15Kg", label: "Rate Per 15 kg" },
     { id: "ratePerLtr", label: "Rate Per Ltr." }, // Aggregated
     { id: "rate", label: "Rate" },
     { id: "totalWithGst", label: "Total Amount with GST" },
@@ -230,7 +230,7 @@ export default function ActualDispatchPage() {
     { id: "overallStatus", label: "Overall Status of Order" },
     { id: "orderConfirmation", label: "Order Confirmation with Customer" },
     { id: "qtytobedispatched", label: "Qty to be Dispatched" },
-    { id: "dispatchfrom", label: "Dispatch from"}
+    { id: "dispatchfrom", label: "Dispatch from" }
   ]
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
@@ -249,7 +249,7 @@ export default function ActualDispatchPage() {
       console.log('[ACTUAL DISPATCH] Fetching pending from API...');
       const response = await actualDispatchApi.getPending({ limit: 1000 });
       console.log('[ACTUAL DISPATCH] API Response:', response);
-      
+
       if (response.success && response.data.dispatches) {
         setPendingOrders(response.data.dispatches);
         console.log('[ACTUAL DISPATCH] Loaded', response.data.dispatches.length, 'pending dispatches');
@@ -267,7 +267,7 @@ export default function ActualDispatchPage() {
   const fetchDispatchHistory = async () => {
     try {
       const response = await actualDispatchApi.getHistory({ limit: 1000 });
-      
+
       if (response.success && response.data.dispatches) {
         setHistoryOrders(response.data.dispatches);
       }
@@ -282,7 +282,7 @@ export default function ActualDispatchPage() {
       console.log('[ACTUAL DISPATCH] Fetching SKUs for weight calculation...')
       const response = await skuApi.getAll()
       console.log('[ACTUAL DISPATCH] SKU API Response:', response)
-      
+
       if (response.success && response.data) {
         // Backend returns array directly in response.data, not response.data.skus
         const skuArray = Array.isArray(response.data) ? response.data : []
@@ -308,7 +308,7 @@ export default function ActualDispatchPage() {
     const gross = parseFloat(loadData.grossWeight) || 0
     const tare = parseFloat(loadData.tareWeight) || 0
     const net = gross - tare
-    
+
     setLoadData(prev => ({
       ...prev,
       netWeightPacking: (loadData.grossWeight || loadData.tareWeight) ? net.toFixed(2) : prev.netWeightPacking
@@ -335,7 +335,7 @@ export default function ActualDispatchPage() {
   useEffect(() => {
     const net = parseFloat(loadData.netWeightPacking) || 0
     const diff = net - totalCombinedWeight
-    
+
     setLoadData(prev => ({
       ...prev,
       differanceWeight: (loadData.netWeightPacking || totalCombinedWeight > 0) ? diff.toFixed(2) : ""
@@ -360,56 +360,61 @@ export default function ActualDispatchPage() {
   const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
-      search: "",
-      status: "",
-      startDate: "",
-      endDate: "",
-      partyName: ""
+    search: "",
+    status: "",
+    startDate: "",
+    endDate: "",
+    partyName: ""
   })
 
   const filteredPendingOrders = pendingOrders.filter(order => {
-      let matches = true
-      
-      // Filter by Party Name
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
-          matches = false
-      }
+    let matches = true
 
-      // Filter by Date Range
-      const orderDateStr = order.actualDispatchData?.confirmedAt || order.dispatchData?.dispatchDate || order.dispatchData?.dispatchedAt || order.timestamp
-      if (orderDateStr) {
-          const orderDate = new Date(orderDateStr)
-          if (filterValues.startDate) {
-              const start = new Date(filterValues.startDate)
-              start.setHours(0,0,0,0)
-              if (orderDate < start) matches = false
-          }
-          if (filterValues.endDate) {
-              const end = new Date(filterValues.endDate)
-              end.setHours(23,59,59,999)
-              if (orderDate > end) matches = false
-          }
-      }
+    // Filter by Planned/Actual Status (Must have planned_1, must not have actual_1)
+    if (order.planned_1 === null || order.planned_1 === undefined || order.actual_1 !== null) {
+      matches = false
+    }
 
-      // Filter by Status (On Time / Expire)
-      if (filterValues.status) {
-          const today = new Date()
-          today.setHours(0, 0, 0, 0)
-          const targetDateStr = order.deliveryDate || order.timestamp
-          if (targetDateStr) {
-             const targetDate = new Date(targetDateStr)
-             
-             if (filterValues.status === "expire") {
-                 if (targetDate < today) matches = true
-                 else matches = false
-             } else if (filterValues.status === "on-time") {
-                 if (targetDate >= today) matches = true
-                 else matches = false
-             }
-          }
-      }
+    // Filter by Party Name
+    if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
+      matches = false
+    }
 
-      return matches
+    // Filter by Date Range
+    const orderDateStr = order.actualDispatchData?.confirmedAt || order.dispatchData?.dispatchDate || order.dispatchData?.dispatchedAt || order.timestamp
+    if (orderDateStr) {
+      const orderDate = new Date(orderDateStr)
+      if (filterValues.startDate) {
+        const start = new Date(filterValues.startDate)
+        start.setHours(0, 0, 0, 0)
+        if (orderDate < start) matches = false
+      }
+      if (filterValues.endDate) {
+        const end = new Date(filterValues.endDate)
+        end.setHours(23, 59, 59, 999)
+        if (orderDate > end) matches = false
+      }
+    }
+
+    // Filter by Status (On Time / Expire)
+    if (filterValues.status) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const targetDateStr = order.deliveryDate || order.timestamp
+      if (targetDateStr) {
+        const targetDate = new Date(targetDateStr)
+
+        if (filterValues.status === "expire") {
+          if (targetDate < today) matches = true
+          else matches = false
+        } else if (filterValues.status === "on-time") {
+          if (targetDate >= today) matches = true
+          else matches = false
+        }
+      }
+    }
+
+    return matches
   })
 
   // Map backend data to display format with Grouping by Customer
@@ -424,34 +429,34 @@ export default function ActualDispatchPage() {
       remarks: "Dispatch Confirmed",
     })).filter(item => {
       let matches = true
-      
+
       if (filterValues.search) {
         const search = filterValues.search.toLowerCase()
-        if (!item.orderNo?.toLowerCase().includes(search) && 
-            !item.customerName?.toLowerCase().includes(search)) {
+        if (!item.orderNo?.toLowerCase().includes(search) &&
+          !item.customerName?.toLowerCase().includes(search)) {
           matches = false
         }
       }
-      
+
       if (filterValues.partyName && filterValues.partyName !== "all" && item.customerName !== filterValues.partyName) {
-          matches = false
+        matches = false
       }
 
       const itemDateStr = item.timestamp
       if (itemDateStr) {
-          const itemDate = new Date(itemDateStr)
-          if (filterValues.startDate) {
-              const start = new Date(filterValues.startDate)
-              start.setHours(0,0,0,0)
-              if (itemDate < start) matches = false
-          }
-          if (filterValues.endDate) {
-              const end = new Date(filterValues.endDate)
-              end.setHours(23,59,59,999)
-              if (itemDate > end) matches = false
-          }
+        const itemDate = new Date(itemDateStr)
+        if (filterValues.startDate) {
+          const start = new Date(filterValues.startDate)
+          start.setHours(0, 0, 0, 0)
+          if (itemDate < start) matches = false
+        }
+        if (filterValues.endDate) {
+          const end = new Date(filterValues.endDate)
+          end.setHours(23, 59, 59, 999)
+          if (itemDate > end) matches = false
+        }
       }
-      
+
       return matches
     })
   }, [historyOrders, filterValues])
@@ -460,93 +465,93 @@ export default function ActualDispatchPage() {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order: any) => {
-       const custName = order.party_name || order.customerName || "Unknown"
-       const doNumber = order.so_no || order.soNo || "DO-XXX"
-       const baseDoMatch = doNumber.match(/^(DO-\d+)/i)
-       const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
-       
-       // Use unique ID as the primary grouping key for truly individual view
-       const groupKey = order.id.toString();
+      const custName = order.party_name || order.customerName || "Unknown"
+      const doNumber = order.so_no || order.soNo || "DO-XXX"
+      const baseDoMatch = doNumber.match(/^(DO-\d+)/i)
+      const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
 
-       if (!grouped[groupKey]) {
-          grouped[groupKey] = {
-             customerName: custName,
-             _rowKey: groupKey,
-             _allProducts: [],
-             _productCount: 0,
-             _ordersMap: {},
-             _allBaseDos: new Set()
-          }
-       }
-       
-       grouped[groupKey]._allBaseDos.add(baseDo)
+      // Use Base DO as the primary grouping key to merge duplicates and stripped alphabets
+      const groupKey = baseDo;
 
-       if (!grouped[groupKey]._ordersMap[baseDo]) {
-          const internalOrder = order.data?.orderData || order;
-          const checklist = order.data?.checklistResults || {};
-          
-          grouped[groupKey]._ordersMap[baseDo] = {
-             ...order,
-             baseDo,
-             _products: [],
-             // Detailed Fields (Robust Mapping)
-             deliveryPurpose: internalOrder.order_type_delivery_purpose || internalOrder.orderPurpose || "—",
-             startDate: internalOrder.start_date || internalOrder.startDate || "—",
-             endDate: internalOrder.end_date || internalOrder.endDate || "—",
-             deliveryDate: internalOrder.delivery_date || internalOrder.deliveryDate || internalOrder.timestamp || "—",
-             orderType: internalOrder.order_type || internalOrder.orderType || "—",
-             customerType: internalOrder.customer_type || internalOrder.customerType || "—",
-             partySoDate: internalOrder.party_so_date || internalOrder.partySoDate || "—",
-             totalWithGst: internalOrder.total_amount_with_gst || internalOrder.totalWithGst || "—",
-             transportType: internalOrder.type_of_transporting || internalOrder.transportType || "—",
-             contactPerson: internalOrder.customer_contact_person_name || internalOrder.contactPerson || "—",
-             whatsapp: internalOrder.customer_contact_person_whatsapp_no || internalOrder.whatsapp || "—",
-             address: internalOrder.customer_address || internalOrder.address || "—",
-             paymentTerms: internalOrder.payment_terms || internalOrder.paymentTerms || "—",
-             advanceTaken: internalOrder.advance_payment_to_be_taken || internalOrder.advanceTaken || false,
-             advanceAmount: internalOrder.advance_amount || internalOrder.advanceAmount || "—",
-             isBroker: internalOrder.is_order_through_broker || internalOrder.isBroker || false,
-             brokerName: internalOrder.broker_name || internalOrder.brokerName || "—",
-             depoName: internalOrder.depo_name || internalOrder.depoName || "—",
-             orderPunchRemarks: internalOrder.order_punch_remarks || internalOrder.orderPunchRemarks || "—",
-             rateRightly: internalOrder.rate_is_rightly_as_per_current_market_rate || checklist.rate || "—",
-             dealingInOrder: internalOrder.we_are_dealing_in_ordered_sku || checklist.sku || "—",
-             partyCredit: internalOrder.party_credit_status || checklist.credit || "—",
-             dispatchConfirmed: internalOrder.dispatch_date_confirmed || checklist.dispatch || "—",
-             overallStatus: internalOrder.overall_status_of_order || checklist.overall || "—",
-             orderConfirmation: internalOrder.order_confirmation_with_customer || checklist.confirm || "—",
-          }
-       }
-       
-       // Add individual product to the group
-       const productQty = parseFloat(order.qty_to_be_dispatched || order.qtyToDispatch || 0);
-       const productMeta = {
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = {
+          customerName: custName,
+          _rowKey: groupKey,
+          _allProducts: [],
+          _productCount: 0,
+          _ordersMap: {},
+          _allBaseDos: new Set()
+        }
+      }
+
+      grouped[groupKey]._allBaseDos.add(baseDo)
+
+      if (!grouped[groupKey]._ordersMap[baseDo]) {
+        const internalOrder = order.data?.orderData || order;
+        const checklist = order.data?.checklistResults || {};
+
+        grouped[groupKey]._ordersMap[baseDo] = {
           ...order,
-          _rowKey: `${custName}-${baseDo}-${order.d_sr_number || order.id}`,
-          orderNo: order.so_no || order.soNo,
-          productName: order.product_name || order.productName,
-          qtyToDispatch: order.qty_to_be_dispatched || order.qtyToDispatch,
-          deliveryFrom: order.dispatch_from || order.deliveryFrom,
-          dsrNumber: order.d_sr_number,
-          rate: order.final_rate || order.rate_of_material,
-          processid: order.processid || null
-       }
-       
-       grouped[groupKey]._ordersMap[baseDo]._products.push(productMeta)
-       grouped[groupKey]._allProducts.push(productMeta)
+          baseDo,
+          _products: [],
+          // Detailed Fields (Robust Mapping)
+          deliveryPurpose: internalOrder.order_type_delivery_purpose || internalOrder.orderPurpose || "—",
+          startDate: internalOrder.start_date || internalOrder.startDate || "—",
+          endDate: internalOrder.end_date || internalOrder.endDate || "—",
+          deliveryDate: internalOrder.delivery_date || internalOrder.deliveryDate || internalOrder.timestamp || "—",
+          orderType: internalOrder.order_type || internalOrder.orderType || "—",
+          customerType: internalOrder.customer_type || internalOrder.customerType || "—",
+          partySoDate: internalOrder.party_so_date || internalOrder.partySoDate || "—",
+          totalWithGst: internalOrder.total_amount_with_gst || internalOrder.totalWithGst || "—",
+          transportType: internalOrder.type_of_transporting || internalOrder.transportType || "—",
+          contactPerson: internalOrder.customer_contact_person_name || internalOrder.contactPerson || "—",
+          whatsapp: internalOrder.customer_contact_person_whatsapp_no || internalOrder.whatsapp || "—",
+          address: internalOrder.customer_address || internalOrder.address || "—",
+          paymentTerms: internalOrder.payment_terms || internalOrder.paymentTerms || "—",
+          advanceTaken: internalOrder.advance_payment_to_be_taken || internalOrder.advanceTaken || false,
+          advanceAmount: internalOrder.advance_amount || internalOrder.advanceAmount || "—",
+          isBroker: internalOrder.is_order_through_broker || internalOrder.isBroker || false,
+          brokerName: internalOrder.broker_name || internalOrder.brokerName || "—",
+          depoName: internalOrder.depo_name || internalOrder.depoName || "—",
+          orderPunchRemarks: internalOrder.order_punch_remarks || internalOrder.orderPunchRemarks || "—",
+          rateRightly: internalOrder.rate_is_rightly_as_per_current_market_rate || checklist.rate || "—",
+          dealingInOrder: internalOrder.we_are_dealing_in_ordered_sku || checklist.sku || "—",
+          partyCredit: internalOrder.party_credit_status || checklist.credit || "—",
+          dispatchConfirmed: internalOrder.dispatch_date_confirmed || checklist.dispatch || "—",
+          overallStatus: internalOrder.overall_status_of_order || checklist.overall || "—",
+          orderConfirmation: internalOrder.order_confirmation_with_customer || checklist.confirm || "—",
+        }
+      }
+
+      // Add individual product to the group
+      const productQty = parseFloat(order.qty_to_be_dispatched || order.qtyToDispatch || 0);
+      const productMeta = {
+        ...order,
+        _rowKey: `${custName}-${baseDo}-${order.d_sr_number || order.id}`,
+        orderNo: order.so_no || order.soNo,
+        productName: order.product_name || order.productName,
+        qtyToDispatch: order.qty_to_be_dispatched || order.qtyToDispatch,
+        deliveryFrom: order.dispatch_from || order.deliveryFrom,
+        dsrNumber: order.d_sr_number,
+        rate: order.final_rate || order.rate_of_material,
+        processid: order.processid || null
+      }
+
+      grouped[groupKey]._ordersMap[baseDo]._products.push(productMeta)
+      grouped[groupKey]._allProducts.push(productMeta)
     })
 
     return Object.values(grouped).map((group: any) => {
-       const firstOrderDetails = Object.values(group._ordersMap)[0] as any || {};
-       return {
-          ...group,
-          ...firstOrderDetails, // Flatten all detail fields into the group object
-          orderNo: Array.from(group._allBaseDos).join(", "),
-          processId: group._allProducts[0]?.processid || "—",
-          qtyToDispatch: group._allProducts.reduce((sum: number, p: any) => sum + parseFloat(p.qtyToDispatch || 0), 0),
-          orderPunchRemarks: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.orderPunchRemarks))).filter(Boolean).join("; ") || "—",
-          _productCount: group._allProducts.length
-       };
+      const firstOrderDetails = Object.values(group._ordersMap)[0] as any || {};
+      return {
+        ...group,
+        ...firstOrderDetails, // Flatten all detail fields into the group object
+        orderNo: Array.from(group._allBaseDos).join(", "),
+        processId: group._allProducts[0]?.processid || "—",
+        qtyToDispatch: group._allProducts.reduce((sum: number, p: any) => sum + parseFloat(p.qtyToDispatch || 0), 0),
+        orderPunchRemarks: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.orderPunchRemarks))).filter(Boolean).join("; ") || "—",
+        _productCount: group._allProducts.length
+      };
     })
   }, [filteredPendingOrders])
 
@@ -569,83 +574,83 @@ export default function ActualDispatchPage() {
 
 
   const handleOpenDialog = (group?: any) => {
-      const targetGroups = group ? [group] : displayRows.filter(r => selectedOrders.includes(r._rowKey));
-      
-      if (targetGroups.length > 0) {
-          setSelectedGroups(targetGroups)
-          // Default: Select ALL products in all selected groups
-          const allKeys = targetGroups.flatMap(g => g._allProducts.map((p: any) => p._rowKey));
-          setDialogSelectedProducts(allKeys)
-          
-          // Pre-fill confirmation details
-          const newDetails: Record<string, { qty: string }> = {};
-          targetGroups.forEach(g => {
-            g._allProducts.forEach((prod: any) => {
-               newDetails[prod._rowKey] = {
-                  qty: String(prod.qtyToDispatch)
-               };
-            });
-          });
-          setConfirmDetails(newDetails);
-          
-          setIsDialogOpen(true)
-          
-          // Reset consolidated forms
-          setVehicleNumber("")
-          setVehicleData({
-            checkStatus: "",
-            remarks: "",
-            fitness: "",
-            insurance: "",
-            tax_copy: "",
-            polution: "",
-            permit1: "",
-            permit2_out_state: "",
-            fitness_file_name: "",
-            insurance_file_name: "",
-            tax_file_name: "",
-            pollution_file_name: "",
-            permit1_file_name: "",
-            permit2_file_name: "",
-            fitness_end_date: "",
-            insurance_end_date: "",
-            tax_end_date: "",
-            pollution_end_date: "",
-            permit1_end_date: "",
-            permit2_end_date: "",
-          })
-          setLoadData({
-            actualQty: String(targetGroups.flatMap(g => g._allProducts).reduce((sum, p) => sum + parseFloat(p.qtyToDispatch || "0"), 0)),
-            weightmentSlip: "",
-            rstNo: "",
-            grossWeight: "",
-            tareWeight: "",
-            netWeight: "",
-            grossWeightPacking: "",
-            netWeightPacking: "",
-            otherItemWeight: "",
-            dharamkataWeight: "",
-            differanceWeight: "",
-            transporterName: "",
-            reason: "",
-            truckNo: "",
-            vehicleNoPlateImage: "",
-            checkStatus: "",
-            remarks: "",
-            extraWeight: "0",
-            weightmentSlip_file_name: "",
-            vehicleNoPlateImage_file_name: "",
-          })
-      }
+    const targetGroups = group ? [group] : displayRows.filter(r => selectedOrders.includes(r._rowKey));
+
+    if (targetGroups.length > 0) {
+      setSelectedGroups(targetGroups)
+      // Default: Select ALL products in all selected groups
+      const allKeys = targetGroups.flatMap(g => g._allProducts.map((p: any) => p._rowKey));
+      setDialogSelectedProducts(allKeys)
+
+      // Pre-fill confirmation details
+      const newDetails: Record<string, { qty: string }> = {};
+      targetGroups.forEach(g => {
+        g._allProducts.forEach((prod: any) => {
+          newDetails[prod._rowKey] = {
+            qty: String(prod.qtyToDispatch)
+          };
+        });
+      });
+      setConfirmDetails(newDetails);
+
+      setIsDialogOpen(true)
+
+      // Reset consolidated forms
+      setVehicleNumber("")
+      setVehicleData({
+        checkStatus: "",
+        remarks: "",
+        fitness: "",
+        insurance: "",
+        tax_copy: "",
+        polution: "",
+        permit1: "",
+        permit2_out_state: "",
+        fitness_file_name: "",
+        insurance_file_name: "",
+        tax_file_name: "",
+        pollution_file_name: "",
+        permit1_file_name: "",
+        permit2_file_name: "",
+        fitness_end_date: "",
+        insurance_end_date: "",
+        tax_end_date: "",
+        pollution_end_date: "",
+        permit1_end_date: "",
+        permit2_end_date: "",
+      })
+      setLoadData({
+        actualQty: String(targetGroups.flatMap(g => g._allProducts).reduce((sum, p) => sum + parseFloat(p.qtyToDispatch || "0"), 0)),
+        weightmentSlip: "",
+        rstNo: "",
+        grossWeight: "",
+        tareWeight: "",
+        netWeight: "",
+        grossWeightPacking: "",
+        netWeightPacking: "",
+        otherItemWeight: "",
+        dharamkataWeight: "",
+        differanceWeight: "",
+        transporterName: "",
+        reason: "",
+        truckNo: "",
+        vehicleNoPlateImage: "",
+        checkStatus: "",
+        remarks: "",
+        extraWeight: "0",
+        weightmentSlip_file_name: "",
+        vehicleNoPlateImage_file_name: "",
+      })
+    }
   }
 
 
   const toggleSelectDialogProduct = (key: string) => {
-     if (dialogSelectedProducts.includes(key)) {
-         setDialogSelectedProducts(prev => prev.filter(k => k !== key))
-     } else {
-         setDialogSelectedProducts(prev => [...prev, key])
-     }
+    if (dialogSelectedProducts.includes(key)) {
+      setDialogSelectedProducts(prev => prev.filter(k => k !== key))
+    } else {
+      setDialogSelectedProducts(prev => [...prev, key])
+    }
   }
 
   const performDispatchConfirmation = async () => {
@@ -675,12 +680,12 @@ export default function ActualDispatchPage() {
       const val = vehicleData[doc.key as keyof typeof vehicleData];
       // Skip required check for Permit 2 (both file and date are optional)
       if (doc.key === 'permit2_out_state' || doc.key === 'permit2_end_date') continue;
-      
+
       if (!val) {
-        toast({ 
-          title: "Validation Error", 
-          description: `${doc.label} is required (Stage 6)`, 
-          variant: "destructive" 
+        toast({
+          title: "Validation Error",
+          description: `${doc.label} is required (Stage 6)`,
+          variant: "destructive"
         });
         return;
       }
@@ -741,10 +746,10 @@ export default function ActualDispatchPage() {
     for (const field of dateFields) {
       const dateVal = vehicleData[field.key as keyof typeof vehicleData];
       if (dateVal && dateVal < minDate) {
-        toast({ 
-          title: "Date Error", 
-          description: `${field.label} End Date must be at least 5 days from today (Min: ${formatDate(minDate)})`, 
-          variant: "destructive" 
+        toast({
+          title: "Date Error",
+          description: `${field.label} End Date must be at least 5 days from today (Min: ${formatDate(minDate)})`,
+          variant: "destructive"
         });
         return;
       }
@@ -759,14 +764,14 @@ export default function ActualDispatchPage() {
 
       const successfulDispatches: any[] = []
       const failedDispatches: any[] = []
-      
-      const itemsToProcess = selectedGroups.flatMap(g => 
+
+      const itemsToProcess = selectedGroups.flatMap(g =>
         g._allProducts.filter((p: any) => dialogSelectedProducts.includes(p._rowKey))
       )
 
       // Submit each item as a single consolidated request
       for (const item of itemsToProcess) {
-        const dsrNumber = item.d_sr_number || item.dsrNumber; 
+        const dsrNumber = item.d_sr_number || item.dsrNumber;
         const rowKey = item._rowKey;
         const confirmedQty = confirmDetails[rowKey]?.qty || item.qtyToDispatch;
 
@@ -776,12 +781,12 @@ export default function ActualDispatchPage() {
             // Stage 5 fields
             product_name_1: item.productName || item.product_name,
             actual_qty_dispatch: confirmedQty || item.qtyToDispatch,
-            
+
             // Stage 6 fields
             vehicle_number: vehicleNumber,
             check_status: vehicleData.checkStatus,
             remarks: vehicleData.remarks,
-            fitness: vehicleData.fitness || "pending", 
+            fitness: vehicleData.fitness || "pending",
             insurance: vehicleData.insurance || "pending",
             tax_copy: vehicleData.tax_copy || "pending",
             polution: vehicleData.polution || "pending",
@@ -795,7 +800,7 @@ export default function ActualDispatchPage() {
             pollution_end_date: vehicleData.pollution_end_date || null,
             permit1_end_date: vehicleData.permit1_end_date || null,
             permit2_end_date: vehicleData.permit2_end_date || null,
-            
+
             // Stage 7 fields
             actual_qty: parseFloat(loadData.actualQty) || parseFloat(confirmedQty),
             weightment_slip_copy: loadData.weightmentSlip || "pending",
@@ -812,9 +817,9 @@ export default function ActualDispatchPage() {
           };
 
           console.log('[CONSOLIDATED SUBMIT] Payload for DSR:', dsrNumber, payload);
-          
+
           const res = await actualDispatchApi.submit(dsrNumber, payload);
-          
+
           if (!res.success) throw new Error(res.message);
 
           successfulDispatches.push({ item, dsrNumber });
@@ -832,7 +837,7 @@ export default function ActualDispatchPage() {
         });
 
         setSelectedOrders([]);
-        setIsDialogOpen(false); 
+        setIsDialogOpen(false);
         setConfirmDetails({});
         setSelectedGroups([]);
         setDialogSelectedProducts([]);
@@ -902,7 +907,7 @@ export default function ActualDispatchPage() {
             disabled={selectedOrders.length === 0 || isReadOnly}
             title={isReadOnly ? "View Only Access" : "Confirm Dispatch"}
           >
-             Confirm Dispatch ({selectedOrders.length})
+            Confirm Dispatch ({selectedOrders.length})
           </Button>
         </div>
 
@@ -927,44 +932,44 @@ export default function ActualDispatchPage() {
             <TableBody>
               {displayRows.length > 0 ? (
                 displayRows.map((row) => {
-                     const rowKey = row._rowKey;
-                     return (
-                       <TableRow key={rowKey} className={selectedOrders.includes(rowKey) ? "bg-blue-50/50" : ""}>
-                         <TableCell className="text-center">
-                           <Checkbox
-                             checked={selectedOrders.includes(rowKey)}
-                             onCheckedChange={() => toggleSelectOrder(rowKey)}
-                           />
-                         </TableCell>
-                         {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                           <TableCell key={col.id} className="whitespace-nowrap text-center">
-                              {col.id === "status" ? (
-                                 <div className="flex justify-center flex-col items-center gap-1">
-                                   <Badge className="bg-blue-100 text-blue-700">Ready for Dispatch</Badge>
-                                   {row._productCount > 1 && (
-                                       <span className="text-[10px] text-slate-500 font-medium">({row._productCount} Items)</span>
-                                   )}
-                                 </div>
-                              ) : col.id === "qtyToDispatch" ? (
-                                  <div className="flex flex-col items-center">
-                                      <span>{row.qtyToDispatch}</span>
-                                      {row._productCount > 1 && <span className="text-[10px] text-slate-500">(Total)</span>}
-                                  </div>
-                              ) : (
-                                 row[col.id as keyof typeof row] || "—"
+                  const rowKey = row._rowKey;
+                  return (
+                    <TableRow key={rowKey} className={selectedOrders.includes(rowKey) ? "bg-blue-50/50" : ""}>
+                      <TableCell className="text-center">
+                        <Checkbox
+                          checked={selectedOrders.includes(rowKey)}
+                          onCheckedChange={() => toggleSelectOrder(rowKey)}
+                        />
+                      </TableCell>
+                      {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                        <TableCell key={col.id} className="whitespace-nowrap text-center">
+                          {col.id === "status" ? (
+                            <div className="flex justify-center flex-col items-center gap-1">
+                              <Badge className="bg-blue-100 text-blue-700">Ready for Dispatch</Badge>
+                              {row._productCount > 1 && (
+                                <span className="text-[10px] text-slate-500 font-medium">({row._productCount} Items)</span>
                               )}
-                           </TableCell>
-                         ))}
-                       </TableRow>
-                     )
-                  })
-               ) : (
-                 <TableRow>
-                   <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
-                     No orders pending for actual dispatch
-                   </TableCell>
-                 </TableRow>
-               )}
+                            </div>
+                          ) : col.id === "qtyToDispatch" ? (
+                            <div className="flex flex-col items-center">
+                              <span>{row.qtyToDispatch}</span>
+                              {row._productCount > 1 && <span className="text-[10px] text-slate-500">(Total)</span>}
+                            </div>
+                          ) : (
+                            row[col.id as keyof typeof row] || "—"
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  )
+                })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
+                    No orders pending for actual dispatch
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </Card>
@@ -973,18 +978,18 @@ export default function ActualDispatchPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[95vw] max-w-[95vw]! max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] p-0">
           <div className="p-8">
-          <DialogHeader className="border-b pb-6 mb-6">
-            <DialogTitle className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-              <Truck className="h-7 w-7 text-blue-600" />
-              Actual Dispatch Confirmation - {selectedGroups.length > 1 ? `${selectedGroups.length} Customer Groups` : selectedGroups[0]?.customerName}
-            </DialogTitle>
-            <DialogDescription className="text-slate-500 font-medium text-base mt-2">
-              Review and confirm dispatch quantities for selected customers.
-            </DialogDescription>
-          </DialogHeader>
-          
-          {selectedGroups.length > 0 && (
-             <div className="space-y-12 mt-6">
+            <DialogHeader className="border-b pb-6 mb-6">
+              <DialogTitle className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                <Truck className="h-7 w-7 text-blue-600" />
+                Actual Dispatch Confirmation - {selectedGroups.length > 1 ? `${selectedGroups.length} Customer Groups` : selectedGroups[0]?.customerName}
+              </DialogTitle>
+              <DialogDescription className="text-slate-500 font-medium text-base mt-2">
+                Review and confirm dispatch quantities for selected customers.
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedGroups.length > 0 && (
+              <div className="space-y-12 mt-6">
                 {/* 1. Multi-Customer Interleaved Details */}
                 {selectedGroups.map((group, groupIdx) => (
                   <div key={group._rowKey} className="space-y-6">
@@ -1004,21 +1009,21 @@ export default function ActualDispatchPage() {
                       return (
                         <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
                           <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
-                             <div className="flex items-center gap-4">
-                               <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
-                                  ORDER: {baseDo}
-                               </Badge>
-                               <div className="flex flex-col">
-                                 <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">Customer Group {groupIdx + 1} | Section {orderIdx + 1}</span>
-                                 <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products.length} Items Selected</span>
-                                </div>
-                             </div>
-                             <div className="flex items-center gap-3">
-                               <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
-                               <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20 rounded-full">
-                                  {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                                </Button>
-                             </div>
+                            <div className="flex items-center gap-4">
+                              <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
+                                ORDER: {baseDo}
+                              </Badge>
+                              <div className="flex flex-col">
+                                <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">Customer Group {groupIdx + 1} | Section {orderIdx + 1}</span>
+                                <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products.length} Items Selected</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20 rounded-full">
+                                {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                              </Button>
+                            </div>
                           </div>
 
                           {isExpanded && (
@@ -1038,8 +1043,8 @@ export default function ActualDispatchPage() {
                                     <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.orderType}</p>
                                   </div>
                                   <div>
-                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Dates</p>
-                                     <p className="text-sm font-bold text-slate-900 leading-tight">S: {formatDate(orderDetails.startDate)} | E: {formatDate(orderDetails.endDate)}</p>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Dates</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">S: {formatDate(orderDetails.startDate)} | E: {formatDate(orderDetails.endDate)}</p>
                                   </div>
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Date</p>
@@ -1076,7 +1081,7 @@ export default function ActualDispatchPage() {
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Credit Status</p>
                                     <Badge className={cn("text-[10px] font-bold px-2 py-0.5", orderDetails.partyCredit === 'Good' ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-red-100 text-red-700 hover:bg-red-100')}>
-                                        {orderDetails.partyCredit}
+                                      {orderDetails.partyCredit}
                                     </Badge>
                                   </div>
                                   <div className="col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4 mt-2">
@@ -1086,24 +1091,24 @@ export default function ActualDispatchPage() {
                                       <p className="text-sm font-medium text-slate-700 italic leading-snug">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
                                     </div>
                                   </div>
-                                  
+
                                   <div className="col-span-full grid grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-200 mt-2">
-                                     <div className="flex items-center gap-2">
-                                         <div className={cn("w-2 h-2 rounded-full", orderDetails.weDealInSku ? 'bg-green-500' : 'bg-red-500')} />
-                                         <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">We Deal SKU?</span>
-                                     </div>
-                                      <div className="flex items-center gap-2">
-                                         <div className={cn("w-2 h-2 rounded-full", orderDetails.dispatchConfirmed ? 'bg-green-500' : 'bg-red-500')} />
-                                         <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Dispatch Confirmed?</span>
-                                     </div>
-                                      <div className="flex items-center gap-2">
-                                         <div className={cn("w-2 h-2 rounded-full", orderDetails.overallStatus === 'Approved' ? 'bg-green-500' : 'bg-red-500')} />
-                                         <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Status: {orderDetails.overallStatus}</span>
-                                     </div>
-                                     <div className="flex items-center gap-2">
-                                         <div className={cn("w-2 h-2 rounded-full", orderDetails.orderConfirmation ? 'bg-green-500' : 'bg-red-500')} />
-                                         <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Cust. Confirmed?</span>
-                                     </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className={cn("w-2 h-2 rounded-full", orderDetails.weDealInSku ? 'bg-green-500' : 'bg-red-500')} />
+                                      <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">We Deal SKU?</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className={cn("w-2 h-2 rounded-full", orderDetails.dispatchConfirmed ? 'bg-green-500' : 'bg-red-500')} />
+                                      <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Dispatch Confirmed?</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className={cn("w-2 h-2 rounded-full", orderDetails.overallStatus === 'Approved' ? 'bg-green-500' : 'bg-red-500')} />
+                                      <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Status: {orderDetails.overallStatus}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className={cn("w-2 h-2 rounded-full", orderDetails.orderConfirmation ? 'bg-green-500' : 'bg-red-500')} />
+                                      <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Cust. Confirmed?</span>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -1126,424 +1131,425 @@ export default function ActualDispatchPage() {
 
                   <div className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm bg-white">
                     <Table>
-                        <TableHeader className="bg-slate-50 sticky top-0 z-10">
-                            <TableRow>
-                                <TableHead className="w-12.5 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">
-                                    <Checkbox 
-                                        checked={dialogSelectedProducts.length > 0 && dialogSelectedProducts.length === selectedGroups.reduce((s, g) => s + g._allProducts.length, 0)}
-                                        onCheckedChange={(checked) => {
-                                            if (checked) {
-                                                const allKeys = selectedGroups.flatMap(g => g._allProducts.map((p: any) => p._rowKey));
-                                                setDialogSelectedProducts(allKeys)
-                                            } else {
-                                                setDialogSelectedProducts([])
-                                            }
-                                        }}
-                                    />
-                                </TableHead>
-                                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">CUSTOMER / DO</TableHead>
-                                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">PRODUCT NAME</TableHead>
-                                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">PLANNED QTY</TableHead>
-                                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">DELIVERY FROM</TableHead>
-                                <TableHead className="w-45 text-[10px] uppercase font-black text-slate-500 tracking-wider">ACTUAL QTY DISPATCHED</TableHead>
-                                <TableHead className="w-30 text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">GROSS WEIGHT (KG)</TableHead>
-                                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">STATUS</TableHead>
+                      <TableHeader className="bg-slate-50 sticky top-0 z-10">
+                        <TableRow>
+                          <TableHead className="w-12.5 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">
+                            <Checkbox
+                              checked={dialogSelectedProducts.length > 0 && dialogSelectedProducts.length === selectedGroups.reduce((s, g) => s + g._allProducts.length, 0)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  const allKeys = selectedGroups.flatMap(g => g._allProducts.map((p: any) => p._rowKey));
+                                  setDialogSelectedProducts(allKeys)
+                                } else {
+                                  setDialogSelectedProducts([])
+                                }
+                              }}
+                            />
+                          </TableHead>
+                          <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">CUSTOMER / DO</TableHead>
+                          <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">PRODUCT NAME</TableHead>
+                          <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">PLANNED QTY</TableHead>
+                          <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">DELIVERY FROM</TableHead>
+                          <TableHead className="w-45 text-[10px] uppercase font-black text-slate-500 tracking-wider">ACTUAL QTY DISPATCHED</TableHead>
+                          <TableHead className="w-30 text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">GROSS WEIGHT (KG)</TableHead>
+                          <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">STATUS</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedGroups.flatMap(group => group._allProducts).map((prod: any) => {
+                          const rowKey = prod._rowKey;
+                          return (
+                            <TableRow key={rowKey} className={cn(dialogSelectedProducts.includes(rowKey) ? "bg-blue-50/30" : "")}>
+                              <TableCell className="text-center p-3">
+                                <Checkbox
+                                  checked={dialogSelectedProducts.includes(rowKey)}
+                                  onCheckedChange={() => toggleSelectDialogProduct(rowKey)}
+                                />
+                              </TableCell>
+                              <TableCell className="p-3">
+                                <div className="flex flex-col">
+                                  <span className="text-[9px] font-black text-blue-600 uppercase leading-none mb-1">{prod.customerName}</span>
+                                  <span className="text-[10px] font-bold text-slate-700">{prod.orderNo || "—"}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-bold text-[11px] p-3 text-slate-900">{prod.productName || "—"}</TableCell>
+                              <TableCell className="text-[11px] font-black p-3 text-center text-blue-700">{prod.qtyToDispatch}</TableCell>
+                              <TableCell className="text-[10px] font-black p-3 uppercase text-slate-400 tracking-tighter">{prod.deliveryFrom}</TableCell>
+                              <TableCell className="p-3">
+                                <Input
+                                  type="number"
+                                  className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 transition-colors shadow-sm"
+                                  placeholder="Actual Qty"
+                                  value={confirmDetails[rowKey]?.qty || ""}
+                                  onChange={(e) =>
+                                    setConfirmDetails((prev) => ({
+                                      ...prev,
+                                      [rowKey]: {
+                                        ...prev[rowKey],
+                                        qty: e.target.value
+                                      }
+                                    }))
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell className="p-3 text-center">
+                                <div className="font-black text-sm text-purple-700">
+                                  {calculateGrossWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch).toFixed(2)} kg
+                                </div>
+                              </TableCell>
+                              <TableCell className="p-3 text-center">
+                                <Badge variant="outline" className="text-[9px] bg-orange-50 text-orange-700 border-orange-200 uppercase font-black px-2 py-0.5">Pending</Badge>
+                              </TableCell>
                             </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {selectedGroups.flatMap(group => group._allProducts).map((prod: any) => {
-                                const rowKey = prod._rowKey;
-                                return (
-                                <TableRow key={rowKey} className={cn(dialogSelectedProducts.includes(rowKey) ? "bg-blue-50/30" : "")}>
-                                    <TableCell className="text-center p-3">
-                                        <Checkbox 
-                                            checked={dialogSelectedProducts.includes(rowKey)}
-                                            onCheckedChange={() => toggleSelectDialogProduct(rowKey)}
-                                        />
-                                    </TableCell>
-                                    <TableCell className="p-3">
-                                        <div className="flex flex-col">
-                                            <span className="text-[9px] font-black text-blue-600 uppercase leading-none mb-1">{prod.customerName}</span>
-                                            <span className="text-[10px] font-bold text-slate-700">{prod.orderNo || "—"}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="font-bold text-[11px] p-3 text-slate-900">{prod.productName || "—"}</TableCell>
-                                    <TableCell className="text-[11px] font-black p-3 text-center text-blue-700">{prod.qtyToDispatch}</TableCell>
-                                    <TableCell className="text-[10px] font-black p-3 uppercase text-slate-400 tracking-tighter">{prod.deliveryFrom}</TableCell>
-                                    <TableCell className="p-3">
-                                        <Input
-                                            type="number"
-                                            className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 transition-colors shadow-sm"
-                                            placeholder="Actual Qty"
-                                            value={confirmDetails[rowKey]?.qty || ""}
-                                            onChange={(e) =>
-                                              setConfirmDetails((prev) => ({
-                                                ...prev,
-                                                [rowKey]: {
-                                                   ...prev[rowKey],
-                                                   qty: e.target.value
-                                                }
-                                              }))
-                                            }
-                                        />
-                                    </TableCell>
-                                    <TableCell className="p-3 text-center">
-                                        <div className="font-black text-sm text-purple-700">
-                                            {calculateGrossWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch).toFixed(2)} kg
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="p-3 text-center">
-                                        <Badge variant="outline" className="text-[9px] bg-orange-50 text-orange-700 border-orange-200 uppercase font-black px-2 py-0.5">Pending</Badge>
-                                    </TableCell>
-                                </TableRow>
-                            )})}
-                            {/* Total Weight Row - only includes SELECTED products */}
-                            <TableRow className="bg-purple-50 border-t-2 border-purple-200">
-                                <TableCell colSpan={3} className="text-right p-4 font-black text-xs uppercase text-purple-900 tracking-wider">
-                                    TOTALS:
-                                </TableCell>
-                                <TableCell className="p-4 text-center">
-                                    <div className="font-black text-sm text-purple-700">
-                                        {selectedGroups.flatMap(g => g._allProducts).filter((p: any) => dialogSelectedProducts.includes(p._rowKey)).reduce((sum, p) => sum + parseFloat(p.qtyToDispatch || "0"), 0)}
-                                    </div>
-                                </TableCell>
-                                <TableCell />
-                                <TableCell className="p-4 text-center">
-                                    <div className="font-black text-sm text-purple-700">
-                                        {selectedGroups.flatMap(g => g._allProducts).filter((p: any) => dialogSelectedProducts.includes(p._rowKey)).reduce((sum, p) => sum + parseFloat(confirmDetails[p._rowKey]?.qty || p.qtyToDispatch || "0"), 0)}
-                                    </div>
-                                </TableCell>
-                                <TableCell className="p-4 text-center">
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-[9px] font-black text-purple-400 uppercase tracking-tighter mb-1">TOTAL PACKING WEIGHT</span>
-                                        <div className="font-black text-lg text-purple-700">
-                                            {selectedGroups.flatMap(g => g._allProducts)
-                                                .filter((prod: any) => dialogSelectedProducts.includes(prod._rowKey))
-                                                .reduce((total, prod) => {
-                                                    const rowKey = prod._rowKey
-                                                    return total + calculateGrossWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch)
-                                                }, 0).toFixed(2)} kg
-                                        </div>
-                                    </div>
-                                </TableCell>
-                                <TableCell colSpan={1} />
-                            </TableRow>
-                        </TableBody>
+                          )
+                        })}
+                        {/* Total Weight Row - only includes SELECTED products */}
+                        <TableRow className="bg-purple-50 border-t-2 border-purple-200">
+                          <TableCell colSpan={3} className="text-right p-4 font-black text-xs uppercase text-purple-900 tracking-wider">
+                            TOTALS:
+                          </TableCell>
+                          <TableCell className="p-4 text-center">
+                            <div className="font-black text-sm text-purple-700">
+                              {selectedGroups.flatMap(g => g._allProducts).filter((p: any) => dialogSelectedProducts.includes(p._rowKey)).reduce((sum, p) => sum + parseFloat(p.qtyToDispatch || "0"), 0)}
+                            </div>
+                          </TableCell>
+                          <TableCell />
+                          <TableCell className="p-4 text-center">
+                            <div className="font-black text-sm text-purple-700">
+                              {selectedGroups.flatMap(g => g._allProducts).filter((p: any) => dialogSelectedProducts.includes(p._rowKey)).reduce((sum, p) => sum + parseFloat(confirmDetails[p._rowKey]?.qty || p.qtyToDispatch || "0"), 0)}
+                            </div>
+                          </TableCell>
+                          <TableCell className="p-4 text-center">
+                            <div className="flex flex-col items-center">
+                              <span className="text-[9px] font-black text-purple-400 uppercase tracking-tighter mb-1">TOTAL PACKING WEIGHT</span>
+                              <div className="font-black text-lg text-purple-700">
+                                {selectedGroups.flatMap(g => g._allProducts)
+                                  .filter((prod: any) => dialogSelectedProducts.includes(prod._rowKey))
+                                  .reduce((total, prod) => {
+                                    const rowKey = prod._rowKey
+                                    return total + calculateGrossWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch)
+                                  }, 0).toFixed(2)} kg
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell colSpan={1} />
+                        </TableRow>
+                      </TableBody>
                     </Table>
                   </div>
                 </div>
 
                 {/* 3. Consolidated Vehicle & Load Forms */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-8 border-t-4 border-slate-100">
-                   {/* Column A: Vehicle Information */}
-                   <div className="space-y-6">
-                      <div className="bg-purple-600 px-6 py-4 rounded-3xl flex items-center justify-between shadow-lg">
-                         <div className="flex items-center gap-3">
-                            <Truck className="h-6 w-6 text-white" />
-                            <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">Vehicle Setup</h3>
-                         </div>
-                         <Badge className="bg-white text-purple-700 font-black">STAGE 6</Badge>
+                  {/* Column A: Vehicle Information */}
+                  <div className="space-y-6">
+                    <div className="bg-purple-600 px-6 py-4 rounded-3xl flex items-center justify-between shadow-lg">
+                      <div className="flex items-center gap-3">
+                        <Truck className="h-6 w-6 text-white" />
+                        <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">Vehicle Setup</h3>
+                      </div>
+                      <Badge className="bg-white text-purple-700 font-black">STAGE 6</Badge>
+                    </div>
+
+                    <div className="bg-slate-50 border-2 border-slate-200 rounded-3xl p-6 space-y-6 shadow-md transition-all hover:shadow-lg">
+                      <div className="space-y-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Vehicle Registration Number <span className="text-red-500">*</span></Label>
+                          <Input
+                            placeholder="e.g. MH-12-AB-1234"
+                            className="h-12 border-2 border-slate-200 rounded-xl px-4 font-black text-lg focus:border-purple-500 transition-colors uppercase bg-white"
+                            value={vehicleNumber}
+                            onChange={(e) => setVehicleNumber(e.target.value)}
+                          />
+                        </div>
                       </div>
 
-                      <div className="bg-slate-50 border-2 border-slate-200 rounded-3xl p-6 space-y-6 shadow-md transition-all hover:shadow-lg">
-                         <div className="space-y-4">
-                            <div className="space-y-1.5">
-                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Vehicle Registration Number <span className="text-red-500">*</span></Label>
-                               <Input 
-                                 placeholder="e.g. MH-12-AB-1234" 
-                                 className="h-12 border-2 border-slate-200 rounded-xl px-4 font-black text-lg focus:border-purple-500 transition-colors uppercase bg-white"
-                                 value={vehicleNumber}
-                                 onChange={(e) => setVehicleNumber(e.target.value)}
-                               />
-                            </div>
-                         </div>
-
-                         <div className="pt-4 border-t border-slate-200">
-                            <p className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest leading-none">Digital Documents (STAGE 6)</p>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
-                                   <div className="flex items-center justify-between w-full">
-                                      <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
-                                         Fitness <span className="text-red-500">*</span> {vehicleData.fitness_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.fitness_file_name})</span>}
-                                      </span>
-                                      <div className="flex items-center gap-2">
-                                         <Input type="file" className="hidden" id="fitness-doc" onChange={(e) => handleFileChange('fitness', 'fitness_file_name', e.target.files?.[0] || null)} />
-                                         <Label htmlFor="fitness-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                            {isUploading === 'fitness' ? "..." : (vehicleData.fitness_file_name ? 'REPLACE' : 'UPLOAD')}
-                                         </Label>
-                                      </div>
-                                   </div>
-                                   <Input 
-                                      type="date" 
-                                      className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
-                                      min={minDate}
-                                      value={vehicleData.fitness_end_date}
-                                      onChange={(e) => setVehicleData(p => ({...p, fitness_end_date: e.target.value}))}
-                                   />
-                                </div>
-                                <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
-                                   <div className="flex items-center justify-between w-full">
-                                      <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
-                                         Insurance <span className="text-red-500">*</span> {vehicleData.insurance_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.insurance_file_name})</span>}
-                                      </span>
-                                      <div className="flex items-center gap-2">
-                                         <Input type="file" className="hidden" id="ins-doc" onChange={(e) => handleFileChange('insurance', 'insurance_file_name', e.target.files?.[0] || null)} />
-                                         <Label htmlFor="ins-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                            {isUploading === 'insurance' ? "..." : (vehicleData.insurance_file_name ? 'REPLACE' : 'UPLOAD')}
-                                         </Label>
-                                      </div>
-                                   </div>
-                                   <Input 
-                                      type="date" 
-                                      className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
-                                      min={minDate}
-                                      value={vehicleData.insurance_end_date}
-                                      onChange={(e) => setVehicleData(p => ({...p, insurance_end_date: e.target.value}))}
-                                   />
-                                </div>
-                                <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
-                                   <div className="flex items-center justify-between w-full">
-                                      <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
-                                         Tax Copy <span className="text-red-500">*</span> {vehicleData.tax_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.tax_file_name})</span>}
-                                      </span>
-                                      <div className="flex items-center gap-2">
-                                         <Input type="file" className="hidden" id="tax-doc" onChange={(e) => handleFileChange('tax_copy', 'tax_file_name', e.target.files?.[0] || null)} />
-                                         <Label htmlFor="tax-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                            {isUploading === 'tax_copy' ? "..." : (vehicleData.tax_file_name ? 'REPLACE' : 'UPLOAD')}
-                                         </Label>
-                                      </div>
-                                   </div>
-                                   <Input 
-                                      type="date" 
-                                      className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
-                                      min={minDate}
-                                      value={vehicleData.tax_end_date}
-                                      onChange={(e) => setVehicleData(p => ({...p, tax_end_date: e.target.value}))}
-                                   />
-                                </div>
-                                <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
-                                   <div className="flex items-center justify-between w-full">
-                                      <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
-                                         Pollution <span className="text-red-500">*</span> {vehicleData.pollution_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.pollution_file_name})</span>}
-                                      </span>
-                                      <div className="flex items-center gap-2">
-                                         <Input type="file" className="hidden" id="poll-doc" onChange={(e) => handleFileChange('polution', 'pollution_file_name', e.target.files?.[0] || null)} />
-                                         <Label htmlFor="poll-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                            {isUploading === 'polution' ? "..." : (vehicleData.pollution_file_name ? 'REPLACE' : 'UPLOAD')}
-                                         </Label>
-                                      </div>
-                                   </div>
-                                   <Input 
-                                      type="date" 
-                                      className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
-                                      min={minDate}
-                                      value={vehicleData.pollution_end_date}
-                                      onChange={(e) => setVehicleData(p => ({...p, pollution_end_date: e.target.value}))}
-                                   />
-                                </div>
-                                <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
-                                   <div className="flex items-center justify-between w-full">
-                                      <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
-                                         Permit 1 <span className="text-red-500">*</span> {vehicleData.permit1_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit1_file_name})</span>}
-                                      </span>
-                                      <div className="flex items-center gap-2">
-                                         <Input type="file" className="hidden" id="permit1-doc" onChange={(e) => handleFileChange('permit1', 'permit1_file_name', e.target.files?.[0] || null)} />
-                                         <Label htmlFor="permit1-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                            {isUploading === 'permit1' ? "..." : (vehicleData.permit1_file_name ? 'REPLACE' : 'UPLOAD')}
-                                         </Label>
-                                      </div>
-                                   </div>
-                                   <Input 
-                                      type="date" 
-                                      className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
-                                      min={minDate}
-                                      value={vehicleData.permit1_end_date}
-                                      onChange={(e) => setVehicleData(p => ({...p, permit1_end_date: e.target.value}))}
-                                   />
-                                </div>
-                                <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
-                                   <div className="flex items-center justify-between w-full">
-                                      <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
-                                         Permit 2 {vehicleData.permit2_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit2_file_name})</span>}
-                                      </span>
-                                      <div className="flex items-center gap-2">
-                                         <Input type="file" className="hidden" id="permit2-doc" onChange={(e) => handleFileChange('permit2_out_state', 'permit2_file_name', e.target.files?.[0] || null)} />
-                                         <Label htmlFor="permit2-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                            {isUploading === 'permit2_out_state' ? "..." : (vehicleData.permit2_file_name ? 'REPLACE' : 'UPLOAD')}
-                                         </Label>
-                                      </div>
-                                   </div>
-                                   <Input 
-                                      type="date" 
-                                      className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
-                                      min={minDate}
-                                      value={vehicleData.permit2_end_date}
-                                      onChange={(e) => setVehicleData(p => ({...p, permit2_end_date: e.target.value}))}
-                                   />
-                                </div>
-                            </div>
-                         </div>
-
-                         <div className="pt-4 border-t border-slate-200 grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Check Status <span className="text-red-500">*</span></Label>
-                               <Select value={vehicleData.checkStatus} onValueChange={(v) => setVehicleData(p => ({...p, checkStatus: v}))}>
-                                  <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl font-bold bg-white focus:ring-2 focus:ring-purple-500">
-                                     <SelectValue placeholder="Status" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                     <SelectItem value="Accept">Accept</SelectItem>
-                                     <SelectItem value="Reject">Reject</SelectItem>
-                                  </SelectContent>
-                               </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">
-                                  Remarks {vehicleData.checkStatus === "Reject" ? <span className="text-red-500">*</span> : <span className="text-slate-400 font-normal normal-case">(Optional)</span>}
-                               </Label>
-                               <Input 
-                                 placeholder="Add notes..." 
-                                 className="h-12 border-2 border-slate-200 rounded-xl bg-white font-medium focus:border-purple-500 transition-colors"
-                                 value={vehicleData.remarks}
-                                 onChange={(e) => setVehicleData(p => ({...p, remarks: e.target.value}))}
-                               />
-                            </div>
-                         </div>
-                      </div>
-                   </div>
-
-                   {/* Column B: Material Load Details */}
-                   <div className="space-y-6">
-                      <div className="bg-blue-800 px-6 py-4 rounded-3xl flex items-center justify-between shadow-lg">
-                         <div className="flex items-center gap-3">
-                            <Weight className="h-6 w-6 text-white" />
-                            <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">Weightment Audit</h3>
-                         </div>
-                         <Badge className="bg-white text-blue-800 font-black">STAGE 7</Badge>
-                      </div>
-
-                      <div className="bg-white border-2 border-slate-200 rounded-3xl p-6 space-y-5 shadow-md overflow-hidden relative group hover:shadow-lg transition-all">
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Actual Qty <span className="text-red-500">*</span></Label>
-                                <Input type="number" step="0.01" className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-white focus:border-blue-500 transition-colors" 
-                                  value={loadData.actualQty} onChange={(e) => setLoadData(p => ({...p, actualQty: e.target.value}))} />
-                             </div>
-                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">RST No <span className="text-red-500">*</span></Label>
-                                <Input className="h-10 border-slate-200 rounded-lg font-bold"
-                                  value={loadData.rstNo} onChange={(e) => setLoadData(p => ({...p, rstNo: e.target.value}))} />
-                             </div>
-                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Truck No</Label>
-                                <Input className="h-10 border-slate-200 rounded-lg font-bold bg-slate-50 font-mono uppercase" value={loadData.truckNo || vehicleNumber} readOnly />
-                             </div>
-                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex justify-between items-center">
-                                   Weightment Slip <span className="text-slate-400 font-normal normal-case">(Optional)</span> {loadData.weightmentSlip_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.weightmentSlip_file_name})</span>}
+                      <div className="pt-4 border-t border-slate-200">
+                        <p className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest leading-none">Digital Documents (STAGE 6)</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                                Fitness <span className="text-red-500">*</span> {vehicleData.fitness_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.fitness_file_name})</span>}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <Input type="file" className="hidden" id="fitness-doc" onChange={(e) => handleFileChange('fitness', 'fitness_file_name', e.target.files?.[0] || null)} />
+                                <Label htmlFor="fitness-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                  {isUploading === 'fitness' ? "..." : (vehicleData.fitness_file_name ? 'REPLACE' : 'UPLOAD')}
                                 </Label>
-                                <div className="flex gap-2">
-                                   <Input type="file" className="hidden" id="weightment-slip" onChange={(e) => handleFileChange('weightmentSlip', 'weightmentSlip_file_name', e.target.files?.[0] || null, 'load')} />
-                                   <Label htmlFor="weightment-slip" className="h-10 flex-1 flex items-center justify-center bg-slate-100 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-black text-slate-600 cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all">
-                                      {isUploading === 'weightmentSlip' ? "..." : (loadData.weightmentSlip ? 'REPLACE' : 'UPLOAD')}
-                                   </Label>
-                                </div>
-                             </div>
-                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex justify-between items-center">
-                                   No Plate Image <span className="text-slate-400 font-normal normal-case">(Optional)</span> {loadData.vehicleNoPlateImage_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.vehicleNoPlateImage_file_name})</span>}
+                              </div>
+                            </div>
+                            <Input
+                              type="date"
+                              className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
+                              min={minDate}
+                              value={vehicleData.fitness_end_date}
+                              onChange={(e) => setVehicleData(p => ({ ...p, fitness_end_date: e.target.value }))}
+                            />
+                          </div>
+                          <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                                Insurance <span className="text-red-500">*</span> {vehicleData.insurance_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.insurance_file_name})</span>}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <Input type="file" className="hidden" id="ins-doc" onChange={(e) => handleFileChange('insurance', 'insurance_file_name', e.target.files?.[0] || null)} />
+                                <Label htmlFor="ins-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                  {isUploading === 'insurance' ? "..." : (vehicleData.insurance_file_name ? 'REPLACE' : 'UPLOAD')}
                                 </Label>
-                                <div className="flex gap-2">
-                                   <Input type="file" className="hidden" id="no-plate" onChange={(e) => handleFileChange('vehicleNoPlateImage', 'vehicleNoPlateImage_file_name', e.target.files?.[0] || null, 'load')} />
-                                   <Label htmlFor="no-plate" className="h-10 flex-1 flex items-center justify-center bg-slate-100 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-black text-slate-600 cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all">
-                                      {isUploading === 'vehicleNoPlateImage' ? "..." : (loadData.vehicleNoPlateImage ? 'REPLACE' : 'UPLOAD')}
-                                   </Label>
-                                </div>
-                             </div>
+                              </div>
+                            </div>
+                            <Input
+                              type="date"
+                              className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
+                              min={minDate}
+                              value={vehicleData.insurance_end_date}
+                              onChange={(e) => setVehicleData(p => ({ ...p, insurance_end_date: e.target.value }))}
+                            />
                           </div>
-
-                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                              <div className="space-y-1.5">
-                                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Gross Wt <span className="text-red-500">*</span></Label>
-                                 <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold text-blue-600"
-                                   value={loadData.grossWeight} onChange={(e) => setLoadData(p => ({...p, grossWeight: e.target.value}))} />
+                          <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                                Tax Copy <span className="text-red-500">*</span> {vehicleData.tax_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.tax_file_name})</span>}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <Input type="file" className="hidden" id="tax-doc" onChange={(e) => handleFileChange('tax_copy', 'tax_file_name', e.target.files?.[0] || null)} />
+                                <Label htmlFor="tax-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                  {isUploading === 'tax_copy' ? "..." : (vehicleData.tax_file_name ? 'REPLACE' : 'UPLOAD')}
+                                </Label>
                               </div>
-                              <div className="space-y-1.5">
-                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Tare Wt <span className="text-red-500">*</span></Label>
-                                 <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold"
-                                   value={loadData.tareWeight} onChange={(e) => setLoadData(p => ({...p, tareWeight: e.target.value}))} />
-                              </div>
-                              <div className="space-y-1.5">
-                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Net Weight</Label>
-                                 <Input type="number" step="0.01" readOnly className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-slate-50"
-                                   value={loadData.netWeightPacking} />
-                              </div>
-                              <div className="space-y-1.5">
-                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Difference</Label>
-                                 <Input type="number" readOnly className={`h-10 border-2 rounded-lg font-bold ${Math.abs(parseFloat(loadData.differanceWeight) || 0) > 20 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}
-                                   value={loadData.differanceWeight} />
-                              </div>
-                           </div>
-
-                           <div className="pt-4 border-t-2 border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-4">
-                              <div className="space-y-1.5">
-                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Total packing weight</Label>
-                                 <Input readOnly className="h-10 border-slate-200 rounded-lg font-bold bg-slate-50" value={totalPackingWeightFromSku.toFixed(2)} />
-                              </div>
-                              <div className="space-y-1.5">
-                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Extra packing material weight</Label>
-                                 <Input type="number" step="0.001" className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-white focus:border-blue-500 transition-colors"
-                                   placeholder="0.000"
-                                   value={loadData.extraWeight} onChange={(e) => setLoadData(p => ({...p, extraWeight: e.target.value}))} />
-                              </div>
-                              <div className="space-y-1.5">
-                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Total Weight</Label>
-                                 <Input readOnly className="h-10 border-slate-200 rounded-lg font-bold bg-blue-50 text-blue-700" value={totalCombinedWeight.toFixed(2)} />
-                              </div>
-                           </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Status (STG 7) <span className="text-red-500">*</span></Label>
-                                <Select value={loadData.checkStatus} onValueChange={(v) => setLoadData(p => ({...p, checkStatus: v}))}>
-                                   <SelectTrigger className="h-10 border-2 border-slate-200 rounded-xl font-bold bg-white">
-                                      <SelectValue placeholder="Decision" />
-                                   </SelectTrigger>
-                                   <SelectContent>
-                                      <SelectItem value="Accept">Approved Quality</SelectItem>
-                                      <SelectItem value="Reject">Reject Load</SelectItem>
-                                   </SelectContent>
-                                </Select>
-                             </div>
-                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Transporter <span className="text-red-500">*</span></Label>
-                                <Input className="h-10 border-slate-200 rounded-lg font-medium bg-white" placeholder="Carrier Name"
-                                  value={loadData.transporterName} onChange={(e) => setLoadData(p => ({...p, transporterName: e.target.value}))} />
-                             </div>
+                            </div>
+                            <Input
+                              type="date"
+                              className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
+                              min={minDate}
+                              value={vehicleData.tax_end_date}
+                              onChange={(e) => setVehicleData(p => ({ ...p, tax_end_date: e.target.value }))}
+                            />
                           </div>
-
-                           <div className="space-y-1.5">
-                              <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">
-                                 Weight Difference Reason {Math.abs(parseFloat(loadData.differanceWeight) || 0) > 20 ? <span className="text-red-500">* (Required)</span> : <span className="text-slate-400 font-normal normal-case">(Optional)</span>}
-                              </Label>
-                              <Input
-                                className={`h-10 rounded-lg font-medium bg-white ${Math.abs(parseFloat(loadData.differanceWeight) || 0) > 20 ? 'border-2 border-red-400 focus:border-red-500' : 'border-slate-200'}`}
-                                placeholder={Math.abs(parseFloat(loadData.differanceWeight) || 0) > 20 ? "Required: explain weight difference..." : "Specify reason..."}
-                                value={loadData.reason} onChange={(e) => setLoadData(p => ({...p, reason: e.target.value}))} />
-                           </div>
-
-
+                          <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                                Pollution <span className="text-red-500">*</span> {vehicleData.pollution_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.pollution_file_name})</span>}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <Input type="file" className="hidden" id="poll-doc" onChange={(e) => handleFileChange('polution', 'pollution_file_name', e.target.files?.[0] || null)} />
+                                <Label htmlFor="poll-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                  {isUploading === 'polution' ? "..." : (vehicleData.pollution_file_name ? 'REPLACE' : 'UPLOAD')}
+                                </Label>
+                              </div>
+                            </div>
+                            <Input
+                              type="date"
+                              className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
+                              min={minDate}
+                              value={vehicleData.pollution_end_date}
+                              onChange={(e) => setVehicleData(p => ({ ...p, pollution_end_date: e.target.value }))}
+                            />
+                          </div>
+                          <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                                Permit 1 <span className="text-red-500">*</span> {vehicleData.permit1_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit1_file_name})</span>}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <Input type="file" className="hidden" id="permit1-doc" onChange={(e) => handleFileChange('permit1', 'permit1_file_name', e.target.files?.[0] || null)} />
+                                <Label htmlFor="permit1-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                  {isUploading === 'permit1' ? "..." : (vehicleData.permit1_file_name ? 'REPLACE' : 'UPLOAD')}
+                                </Label>
+                              </div>
+                            </div>
+                            <Input
+                              type="date"
+                              className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
+                              min={minDate}
+                              value={vehicleData.permit1_end_date}
+                              onChange={(e) => setVehicleData(p => ({ ...p, permit1_end_date: e.target.value }))}
+                            />
+                          </div>
+                          <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                                Permit 2 {vehicleData.permit2_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit2_file_name})</span>}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <Input type="file" className="hidden" id="permit2-doc" onChange={(e) => handleFileChange('permit2_out_state', 'permit2_file_name', e.target.files?.[0] || null)} />
+                                <Label htmlFor="permit2-doc" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                  {isUploading === 'permit2_out_state' ? "..." : (vehicleData.permit2_file_name ? 'REPLACE' : 'UPLOAD')}
+                                </Label>
+                              </div>
+                            </div>
+                            <Input
+                              type="date"
+                              className="h-7 text-[10px] border-slate-200 rounded-lg px-2 font-bold focus:border-purple-500 transition-colors bg-slate-50"
+                              min={minDate}
+                              value={vehicleData.permit2_end_date}
+                              onChange={(e) => setVehicleData(p => ({ ...p, permit2_end_date: e.target.value }))}
+                            />
+                          </div>
+                        </div>
                       </div>
-                   </div>
+
+                      <div className="pt-4 border-t border-slate-200 grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Check Status <span className="text-red-500">*</span></Label>
+                          <Select value={vehicleData.checkStatus} onValueChange={(v) => setVehicleData(p => ({ ...p, checkStatus: v }))}>
+                            <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl font-bold bg-white focus:ring-2 focus:ring-purple-500">
+                              <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Accept">Accept</SelectItem>
+                              <SelectItem value="Reject">Reject</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">
+                            Remarks {vehicleData.checkStatus === "Reject" ? <span className="text-red-500">*</span> : <span className="text-slate-400 font-normal normal-case">(Optional)</span>}
+                          </Label>
+                          <Input
+                            placeholder="Add notes..."
+                            className="h-12 border-2 border-slate-200 rounded-xl bg-white font-medium focus:border-purple-500 transition-colors"
+                            value={vehicleData.remarks}
+                            onChange={(e) => setVehicleData(p => ({ ...p, remarks: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Column B: Material Load Details */}
+                  <div className="space-y-6">
+                    <div className="bg-blue-800 px-6 py-4 rounded-3xl flex items-center justify-between shadow-lg">
+                      <div className="flex items-center gap-3">
+                        <Weight className="h-6 w-6 text-white" />
+                        <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">Weightment Audit</h3>
+                      </div>
+                      <Badge className="bg-white text-blue-800 font-black">STAGE 7</Badge>
+                    </div>
+
+                    <div className="bg-white border-2 border-slate-200 rounded-3xl p-6 space-y-5 shadow-md overflow-hidden relative group hover:shadow-lg transition-all">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Actual Qty <span className="text-red-500">*</span></Label>
+                          <Input type="number" step="0.01" className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-white focus:border-blue-500 transition-colors"
+                            value={loadData.actualQty} onChange={(e) => setLoadData(p => ({ ...p, actualQty: e.target.value }))} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">RST No <span className="text-red-500">*</span></Label>
+                          <Input className="h-10 border-slate-200 rounded-lg font-bold"
+                            value={loadData.rstNo} onChange={(e) => setLoadData(p => ({ ...p, rstNo: e.target.value }))} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Truck No</Label>
+                          <Input className="h-10 border-slate-200 rounded-lg font-bold bg-slate-50 font-mono uppercase" value={loadData.truckNo || vehicleNumber} readOnly />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex justify-between items-center">
+                            Weightment Slip <span className="text-slate-400 font-normal normal-case">(Optional)</span> {loadData.weightmentSlip_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.weightmentSlip_file_name})</span>}
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input type="file" className="hidden" id="weightment-slip" onChange={(e) => handleFileChange('weightmentSlip', 'weightmentSlip_file_name', e.target.files?.[0] || null, 'load')} />
+                            <Label htmlFor="weightment-slip" className="h-10 flex-1 flex items-center justify-center bg-slate-100 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-black text-slate-600 cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all">
+                              {isUploading === 'weightmentSlip' ? "..." : (loadData.weightmentSlip ? 'REPLACE' : 'UPLOAD')}
+                            </Label>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex justify-between items-center">
+                            No Plate Image <span className="text-slate-400 font-normal normal-case">(Optional)</span> {loadData.vehicleNoPlateImage_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.vehicleNoPlateImage_file_name})</span>}
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input type="file" className="hidden" id="no-plate" onChange={(e) => handleFileChange('vehicleNoPlateImage', 'vehicleNoPlateImage_file_name', e.target.files?.[0] || null, 'load')} />
+                            <Label htmlFor="no-plate" className="h-10 flex-1 flex items-center justify-center bg-slate-100 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-black text-slate-600 cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all">
+                              {isUploading === 'vehicleNoPlateImage' ? "..." : (loadData.vehicleNoPlateImage ? 'REPLACE' : 'UPLOAD')}
+                            </Label>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Gross Wt <span className="text-red-500">*</span></Label>
+                          <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold text-blue-600"
+                            value={loadData.grossWeight} onChange={(e) => setLoadData(p => ({ ...p, grossWeight: e.target.value }))} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Tare Wt <span className="text-red-500">*</span></Label>
+                          <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold"
+                            value={loadData.tareWeight} onChange={(e) => setLoadData(p => ({ ...p, tareWeight: e.target.value }))} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Net Weight</Label>
+                          <Input type="number" step="0.01" readOnly className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-slate-50"
+                            value={loadData.netWeightPacking} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Difference</Label>
+                          <Input type="number" readOnly className={`h-10 border-2 rounded-lg font-bold ${Math.abs(parseFloat(loadData.differanceWeight) || 0) > 20 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}
+                            value={loadData.differanceWeight} />
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t-2 border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Total packing weight</Label>
+                          <Input readOnly className="h-10 border-slate-200 rounded-lg font-bold bg-slate-50" value={totalPackingWeightFromSku.toFixed(2)} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Extra packing material weight</Label>
+                          <Input type="number" step="0.001" className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-white focus:border-blue-500 transition-colors"
+                            placeholder="0.000"
+                            value={loadData.extraWeight} onChange={(e) => setLoadData(p => ({ ...p, extraWeight: e.target.value }))} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-tighter ml-1">Total Weight</Label>
+                          <Input readOnly className="h-10 border-slate-200 rounded-lg font-bold bg-blue-50 text-blue-700" value={totalCombinedWeight.toFixed(2)} />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Status (STG 7) <span className="text-red-500">*</span></Label>
+                          <Select value={loadData.checkStatus} onValueChange={(v) => setLoadData(p => ({ ...p, checkStatus: v }))}>
+                            <SelectTrigger className="h-10 border-2 border-slate-200 rounded-xl font-bold bg-white">
+                              <SelectValue placeholder="Decision" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Accept">Approved Quality</SelectItem>
+                              <SelectItem value="Reject">Reject Load</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Transporter <span className="text-red-500">*</span></Label>
+                          <Input className="h-10 border-slate-200 rounded-lg font-medium bg-white" placeholder="Carrier Name"
+                            value={loadData.transporterName} onChange={(e) => setLoadData(p => ({ ...p, transporterName: e.target.value }))} />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">
+                          Weight Difference Reason {Math.abs(parseFloat(loadData.differanceWeight) || 0) > 20 ? <span className="text-red-500">* (Required)</span> : <span className="text-slate-400 font-normal normal-case">(Optional)</span>}
+                        </Label>
+                        <Input
+                          className={`h-10 rounded-lg font-medium bg-white ${Math.abs(parseFloat(loadData.differanceWeight) || 0) > 20 ? 'border-2 border-red-400 focus:border-red-500' : 'border-slate-200'}`}
+                          placeholder={Math.abs(parseFloat(loadData.differanceWeight) || 0) > 20 ? "Required: explain weight difference..." : "Specify reason..."}
+                          value={loadData.reason} onChange={(e) => setLoadData(p => ({ ...p, reason: e.target.value }))} />
+                      </div>
+
+
+                    </div>
+                  </div>
                 </div>
-             </div>
-          )}
+              </div>
+            )}
           </div>
 
           <DialogFooter className="mt-4 border-t pt-4 px-8 pb-8">
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
             <Button onClick={performDispatchConfirmation} disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly} title={isReadOnly ? "View Only Access" : "Confirm Dispatch"}>
-               {isProcessing ? "Processing..." : `Confirm Dispatch (${dialogSelectedProducts.length})`}
+              {isProcessing ? "Processing..." : `Confirm Dispatch (${dialogSelectedProducts.length})`}
             </Button>
           </DialogFooter>
         </DialogContent>
