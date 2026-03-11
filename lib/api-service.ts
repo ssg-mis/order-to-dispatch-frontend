@@ -71,7 +71,7 @@ async function request<T = any>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_CONFIG.baseURL}${endpoint}`;
-  
+
   const headers: any = {
     ...options.headers,
   };
@@ -121,7 +121,7 @@ export const orderApi = {
   uploadFile: async (file: File): Promise<ApiResponse<{ url: string }>> => {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     return request(API_ENDPOINTS.orders.upload, {
       method: 'POST',
       body: formData,
@@ -138,10 +138,10 @@ export const orderApi = {
     customer_name?: string;
     order_type?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(API_ENDPOINTS.orders.getAll + queryString);
   },
 
@@ -187,10 +187,10 @@ export const preApprovalApi = {
     start_date?: string;
     end_date?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/pre-approval/pending${queryString}`);
   },
 
@@ -205,10 +205,10 @@ export const preApprovalApi = {
     start_date?: string;
     end_date?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/pre-approval/history${queryString}`);
   },
 
@@ -238,10 +238,10 @@ export const approvalApi = {
     start_date?: string;
     end_date?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/approval/pending${queryString}`);
   },
 
@@ -256,10 +256,10 @@ export const approvalApi = {
     start_date?: string;
     end_date?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/approval/history${queryString}`);
   },
 
@@ -296,10 +296,10 @@ export const dispatchPlanningApi = {
     start_date?: string;
     end_date?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/dispatch-planning/pending${queryString}`);
   },
 
@@ -314,10 +314,10 @@ export const dispatchPlanningApi = {
     start_date?: string;
     end_date?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/dispatch-planning/history${queryString}`);
   },
 
@@ -346,10 +346,10 @@ export const actualDispatchApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/actual-dispatch/pending${queryString}`);
   },
 
@@ -363,10 +363,10 @@ export const actualDispatchApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/actual-dispatch/history${queryString}`);
   },
 
@@ -395,10 +395,10 @@ export const vehicleDetailsApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/vehicle-details/pending${queryString}`);
   },
 
@@ -412,10 +412,10 @@ export const vehicleDetailsApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/vehicle-details/history${queryString}`);
   },
 
@@ -451,10 +451,10 @@ export const materialLoadApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/material-load/pending${queryString}`);
   },
 
@@ -468,10 +468,10 @@ export const materialLoadApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/material-load/history${queryString}`);
   },
 
@@ -507,10 +507,10 @@ export const securityGuardApprovalApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/security-approval/pending${queryString}`);
   },
 
@@ -524,10 +524,10 @@ export const securityGuardApprovalApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
-    
+
     return request(`/security-approval/history${queryString}`);
   },
 
@@ -560,7 +560,7 @@ export const makeInvoiceApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/make-invoice/pending${queryString}`);
@@ -573,7 +573,7 @@ export const makeInvoiceApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/make-invoice/history${queryString}`);
@@ -602,7 +602,7 @@ export const checkInvoiceApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/check-invoice/pending${queryString}`);
@@ -615,7 +615,7 @@ export const checkInvoiceApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/check-invoice/history${queryString}`);
@@ -640,7 +640,7 @@ export const gateOutApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/gate-out/pending${queryString}`);
@@ -653,7 +653,7 @@ export const gateOutApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/gate-out/history${queryString}`);
@@ -678,7 +678,7 @@ export const confirmMaterialReceiptApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/confirm-receipt/pending${queryString}`);
@@ -691,7 +691,7 @@ export const confirmMaterialReceiptApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/confirm-receipt/history${queryString}`);
@@ -716,7 +716,7 @@ export const damageAdjustmentApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/damage-adjustment/pending${queryString}`);
@@ -729,7 +729,7 @@ export const damageAdjustmentApi = {
     so_no?: string;
     party_name?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/damage-adjustment/history${queryString}`);
@@ -756,7 +756,7 @@ export const userApi = {
     role?: string;
     status?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/users${queryString}`);
@@ -832,7 +832,7 @@ export const customerApi = {
    * Get all customers
    */
   getAll: async (params?: any): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/customers${queryString}`);
@@ -916,7 +916,7 @@ export const depotApi = {
    * Get all depots
    */
   getAll: async (params?: any): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/depots${queryString}`);
@@ -974,7 +974,7 @@ export const brokerApi = {
    * Get all brokers
    */
   getAll: async (params?: any): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/brokers${queryString}`);
@@ -1029,7 +1029,7 @@ export const brokerApi = {
  */
 export const skuDetailsApi = {
   getAll: async (params?: any): Promise<ApiResponse> => {
-    const queryString = params 
+    const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/sku-details${queryString}`);
@@ -1061,6 +1061,47 @@ export const skuDetailsApi = {
 };
 
 /**
+ * SKU Selling Price API
+ */
+export const skuSellingPriceApi = {
+  /**
+   * Get all SKU selling prices (landing cost + margin)
+   */
+  getAll: async (): Promise<ApiResponse> => {
+    return request('/skus/sku-selling-price');
+  },
+
+  /**
+   * Update SKU selling price
+   */
+  update: async (id: number, data: any): Promise<ApiResponse> => {
+    return request(`/skus/sku-selling-price/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Create SKU selling price
+   */
+  create: async (data: any): Promise<ApiResponse> => {
+    return request('/skus/sku-selling-price', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Delete SKU selling price
+   */
+  delete: async (id: number): Promise<ApiResponse> => {
+    return request(`/skus/sku-selling-price/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+/**
  * Common API
  */
 export const commonApi = {
@@ -1069,6 +1110,35 @@ export const commonApi = {
   },
 };
 
+
+/**
+ * Variable Calculation API (Input Parameters)
+ */
+export const varCalcApi = {
+  /**
+   * Get latest calculation variables
+   */
+  getLatest: async (): Promise<ApiResponse> => {
+    return request('/common/var-calc/latest');
+  },
+
+  /**
+   * Save calculation variables
+   */
+  save: async (data: any): Promise<ApiResponse> => {
+    return request('/common/var-calc', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Get all calculation variables (history)
+   */
+  getAll: async (): Promise<ApiResponse> => {
+    return request('/common/var-calc/history');
+  },
+};
 
 export default {
   order: orderApi,
@@ -1084,6 +1154,8 @@ export default {
   gateOut: gateOutApi,
   confirmMaterialReceipt: confirmMaterialReceiptApi,
   skuDetails: skuDetailsApi,
+  skuSellingPrice: skuSellingPriceApi,
   common: commonApi,
+  varCalc: varCalcApi,
 };
 

@@ -40,6 +40,7 @@ export default function DispatchMaterialPage() {
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
 
   const PAGE_COLUMNS = [
+    { id: "partySoDate", label: "DO Date" },
     { id: "orderNo", label: "DO Number" },
     { id: "processId", label: "Process ID" },
     { id: "customerName", label: "Customer Name" },
@@ -47,7 +48,7 @@ export default function DispatchMaterialPage() {
     { id: "transportType", label: "Type of Transporting" },
     { id: "orderPunchRemarks", label: "Order Punch Remarks" },
     { id: "status", label: "Status" },
-    
+
     // Requested Options
     { id: "soNo", label: "DO No." },
     { id: "deliveryPurpose", label: "Order Type (Delivery Purpose)" },
@@ -56,7 +57,6 @@ export default function DispatchMaterialPage() {
     { id: "deliveryDate", label: "Delivery Date" },
     { id: "orderType", label: "Order Type" },
     { id: "customerType", label: "Customer Type" },
-    { id: "partySoDate", label: "Party DO Date" },
     { id: "oilType", label: "Oil Type" },
     { id: "ratePer15Kg", label: "Rate Per 15 kg" },
     { id: "ratePerLtr", label: "Rate Per Ltr" },
@@ -78,6 +78,7 @@ export default function DispatchMaterialPage() {
   ]
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    "partySoDate",
     "orderNo",
     "processId",
     "customerName",
@@ -94,7 +95,7 @@ export default function DispatchMaterialPage() {
       console.log('[DISPATCH] Fetching pending dispatches from API...');
       const response = await dispatchPlanningApi.getPending({ limit: 1000 });
       console.log('[DISPATCH] API Response:', response);
-      
+
       if (response.success && response.data.dispatches) {
         setPendingOrders(response.data.dispatches);
         console.log('[DISPATCH] Loaded', response.data.dispatches.length, 'pending dispatches');
@@ -114,7 +115,7 @@ export default function DispatchMaterialPage() {
   const fetchDispatchHistory = async () => {
     try {
       const response = await dispatchPlanningApi.getHistory({ limit: 1000 });
-      
+
       if (response.success && response.data.dispatches) {
         setHistoryOrders(response.data.dispatches);
       }
@@ -143,7 +144,7 @@ export default function DispatchMaterialPage() {
   const toggleSelectItem = (item: any) => {
     const key = item._rowKey
     const isSelected = selectedItems.some(i => i._rowKey === key)
-    
+
     if (isSelected) {
       setSelectedItems(prev => prev.filter(i => i._rowKey !== key))
     } else {
@@ -152,21 +153,21 @@ export default function DispatchMaterialPage() {
   }
 
   const handleOpenDialog = () => {
-      if (selectedItems.length > 0) {
-          setSelectedGroup(selectedItems[0])
-          // Default: Select ALL products in all selected groups for dispatch
-          const allKeys = selectedItems.flatMap(g => g._allProducts || []).map((p: any) => p._rowKey)
-          setDialogSelectedProducts(allKeys)
-          setIsDialogOpen(true)
-      }
+    if (selectedItems.length > 0) {
+      setSelectedGroup(selectedItems[0])
+      // Default: Select ALL products in all selected groups for dispatch
+      const allKeys = selectedItems.flatMap(g => g._allProducts || []).map((p: any) => p._rowKey)
+      setDialogSelectedProducts(allKeys)
+      setIsDialogOpen(true)
+    }
   }
 
   const toggleSelectDialogProduct = (key: string) => {
-     if (dialogSelectedProducts.includes(key)) {
-         setDialogSelectedProducts(prev => prev.filter(k => k !== key))
-     } else {
-         setDialogSelectedProducts(prev => [...prev, key])
-     }
+    if (dialogSelectedProducts.includes(key)) {
+      setDialogSelectedProducts(prev => prev.filter(k => k !== key))
+    } else {
+      setDialogSelectedProducts(prev => [...prev, key])
+    }
   }
 
   // Get all flattened products from selected Groups
@@ -203,7 +204,7 @@ export default function DispatchMaterialPage() {
 
       const successfulDispatches: any[] = []
       const failedDispatches: any[] = []
-      
+
       const itemsToProcess = allProductsFromSelectedGroups.filter((p: any) => dialogSelectedProducts.includes(p._rowKey))
 
       // 1. Validation Check: Ensure no quantities are 0
@@ -227,10 +228,10 @@ export default function DispatchMaterialPage() {
       for (const item of itemsToProcess) {
         const orderId = item.id // Use the order_dispatch table ID from backend
         const rowKey = item._rowKey;
-        
+
         const deliveryVal = dispatchDetails[rowKey]?.deliveryFrom || "in-stock";
         const dispatchQty = dispatchDetails[rowKey]?.qty !== undefined ? dispatchDetails[rowKey].qty : (item.remainingDispatchQty !== undefined ? item.remainingDispatchQty : item.approvalQty);
-        
+
         try {
           if (orderId) {
             const dispatchData = {
@@ -240,7 +241,7 @@ export default function DispatchMaterialPage() {
             };
 
             const response = await dispatchPlanningApi.submit(orderId, dispatchData);
-            
+
             if (response.success) {
               successfulDispatches.push({ item, dsrNumber: response.data?.dsrNumber });
             } else {
@@ -297,76 +298,76 @@ export default function DispatchMaterialPage() {
   const customerNames = Array.from(new Set(pendingOrders.map(order => order.customer_name || order.customerName || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
-      search: "",
-      status: "",
-      startDate: "",
-      endDate: "",
-      partyName: ""
+    search: "",
+    status: "",
+    startDate: "",
+    endDate: "",
+    partyName: ""
   })
 
   const filteredPendingOrders = pendingOrders.filter(order => {
-      let matches = true
-      
-      // 1. Search Filter (DO Number, Customer Name, Product Name)
-      if (filterValues.search) {
-          const searchTerm = filterValues.search.toLowerCase();
-          const orderNo = (order.order_no || order.orderNo || "").toLowerCase();
-          const customerName = (order.customerName || order.customer_name || "").toLowerCase();
-          const productName = (order.product_name || "").toLowerCase();
-          
-          if (!orderNo.includes(searchTerm) && !customerName.includes(searchTerm) && !productName.includes(searchTerm)) {
-              matches = false;
-          }
+    let matches = true
+
+    // 1. Search Filter (DO Number, Customer Name, Product Name)
+    if (filterValues.search) {
+      const searchTerm = filterValues.search.toLowerCase();
+      const orderNo = (order.order_no || order.orderNo || "").toLowerCase();
+      const customerName = (order.customerName || order.customer_name || "").toLowerCase();
+      const productName = (order.product_name || "").toLowerCase();
+
+      if (!orderNo.includes(searchTerm) && !customerName.includes(searchTerm) && !productName.includes(searchTerm)) {
+        matches = false;
       }
+    }
 
-      // 2. Party Name Filter
-      if (matches && filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
-          matches = false
+    // 2. Party Name Filter
+    if (matches && filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
+      matches = false
+    }
+
+    // 3. Date Range Filter
+    if (matches && (filterValues.startDate || filterValues.endDate)) {
+      const orderDateStr = order.dispatchData?.dispatchDate || order.deliveryDate || order.timestamp;
+      if (orderDateStr) {
+        const orderDate = new Date(orderDateStr);
+        orderDate.setHours(0, 0, 0, 0);
+
+        if (filterValues.startDate) {
+          const start = new Date(filterValues.startDate)
+          start.setHours(0, 0, 0, 0)
+          if (orderDate < start) matches = false
+        }
+        if (matches && filterValues.endDate) {
+          const end = new Date(filterValues.endDate)
+          end.setHours(0, 0, 0, 0)
+          if (orderDate > end) matches = false
+        }
+      } else if (filterValues.startDate || filterValues.endDate) {
+        // If filtering by date but order has no date, treat as no match
+        matches = false;
       }
+    }
 
-      // 3. Date Range Filter
-      if (matches && (filterValues.startDate || filterValues.endDate)) {
-          const orderDateStr = order.dispatchData?.dispatchDate || order.deliveryDate || order.timestamp;
-          if (orderDateStr) {
-              const orderDate = new Date(orderDateStr);
-              orderDate.setHours(0, 0, 0, 0);
+    // 4. Status Filter (On Time / Expire)
+    if (matches && filterValues.status) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const targetDateStr = order.deliveryDate || order.timestamp
+      if (targetDateStr) {
+        const targetDate = new Date(targetDateStr)
+        targetDate.setHours(0, 0, 0, 0)
 
-              if (filterValues.startDate) {
-                  const start = new Date(filterValues.startDate)
-                  start.setHours(0, 0, 0, 0)
-                  if (orderDate < start) matches = false
-              }
-              if (matches && filterValues.endDate) {
-                  const end = new Date(filterValues.endDate)
-                  end.setHours(0, 0, 0, 0)
-                  if (orderDate > end) matches = false
-              }
-          } else if (filterValues.startDate || filterValues.endDate) {
-              // If filtering by date but order has no date, treat as no match
-              matches = false;
-          }
+        if (filterValues.status === "expire") {
+          if (targetDate >= today) matches = false
+        } else if (filterValues.status === "on-time") {
+          if (targetDate < today) matches = false
+        }
+      } else {
+        matches = false;
       }
+    }
 
-      // 4. Status Filter (On Time / Expire)
-      if (matches && filterValues.status) {
-          const today = new Date()
-          today.setHours(0, 0, 0, 0)
-          const targetDateStr = order.deliveryDate || order.timestamp
-          if (targetDateStr) {
-             const targetDate = new Date(targetDateStr)
-             targetDate.setHours(0, 0, 0, 0)
-             
-             if (filterValues.status === "expire") {
-                 if (targetDate >= today) matches = false
-             } else if (filterValues.status === "on-time") {
-                 if (targetDate < today) matches = false
-             }
-          } else {
-              matches = false;
-          }
-      }
-
-      return matches
+    return matches
   })
 
   // Group by base DO number (removing uniqueness by Customer Name as per request)
@@ -381,51 +382,51 @@ export default function DispatchMaterialPage() {
       remarks: order.dispatchPlanningData?.dispatchDate ? `Date: ${order.dispatchPlanningData.dispatchDate}` : "Dispatch Plannned",
     })).filter(item => {
       let matches = true
-      
+
       if (filterValues.search) {
         const search = filterValues.search.toLowerCase()
-        if (!item.orderNo?.toLowerCase().includes(search) && 
-            !item.customerName?.toLowerCase().includes(search)) {
+        if (!item.orderNo?.toLowerCase().includes(search) &&
+          !item.customerName?.toLowerCase().includes(search)) {
           matches = false
         }
       }
-      
+
       if (filterValues.partyName && filterValues.partyName !== "all" && item.customerName !== filterValues.partyName) {
-          matches = false
+        matches = false
       }
 
       const itemDateStr = item.timestamp
       if (itemDateStr) {
-          const itemDate = new Date(itemDateStr)
-          if (filterValues.startDate) {
-              const start = new Date(filterValues.startDate)
-              start.setHours(0,0,0,0)
-              if (itemDate < start) matches = false
-          }
-          if (filterValues.endDate) {
-              const end = new Date(filterValues.endDate)
-              end.setHours(23,59,59,999)
-              if (itemDate > end) matches = false
-          }
+        const itemDate = new Date(itemDateStr)
+        if (filterValues.startDate) {
+          const start = new Date(filterValues.startDate)
+          start.setHours(0, 0, 0, 0)
+          if (itemDate < start) matches = false
+        }
+        if (filterValues.endDate) {
+          const end = new Date(filterValues.endDate)
+          end.setHours(23, 59, 59, 999)
+          if (itemDate > end) matches = false
+        }
       }
-      
+
       return matches
     })
   }, [historyOrders, filterValues])
 
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
-    
+
     filteredPendingOrders.forEach((order: any) => {
       const orderId = order.order_no || order.orderNo || "DO-XXX"
-      
+
       // Strip suffix (A, B, C...) from DO number for grouping/display
       const baseDoMatch = orderId.match(/^(DO-\d+)/i)
       const baseDo = baseDoMatch ? baseDoMatch[1] : orderId
-      
+
       // Group by Order Number (baseDo)
       const groupKey = baseDo
-      
+
       if (!grouped[groupKey]) {
         grouped[groupKey] = {
           ...order,
@@ -441,36 +442,36 @@ export default function DispatchMaterialPage() {
 
       const internalOrder = order.data?.orderData || order;
       if (!grouped[groupKey]._ordersMap[baseDo]) {
-         grouped[groupKey]._ordersMap[baseDo] = {
-            ...order,
-            baseDo,
-            _products: [],
-            // Robust Mapping for Header
-            deliveryPurpose: internalOrder.order_type_delivery_purpose || internalOrder.orderPurpose || "—",
-            startDate: internalOrder.start_date || internalOrder.startDate || "—",
-            endDate: internalOrder.end_date || internalOrder.endDate || "—",
-            deliveryDate: internalOrder.delivery_date || internalOrder.deliveryDate || internalOrder.timestamp || "—",
-            orderType: internalOrder.order_type || internalOrder.orderType || "—",
-            customerType: internalOrder.customer_type || internalOrder.customerType || "—",
-            partySoDate: internalOrder.party_so_date || internalOrder.soDate || "—",
-            totalWithGst: internalOrder.total_amount_with_gst || internalOrder.totalWithGst || "—",
-            contactPerson: internalOrder.customer_contact_person_name || internalOrder.contactPerson || "—",
-            whatsapp: internalOrder.customer_contact_person_whatsapp_no || internalOrder.whatsappNo || "—",
-            address: internalOrder.customer_address || internalOrder.customerAddress || "—",
-            paymentTerms: internalOrder.payment_terms || internalOrder.paymentTerms || "—",
-            advanceTaken: internalOrder.advance_payment_to_be_taken || internalOrder.advancePaymentTaken || false,
-            advanceAmount: internalOrder.advance_amount || internalOrder.advanceAmount || "—",
-            isBroker: internalOrder.is_order_through_broker || internalOrder.isBrokerOrder || false,
-            brokerName: internalOrder.broker_name || internalOrder.brokerName || "—",
-            depoName: internalOrder.depo_name || internalOrder.depoName || "—",
-            orderPunchRemarks: internalOrder.order_punch_remarks || internalOrder.orderPunchRemarks || "—",
-            custContactName: internalOrder.customer_contact_person_name || internalOrder.contactPerson || "—",
-            weDealInSku: internalOrder.we_are_dealing_in_ordered_sku || false,
-            creditStatus: internalOrder.party_credit_status || internalOrder.creditStatus || "—",
-            dispatchConfirmed: internalOrder.dispatch_date_confirmed || false,
-            overallStatus: internalOrder.overall_status_of_order || internalOrder.overallStatus || "—",
-            custConfirmation: internalOrder.order_confirmation_with_customer || false,
-         }
+        grouped[groupKey]._ordersMap[baseDo] = {
+          ...order,
+          baseDo,
+          _products: [],
+          // Robust Mapping for Header
+          deliveryPurpose: internalOrder.order_type_delivery_purpose || internalOrder.orderPurpose || "—",
+          startDate: internalOrder.start_date || internalOrder.startDate || "—",
+          endDate: internalOrder.end_date || internalOrder.endDate || "—",
+          deliveryDate: internalOrder.delivery_date || internalOrder.deliveryDate || internalOrder.timestamp || "—",
+          orderType: internalOrder.order_type || internalOrder.orderType || "—",
+          customerType: internalOrder.customer_type || internalOrder.customerType || "—",
+          partySoDate: formatDate(internalOrder.party_so_date || internalOrder.soDate),
+          totalWithGst: internalOrder.total_amount_with_gst || internalOrder.totalWithGst || "—",
+          contactPerson: internalOrder.customer_contact_person_name || internalOrder.contactPerson || "—",
+          whatsapp: internalOrder.customer_contact_person_whatsapp_no || internalOrder.whatsappNo || "—",
+          address: internalOrder.customer_address || internalOrder.customerAddress || "—",
+          paymentTerms: internalOrder.payment_terms || internalOrder.paymentTerms || "—",
+          advanceTaken: internalOrder.advance_payment_to_be_taken || internalOrder.advancePaymentTaken || false,
+          advanceAmount: internalOrder.advance_amount || internalOrder.advanceAmount || "—",
+          isBroker: internalOrder.is_order_through_broker || internalOrder.isBrokerOrder || false,
+          brokerName: internalOrder.broker_name || internalOrder.brokerName || "—",
+          depoName: internalOrder.depo_name || internalOrder.depoName || "—",
+          orderPunchRemarks: internalOrder.order_punch_remarks || internalOrder.orderPunchRemarks || "—",
+          custContactName: internalOrder.customer_contact_person_name || internalOrder.contactPerson || "—",
+          weDealInSku: internalOrder.we_are_dealing_in_ordered_sku || false,
+          creditStatus: internalOrder.party_credit_status || internalOrder.creditStatus || "—",
+          dispatchConfirmed: internalOrder.dispatch_date_confirmed || false,
+          overallStatus: internalOrder.overall_status_of_order || internalOrder.overallStatus || "—",
+          custConfirmation: internalOrder.order_confirmation_with_customer || false,
+        }
       }
 
       // Add product to the group
@@ -486,11 +487,11 @@ export default function DispatchMaterialPage() {
         approvalQty: order.approval_qty || order.order_quantity,
         remainingDispatchQty: order.remaining_dispatch_qty !== null ? order.remaining_dispatch_qty : (order.approval_qty || order.order_quantity),
       }
-      
+
       grouped[groupKey]._ordersMap[baseDo]._products.push(productWithMeta)
       grouped[groupKey]._allProducts.push(productWithMeta)
     })
-    
+
     return Object.values(grouped).map((group: any) => {
       const firstOrderDetails = Object.values(group._ordersMap)[0] as any || {};
       return {
@@ -570,43 +571,43 @@ export default function DispatchMaterialPage() {
           </TableHeader>
           <TableBody>
             {displayRows.length > 0 ? (
-                displayRows.map((row) => {
-                   const isSelected = selectedItems.some(i => i._rowKey === row._rowKey);
-                   
-                   return (
-                   <TableRow key={row._rowKey} className={isSelected ? "bg-blue-50/50" : ""}>
-                     <TableCell className="text-center">
-                       <Checkbox
-                         checked={isSelected}
-                         onCheckedChange={() => toggleSelectItem(row)}
-                       />
-                     </TableCell>
-                     
-                     {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                       <TableCell key={col.id} className="whitespace-nowrap text-center text-xs">
-                         {col.id === "status" ? (
-                            <div className="flex justify-center flex-col items-center gap-1">
-                              <Badge className="bg-orange-100 text-orange-700">Pending</Badge>
-                              {row._productCount > 1 && (
-                                  <span className="text-[10px] text-slate-500 font-medium">({row._productCount} Items)</span>
-                              )}
-                            </div>
-                         ) : col.id === "productName" ? (
-                              <div className="flex flex-col items-center">
-                                  <span className="font-medium text-slate-700">{row._allProducts[0]?.productName}</span>
-                                  {row._productCount > 1 && (
-                                      <span className="text-[10px] text-slate-500">+ {row._productCount - 1} more types</span>
-                                  )}
-                              </div>
-                          ) : (
-                             row[col.id as keyof typeof row] || "—"
-                          )}
-                       </TableCell>
-                     ))}
-                   </TableRow>
-                   )
-                 })
-               ) : (
+              displayRows.map((row) => {
+                const isSelected = selectedItems.some(i => i._rowKey === row._rowKey);
+
+                return (
+                  <TableRow key={row._rowKey} className={isSelected ? "bg-blue-50/50" : ""}>
+                    <TableCell className="text-center">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelectItem(row)}
+                      />
+                    </TableCell>
+
+                    {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                      <TableCell key={col.id} className="whitespace-nowrap text-center text-xs">
+                        {col.id === "status" ? (
+                          <div className="flex justify-center flex-col items-center gap-1">
+                            <Badge className="bg-orange-100 text-orange-700">Pending</Badge>
+                            {row._productCount > 1 && (
+                              <span className="text-[10px] text-slate-500 font-medium">({row._productCount} Items)</span>
+                            )}
+                          </div>
+                        ) : col.id === "productName" ? (
+                          <div className="flex flex-col items-center">
+                            <span className="font-medium text-slate-700">{row._allProducts[0]?.productName}</span>
+                            {row._productCount > 1 && (
+                              <span className="text-[10px] text-slate-500">+ {row._productCount - 1} more types</span>
+                            )}
+                          </div>
+                        ) : (
+                          row[col.id as keyof typeof row] || "—"
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                )
+              })
+            ) : (
               <TableRow>
                 <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
                   No orders pending for dispatch
@@ -616,7 +617,7 @@ export default function DispatchMaterialPage() {
           </TableBody>
         </Table>
       </Card>
-      
+
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-6xl !max-w-6xl max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <DialogHeader className="border-b pb-4">
@@ -627,7 +628,7 @@ export default function DispatchMaterialPage() {
               Review order details and set dispatch quantities for products.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-8 mt-4">
             {/* Group by Customer -> Multiple Orders -> Consolidated Table */}
             <div className="space-y-12 mt-6">
@@ -762,7 +763,7 @@ export default function DispatchMaterialPage() {
                           <TableHeader className="bg-slate-50">
                             <TableRow>
                               <TableHead className="w-12 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">
-                                <Checkbox 
+                                <Checkbox
                                   checked={items.flatMap(i => i._allProducts).every(p => dialogSelectedProducts.includes(p._rowKey))}
                                   onCheckedChange={(checked) => {
                                     const keys = items.flatMap(i => i._allProducts).map(p => p._rowKey);
@@ -863,9 +864,9 @@ export default function DispatchMaterialPage() {
           </div>
 
           <DialogFooter className="mt-4 border-t pt-4">
-             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-             <Button onClick={handleBulkDispatch} disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly}>
-                {isProcessing ? "Processing..." : `Dispatch ${dialogSelectedProducts.length} Item(s)`}
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleBulkDispatch} disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly}>
+              {isProcessing ? "Processing..." : `Dispatch ${dialogSelectedProducts.length} Item(s)`}
             </Button>
           </DialogFooter>
         </DialogContent>

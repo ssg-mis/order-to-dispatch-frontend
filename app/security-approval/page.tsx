@@ -37,7 +37,23 @@ export default function SecurityApprovalPage() {
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "—";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    "partySoDate",
     "orderNo",
     "customerName",
     "status",
@@ -377,6 +393,7 @@ export default function SecurityApprovalPage() {
       const isDisabled = group._allProducts.some((p: any) => p.planned_1 == null || p.actual_1 == null)
       return {
         ...group,
+        partySoDate: formatDate(group._allProducts[0]?.party_so_date),
         doNumber: Array.from(group.doNumberList as Set<string>).join(", "),
         processId: group._allProducts[0]?.processid || "—",
         vehicleNo: (group._allProducts[0]?.truckNo || "—").toUpperCase(),
@@ -484,6 +501,7 @@ export default function SecurityApprovalPage() {
                 <TableHead className="w-12 text-center">
                   <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.filter(r => !r.isDisabled).length && displayRows.filter(r => !r.isDisabled).length > 0} onCheckedChange={toggleSelectAll} />
                 </TableHead>
+                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">DO DATE</TableHead>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">DO NUMBERS</TableHead>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">PROCESS ID</TableHead>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">CUSTOMER NAME</TableHead>
@@ -501,6 +519,7 @@ export default function SecurityApprovalPage() {
                     <TableCell className="text-center p-4">
                       <Checkbox disabled={group.isDisabled} checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                     </TableCell>
+                    <TableCell className="p-4 text-center text-xs font-medium">{group.partySoDate}</TableCell>
                     <TableCell className="p-4">
                       <div className="flex flex-wrap gap-1 max-w-sm">
                         {group.doNumber.split(", ").map((doNum: string) => (
@@ -543,7 +562,7 @@ export default function SecurityApprovalPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-20">
+                  <TableCell colSpan={10} className="text-center py-20">
                     <div className="flex flex-col items-center gap-2">
                       <ShieldAlert className="w-12 h-12 text-slate-200" />
                       <p className="text-slate-400 font-black uppercase tracking-widest text-xs">No vehicles pending for security check</p>

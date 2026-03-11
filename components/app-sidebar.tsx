@@ -22,9 +22,13 @@ import {
   LogOut,
   ChevronRight,
   BarChart2,
+  Calculator,
+  Save,
+  Calendar,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
+import { useToast } from "@/hooks/use-toast"
 
 import {
   Sidebar,
@@ -53,6 +57,7 @@ const modules = [
   { title: "Gate Out", icon: Gate, url: "/gate-out" },
   { title: "Confirm Material Receipt", icon: FileSignature, url: "/material-receipt" },
   { title: "Damage Adjustment", icon: AlertCircle, url: "/damage-adjustment" },
+  { title: "Variable Parameters", icon: Calculator, url: "/variable-parameters" },
   { title: "Settings", icon: Settings2, url: "/settings" },
   { title: "Master", icon: BookMarked, url: "/master" },
   { title: "Reports", icon: BarChart2, url: "/reports" },
@@ -63,6 +68,8 @@ export function AppSidebar() {
   const [allowedModules, setAllowedModules] = useState(modules)
   const [username, setUsername] = useState<string>("")
   const [userRole, setUserRole] = useState<string>("")
+
+  const { toast } = useToast()
 
   useEffect(() => {
     const userStr = localStorage.getItem("user")
@@ -83,11 +90,11 @@ export function AppSidebar() {
         const filtered = modules.filter(module => {
           // Dashboard is always allowed if authenticated
           if (module.title === "Dashboard") return true
-          
+
           const permissionName = permissionMapping[module.title] || module.title
           return pageAccess.includes(permissionName)
         })
-        
+
         setAllowedModules(filtered)
       } catch (e) {
         console.error("Failed to parse user for sidebar filtering", e)
@@ -107,7 +114,7 @@ export function AppSidebar() {
           }}
         >
           <div
-            className="flex h-9 w-9 items-center justify-center rounded-xl shadow-lg flex-shrink-0"
+            className="flex h-9 w-9 items-center justify-center rounded-xl shadow-lg shrink-0"
             style={{
               background: "linear-gradient(135deg, oklch(0.54 0.22 265) 0%, oklch(0.44 0.20 280) 100%)",
               boxShadow: "0 4px 12px oklch(0.42 0.18 265 / 0.4)",
@@ -166,7 +173,7 @@ export function AppSidebar() {
                           />
                         )}
                         <item.icon
-                          className="h-4 w-4 flex-shrink-0 transition-transform duration-200 group-hover:scale-105"
+                          className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-105"
                           style={{ color: isActive ? "white" : "oklch(0.60 0.10 260)" }}
                         />
                         <span className="truncate text-[13px]">{item.title}</span>
@@ -178,6 +185,7 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
       </SidebarContent>
 
       <SidebarFooter
@@ -191,7 +199,7 @@ export function AppSidebar() {
             style={{ background: "oklch(0.20 0.05 255)" }}
           >
             <div
-              className="flex h-7 w-7 items-center justify-center rounded-lg flex-shrink-0 text-xs font-black text-white"
+              className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0 text-xs font-black text-white"
               style={{ background: "oklch(0.42 0.18 265)" }}
             >
               {username.charAt(0).toUpperCase()}

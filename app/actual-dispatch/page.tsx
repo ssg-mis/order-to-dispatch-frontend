@@ -187,6 +187,7 @@ export default function ActualDispatchPage() {
   // --- End Helpers ---
 
   const PAGE_COLUMNS = [
+    { id: "partySoDate", label: "DO Date" },
     { id: "orderNo", label: "DO Number" },
     { id: "processId", label: "Process ID" },
     { id: "customerName", label: "Customer Name" },
@@ -203,7 +204,6 @@ export default function ActualDispatchPage() {
     { id: "deliveryDate", label: "Delivery Date" },
     { id: "orderType", label: "Order Type" },
     { id: "customerType", label: "Customer Type" },
-    { id: "partySoDate", label: "Party DO Date" },
     { id: "oilType", label: "Oil Type" },
     { id: "ratePer15Kg", label: "Rate Per 15 kg" },
     { id: "ratePerLtr", label: "Rate Per Ltr." }, // Aggregated
@@ -234,6 +234,7 @@ export default function ActualDispatchPage() {
   ]
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    "partySoDate",
     "orderNo",
     "processId",
     "customerName",
@@ -501,7 +502,7 @@ export default function ActualDispatchPage() {
           deliveryDate: internalOrder.delivery_date || internalOrder.deliveryDate || internalOrder.timestamp || "—",
           orderType: internalOrder.order_type || internalOrder.orderType || "—",
           customerType: internalOrder.customer_type || internalOrder.customerType || "—",
-          partySoDate: internalOrder.party_so_date || internalOrder.partySoDate || "—",
+          partySoDate: formatDate(internalOrder.party_so_date || internalOrder.partySoDate),
           totalWithGst: internalOrder.total_amount_with_gst || internalOrder.totalWithGst || "—",
           transportType: internalOrder.type_of_transporting || internalOrder.transportType || "—",
           contactPerson: internalOrder.customer_contact_person_name || internalOrder.contactPerson || "—",

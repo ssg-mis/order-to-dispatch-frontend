@@ -32,7 +32,23 @@ export default function GateOutPage() {
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "—";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    "partySoDate",
     "orderNo",
     "customerName",
     "invoiceNo",
@@ -250,6 +266,7 @@ export default function GateOutPage() {
     // Finalize DO numbers string
     const result = Object.values(grouped).map((g: any) => ({
       ...g,
+      partySoDate: formatDate(g._allProducts[0]?.party_so_date),
       doNumber: Array.from(new Set(Array.from(g.doNumberList).map((dn: any) => dn.replace(/[A-Z]+$/i, "").trim()))).join(", "),
       processId: g._allProducts[0]?.processid || "—",
       vehicleNo: (g._allProducts[0]?.truckNo || "—").toUpperCase(),
@@ -460,6 +477,7 @@ export default function GateOutPage() {
                 <TableHead className="w-12 text-center">
                   <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
+                <TableHead className="whitespace-nowrap text-center">DO Date</TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
@@ -477,6 +495,7 @@ export default function GateOutPage() {
                     <TableCell className="text-center">
                       <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                     </TableCell>
+                    <TableCell className="text-center text-xs font-medium">{group.partySoDate}</TableCell>
                     <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
                     <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
                     <TableCell className="text-center text-xs">{group.customerName}</TableCell>
@@ -497,7 +516,7 @@ export default function GateOutPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     No orders pending for gate out
                   </TableCell>
                 </TableRow>

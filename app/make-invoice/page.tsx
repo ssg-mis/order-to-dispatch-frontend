@@ -33,7 +33,23 @@ export default function MakeInvoicePage() {
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "—";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    "partySoDate",
     "orderNo",
     "customerName",
     "status",
@@ -214,8 +230,8 @@ export default function MakeInvoicePage() {
         specificOrderNo: doNumber,
         productName: order.product_name,
         rate: (parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1),
-        amount: ((parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1)) * (parseFloat(order.actual_qty_dispatch || order.qty_to_be_dispatched || order.qty_to_dispatch) || 0),
-        qtyToDispatch: order.actual_qty_dispatch || order.qty_to_be_dispatched || order.qty_to_dispatch || 0,
+        amount: ((parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1)) * (parseFloat(order.actual_qty_dispatch) || 0),
+        qtyToDispatch: order.actual_qty_dispatch || 0,
         truckNo: order.truck_no,
         rstNo: order.rst_no,
         grossWeight: order.gross_weight,
@@ -245,6 +261,7 @@ export default function MakeInvoicePage() {
     // Finalize groups
     return Object.values(grouped).map(group => ({
       ...group,
+      partySoDate: formatDate(group._allProducts[0]?.party_so_date),
       doNumber: Array.from(group.doNumberList as Set<string>).join(", "),
       processId: group._allProducts[0]?.processid || "—",
       vehicleNo: (group._allProducts[0]?.truckNo || "—").toUpperCase(),
@@ -475,6 +492,7 @@ export default function MakeInvoicePage() {
                 <TableHead className="w-12 text-center">
                   <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
+                <TableHead className="whitespace-nowrap text-center">DO Date</TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
@@ -491,6 +509,7 @@ export default function MakeInvoicePage() {
                     <TableCell className="text-center">
                       <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                     </TableCell>
+                    <TableCell className="text-center text-xs font-medium">{group.partySoDate}</TableCell>
                     <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
                     <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
                     <TableCell className="text-center text-xs">{group.customerName}</TableCell>
@@ -512,7 +531,7 @@ export default function MakeInvoicePage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     No orders pending for invoice creation
                   </TableCell>
                 </TableRow>
@@ -727,7 +746,7 @@ export default function MakeInvoicePage() {
                                     />
                                   </TableHead>
                                   <TableHead className="text-[10px] uppercase font-black h-10">PRODUCT INFO</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">QTY TO BE DISPATCHED</TableHead>
+                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">ACTUAL QTY DISPATCH</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">AMOUNT</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">VEHICLE NUMBER</TableHead>

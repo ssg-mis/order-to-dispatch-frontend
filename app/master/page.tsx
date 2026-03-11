@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { customerApi, depotApi, brokerApi, skuDetailsApi, commonApi } from "@/lib/api-service"
+import { customerApi, depotApi, brokerApi, skuDetailsApi, commonApi, skuSellingPriceApi, varCalcApi } from "@/lib/api-service"
 
 import { useAuth } from "@/hooks/use-auth"
 import { Plus, Pencil, Trash2, Loader2, RefreshCw, Users, Warehouse, Briefcase, Search, Download, Package, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
@@ -84,6 +84,23 @@ interface SkuDetail {
   gross_weight: number | string
 }
 
+interface SkuSellingPrice {
+  id: number
+  packing_material: string
+  sku_weight: number | string
+  sku_unit: string
+  conversion_formula: number | string
+  sku_weight_in_gm: number | string
+  packing_material_weight_in_gm: number | string
+  net_oil_in_gm: number | string
+  packing_cost: number | string
+  var: string
+  landing_cost: number | string
+  selling_cost: number | string
+  margin: string
+  actual_margin: number | string
+}
+
 // --- Constants ---
 
 const STATUS_OPTIONS = ["Active", "Inactive"]
@@ -101,12 +118,16 @@ export default function MasterPage() {
   const [depots, setDepots] = useState<Depot[]>([])
   const [brokers, setBrokers] = useState<Broker[]>([])
   const [skuDetails, setSkuDetails] = useState<SkuDetail[]>([])
+  const [skuSellingPrices, setSkuSellingPrices] = useState<SkuSellingPrice[]>([])
+  const [latestVarCalc, setLatestVarCalc] = useState<any>(null)
+
 
   // Sort states
   const [customerSort, setCustomerSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'customer_id', dir: 'asc' })
   const [depotSort, setDepotSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'depot_id', dir: 'asc' })
   const [brokerSort, setBrokerSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'broker_id', dir: 'asc' })
   const [skuSort, setSkuSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'sku_code', dir: 'asc' })
+  const [skuSellingPriceSort, setSkuSellingPriceSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'packing_material', dir: 'asc' })
 
   // Dialog states
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -168,6 +189,23 @@ export default function MasterPage() {
     gross_weight: ""
   })
 
+  const [SkuSellingPriceForm, setSkuSellingPrice] = useState<Partial<SkuSellingPrice>>({
+    id: 0,
+    packing_material: "",
+    sku_weight: 0,
+    sku_unit: "",
+    conversion_formula: 0,
+    sku_weight_in_gm: 0,
+    packing_material_weight_in_gm: 0,
+    net_oil_in_gm: 0,
+    packing_cost: 0,
+    var: "",
+    landing_cost: 0,
+    selling_cost: 0,
+    margin: "",
+    actual_margin: 0
+  })
+
   // --- Data Fetching ---
 
   const fetchData = async () => {
@@ -186,6 +224,13 @@ export default function MasterPage() {
       } else if (activeTab === "sku_details") {
         const res = await skuDetailsApi.getAll(params)
         if (res.success) setSkuDetails(res.data)
+      } else if (activeTab === "sku_selling_price") {
+        const res = await skuSellingPriceApi.getAll()
+        if (res.success) setSkuSellingPrices(res.data)
+        
+        // Also fetch latest var calc for landing cost recalculation
+        const varRes = await varCalcApi.getLatest()
+        if (varRes.success) setLatestVarCalc(varRes.data)
       }
     } catch (error: any) {
       toast({
@@ -285,6 +330,12 @@ export default function MasterPage() {
         } else {
           res = await skuDetailsApi.create(skuDetailsForm)
         }
+      } else if (activeTab === "sku_selling_price") {
+        if (editingItem) {
+          res = await skuSellingPriceApi.update(editingItem.id, SkuSellingPriceForm)
+        } else {
+          res = await skuSellingPriceApi.create(SkuSellingPriceForm)
+        }
       }
 
       if (res?.success) {
@@ -317,6 +368,8 @@ export default function MasterPage() {
         res = await brokerApi.delete(deletingItem.broker_id)
       } else if (activeTab === "sku_details") {
         res = await skuDetailsApi.delete(deletingItem.id)
+      } else if (activeTab === "sku_selling_price") {
+        res = await skuSellingPriceApi.delete(deletingItem.id)
       }
 
       if (res?.success) {
@@ -366,6 +419,24 @@ export default function MasterPage() {
     } else if (activeTab === "sku_details") {
       nextId = await fetchNextId('sku')
       setSkuDetailsForm(prev => ({ ...prev, sku_code: nextId }))
+    } else if (activeTab === "sku_selling_price") {
+      // No ID fetching for selling price as it usually depends on existing SKUs or is auto-id
+      setSkuSellingPrice({
+        id: 0,
+        packing_material: "",
+        sku_weight: 0,
+        sku_unit: "",
+        conversion_formula: 0,
+        sku_weight_in_gm: 0,
+        packing_material_weight_in_gm: 0,
+        net_oil_in_gm: 0,
+        packing_cost: 0,
+        var: "",
+        landing_cost: 0,
+        selling_cost: 0,
+        margin: "",
+        actual_margin: 0
+      })
     }
   }
 
@@ -379,6 +450,8 @@ export default function MasterPage() {
       setBrokerForm({ ...item })
     } else if (activeTab === "sku_details") {
       setSkuDetailsForm({ ...item })
+    } else if (activeTab === "sku_selling_price") {
+      setSkuSellingPrice({ ...item })
     }
     setIsDialogOpen(true)
   }
@@ -403,6 +476,10 @@ export default function MasterPage() {
   const filteredSkuDetails = skuDetails.filter(s => 
     s.sku_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
     s.sku_code?.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  const filteredSkuSellingPrices = skuSellingPrices.filter(s =>
+    s.packing_material?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   // --- Sort helpers ---
@@ -437,6 +514,7 @@ export default function MasterPage() {
   const sortedDepots = sortData(filteredDepots, depotSort.col, depotSort.dir)
   const sortedBrokers = sortData(filteredBrokers, brokerSort.col, brokerSort.dir)
   const sortedSkuDetails = sortData(filteredSkuDetails, skuSort.col, skuSort.dir)
+  const sortedSkuSellingPrices = sortData(filteredSkuSellingPrices, skuSellingPriceSort.col, skuSellingPriceSort.dir)
 
   // --- Render Helpers ---
 
@@ -671,6 +749,138 @@ export default function MasterPage() {
     </div>
   )
 
+  const renderSkuSellingPriceForm = () => (
+    <div className="grid gap-4 py-4 px-1 max-h-[70vh] overflow-y-auto">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="packing_material">Packing Material *</Label>
+          <Input id="packing_material" value={SkuSellingPriceForm.packing_material} onChange={e => setSkuSellingPrice({...SkuSellingPriceForm, packing_material: e.target.value})} placeholder="Enter material name" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="sku_unit">SKU Unit</Label>
+          <Input id="sku_unit" value={SkuSellingPriceForm.sku_unit} readOnly className="bg-slate-100" placeholder="e.g. Ltr" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="sku_weight_sp">SKU Weight</Label>
+          <Input id="sku_weight_sp" type="number" value={SkuSellingPriceForm.sku_weight} onChange={e => setSkuSellingPrice({...SkuSellingPriceForm, sku_weight: e.target.value})} placeholder="0.00" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="conversion_formula">Conversion Formula</Label>
+          <Input id="conversion_formula" type="number" value={SkuSellingPriceForm.conversion_formula} onChange={e => setSkuSellingPrice({...SkuSellingPriceForm, conversion_formula: e.target.value})} placeholder="0.00" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="sku_weight_in_gm">SKU Weight (gm)</Label>
+          <Input id="sku_weight_in_gm" type="number" value={SkuSellingPriceForm.sku_weight_in_gm} onChange={e => {
+            const rawVal = e.target.value;
+            const val = parseFloat(rawVal) || 0;
+            const pmWeight = parseFloat(SkuSellingPriceForm.packing_material_weight_in_gm?.toString() || "0");
+            const netOilInGm = val - pmWeight;
+            
+            // Recalculate landing cost: (GT / 1000) * netOilInGm + packingCost
+            let newLandingCost = SkuSellingPriceForm.landing_cost || 0;
+            if (latestVarCalc?.gt) {
+              const gt = parseFloat(latestVarCalc.gt) || 0;
+              const pCost = parseFloat(SkuSellingPriceForm.packing_cost?.toString() || "0");
+              newLandingCost = ((gt / 1000) * netOilInGm + pCost).toFixed(2);
+            }
+
+            setSkuSellingPrice({
+              ...SkuSellingPriceForm, 
+              sku_weight_in_gm: rawVal,
+              net_oil_in_gm: netOilInGm.toFixed(2),
+              landing_cost: newLandingCost
+            });
+          }} placeholder="0.00" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="packing_material_weight_in_gm">Packing Mat. Wt (gm)</Label>
+          <Input id="packing_material_weight_in_gm" type="number" value={SkuSellingPriceForm.packing_material_weight_in_gm} onChange={e => {
+            const rawVal = e.target.value;
+            const val = parseFloat(rawVal) || 0;
+            const skuWt = parseFloat(SkuSellingPriceForm.sku_weight_in_gm?.toString() || "0");
+            const netOilInGm = skuWt - val;
+
+            // Recalculate landing cost: (GT / 1000) * netOilInGm + packingCost
+            let newLandingCost = SkuSellingPriceForm.landing_cost || 0;
+            if (latestVarCalc?.gt) {
+              const gt = parseFloat(latestVarCalc.gt) || 0;
+              const pCost = parseFloat(SkuSellingPriceForm.packing_cost?.toString() || "0");
+              newLandingCost = ((gt / 1000) * netOilInGm + pCost).toFixed(2);
+            }
+
+            setSkuSellingPrice({
+              ...SkuSellingPriceForm, 
+              packing_material_weight_in_gm: rawVal,
+              net_oil_in_gm: netOilInGm.toFixed(2),
+              landing_cost: newLandingCost
+            });
+          }} placeholder="0.00" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="net_oil_in_gm">Net Oil (gm)</Label>
+          <Input id="net_oil_in_gm" type="number" value={SkuSellingPriceForm.net_oil_in_gm} readOnly className="bg-slate-100" placeholder="Auto-calculated" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="packing_cost">Packing Cost</Label>
+          <Input id="packing_cost" type="number" value={SkuSellingPriceForm.packing_cost} onChange={e => {
+            const rawVal = e.target.value;
+            const val = parseFloat(rawVal) || 0;
+            
+            // Recalculate landing cost when packing cost changes as well
+            let newLandingCost = SkuSellingPriceForm.landing_cost || 0;
+            if (latestVarCalc?.gt) {
+              const gt = parseFloat(latestVarCalc.gt) || 0;
+              const netOilInGm = parseFloat(SkuSellingPriceForm.net_oil_in_gm?.toString() || "0");
+              newLandingCost = ((gt / 1000) * netOilInGm + val).toFixed(2);
+            }
+
+            setSkuSellingPrice({
+              ...SkuSellingPriceForm, 
+              packing_cost: rawVal,
+              landing_cost: newLandingCost
+            });
+          }} placeholder="0.00" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="landing_cost">Landing Cost</Label>
+          <Input id="landing_cost" type="number" value={SkuSellingPriceForm.landing_cost} readOnly className="bg-slate-100" placeholder="Auto-calculated" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="var">Var</Label>
+          <Input id="var" value={SkuSellingPriceForm.var} onChange={e => setSkuSellingPrice({...SkuSellingPriceForm, var: e.target.value})} placeholder="e.g. 1" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="margin">Margin</Label>
+          <Input id="margin" value={SkuSellingPriceForm.margin} onChange={e => setSkuSellingPrice({...SkuSellingPriceForm, margin: e.target.value})} placeholder="e.g. 10%" />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="landing_cost">Landing Cost</Label>
+          <Input id="landing_cost" type="number" value={SkuSellingPriceForm.landing_cost} readOnly className="bg-slate-100" placeholder="Auto" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="actual_margin">Actual Margin</Label>
+          <Input id="actual_margin" type="number" value={SkuSellingPriceForm.actual_margin} readOnly className="bg-slate-100" placeholder="Auto" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="selling_cost">Selling Cost</Label>
+          <Input id="selling_cost" type="number" value={SkuSellingPriceForm.selling_cost} readOnly className="bg-slate-100" placeholder="Auto" />
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div className="p-8 max-w-7xl mx-auto min-h-screen space-y-8 animate-in fade-in duration-700">
       <PageHeader 
@@ -696,19 +906,19 @@ export default function MasterPage() {
             if (!open) resetForms()
           }}>
             <DialogTrigger asChild>
-              <Button className="bg-primary hover:bg-primary/90 shadow-lg" disabled={isReadOnly} onClick={handleOpenAddDialog} title={isReadOnly ? "View Only Access" : `Add New ${activeTab.slice(0, -1)}`}>
+              <Button className="bg-primary hover:bg-primary/90 shadow-lg" disabled={isReadOnly} onClick={handleOpenAddDialog} title={isReadOnly ? "View Only Access" : `Add New ${activeTab.replace('_', ' ')}`}>
                 <Plus className="mr-2 h-4 w-4" />
-                Add New {activeTab === "customers" ? "Customer" : activeTab === "depots" ? "Depot" : activeTab === "sku_details" ? "SKU" : "Broker"}
+                Add New {activeTab === "customers" ? "Customer" : activeTab === "depots" ? "Depot" : activeTab === "sku_details" ? "SKU" : activeTab === "sku_selling_price" ? "SKU Price" : "Broker"}
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-xl">
               <DialogHeader>
-                <DialogTitle>{editingItem ? "Edit" : "Add New"} {activeTab === "sku_details" ? "SKU" : activeTab.slice(0, -1)}</DialogTitle>
+                <DialogTitle>{editingItem ? "Edit" : "Add New"} {activeTab === "sku_details" ? "SKU" : activeTab === "sku_selling_price" ? "SKU Selling Price" : activeTab.slice(0, -1)}</DialogTitle>
                 <DialogDescription>
-                  Enter the details for the {activeTab === "sku_details" ? "SKU" : activeTab.slice(0, -1)} record.
+                  Enter the details for the {activeTab === "sku_details" ? "SKU" : activeTab === "sku_selling_price" ? "SKU Selling Price" : activeTab.slice(0, -1)} record.
                 </DialogDescription>
               </DialogHeader>
-              {activeTab === "customers" ? renderCustomerForm() : activeTab === "depots" ? renderDepotForm() : activeTab === "sku_details" ? renderSkuDetailsForm() : renderBrokerForm()}
+              {activeTab === "customers" ? renderCustomerForm() : activeTab === "depots" ? renderDepotForm() : activeTab === "sku_details" ? renderSkuDetailsForm() : activeTab === "sku_selling_price" ? renderSkuSellingPriceForm() : renderBrokerForm()}
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button onClick={handleCreateOrUpdate} disabled={isSubmitting}>
@@ -738,6 +948,10 @@ export default function MasterPage() {
           <TabsTrigger value="sku_details" className="flex items-center gap-2 px-6 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-300">
             <Package className="h-4 w-4" />
             SKU Details
+          </TabsTrigger>
+          <TabsTrigger value="sku_selling_price" className="flex items-center gap-2 px-6 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-300">
+            <Package className="h-4 w-4" />
+            SKU Selling Price
           </TabsTrigger>
         </TabsList>
 
@@ -992,6 +1206,79 @@ export default function MasterPage() {
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete SKU"}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="sku_selling_price">
+          <Card className="shadow-xl border-none rounded-2xl bg-white">
+            <CardHeader className="bg-slate-50/50 border-b p-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="text-xl font-bold flex items-center gap-2">
+                    <Package className="h-5 w-5 text-primary" />
+                    SKU Selling Price List
+                  </CardTitle>
+                  <CardDescription className="mt-1">Manage your SKU prices</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
+              <table className="w-full caption-bottom text-sm">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('packing_material', skuSellingPriceSort, setSkuSellingPriceSort)}>Packing Material <SortIcon col="packing_material" sort={skuSellingPriceSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('sku_weight', skuSellingPriceSort, setSkuSellingPriceSort)}>Weight <SortIcon col="sku_weight" sort={skuSellingPriceSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('sku_unit', skuSellingPriceSort, setSkuSellingPriceSort)}>Unit <SortIcon col="sku_unit" sort={skuSellingPriceSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('conversion_formula', skuSellingPriceSort, setSkuSellingPriceSort)}>Conv. Form <SortIcon col="conversion_formula" sort={skuSellingPriceSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('sku_weight_in_gm', skuSellingPriceSort, setSkuSellingPriceSort)}>SKU Wght(gm) <SortIcon col="sku_weight_in_gm" sort={skuSellingPriceSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('packing_material_weight_in_gm', skuSellingPriceSort, setSkuSellingPriceSort)}>Pack Mat. Wght <SortIcon col="packing_material_weight_in_gm" sort={skuSellingPriceSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('net_oil_in_gm', skuSellingPriceSort, setSkuSellingPriceSort)}>Net Oil(gm) <SortIcon col="net_oil_in_gm" sort={skuSellingPriceSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('packing_cost', skuSellingPriceSort, setSkuSellingPriceSort)}>Pack Cost <SortIcon col="packing_cost" sort={skuSellingPriceSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('var', skuSellingPriceSort, setSkuSellingPriceSort)}>VAR <SortIcon col="var" sort={skuSellingPriceSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('landing_cost', skuSellingPriceSort, setSkuSellingPriceSort)}>Landing Cost <SortIcon col="landing_cost" sort={skuSellingPriceSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('margin', skuSellingPriceSort, setSkuSellingPriceSort)}>Margin <SortIcon col="margin" sort={skuSellingPriceSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('actual_margin', skuSellingPriceSort, setSkuSellingPriceSort)}>Actual Margin <SortIcon col="actual_margin" sort={skuSellingPriceSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('selling_cost', skuSellingPriceSort, setSkuSellingPriceSort)}>Selling Cost <SortIcon col="selling_cost" sort={skuSellingPriceSort} /></TableHead>
+                    <TableHead className="text-right pr-6 sticky top-0 z-10 bg-slate-50">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow><TableCell colSpan={14} className="text-center py-20"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
+                  ) : sortedSkuSellingPrices.length === 0 ? (
+                    <TableRow><TableCell colSpan={14} className="text-center py-20 text-slate-400">No SKU Prices found</TableCell></TableRow>
+                  ) : sortedSkuSellingPrices.map(item => (
+                    <TableRow key={item.id} className="hover:bg-slate-50/30 transition-colors">
+                      <TableCell className="font-semibold text-slate-900 pl-6">{item.packing_material}</TableCell>
+                      <TableCell>{item.sku_weight}</TableCell>
+                      <TableCell>{item.sku_unit}</TableCell>
+                      <TableCell>{item.conversion_formula}</TableCell>
+                      <TableCell>{item.sku_weight_in_gm}</TableCell>
+                      <TableCell>{item.packing_material_weight_in_gm}</TableCell>
+                      <TableCell>{item.net_oil_in_gm}</TableCell>
+                      <TableCell>{item.packing_cost}</TableCell>
+                      <TableCell>{item.var}</TableCell>
+                      <TableCell className="font-medium text-slate-700">{item.landing_cost}</TableCell>
+                      <TableCell>{item.margin}</TableCell>
+                      <TableCell>{item.actual_margin}</TableCell>
+                      <TableCell className="font-medium text-emerald-600">{item.selling_cost}</TableCell>
+                      <TableCell className="text-right pr-6">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit SKU Price"}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete SKU Price"}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>

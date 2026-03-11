@@ -44,6 +44,7 @@ export default function CommitmentReviewPage() {
   };
 
   const PAGE_COLUMNS = [
+    { id: "partySoDate", label: "DO Date" },
     { id: "orderNo", label: "DO Number" },
     { id: "soNo", label: "DO No." },
     { id: "deliveryPurpose", label: "Order Type (Delivery Purpose)" },
@@ -52,7 +53,6 @@ export default function CommitmentReviewPage() {
     { id: "deliveryDate", label: "Delivery Date" },
     { id: "orderType", label: "Order Type" },
     { id: "customerType", label: "Customer Type" },
-    { id: "partySoDate", label: "Party DO Date" },
     { id: "customerName", label: "Customer Name" },
     { id: "oilType", label: "Oil Type" },
     { id: "ratePer15Kg", label: "Rate Per 15 kg" },
@@ -79,6 +79,7 @@ export default function CommitmentReviewPage() {
   ]
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    "partySoDate",
     "orderNo",
     "customerName",
     "productName",
@@ -86,7 +87,7 @@ export default function CommitmentReviewPage() {
     "orderPunchRemarks",
     "status",
   ])
-  
+
   // State for list of orders
   const [isLoading, setIsLoading] = useState(true)
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
@@ -166,7 +167,7 @@ export default function CommitmentReviewPage() {
     try {
       setIsLoading(true);
       const response = await approvalApi.getPending({ limit: 1000 });
-      
+
       if (response.success && response.data.orders) {
         const mappedOrders = response.data.orders.map(mapBackendOrderToFrontend);
         setPendingOrders(mappedOrders);
@@ -178,7 +179,7 @@ export default function CommitmentReviewPage() {
         description: error?.message || "Failed to load pending approvals from server",
         variant: "destructive",
       });
-      
+
       // Fallback to localStorage if API fails
       const savedPending = localStorage.getItem("approvalPendingItems");
       if (savedPending) {
@@ -193,14 +194,14 @@ export default function CommitmentReviewPage() {
   const fetchHistory = async () => {
     try {
       const response = await approvalApi.getHistory({ limit: 1000 });
-      
+
       if (response.success && response.data.orders) {
         const mappedHistory = response.data.orders.map((order: any) => ({
           orderNo: order.order_no,
           customerName: order.customer_name,
           stage: "Approval Of Order",
-          status: order.overall_status_of_order === true ? "Approved" : 
-                  order.overall_status_of_order === false ? "Rejected" : "Completed",
+          status: order.overall_status_of_order === true ? "Approved" :
+            order.overall_status_of_order === false ? "Rejected" : "Completed",
           processedBy: "System",
           timestamp: order.actual_2,
           date: order.actual_2 ? new Date(order.actual_2).toLocaleDateString("en-GB") : "-",
@@ -210,7 +211,7 @@ export default function CommitmentReviewPage() {
       }
     } catch (error: any) {
       console.error("Failed to fetch history:", error);
-      
+
       // Fallback to localStorage
       const savedHistory = localStorage.getItem("workflowHistory");
       if (savedHistory) {
@@ -252,19 +253,19 @@ export default function CommitmentReviewPage() {
 
   const handleConfirmCommitment = async () => {
     if (selectedItems.length === 0) return;
-    
+
     setIsConfirming(true)
     try {
       const hasRejection = Object.values(checklistValues).includes("reject")
       const timestamp = new Date().toISOString()
-      
+
       const successfulApprovals: any[] = []
       const failedApprovals: any[] = []
-      
+
       // Process each selected item individually
       // Process selected products from the dialog
       const itemsToProcess = allProductsFromSelectedGroups.filter(p => dialogSelectedProducts.includes(p._rowKey))
-      
+
       for (const item of itemsToProcess) {
         const orderData = item._orderData || {};
         const orderIdentifier = item._originalOrderId || orderData.doNumber || orderData.orderNo || "ORD-XXX";
@@ -281,10 +282,10 @@ export default function CommitmentReviewPage() {
 
         // Create a focused order object with ONLY the approved/rejected product
         const focusedOrderData = {
-            ...orderData,
-            products: orderData.orderType === "regular" ? [product] : [],
-            preApprovalProducts: orderData.orderType === "pre-approval" ? [product] : (orderData.preApprovalProducts?.some((p: any) => p.oilType) ? [product] : []),
-            _product: product // keep for reference
+          ...orderData,
+          products: orderData.orderType === "regular" ? [product] : [],
+          preApprovalProducts: orderData.orderType === "pre-approval" ? [product] : (orderData.preApprovalProducts?.some((p: any) => p.oilType) ? [product] : []),
+          _product: product // keep for reference
         };
 
         // Try submitting to backend API
@@ -347,7 +348,7 @@ export default function CommitmentReviewPage() {
             orderData: {
               ...focusedOrderData,
               deliveryData: {
-                  deliveryFrom: sourceOfMaterial
+                deliveryFrom: sourceOfMaterial
               }
             },
             checklistResults: checklistValues,
@@ -379,12 +380,12 @@ export default function CommitmentReviewPage() {
           description: `${successfulApprovals.length} item(s) have been processed successfully.`,
           variant: hasRejection ? "destructive" : "default",
         })
-        
+
         // Refresh data from backend
         await fetchPendingApprovals()
         await fetchHistory()
       }
-      
+
       if (failedApprovals.length > 0) {
         toast({
           title: "Some Approvals Failed",
@@ -402,9 +403,9 @@ export default function CommitmentReviewPage() {
       }
 
       if (pendingOrders.length <= selectedItems.length) {
-           setTimeout(() => {
-             router.push("/dispatch-material")
-           }, 1000)
+        setTimeout(() => {
+          router.push("/dispatch-material")
+        }, 1000)
       }
       setSelectedItems([])
       setSelectedOrder(null)
@@ -417,7 +418,7 @@ export default function CommitmentReviewPage() {
   const [dialogSelectedProducts, setDialogSelectedProducts] = useState<string[]>([])
 
   const toggleSelectDialogProduct = (key: string) => {
-    setDialogSelectedProducts(prev => 
+    setDialogSelectedProducts(prev =>
       prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
     )
   }
@@ -430,7 +431,7 @@ export default function CommitmentReviewPage() {
   const toggleSelectItem = (item: any) => {
     const key = item._rowKey
     const isSelected = selectedItems.some(i => i._rowKey === key)
-    
+
     if (isSelected) {
       setSelectedItems(prev => prev.filter(i => i._rowKey !== key))
     } else {
@@ -465,96 +466,96 @@ export default function CommitmentReviewPage() {
   const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
-      search: "",
-      status: "",
-      startDate: "",
-      endDate: "",
-      partyName: ""
+    search: "",
+    status: "",
+    startDate: "",
+    endDate: "",
+    partyName: ""
   })
 
   const filteredPendingOrders = pendingOrders.filter(order => {
-      let matches = true
-      
-      // Filter by Party Name
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
-          matches = false
-      }
+    let matches = true
 
-      // Filter by Date Range
-      // Check for timestamp or date field
-      const orderDateStr = order.deliveryData?.date || order.date || order.timestamp
-      if (orderDateStr) {
-          const orderDate = new Date(orderDateStr)
-          if (filterValues.startDate) {
-              const start = new Date(filterValues.startDate)
-              start.setHours(0,0,0,0)
-              if (orderDate < start) matches = false
-          }
-          if (filterValues.endDate) {
-              const end = new Date(filterValues.endDate)
-              end.setHours(23,59,59,999)
-              if (orderDate > end) matches = false
-          }
-      }
+    // Filter by Party Name
+    if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
+      matches = false
+    }
 
-      // Filter by Status (Simulating Expiry based on arbitrary logic if no due date, 
-      // typically approval is needed ASAP so maybe compare created date vs today)
-      // For now, let's use the same logic: "on-time" if recent, "expire" if old (>7 days?)
-      // OR better, if the order object has a due date.
-      // Let's assume deliveryDate exists as in other stages, or default to checking 'timestamp' vs today.
-      
-      if (filterValues.status) {
-          const targetDateStr = order.deliveryData?.expectedDeliveryDate || order.deliveryDate || order.timestamp
-          if (targetDateStr) {
-             const targetDate = new Date(targetDateStr)
-             const today = new Date()
-             today.setHours(0, 0, 0, 0)
-             
-             if (filterValues.status === "expire") {
-                 // If Expected Date is in past, it's expired/overdue? OR if it's "Expire" status.
-                 // Let's assume "Expire" means "Overdue"
-                 if (targetDate < today) matches = true // keeping 'expire' matches
-                 else matches = false
-             } else if (filterValues.status === "on-time") {
-                 if (targetDate >= today) matches = true
-                 else matches = false
-             }
-          }
+    // Filter by Date Range
+    // Check for timestamp or date field
+    const orderDateStr = order.deliveryData?.date || order.date || order.timestamp
+    if (orderDateStr) {
+      const orderDate = new Date(orderDateStr)
+      if (filterValues.startDate) {
+        const start = new Date(filterValues.startDate)
+        start.setHours(0, 0, 0, 0)
+        if (orderDate < start) matches = false
       }
+      if (filterValues.endDate) {
+        const end = new Date(filterValues.endDate)
+        end.setHours(23, 59, 59, 999)
+        if (orderDate > end) matches = false
+      }
+    }
 
-      return matches
+    // Filter by Status (Simulating Expiry based on arbitrary logic if no due date, 
+    // typically approval is needed ASAP so maybe compare created date vs today)
+    // For now, let's use the same logic: "on-time" if recent, "expire" if old (>7 days?)
+    // OR better, if the order object has a due date.
+    // Let's assume deliveryDate exists as in other stages, or default to checking 'timestamp' vs today.
+
+    if (filterValues.status) {
+      const targetDateStr = order.deliveryData?.expectedDeliveryDate || order.deliveryDate || order.timestamp
+      if (targetDateStr) {
+        const targetDate = new Date(targetDateStr)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+
+        if (filterValues.status === "expire") {
+          // If Expected Date is in past, it's expired/overdue? OR if it's "Expire" status.
+          // Let's assume "Expire" means "Overdue"
+          if (targetDate < today) matches = true // keeping 'expire' matches
+          else matches = false
+        } else if (filterValues.status === "on-time") {
+          if (targetDate >= today) matches = true
+          else matches = false
+        }
+      }
+    }
+
+    return matches
   })
-  
+
   const filteredHistory = useMemo(() => {
     return history.filter(item => {
       let matches = true
-      
+
       if (filterValues.search) {
         const search = filterValues.search.toLowerCase()
-        if (!item.orderNo?.toLowerCase().includes(search) && 
-            !item.customerName?.toLowerCase().includes(search)) {
+        if (!item.orderNo?.toLowerCase().includes(search) &&
+          !item.customerName?.toLowerCase().includes(search)) {
           matches = false
         }
       }
-      
+
       if (filterValues.partyName && filterValues.partyName !== "all" && item.customerName !== filterValues.partyName) {
-          matches = false
+        matches = false
       }
 
       if (filterValues.startDate) {
-          const start = new Date(filterValues.startDate)
-          start.setHours(0,0,0,0)
-          const itemDate = new Date(item.timestamp)
-          if (itemDate < start) matches = false
+        const start = new Date(filterValues.startDate)
+        start.setHours(0, 0, 0, 0)
+        const itemDate = new Date(item.timestamp)
+        if (itemDate < start) matches = false
       }
-      
+
       if (filterValues.endDate) {
-          const end = new Date(filterValues.endDate)
-          end.setHours(23,59,59,999)
-          const itemDate = new Date(item.timestamp)
-          if (itemDate > end) matches = false
+        const end = new Date(filterValues.endDate)
+        end.setHours(23, 59, 59, 999)
+        const itemDate = new Date(item.timestamp)
+        if (itemDate > end) matches = false
       }
-      
+
       return matches
     })
   }, [history, filterValues])
@@ -562,17 +563,17 @@ export default function CommitmentReviewPage() {
   // Group by base DO number (removing uniqueness by Customer Name)
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
-    
+
     filteredPendingOrders.forEach((order) => {
       const originalOrderId = order.doNumber || order.orderNo || "DO-XXX"
-      
+
       // Strip suffix (A, B, C...) from DO number for grouping/display
       const baseDoMatch = originalOrderId.match(/^(DO-\d+)/i)
       const baseDo = baseDoMatch ? baseDoMatch[1] : originalOrderId
-      
+
       // Group by Order Number (baseDo)
       const groupKey = baseDo
-      
+
       const products = order.products || []
 
       if (!grouped[groupKey]) {
@@ -588,7 +589,7 @@ export default function CommitmentReviewPage() {
       } else {
         grouped[groupKey]._allBaseDos.add(baseDo)
       }
-      
+
       // Store/Update details for this base DO group
       if (!grouped[groupKey]._ordersMap[baseDo]) {
         grouped[groupKey]._ordersMap[baseDo] = {
@@ -609,18 +610,19 @@ export default function CommitmentReviewPage() {
           depoName: order.depoName,
           orderPunchRemarks: order.orderPunchRemarks,
           remark: order.remark,
+          partySoDate: formatDate(order.partySoDate),
           _products: []
         }
       }
-      
+
       // Aggregate products and link them to their original order ID
       products.forEach((prod: any) => {
         const pName = prod.productName || prod.oilType;
-        const isVerified = history.some(h => 
-          (h.orderNo === originalOrderId || h.orderNo === baseDo) && 
+        const isVerified = history.some(h =>
+          (h.orderNo === originalOrderId || h.orderNo === baseDo) &&
           (h.data?.orderData?._product?.productName === pName || h.data?.orderData?._product?.oilType === pName)
         );
-        
+
         if (!isVerified) {
           const productWithId = {
             ...prod,
@@ -633,10 +635,10 @@ export default function CommitmentReviewPage() {
           grouped[groupKey]._ordersMap[baseDo]._products.push(productWithId)
         }
       })
-      
+
       grouped[groupKey]._productCount = grouped[groupKey]._allProducts.length
     })
-    
+
     // Cleanup display strings
     return Object.values(grouped).map((group: any) => ({
       ...group,
@@ -653,280 +655,280 @@ export default function CommitmentReviewPage() {
       description="Six-point verification check before commitment entry."
       pendingCount={displayRows.length}
       historyData={filteredHistory}
-        partyNames={customerNames}
-        onFilterChange={setFilterValues}
+      partyNames={customerNames}
+      onFilterChange={setFilterValues}
     >
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
           <Dialog open={selectedOrder !== null} onOpenChange={handleBulkVerifyOpen}>
-              <DialogTrigger asChild>
-                <Button 
-                  disabled={selectedItems.length === 0}
-                  className="bg-blue-600 hover:bg-blue-700 shadow-md transition-all active:scale-95"
-                >
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Verify Selected ({selectedItems.length})
-                </Button>
-              </DialogTrigger>
-                <DialogContent className="max-w-6xl! max-h-[90vh] flex flex-col p-0 overflow-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                <DialogHeader className="border-b pb-4">
-                  <DialogTitle className="text-xl font-bold text-slate-900 leading-none">
-                    Bulk Approval: {selectedItems.length > 1 ? `${selectedItems.length} Items Selected` : (selectedOrder?.doNumber || "Order Verification")}
-                  </DialogTitle>
-                  <DialogDescription className="text-slate-500 mt-1.5">Verify order details and complete the six-point check for commitment.</DialogDescription>
-                </DialogHeader>
+            <DialogTrigger asChild>
+              <Button
+                disabled={selectedItems.length === 0}
+                className="bg-blue-600 hover:bg-blue-700 shadow-md transition-all active:scale-95"
+              >
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Verify Selected ({selectedItems.length})
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-6xl! max-h-[90vh] flex flex-col p-0 overflow-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <DialogHeader className="border-b pb-4">
+                <DialogTitle className="text-xl font-bold text-slate-900 leading-none">
+                  Bulk Approval: {selectedItems.length > 1 ? `${selectedItems.length} Items Selected` : (selectedOrder?.doNumber || "Order Verification")}
+                </DialogTitle>
+                <DialogDescription className="text-slate-500 mt-1.5">Verify order details and complete the six-point check for commitment.</DialogDescription>
+              </DialogHeader>
 
-                {/* Interleaved Order Details and Product Tables Section */}
-                <div className="space-y-12 mt-6">
-                  {selectedItems.map((customerGrp) => (
-                    <div key={customerGrp._rowKey} className="space-y-6">
-                      <h2 className="text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
-                        {customerGrp.customerName}
-                        <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
-                          {customerGrp._productCount} PRODUCTS
-                        </Badge>
-                      </h2>
-                      
-                      {/* Iterate through each unique base DO for this customer */}
-                      {Object.entries(customerGrp._ordersMap).map(([baseDo, orderDetails]: [string, any], orderIdx) => {
-                        const isExpanded = expandedOrders.includes(baseDo);
-                        
-                        const toggleExpand = () => {
-                          setExpandedOrders(prev => 
-                            isExpanded ? prev.filter(id => id !== baseDo) : [...prev, baseDo]
-                          );
-                        };
+              {/* Interleaved Order Details and Product Tables Section */}
+              <div className="space-y-12 mt-6">
+                {selectedItems.map((customerGrp) => (
+                  <div key={customerGrp._rowKey} className="space-y-6">
+                    <h2 className="text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
+                      {customerGrp.customerName}
+                      <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
+                        {customerGrp._productCount} PRODUCTS
+                      </Badge>
+                    </h2>
 
-                        return (
-                          <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
-                            <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
-                               <div className="flex items-center gap-4">
-                                 <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
-                                    ORDER: {baseDo}
-                                 </Badge>
-                                 <div className="flex flex-col">
-                                   <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">Section {orderIdx + 1}</span>
-                                   <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products.length} Items Selected</span>
-                                 </div>
-                               </div>
-                               <div className="flex items-center gap-3">
-                                 <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
-                                 <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-8 w-8 text-white hover:bg-white/20 rounded-full"
-                                  >
-                                    {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                                  </Button>
-                               </div>
+                    {/* Iterate through each unique base DO for this customer */}
+                    {Object.entries(customerGrp._ordersMap).map(([baseDo, orderDetails]: [string, any], orderIdx) => {
+                      const isExpanded = expandedOrders.includes(baseDo);
+
+                      const toggleExpand = () => {
+                        setExpandedOrders(prev =>
+                          isExpanded ? prev.filter(id => id !== baseDo) : [...prev, baseDo]
+                        );
+                      };
+
+                      return (
+                        <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
+                          <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
+                            <div className="flex items-center gap-4">
+                              <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
+                                ORDER: {baseDo}
+                              </Badge>
+                              <div className="flex flex-col">
+                                <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">Section {orderIdx + 1}</span>
+                                <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products.length} Items Selected</span>
+                              </div>
                             </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-white hover:bg-white/20 rounded-full"
+                              >
+                                {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                              </Button>
+                            </div>
+                          </div>
 
-                            {/* Collapsible Order Details */}
-                            {isExpanded && (
-                              <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
-                                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Customer Name</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{customerGrp.customerName || "—"}</p>
+                          {/* Collapsible Order Details */}
+                          {isExpanded && (
+                            <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
+                              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Customer Name</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{customerGrp.customerName || "—"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Depo Name</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.depoName || "—"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Purpose</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight capitalize">{orderDetails.orderPurpose?.replace(/-/g, ' ') || "—"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Order Type</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight capitalize">{orderDetails.orderType || "—"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Start Date</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.startDate)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">End Date</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.endDate)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Date</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.deliveryDate)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Transport Type</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.transportType || "—"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Contact Person</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.contactPerson || "—"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">WhatsApp No.</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.whatsappNo || "—"}</p>
+                                  </div>
+                                  <div className="col-span-2">
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Customer Address</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight truncate" title={orderDetails.customerAddress}>{orderDetails.customerAddress || "—"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Payment Terms</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight capitalize">{orderDetails.paymentTerms || "—"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Advance Amount</p>
+                                    <p className="text-base font-black text-blue-700 leading-tight">₹{orderDetails.advanceAmount || 0}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Advance Payment</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.advancePaymentTaken ? "YES" : "NO"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Through Broker</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.isBrokerOrder ? orderDetails.brokerName || "Yes" : "No"}</p>
+                                  </div>
+                                  <div className="col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
+                                    <div className="bg-amber-100 p-2 rounded-lg">
+                                      <Settings2 className="h-5 w-5 text-amber-600" />
                                     </div>
                                     <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Depo Name</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.depoName || "—"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Purpose</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight capitalize">{orderDetails.orderPurpose?.replace(/-/g, ' ') || "—"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Order Type</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight capitalize">{orderDetails.orderType || "—"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Start Date</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.startDate)}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">End Date</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.endDate)}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Date</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.deliveryDate)}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Transport Type</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.transportType || "—"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Contact Person</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.contactPerson || "—"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">WhatsApp No.</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.whatsappNo || "—"}</p>
-                                    </div>
-                                    <div className="col-span-2">
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Customer Address</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight truncate" title={orderDetails.customerAddress}>{orderDetails.customerAddress || "—"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Payment Terms</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight capitalize">{orderDetails.paymentTerms || "—"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Advance Amount</p>
-                                      <p className="text-base font-black text-blue-700 leading-tight">₹{orderDetails.advanceAmount || 0}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Advance Payment</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.advancePaymentTaken ? "YES" : "NO"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Through Broker</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.isBrokerOrder ? orderDetails.brokerName || "Yes" : "No"}</p>
-                                    </div>
-                                    <div className="col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
-                                      <div className="bg-amber-100 p-2 rounded-lg">
-                                        <Settings2 className="h-5 w-5 text-amber-600" />
-                                      </div>
-                                      <div>
-                                        <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
-                                        <p className="text-sm font-medium text-slate-700 italic leading-snug">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
-                                      </div>
+                                      <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
+                                      <p className="text-sm font-medium text-slate-700 italic leading-snug">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
                                     </div>
                                   </div>
                                 </div>
                               </div>
-                            )}
+                            </div>
+                          )}
 
-                            {/* Render Product Table for this DO */}
-                            <div className="px-5 pb-6">
-                              <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow className="bg-slate-50 border-b">
-                                      <TableHead className="w-12 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">
-                                        <Checkbox 
-                                            checked={orderDetails._products.length > 0 && orderDetails._products.every((p: any) => dialogSelectedProducts.includes(p._rowKey))}
-                                            onCheckedChange={(checked) => {
-                                                const productKeys = orderDetails._products.map((p: any) => p._rowKey);
-                                                if (checked) {
-                                                  setDialogSelectedProducts(prev => Array.from(new Set([...prev, ...productKeys]))
-                                                  )
-                                                } else {
-                                                  setDialogSelectedProducts(prev => prev.filter(k => !productKeys.includes(k)))
-                                                }
-                                            }}
+                          {/* Render Product Table for this DO */}
+                          <div className="px-5 pb-6">
+                            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="bg-slate-50 border-b">
+                                    <TableHead className="w-12 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">
+                                      <Checkbox
+                                        checked={orderDetails._products.length > 0 && orderDetails._products.every((p: any) => dialogSelectedProducts.includes(p._rowKey))}
+                                        onCheckedChange={(checked) => {
+                                          const productKeys = orderDetails._products.map((p: any) => p._rowKey);
+                                          if (checked) {
+                                            setDialogSelectedProducts(prev => Array.from(new Set([...prev, ...productKeys]))
+                                            )
+                                          } else {
+                                            setDialogSelectedProducts(prev => prev.filter(k => !productKeys.includes(k)))
+                                          }
+                                        }}
+                                      />
+                                    </TableHead>
+                                    <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Product Info</TableHead>
+                                    <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Qty</TableHead>
+                                    <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Rate</TableHead>
+                                    <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Status</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {orderDetails._products.map((prod: any) => (
+                                    <TableRow key={prod._rowKey} className={cn(dialogSelectedProducts.includes(prod._rowKey) ? "bg-blue-50/40" : "")}>
+                                      <TableCell className="text-center p-3">
+                                        <Checkbox
+                                          checked={dialogSelectedProducts.includes(prod._rowKey)}
+                                          onCheckedChange={() => toggleSelectDialogProduct(prod._rowKey)}
                                         />
-                                      </TableHead>
-                                      <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Product Info</TableHead>
-                                      <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Qty</TableHead>
-                                      <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Rate</TableHead>
-                                      <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Status</TableHead>
+                                      </TableCell>
+                                      <TableCell className="p-3">
+                                        <div className="flex flex-col">
+                                          <span className="text-xs font-black text-slate-900 leading-none mb-1">{prod.productName || prod.oilType || "—"}</span>
+                                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{prod._originalOrderId}</span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="p-3">
+                                        <Badge variant="outline" className="border-blue-200 text-blue-700 font-black px-2">{prod.orderQty}</Badge>
+                                      </TableCell>
+                                      <TableCell className="p-3 text-[10px] font-bold text-slate-700">₹{prod.rate || "—"}</TableCell>
+                                      <TableCell className="p-3">
+                                        <Badge variant="outline" className="text-[9px] bg-green-50 text-green-700 border-green-200 uppercase font-black">Pending Approval</Badge>
+                                      </TableCell>
                                     </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {orderDetails._products.map((prod: any) => (
-                                      <TableRow key={prod._rowKey} className={cn(dialogSelectedProducts.includes(prod._rowKey) ? "bg-blue-50/40" : "")}>
-                                        <TableCell className="text-center p-3">
-                                          <Checkbox 
-                                            checked={dialogSelectedProducts.includes(prod._rowKey)}
-                                            onCheckedChange={() => toggleSelectDialogProduct(prod._rowKey)}
-                                          />
-                                        </TableCell>
-                                        <TableCell className="p-3">
-                                          <div className="flex flex-col">
-                                            <span className="text-xs font-black text-slate-900 leading-none mb-1">{prod.productName || prod.oilType || "—"}</span>
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{prod._originalOrderId}</span>
-                                          </div>
-                                        </TableCell>
-                                        <TableCell className="p-3">
-                                          <Badge variant="outline" className="border-blue-200 text-blue-700 font-black px-2">{prod.orderQty}</Badge>
-                                        </TableCell>
-                                        <TableCell className="p-3 text-[10px] font-bold text-slate-700">₹{prod.rate || "—"}</TableCell>
-                                        <TableCell className="p-3">
-                                          <Badge variant="outline" className="text-[9px] bg-green-50 text-green-700 border-green-200 uppercase font-black">Pending Approval</Badge>
-                                        </TableCell>
-                                      </TableRow>
-                                    ))}
-                                  </TableBody>
-                                </Table>
-                              </div>
+                                  ))}
+                                </TableBody>
+                              </Table>
                             </div>
                           </div>
-                        )
-                      })}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              <div className="py-6 space-y-4">
+                {/* Process ID Input */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 px-1 uppercase tracking-tight">
+                    <div className="w-1.5 h-4 bg-blue-600 rounded-full" />
+                    Process ID
+                  </h3>
+                  <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
+                    <Label className="text-sm font-semibold text-slate-700 mb-2 block">Enter Process ID</Label>
+                    <Input
+                      type="text"
+                      placeholder="Enter process ID..."
+                      value={processId}
+                      onChange={(e) => setProcessId(e.target.value)}
+                      className="w-full h-11 text-sm font-medium border-slate-200 focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Six-Point Verification */}
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 px-1 uppercase tracking-tight">
+                  <div className="w-1.5 h-4 bg-blue-600 rounded-full" />
+                  Six-Point Verification
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {checkItems.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-white shadow-sm hover:border-slate-200 transition-colors">
+                      <Label className="text-sm font-semibold text-slate-700">{item.label}</Label>
+                      <RadioGroup
+                        value={checklistValues[item.id]}
+                        onValueChange={(value) => handleChecklistChange(item.id, value)}
+                        className="flex gap-6"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="approve" id={`${item.id}-ok`} className="text-green-600" />
+                          <Label htmlFor={`${item.id}-ok`} className="text-sm font-medium text-green-600 cursor-pointer">
+                            Approve
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="reject" id={`${item.id}-no`} className="text-red-600" />
+                          <Label htmlFor={`${item.id}-no`} className="text-sm font-medium text-red-600 cursor-pointer">
+                            Reject
+                          </Label>
+                        </div>
+                      </RadioGroup>
                     </div>
                   ))}
                 </div>
-
-                <div className="py-6 space-y-4">
-                  {/* Process ID Input */}
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 px-1 uppercase tracking-tight">
-                      <div className="w-1.5 h-4 bg-blue-600 rounded-full" />
-                      Process ID
-                    </h3>
-                    <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
-                      <Label className="text-sm font-semibold text-slate-700 mb-2 block">Enter Process ID</Label>
-                      <Input 
-                        type="text"
-                        placeholder="Enter process ID..."
-                        value={processId}
-                        onChange={(e) => setProcessId(e.target.value)}
-                        className="w-full h-11 text-sm font-medium border-slate-200 focus:border-blue-500 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Six-Point Verification */}
-                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 px-1 uppercase tracking-tight">
-                    <div className="w-1.5 h-4 bg-blue-600 rounded-full" />
-                    Six-Point Verification
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {checkItems.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-white shadow-sm hover:border-slate-200 transition-colors">
-                        <Label className="text-sm font-semibold text-slate-700">{item.label}</Label>
-                        <RadioGroup
-                          value={checklistValues[item.id]}
-                          onValueChange={(value) => handleChecklistChange(item.id, value)}
-                          className="flex gap-6"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="approve" id={`${item.id}-ok`} className="text-green-600" />
-                            <Label htmlFor={`${item.id}-ok`} className="text-sm font-medium text-green-600 cursor-pointer">
-                              Approve
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="reject" id={`${item.id}-no`} className="text-red-600" />
-                            <Label htmlFor={`${item.id}-no`} className="text-sm font-medium text-red-600 cursor-pointer">
-                              Reject
-                            </Label>
-                          </div>
-                        </RadioGroup>
-                      </div>
-                    ))}
-                  </div>
-               </div>
-               <DialogFooter className="border-t pt-4 sm:justify-center">
-                 <Button
-                   onClick={handleConfirmCommitment}
-                   disabled={isConfirming || isReadOnly}
-                   className="min-w-75 px-8 h-11 text-base font-bold shadow-lg shadow-blue-100 transition-all hover:scale-[1.01] active:scale-[0.99]"
-                   variant={Object.values(checklistValues).includes("reject") ? "destructive" : "default"}
-                 >
-                   {isConfirming
-                     ? "Processing..."
-                     : Object.values(checklistValues).includes("reject")
-                       ? "Reject & Save to History"
-                       : `Approve ${dialogSelectedProducts.length} Selected Item(s)`}
-                 </Button>
-               </DialogFooter>
-             </DialogContent>
-           </Dialog>
+              </div>
+              <DialogFooter className="border-t pt-4 sm:justify-center">
+                <Button
+                  onClick={handleConfirmCommitment}
+                  disabled={isConfirming || isReadOnly}
+                  className="min-w-75 px-8 h-11 text-base font-bold shadow-lg shadow-blue-100 transition-all hover:scale-[1.01] active:scale-[0.99]"
+                  variant={Object.values(checklistValues).includes("reject") ? "destructive" : "default"}
+                >
+                  {isConfirming
+                    ? "Processing..."
+                    : Object.values(checklistValues).includes("reject")
+                      ? "Reject & Save to History"
+                      : `Approve ${dialogSelectedProducts.length} Selected Item(s)`}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -959,10 +961,10 @@ export default function CommitmentReviewPage() {
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>
                 <TableHead className="w-12.5 text-center">
-                    <Checkbox 
-                        checked={displayRows.length > 0 && selectedItems.length === displayRows.length}
-                        onCheckedChange={toggleSelectAll}
-                    />
+                  <Checkbox
+                    checked={displayRows.length > 0 && selectedItems.length === displayRows.length}
+                    onCheckedChange={toggleSelectAll}
+                  />
                 </TableHead>
                 {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
                   <TableHead key={col.id} className="whitespace-nowrap text-center">
@@ -983,90 +985,91 @@ export default function CommitmentReviewPage() {
                 </TableRow>
               ) : displayRows.length > 0 ? (
                 displayRows.map((order: any, index: number) => {
-                   const products = order._allProducts || []
-                   const firstProduct = products[0] || {}
-                   const orderDetails = Object.values(order._ordersMap)[0] as any || {}
-                   
-                   const baseDos = Array.from(new Set(products.map((p: any) => {
-                      const id = p._originalOrderId || "DO-XXX"
-                      const match = id.match(/^(DO-\d+)/i)
-                      return match ? match[1] : id
-                   }))).join(", ")
+                  const products = order._allProducts || []
+                  const firstProduct = products[0] || {}
+                  const orderDetails = Object.values(order._ordersMap)[0] as any || {}
 
-                   const oilTypes = Array.from(new Set(products.map((p:any) => p.oilType || p.productName))).filter(Boolean).join(", ")
+                  const baseDos = Array.from(new Set(products.map((p: any) => {
+                    const id = p._originalOrderId || "DO-XXX"
+                    const match = id.match(/^(DO-\d+)/i)
+                    return match ? match[1] : id
+                  }))).join(", ")
 
-                   const row = {
-                     orderNo: baseDos || "—",
-                     deliveryPurpose: orderDetails.orderPurpose || "—",
-                     customerType: orderDetails.customerType || "—",
-                     orderType: orderDetails.orderType || "—",
-                     soNo: baseDos || "—",
-                     partySoDate: orderDetails.partySoDate || "—",
-                     customerName: order.customerName || "—",
-                     startDate: orderDetails.startDate || "—",
-                     endDate: orderDetails.endDate || "—",
-                     deliveryDate: orderDetails.deliveryDate || "—",
-                     
-                     // Rates & Product Details - Show Summary
-                     oilType: oilTypes || "—",
-                     ratePerLtr: firstProduct?.ratePerLtr || "—",
-                     ratePer15Kg: firstProduct?.rateLtr || "—",
-                     productName: `${order._productCount} Items`,
-                     uom: firstProduct?.uom || "—",
-                     orderQty: products.reduce((sum: number, p: any) => sum + (Number(p.orderQty) || 0), 0).toFixed(2),
-                     altUom: firstProduct?.altUom || "—",
-                     altQty: products.reduce((sum: number, p: any) => sum + (Number(p.altQty) || 0), 0).toFixed(2),
-                     rate: firstProduct?.rate || "—",
+                  const oilTypes = Array.from(new Set(products.map((p: any) => p.oilType || p.productName))).filter(Boolean).join(", ")
 
-                     // Extended Columns
-                     totalWithGst: products.reduce((sum: number, p: any) => sum + (Number(p.totalWithGst) || 0), 0).toFixed(2) || "—",
-                     transportType: orderDetails.transportType || "—",
-                     contactPerson: orderDetails.contactPerson || "—",
-                     whatsapp: orderDetails.whatsappNo || "—",
-                     address: orderDetails.customerAddress || "—",
-                     paymentTerms: orderDetails.paymentTerms || "—",
-                     advanceTaken: orderDetails.advancePaymentTaken ? "YES" : "NO",
-                     advanceAmount: orderDetails.advanceAmount || "—",
-                     isBroker: orderDetails.isBrokerOrder ? "YES" : "NO",
-                     brokerName: orderDetails.brokerName || "—",
-                     uploadSo: "do_document.pdf",
-                     orderPunchRemarks: order.orderPunchRemarks || "—",
-                     
-                     status: "Pending",
-                   }
+                  const row = {
+                    orderNo: baseDos || "—",
+                    deliveryPurpose: orderDetails.orderPurpose || "—",
+                    customerType: orderDetails.customerType || "—",
+                    orderType: orderDetails.orderType || "—",
+                    soNo: baseDos || "—",
+                    partySoDate: orderDetails.partySoDate || "—",
+                    customerName: order.customerName || "—",
+                    startDate: orderDetails.startDate || "—",
+                    endDate: orderDetails.endDate || "—",
+                    deliveryDate: orderDetails.deliveryDate || "—",
 
-                   return (
-                   <TableRow 
+                    // Rates & Product Details - Show Summary
+                    oilType: oilTypes || "—",
+                    ratePerLtr: firstProduct?.ratePerLtr || "—",
+                    ratePer15Kg: firstProduct?.rateLtr || "—",
+                    productName: `${order._productCount} Items`,
+                    uom: firstProduct?.uom || "—",
+                    orderQty: products.reduce((sum: number, p: any) => sum + (Number(p.orderQty) || 0), 0).toFixed(2),
+                    altUom: firstProduct?.altUom || "—",
+                    altQty: products.reduce((sum: number, p: any) => sum + (Number(p.altQty) || 0), 0).toFixed(2),
+                    rate: firstProduct?.rate || "—",
+
+                    // Extended Columns
+                    totalWithGst: products.reduce((sum: number, p: any) => sum + (Number(p.totalWithGst) || 0), 0).toFixed(2) || "—",
+                    transportType: orderDetails.transportType || "—",
+                    contactPerson: orderDetails.contactPerson || "—",
+                    whatsapp: orderDetails.whatsappNo || "—",
+                    address: orderDetails.customerAddress || "—",
+                    paymentTerms: orderDetails.paymentTerms || "—",
+                    advanceTaken: orderDetails.advancePaymentTaken ? "YES" : "NO",
+                    advanceAmount: orderDetails.advanceAmount || "—",
+                    isBroker: orderDetails.isBrokerOrder ? "YES" : "NO",
+                    brokerName: orderDetails.brokerName || "—",
+                    uploadSo: "do_document.pdf",
+                    orderPunchRemarks: order.orderPunchRemarks || "—",
+
+                    status: "Pending",
+                  }
+
+                  return (
+                    <TableRow
                       key={order._rowKey}
                       className={selectedItems.some(i => i._rowKey === order._rowKey) ? "bg-blue-50/50" : ""}
-                   >
-                     <TableCell className="text-center">
-                        <Checkbox 
-                            checked={selectedItems.some(i => i._rowKey === order._rowKey)}
-                            onCheckedChange={() => toggleSelectItem(order)}
+                    >
+                      <TableCell className="text-center">
+                        <Checkbox
+                          checked={selectedItems.some(i => i._rowKey === order._rowKey)}
+                          onCheckedChange={() => toggleSelectItem(order)}
                         />
-                     </TableCell>
+                      </TableCell>
                       {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
                         <TableCell key={col.id} className="whitespace-nowrap text-center">
                           {col.id === "status" ? (
-                             <div className="flex justify-center gap-2">
-                                <Badge variant="outline" className="text-xs bg-slate-100 text-slate-700 border-slate-200">
-                                   {order._productCount} Items
-                                </Badge>
-                             </div>
+                            <div className="flex justify-center gap-2">
+                              <Badge variant="outline" className="text-xs bg-slate-100 text-slate-700 border-slate-200">
+                                {order._productCount} Items
+                              </Badge>
+                            </div>
                           ) : col.id === "productName" ? (
-                             <span className="font-medium text-slate-700">{row.productName}</span>
+                            <span className="font-medium text-slate-700">{row.productName}</span>
                           ) : row[col.id as keyof typeof row]}
                         </TableCell>
                       ))}
-                   </TableRow>
-                )})
+                    </TableRow>
+                  )
+                })
               ) : (
-                  <TableRow>
-                      <TableCell colSpan={visibleColumns.length + 2} className="text-center py-4 text-muted-foreground">
-                          No orders pending for commitment review
-                      </TableCell>
-                  </TableRow>
+                <TableRow>
+                  <TableCell colSpan={visibleColumns.length + 2} className="text-center py-4 text-muted-foreground">
+                    No orders pending for commitment review
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>

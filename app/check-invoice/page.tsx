@@ -40,7 +40,23 @@ export default function CheckInvoicePage() {
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "—";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    "partySoDate",
     "orderNo",
     "customerName",
     "invoiceNo",
@@ -226,6 +242,7 @@ export default function CheckInvoicePage() {
     // Convert Set to string for display
     return Object.values(grouped).map(group => ({
       ...group,
+      partySoDate: formatDate(group._allProducts[0]?.party_so_date),
       doNumber: Array.from(group.doNumberList).join(", "),
       processId: group._allProducts[0]?.processid || "—",
       vehicleNo: (group._allProducts[0]?.truckNo || "—").toUpperCase(),
@@ -427,6 +444,7 @@ export default function CheckInvoicePage() {
                 <TableHead className="w-12 text-center">
                   <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
+                <TableHead className="whitespace-nowrap text-center">DO Date</TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
@@ -452,6 +470,7 @@ export default function CheckInvoicePage() {
                         title={group.isReverted ? "Reverted to Make Invoice stage — awaiting re-issue" : ""}
                       />
                     </TableCell>
+                    <TableCell className="text-center text-xs font-medium">{group.partySoDate}</TableCell>
                     <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
                     <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
                     <TableCell className="text-center text-xs">{group.customerName}</TableCell>
@@ -478,7 +497,7 @@ export default function CheckInvoicePage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     No invoices pending for review
                   </TableCell>
                 </TableRow>

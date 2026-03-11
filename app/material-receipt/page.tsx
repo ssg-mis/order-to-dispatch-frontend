@@ -33,7 +33,23 @@ export default function MaterialReceiptPage() {
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "—";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    "partySoDate",
     "orderNo",
     "customerName",
     "invoiceNo",
@@ -237,6 +253,7 @@ export default function MaterialReceiptPage() {
 
     return Object.values(grouped).map(g => ({
       ...g,
+      partySoDate: formatDate(g._allProducts[0]?.party_so_date),
       processId: g._allProducts[0]?.processid || "—",
       vehicleNo: (g._allProducts[0]?.truckNo || "—").toUpperCase(),
       orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—"
@@ -444,6 +461,7 @@ export default function MaterialReceiptPage() {
                 <TableHead className="w-12 text-center">
                   <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
+                <TableHead className="whitespace-nowrap text-center">DO Date</TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
@@ -461,6 +479,7 @@ export default function MaterialReceiptPage() {
                     <TableCell className="text-center">
                       <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                     </TableCell>
+                    <TableCell className="text-center text-xs font-medium">{group.partySoDate}</TableCell>
                     <TableCell className="text-center text-xs font-medium">
                       {group.doNumber.replace(/[A-Za-z]+$/, '')}
                     </TableCell>
@@ -483,7 +502,7 @@ export default function MaterialReceiptPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     No orders pending for receipt confirmation
                   </TableCell>
                 </TableRow>
