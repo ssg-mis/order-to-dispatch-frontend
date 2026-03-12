@@ -35,8 +35,8 @@ export default function RootLayout({
     } else if (isAuthenticated && userStr) {
       try {
         const user = JSON.parse(userStr)
-        const pageAccess = user.page_access || []
-        
+        const pageAccess = user.page_access
+
         // Map URLs to permission names
         const urlToPermission: Record<string, string> = {
           "/": "Dashboard",
@@ -56,10 +56,18 @@ export default function RootLayout({
           "/variable-parameters": "Variable Parameters",
           "/settings": "Settings",
           "/master": "Master",
+          "/reports": "Reports",
+        }
+
+        // Helper: check if a page is allowed, supporting both old (string[]) and new ({ page: level }) formats
+        const hasAccess = (permissionName: string): boolean => {
+          if (!pageAccess) return false
+          if (Array.isArray(pageAccess)) return pageAccess.includes(permissionName)
+          return !!(pageAccess as Record<string, string>)[permissionName]
         }
 
         const requiredPermission = urlToPermission[pathname]
-        if (requiredPermission && requiredPermission !== "Dashboard" && !pageAccess.includes(requiredPermission)) {
+        if (requiredPermission && requiredPermission !== "Dashboard" && !hasAccess(requiredPermission)) {
           console.warn(`Unauthorized access attempt to ${pathname}`)
           router.push("/")
         } else {

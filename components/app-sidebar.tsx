@@ -76,7 +76,7 @@ export function AppSidebar() {
     if (userStr) {
       try {
         const user = JSON.parse(userStr)
-        const pageAccess = user.page_access || []
+        const pageAccess = user.page_access
         setUsername(user.username || "")
         setUserRole(user.role || "")
 
@@ -87,12 +87,19 @@ export function AppSidebar() {
           "Damage Adjustment": "Damage Adjustment",
         }
 
+        // Helper: check if a page is allowed, supporting both old (string[]) and new ({ page: level }) formats
+        const hasAccess = (permissionName: string): boolean => {
+          if (!pageAccess) return false
+          if (Array.isArray(pageAccess)) return pageAccess.includes(permissionName)
+          return !!pageAccess[permissionName]
+        }
+
         const filtered = modules.filter(module => {
           // Dashboard is always allowed if authenticated
           if (module.title === "Dashboard") return true
 
           const permissionName = permissionMapping[module.title] || module.title
-          return pageAccess.includes(permissionName)
+          return hasAccess(permissionName)
         })
 
         setAllowedModules(filtered)
