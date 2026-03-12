@@ -869,6 +869,73 @@ export default function ActualDispatchPage() {
     }
   }
 
+  const handleRevert = async () => {
+    setIsProcessing(true);
+    try {
+      const itemsToRevert = selectedGroups.flatMap(g => 
+        g._allProducts.filter((p: any) => dialogSelectedProducts.includes(p._rowKey))
+      );
+
+      if (itemsToRevert.length === 0) {
+        toast({ title: "Error", description: "No products selected to revert", variant: "destructive" });
+        setIsProcessing(false);
+        return;
+      }
+
+      const successfulReverts = [];
+      const failedReverts = [];
+
+      for (const item of itemsToRevert) {
+        const dsrNumber = item.d_sr_number || item.dsrNumber;
+        if (!dsrNumber) continue;
+
+        try {
+          const res = await actualDispatchApi.revert(dsrNumber, user?.username || 'system');
+          if (res.success) {
+            successfulReverts.push(dsrNumber);
+          } else {
+            failedReverts.push({ dsrNumber, message: res.message });
+          }
+        } catch (err: any) {
+          failedReverts.push({ dsrNumber, message: err.message });
+        }
+      }
+
+      if (successfulReverts.length > 0) {
+        toast({
+          title: "Revert Successful",
+          description: `${successfulReverts.length} item(s) reverted to Dispatch Planning.`,
+        });
+        
+        // Reset and refresh
+        setIsDialogOpen(false);
+        setSelectedOrders([]);
+        setDialogSelectedProducts([]);
+        setConfirmDetails({});
+        setSelectedGroups([]);
+        
+        await fetchPendingDispatches();
+        await fetchDispatchHistory();
+      }
+
+      if (failedReverts.length > 0) {
+        toast({
+          title: "Partial Revert Failure",
+          description: `Failed to revert ${failedReverts.length} item(s).`,
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.message || "An unexpected error occurred during revert",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <WorkflowStageShell
       title="Stage 5: Actual Dispatch"
@@ -1547,11 +1614,23 @@ export default function ActualDispatchPage() {
             )}
           </div>
 
-          <DialogFooter className="mt-4 border-t pt-4 px-8 pb-8">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-            <Button onClick={performDispatchConfirmation} disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly} title={isReadOnly ? "View Only Access" : "Confirm Dispatch"}>
-              {isProcessing ? "Processing..." : `Confirm Dispatch (${dialogSelectedProducts.length})`}
-            </Button>
+          <DialogFooter className="mt-4 border-t pt-4 px-8 pb-8 flex justify-between items-center sm:justify-between w-full">
+            <div className="flex gap-2">
+              <Button 
+                variant="destructive" 
+                onClick={handleRevert} 
+                disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly}
+                className="font-black uppercase tracking-tight"
+              >
+                {isProcessing ? "Processing..." : `Revert to Planning (${dialogSelectedProducts.length})`}
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+              <Button onClick={performDispatchConfirmation} disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly} title={isReadOnly ? "View Only Access" : "Confirm Dispatch"}>
+                {isProcessing ? "Processing..." : `Confirm Dispatch (${dialogSelectedProducts.length})`}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

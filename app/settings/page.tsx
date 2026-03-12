@@ -59,6 +59,7 @@ const PAGE_ACCESS_OPTIONS = [
   "Gate Out",
   "Confirm Material Receipt",
   "Damage Adjustment",
+  "Variable Parameters",
   "Settings",
   "Master",
   "Reports"

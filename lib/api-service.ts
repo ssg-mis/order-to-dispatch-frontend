@@ -379,6 +379,16 @@ export const actualDispatchApi = {
       body: JSON.stringify(data || {}),
     });
   },
+
+  /**
+   * Revert actual dispatch
+   */
+  revert: async (dsrNumber: string, username: string): Promise<ApiResponse> => {
+    return request(`/actual-dispatch/revert/${dsrNumber}`, {
+      method: 'POST',
+      body: JSON.stringify({ username }),
+    });
+  },
 };
 
 /**

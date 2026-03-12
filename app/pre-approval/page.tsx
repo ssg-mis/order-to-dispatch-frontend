@@ -511,9 +511,9 @@ export default function PreApprovalPage() {
             product_name: rateData?.productName || rateData?.skuName,  // Include product_name
             approval_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
             remaining_dispatch_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
-            rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null), // Use manual rate or fallback to unit rate
-            final_rate: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null), // Store per-unit approved rate in final_rate
-            rate_of_material: rateData?.rateOfMaterial ? parseFloat(rateData.rateOfMaterial) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
+            rate_per_ltr: (rateData?.ratePerLtr || product.rate_per_ltr || product.ratePerLtr) ? parseFloat(rateData?.ratePerLtr || product.rate_per_ltr || product.ratePerLtr) : null,
+            final_rate: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
+            rate_of_material: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
             remark: rateData?.remark || null, // Use individual remark
             username: user?.username || null, // Add username for tracking
           }
@@ -753,9 +753,9 @@ export default function PreApprovalPage() {
                 oil_type: product.oilType || "", // Fix: Send oil_type for new products
                 uom: product.uom,
                 order_quantity: parseFloat(rateData?.approvalQty || "0"), // Use approvalQty for new SKUs
-                rate_of_material: parseFloat(rateData?.rateOfMaterial || "0"),
+                rate_of_material: rateData?.rate ? parseFloat(rateData.rate) : parseFloat(rateData?.rateOfMaterial || "0"),
                 approval_qty: parseFloat(rateData?.approvalQty || "0"),
-                rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : parseFloat(rateData?.rateOfMaterial || "0"),
+                rate_per_ltr: parseFloat(rateData?.ratePerLtr || "0"),
                 final_rate: rateData?.rate ? parseFloat(rateData.rate) : parseFloat(rateData?.rateOfMaterial || "0"),
                 remark: rateData?.remark || "",
                 sku_name: rateData?.skuName,
@@ -837,9 +837,9 @@ export default function PreApprovalPage() {
               order_quantity: residualOrderQty, // Crucial: Inform backend of remaining budget for this row
               approval_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
               remaining_dispatch_qty: rateData?.approvalQty ? parseFloat(rateData.approvalQty) : null,
-              rate_per_ltr: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
+              rate_per_ltr: (rateData?.ratePerLtr || product.rate_per_ltr || product.ratePerLtr) ? parseFloat(rateData?.ratePerLtr || product.rate_per_ltr || product.ratePerLtr) : null,
               final_rate: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
-              rate_of_material: rateData?.rateOfMaterial ? parseFloat(rateData.rateOfMaterial) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
+              rate_of_material: rateData?.rate ? parseFloat(rateData.rate) : (product.rateOfMaterial ? parseFloat(product.rateOfMaterial) : null),
               remark: rateData?.remark || null,
               username: user?.username || null, // Add username for tracking
             }
@@ -986,10 +986,13 @@ export default function PreApprovalPage() {
       return normalizedK.includes(normalizedTarget) || normalizedTarget.includes(normalizedK);
     });
 
+    let extractedRatePerLtr = 0;
+
     if (contextOilKey) {
       const rates = oilRatesMap[contextOilKey];
       const base15 = parseFloat(rates.ratePer15Kg?.toString().replace('₹', '')) || 0;
       const baseLtr = parseFloat(rates.ratePerLtr?.toString().replace('₹', '')) || 0;
+      extractedRatePerLtr = baseLtr;
       if (base15 > 0 || baseLtr > 0) {
         console.log(`✓ Context Match: Found ${contextOilKey} rates for ${targetOilType} (15kg=${base15}, Ltr=${baseLtr})`);
         pricesForOil = calculateSkuPrices(base15, baseLtr, skuRates);
@@ -1008,6 +1011,7 @@ export default function PreApprovalPage() {
         if (raw15 && rawLtr && raw15 !== "—" && rawLtr !== "—") {
           const base15 = parseFloat(raw15.toString().replace('₹', '')) || 0;
           const baseLtr = parseFloat(rawLtr.toString().replace('₹', '')) || 0;
+          extractedRatePerLtr = baseLtr;
           if (base15 > 0 || baseLtr > 0) {
             console.log(`✓ Product Match: Using row rates for matching oil type ${targetOilType}`);
             pricesForOil = calculateSkuPrices(base15, baseLtr, skuRates);
@@ -1091,6 +1095,8 @@ export default function PreApprovalPage() {
       }
     }
 
+    const finalRatePerLtr = extractedRatePerLtr || parseFloat(product.rate_per_ltr || product.ratePerLtr || "0");
+
     setProductRates(prev => ({
       ...prev,
       [rowKey]: {
@@ -1098,7 +1104,8 @@ export default function PreApprovalPage() {
         skuName: sku,
         productName: sku,
         rateOfMaterial: rateValue,
-        rate: rateValue
+        rate: rateValue,
+        ratePerLtr: finalRatePerLtr
       }
     }));
 
