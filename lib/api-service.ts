@@ -330,6 +330,16 @@ export const dispatchPlanningApi = {
       body: JSON.stringify(data || {}),
     });
   },
+
+  /**
+   * Revert dispatch planning to pre-approval
+   */
+  revert: async (id: number, username: string): Promise<ApiResponse> => {
+    return request(`/dispatch-planning/revert/${id}`, {
+      method: 'POST',
+      body: JSON.stringify({ username }),
+    });
+  },
 };
 
 /**

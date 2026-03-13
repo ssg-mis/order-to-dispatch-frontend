@@ -904,7 +904,7 @@ export default function ActualDispatchPage() {
       if (successfulReverts.length > 0) {
         toast({
           title: "Revert Successful",
-          description: `${successfulReverts.length} item(s) reverted to Dispatch Planning.`,
+          description: `${successfulReverts.length} item(s) reverted to Pre-Approval.`,
         });
         
         // Reset and refresh
@@ -1622,7 +1622,7 @@ export default function ActualDispatchPage() {
                 disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly}
                 className="font-black uppercase tracking-tight"
               >
-                {isProcessing ? "Processing..." : `Revert to Planning (${dialogSelectedProducts.length})`}
+                {isProcessing ? "Processing..." : `Revert to Pre-Approval (${dialogSelectedProducts.length})`}
               </Button>
             </div>
             <div className="flex gap-2">

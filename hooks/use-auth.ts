@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { usePathname } from "next/navigation"
+import { userApi } from "@/lib/api-service"
 
 // page_access can be old format (string[]) or new format ({ pageName: 'view_only' | 'modify' })
 type PageAccessMap = Record<string, 'view_only' | 'modify'>
@@ -41,35 +42,62 @@ export function useAuth() {
   const [isLoading, setIsLoading] = useState(true)
   const pathname = usePathname()
 
+  // Read user from localStorage
+  const checkAuth = useCallback(() => {
+    try {
+      const userStr = localStorage.getItem("user")
+      const authStatus = localStorage.getItem("isAuthenticated") === "true"
+
+      if (authStatus && userStr) {
+        const userData = JSON.parse(userStr)
+        setUser(userData)
+        setIsAuthenticated(true)
+      } else {
+        setUser(null)
+        setIsAuthenticated(false)
+      }
+    } catch (error) {
+      console.error("Auth check failed:", error)
+      setUser(null)
+      setIsAuthenticated(false)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  // Initial load + listen for storage events
   useEffect(() => {
-    const checkAuth = () => {
+    checkAuth()
+    window.addEventListener("storage", checkAuth)
+    return () => window.removeEventListener("storage", checkAuth)
+  }, [checkAuth])
+
+  // Re-fetch fresh user data from server on every navigation
+  useEffect(() => {
+    const refreshUser = async () => {
       try {
         const userStr = localStorage.getItem("user")
         const authStatus = localStorage.getItem("isAuthenticated") === "true"
+        if (!authStatus || !userStr) return
 
-        if (authStatus && userStr) {
-          const userData = JSON.parse(userStr)
-          setUser(userData)
-          setIsAuthenticated(true)
-        } else {
-          setUser(null)
-          setIsAuthenticated(false)
+        const currentUser = JSON.parse(userStr)
+        if (!currentUser?.id) return
+
+        const response = await userApi.getById(currentUser.id)
+        if (response.success && response.data) {
+          const freshUser = response.data
+          // Update localStorage with fresh data from server
+          localStorage.setItem("user", JSON.stringify(freshUser))
+          setUser(freshUser)
         }
       } catch (error) {
-        console.error("Auth check failed:", error)
-        setUser(null)
-        setIsAuthenticated(false)
-      } finally {
-        setIsLoading(false)
+        // Silent fail — don't break the app if refresh fails
+        console.warn("Failed to refresh user data:", error)
       }
     }
 
-    checkAuth()
-
-    // Listen for storage events to sync across tabs
-    window.addEventListener("storage", checkAuth)
-    return () => window.removeEventListener("storage", checkAuth)
-  }, [])
+    refreshUser()
+  }, [pathname])
 
   /**
    * Returns 'modify' | 'view_only' | 'none' for a given page name.

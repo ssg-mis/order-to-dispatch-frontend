@@ -232,6 +232,20 @@ export default function SettingsPage() {
       
       const response = await userApi.update(selectedUser.id, updateData)
       if (response.success) {
+        // If we just edited the currently logged-in user, sync localStorage immediately
+        try {
+          const currentUserStr = localStorage.getItem("user")
+          if (currentUserStr) {
+            const currentUser = JSON.parse(currentUserStr)
+            if (currentUser.id === selectedUser.id) {
+              const updatedUser = { ...currentUser, ...updateData, password: currentUser.password }
+              localStorage.setItem("user", JSON.stringify(updatedUser))
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to sync localStorage after edit", e)
+        }
+
         toast({
           title: "Success",
           description: "User updated successfully",

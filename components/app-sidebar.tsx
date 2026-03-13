@@ -107,7 +107,7 @@ export function AppSidebar() {
         console.error("Failed to parse user for sidebar filtering", e)
       }
     }
-  }, [])
+  }, [pathname])
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
