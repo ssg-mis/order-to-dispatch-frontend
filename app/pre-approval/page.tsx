@@ -87,6 +87,7 @@ export default function PreApprovalPage() {
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [preApprovalData, setPreApprovalData] = useState<any>(null)
   const [latestVarCalc, setLatestVarCalc] = useState<any>(null)
+  const [varCalcHistory, setVarCalcHistory] = useState<any[]>([])
   const [productRates, setProductRates] = useState<{ [key: string]: { skuName: string; approvalQty: string; rate: string; remark: string; productName: string; rateOfMaterial: string; orderQty?: string } }>({})
   const [selectedRows, setSelectedRows] = useState<string[]>([])
   const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false)
@@ -166,6 +167,70 @@ export default function PreApprovalPage() {
         return normalizedPM && normalizedSku.includes(normalizedPM);
       })
       .sort((a, b) => normalize(b.packing_material).length - normalize(a.packing_material).length)[0] || null;
+  };
+
+  // Normalize oil type string to canonical form ("Palm Oil", "Soya Oil", "Rice Oil")
+  const normalizeOilType = (oilType: string): string => {
+    const s = (oilType || "").toLowerCase();
+    if (s.includes("palm") || s.includes("p.o")) return "Palm Oil";
+    if (s.includes("soya") || s.includes("sbo") || s.includes("s.o")) return "Soya Oil";
+    if (s.includes("rice") || s.includes("rbo") || s.includes("r.o")) return "Rice Oil";
+    return oilType; // Return as-is if no match
+  };
+
+  // Find the best matching var_calc record for a given oil type and DO date
+  // Walks backwards: finds the record with greatest calculation_date <= targetDate for that oil_type
+  const findVarCalcForOilAndDate = (oilType: string, doDate: string): any | null => {
+    if (!varCalcHistory.length || !oilType || !doDate) return null;
+
+    const normalizedOil = normalizeOilType(oilType);
+    const targetDate = new Date(doDate);
+    targetDate.setHours(23, 59, 59, 999); // Include the entire target day
+
+    // Filter by oil_type, then find those with calculation_date <= targetDate
+    const matches = varCalcHistory
+      .filter(vc => {
+        if (!vc.oil_type) return false;
+        return normalizeOilType(vc.oil_type) === normalizedOil;
+      })
+      .filter(vc => {
+        if (!vc.calculation_date) return false;
+        return new Date(vc.calculation_date) <= targetDate;
+      })
+      .sort((a, b) => new Date(b.calculation_date).getTime() - new Date(a.calculation_date).getTime());
+
+    return matches[0] || null; // Return the most recent one that is <= targetDate
+  };
+
+  // Dynamically compute landing cost based on oil-type specific GT
+  // Formula: (GT / 1000) * net_oil_in_gm + packing_cost
+  const computeDynamicLandingCost = (skuName: string, oilType: string, doDate: string) => {
+    const pricing = findPricingForSku(skuName);
+    if (!pricing) return null;
+
+    const varCalcMatch = findVarCalcForOilAndDate(oilType, doDate);
+    if (!varCalcMatch) {
+      return {
+        landingCost: 0,
+        margin: parseFloat(pricing.margin) || 0,
+        noVarCalc: true,
+        varCalcDate: null,
+        originalPricing: pricing
+      };
+    }
+
+    const gt = parseFloat(varCalcMatch.gt) || 0;
+    const netOilInGm = parseFloat(pricing.net_oil_in_gm) || 0;
+    const packingCost = parseFloat(pricing.packing_cost) || 0;
+    const landingCost = (gt / 1000) * netOilInGm + packingCost;
+
+    return {
+      landingCost: parseFloat(landingCost.toFixed(2)),
+      margin: parseFloat(pricing.margin) || 0,
+      noVarCalc: false,
+      varCalcDate: varCalcMatch.calculation_date,
+      originalPricing: pricing
+    };
   };
 
   // Fetch SKU Selling Prices
@@ -448,6 +513,19 @@ export default function PreApprovalPage() {
     };
     fetchLatestVarCalc();
 
+    // Fetch full var_calc history for oil-type + date based landing cost calculation
+    const fetchVarCalcHistory = async () => {
+      try {
+        const response = await varCalcApi.getAll();
+        if (response.success && response.data) {
+          setVarCalcHistory(response.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch var calc history:", error);
+      }
+    };
+    fetchVarCalcHistory();
+
     // Load Pre-Approval Draft Data (if any)
     const savedPreApprovalData = localStorage.getItem("preApprovalData");
     if (savedPreApprovalData) {
@@ -705,11 +783,13 @@ export default function PreApprovalPage() {
           return;
         }
 
-        // Selling Price Validation (Landing Cost & Margin) in handleApprove
-        const pricing = findPricingForSku(rateData?.skuName);
-        if (pricing) {
-          const minAllowed = parseFloat(pricing.landing_cost) || 0;
-          const marginPercent = parseFloat(pricing.margin) || 0;
+        // Selling Price Validation (Landing Cost & Margin) - oil-type + DO-date aware
+        const productOilType = product.oilType || product.productName || "";
+        const doDate = item._product?._orderData?.soDate || item._product?.soDate || "";
+        const dynamicCost = computeDynamicLandingCost(rateData?.skuName, productOilType, doDate);
+        if (dynamicCost && !dynamicCost.noVarCalc && dynamicCost.landingCost > 0) {
+          const minAllowed = dynamicCost.landingCost;
+          const marginPercent = dynamicCost.margin;
           const maxAllowed = minAllowed * (1 + marginPercent / 100);
 
           if (enteredRate < minAllowed) {
@@ -2008,11 +2088,13 @@ export default function PreApprovalPage() {
                                                         const newValue = e.target.value;
                                                         const enteredRate = parseFloat(newValue) || 0;
 
-                                                        // Selling Price Validation (Landing Cost & Margin)
-                                                        const pricing = findPricingForSku(productRates[rowKey]?.skuName);
-                                                        if (pricing && newValue !== "") {
-                                                          const minAllowed = parseFloat(pricing.landing_cost) || 0;
-                                                          const marginPercent = parseFloat(pricing.margin) || 0;
+                                                        // Oil-type + DO-date aware landing cost validation
+                                                        const productOilType = product.oilType || product.productName || "";
+                                                        const doDate = orderDetails.soDate || "";
+                                                        const dynamicCost = computeDynamicLandingCost(productRates[rowKey]?.skuName, productOilType, doDate);
+                                                        if (dynamicCost && !dynamicCost.noVarCalc && dynamicCost.landingCost > 0 && newValue !== "") {
+                                                          const minAllowed = dynamicCost.landingCost;
+                                                          const marginPercent = dynamicCost.margin;
                                                           const maxAllowed = minAllowed * (1 + marginPercent / 100);
 
                                                           if (enteredRate < minAllowed) {
@@ -2045,12 +2127,14 @@ export default function PreApprovalPage() {
                                                         });
                                                       }}
                                                       onBlur={(e) => {
-                                                        // Automatically clamp bounds on unfocus
-                                                        const pricing = findPricingForSku(productRates[rowKey]?.skuName);
+                                                        // Automatically clamp bounds on unfocus using dynamic landing cost
+                                                        const productOilType = product.oilType || product.productName || "";
+                                                        const doDate = orderDetails.soDate || "";
+                                                        const dynamicCost = computeDynamicLandingCost(productRates[rowKey]?.skuName, productOilType, doDate);
                                                         const enteredRate = parseFloat(e.target.value);
-                                                        if (pricing && !isNaN(enteredRate)) {
-                                                          const minAllowed = parseFloat(pricing.landing_cost) || 0;
-                                                          const maxAllowed = minAllowed * (1 + (parseFloat(pricing.margin) || 0) / 100);
+                                                        if (dynamicCost && !dynamicCost.noVarCalc && dynamicCost.landingCost > 0 && !isNaN(enteredRate)) {
+                                                          const minAllowed = dynamicCost.landingCost;
+                                                          const maxAllowed = minAllowed * (1 + (dynamicCost.margin || 0) / 100);
                                                           
                                                           let clampedValue = enteredRate;
                                                           if (enteredRate < minAllowed) clampedValue = minAllowed;
@@ -2064,7 +2148,6 @@ export default function PreApprovalPage() {
                                                                 rate: clampedValue.toFixed(2)
                                                               }
                                                             });
-                                                            // Clear existing error bounds as it clamped safely
                                                             const newErrors = { ...rateValidationErrors };
                                                             delete newErrors[rowKey];
                                                             setRateValidationErrors(newErrors);
@@ -2073,48 +2156,62 @@ export default function PreApprovalPage() {
                                                       }}
                                                       disabled={!isSelected}
                                                       placeholder="0.00"
-                                                      min={findPricingForSku(productRates[rowKey]?.skuName) ? parseFloat(findPricingForSku(productRates[rowKey]?.skuName).landing_cost) || 0 : undefined}
-                                                      max={findPricingForSku(productRates[rowKey]?.skuName) ? (parseFloat(findPricingForSku(productRates[rowKey]?.skuName).landing_cost) || 0) * (1 + (parseFloat(findPricingForSku(productRates[rowKey]?.skuName).margin) || 0) / 100) : undefined}
+                                                      min={(() => {
+                                                        const dc = computeDynamicLandingCost(productRates[rowKey]?.skuName, product.oilType || product.productName || "", orderDetails.soDate || "");
+                                                        return dc && !dc.noVarCalc && dc.landingCost > 0 ? dc.landingCost : undefined;
+                                                      })()}
+                                                      max={(() => {
+                                                        const dc = computeDynamicLandingCost(productRates[rowKey]?.skuName, product.oilType || product.productName || "", orderDetails.soDate || "");
+                                                        return dc && !dc.noVarCalc && dc.landingCost > 0 ? dc.landingCost * (1 + (dc.margin || 0) / 100) : undefined;
+                                                      })()}
                                                     />
                                                     {rateValidationErrors[rowKey] && (
                                                       <p className="text-[9px] text-red-600 font-black mt-1 uppercase tracking-tighter text-center">
                                                         {rateValidationErrors[rowKey]}
                                                       </p>
                                                     )}
-                                                    {/* Show landing cost info if available */}
+                                                    {/* Show dynamic landing cost info based on oil type + DO date */}
                                                     {(() => {
-                                                      const pricing = findPricingForSku(productRates[rowKey]?.skuName);
+                                                      const productOilType = product.oilType || product.productName || "";
+                                                      const doDate = orderDetails.soDate || "";
+                                                      const dynamicCost = computeDynamicLandingCost(productRates[rowKey]?.skuName, productOilType, doDate);
+
+                                                      if (!dynamicCost) return null;
+
+                                                      if (dynamicCost.noVarCalc) {
+                                                        return (
+                                                          <div className="mt-1.5 bg-red-50 text-red-700 border border-red-200 text-[10px] font-bold p-1 rounded-sm text-center leading-tight shadow-sm">
+                                                            🚫 No variable parameter found for {normalizeOilType(productOilType)}
+                                                          </div>
+                                                        );
+                                                      }
+
+                                                      const maxRate = dynamicCost.landingCost * (1 + (dynamicCost.margin || 0) / 100);
+
+                                                      // Check how old the matched var_calc is relative to DO date
                                                       let warningElement = null;
-
-                                                      if (latestVarCalc?.calculation_date) {
-                                                        // use .getDate() to automatically convert the UTC "T18:30" string 
-                                                        // back to the local timezone value before subtracting
-                                                        const todayDay = new Date().getDate();
-                                                        const varCalcDate = new Date(latestVarCalc.calculation_date).getDate();
-                                                        
-                                                        const diffDays = todayDay - varCalcDate;
-
+                                                      if (dynamicCost.varCalcDate && doDate) {
+                                                        const doDateObj = new Date(doDate);
+                                                        const vcDateObj = new Date(dynamicCost.varCalcDate);
+                                                        const diffMs = doDateObj.getTime() - vcDateObj.getTime();
+                                                        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
                                                         if (diffDays > 0) {
                                                           warningElement = (
                                                             <div className="mt-1.5 bg-amber-50 text-amber-900 border border-amber-200 text-[10px] font-bold p-1 rounded-sm text-center leading-tight shadow-sm">
-                                                              ⚠️ Variable parameter is last updated {diffDays} {diffDays === 1 ? 'day' : 'days'} ago
+                                                              ⚠️ Using var param from {diffDays} {diffDays === 1 ? 'day' : 'days'} before DO date
                                                             </div>
                                                           );
                                                         }
                                                       }
 
-                                                      if (pricing) {
-                                                        const maxRate = pricing.landing_cost * (1 + (pricing.margin || 0) / 100);
-                                                        return (
-                                                          <>
-                                                            <p className="text-[8px] text-slate-400 mt-1 text-center font-bold">
-                                                              Range: ₹{pricing.landing_cost} - ₹{maxRate.toFixed(2)}
-                                                            </p>
-                                                            {warningElement}
-                                                          </>
-                                                        );
-                                                      }
-                                                      return warningElement;
+                                                      return (
+                                                        <>
+                                                          <p className="text-[8px] text-slate-400 mt-1 text-center font-bold">
+                                                            Range: ₹{dynamicCost.landingCost} - ₹{maxRate.toFixed(2)}
+                                                          </p>
+                                                          {warningElement}
+                                                        </>
+                                                      );
                                                     })()}
                                                   </div>
                                                 </TableCell>

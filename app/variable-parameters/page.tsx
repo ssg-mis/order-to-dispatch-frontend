@@ -19,7 +19,8 @@ import {
     Info,
     Clock,
     ArrowRight,
-    Database
+    Database,
+    Droplets
 } from "lucide-react"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
@@ -35,11 +36,21 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 
+const OIL_TYPES = ["Palm Oil", "Soya Oil", "Rice Oil"] as const;
+type OilType = typeof OIL_TYPES[number];
+
+const OIL_TYPE_COLORS: Record<OilType, { bg: string; border: string; text: string; activeBg: string; activeText: string; icon: string }> = {
+    "Palm Oil":  { bg: "bg-orange-50",  border: "border-orange-200", text: "text-orange-700",  activeBg: "bg-orange-600",  activeText: "text-white", icon: "text-orange-500" },
+    "Soya Oil":  { bg: "bg-amber-50",   border: "border-amber-200",  text: "text-amber-700",   activeBg: "bg-amber-600",   activeText: "text-white", icon: "text-amber-500"  },
+    "Rice Oil":  { bg: "bg-lime-50",    border: "border-lime-200",   text: "text-lime-700",    activeBg: "bg-lime-600",    activeText: "text-white", icon: "text-lime-500"   },
+};
+
 export default function VariableParametersPage() {
     const { toast } = useToast()
     const [isSaving, setIsSaving] = useState(false)
     const [historyData, setHistoryData] = useState<any[]>([])
     const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+    const [selectedOilType, setSelectedOilType] = useState<OilType>("Palm Oil")
     const getLocalISODate = (dateInput?: string | Date) => {
         const d = dateInput ? new Date(dateInput) : new Date();
         const year = d.getFullYear();
@@ -131,13 +142,15 @@ export default function VariableParametersPage() {
                 freight_rate: parseFloat(varCalc.freight_rate),
                 total: parseFloat(varCalc.total),
                 gst: parseFloat(varCalc.gst),
-                gt: parseFloat(varCalc.gt)
+                gt: parseFloat(varCalc.gt),
+                oil_type: selectedOilType,
+                calculation_date: varCalc.calculation_date
             })
 
             if (response.success) {
                 toast({
                     title: "Success",
-                    description: "Variable parameters saved successfully",
+                    description: `Variable parameters saved for ${selectedOilType}`,
                 })
                 fetchHistory() // Refresh history after save
             }
@@ -178,6 +191,34 @@ export default function VariableParametersPage() {
                     </TabsList>
 
                     <TabsContent value="configure" className="space-y-8 animate-in fade-in duration-300">
+                        {/* Oil Type Selector */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <div className="flex items-center gap-2 mr-2">
+                                <Droplets className="h-5 w-5 text-indigo-500" />
+                                <span className="text-sm font-bold text-slate-600 uppercase tracking-wider">Oil Type</span>
+                            </div>
+                            {OIL_TYPES.map((oilType) => {
+                                const colors = OIL_TYPE_COLORS[oilType];
+                                const isActive = selectedOilType === oilType;
+                                return (
+                                    <button
+                                        key={oilType}
+                                        onClick={() => {
+                                            setSelectedOilType(oilType);
+                                            setVarCalc(prev => ({ ...prev, oil_rate: "", total: "0.00", gst: "0.00", gt: "0.00" }));
+                                        }}
+                                        className={`px-5 py-2.5 rounded-xl text-sm font-bold border-2 transition-all duration-200 flex items-center gap-2 ${
+                                            isActive
+                                                ? `${colors.activeBg} ${colors.activeText} border-transparent shadow-lg scale-105`
+                                                : `${colors.bg} ${colors.text} ${colors.border} hover:shadow-md hover:scale-[1.02]`
+                                        }`}
+                                    >
+                                        <Droplets className={`h-4 w-4 ${isActive ? 'text-white/80' : colors.icon}`} />
+                                        {oilType}
+                                    </button>
+                                );
+                            })}
+                        </div>
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                             {/* Input Section */}
                             <Card className="lg:col-span-2 shadow-xl border-slate-200 overflow-hidden relative group">
@@ -245,13 +286,14 @@ export default function VariableParametersPage() {
                                             <div className="p-3 bg-white shadow-sm rounded-xl">
                                                 <Calendar className="h-5 w-5 text-indigo-600" />
                                             </div>
-                                            <div>
+                                            <div className="space-y-1">
                                                 <Label className="text-xs uppercase tracking-[0.2em] font-black text-indigo-400">Effective Date</Label>
-                                                <p className="text-lg font-bold text-slate-900">
-                                                    {new Date(varCalc.calculation_date).toLocaleDateString('en-GB', {
-                                                        day: '2-digit', month: 'long', year: 'numeric'
-                                                    })}
-                                                </p>
+                                                <Input
+                                                    type="date"
+                                                    value={varCalc.calculation_date}
+                                                    onChange={(e) => setVarCalc(prev => ({ ...prev, calculation_date: e.target.value }))}
+                                                    className="h-10 font-bold text-slate-900 bg-white border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 rounded-lg w-[200px]"
+                                                />
                                             </div>
                                         </div>
 
@@ -340,6 +382,7 @@ export default function VariableParametersPage() {
                                         <TableHeader className="bg-slate-50">
                                             <TableRow className="hover:bg-transparent border-slate-200">
                                                 <TableHead className="w-[200px] text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Calculation Date</TableHead>
+                                                <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Oil Type</TableHead>
                                                 <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Loose Oil Rate</TableHead>
                                                 <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Freight Rate</TableHead>
                                                 <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Base Total</TableHead>
@@ -350,7 +393,7 @@ export default function VariableParametersPage() {
                                         <TableBody>
                                             {isLoadingHistory ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={6} className="h-64 text-center">
+                                                    <TableCell colSpan={7} className="h-64 text-center">
                                                         <div className="flex flex-col items-center gap-3">
                                                             <div className="h-8 w-8 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
                                                             <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Fetching history...</span>
@@ -359,7 +402,7 @@ export default function VariableParametersPage() {
                                                 </TableRow>
                                             ) : historyData.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={6} className="h-64 text-center">
+                                                    <TableCell colSpan={7} className="h-64 text-center">
                                                         <div className="flex flex-col items-center gap-4 grayscale opacity-40">
                                                             <History className="h-12 w-12 text-slate-400" />
                                                             <p className="font-bold text-slate-500 uppercase tracking-widest">No historical data found</p>
@@ -376,6 +419,20 @@ export default function VariableParametersPage() {
                                                                     day: '2-digit', month: 'short', year: 'numeric'
                                                                 }) : 'N/A'}
                                                             </div>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {row.oil_type ? (
+                                                                <Badge className={`font-bold text-xs px-3 py-1 rounded-full ${
+                                                                    row.oil_type === 'Palm Oil' ? 'bg-orange-100 text-orange-700 hover:bg-orange-100' :
+                                                                    row.oil_type === 'Soya Oil' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' :
+                                                                    row.oil_type === 'Rice Oil' ? 'bg-lime-100 text-lime-700 hover:bg-lime-100' :
+                                                                    'bg-slate-100 text-slate-700 hover:bg-slate-100'
+                                                                }`}>
+                                                                    {row.oil_type}
+                                                                </Badge>
+                                                            ) : (
+                                                                <span className="text-slate-400 text-xs">—</span>
+                                                            )}
                                                         </TableCell>
                                                         <TableCell className="font-mono font-medium text-slate-600">₹{row.loose_1_kg_oil_rate ?? row.oil_rate ?? '0.00'}</TableCell>
                                                         <TableCell className="font-mono font-medium text-slate-600">₹{row.freight_rate ?? '0.00'}</TableCell>
