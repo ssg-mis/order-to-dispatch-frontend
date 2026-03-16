@@ -70,6 +70,8 @@ export default function PreApprovalPage() {
     { id: "brokerName", label: "Broker Name (If Order Through Broker)" },
     { id: "uploadSo", label: "Upload DO." },
     { id: "orderPunchRemarks", label: "Order Punch Remarks" },
+    { id: "revertDispatchRemarks", label: "Revert(Actual-Dispatch) Remarks" },
+    { id: "revertPlanningRemarks", label: "Revert(Dispatch-Planning) Remarks" },
   ]
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
@@ -80,7 +82,9 @@ export default function PreApprovalPage() {
     "deliveryDate",
     "oilType",
     "ratePer15Kg",
-    "orderPunchRemarks"
+    "orderPunchRemarks",
+    "revertDispatchRemarks",
+    "revertPlanningRemarks"
   ])
   const [isApproving, setIsApproving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -430,6 +434,8 @@ export default function PreApprovalPage() {
       orderPunchRemarks: backendOrder.order_punch_remarks,
       remark: backendOrder.remark,
       totalWithGst: backendOrder.total_with_gst,
+      revertDispatchRemarks: backendOrder.revert_dispatch_remarks || "",
+      revertPlanningRemarks: backendOrder.revert_planning_remarks || "",
       // Product info (for individual row from DB)
       preApprovalProducts: [{
         _pid: `${backendOrder.id}-${backendOrder.order_no}`,
@@ -1348,6 +1354,8 @@ export default function PreApprovalPage() {
           orderPunchRemarks: order.orderPunchRemarks,
           remark: order.remark,
           totalWithGst: order.totalWithGst,
+          revertDispatchRemarks: order.revertDispatchRemarks,
+          revertPlanningRemarks: order.revertPlanningRemarks,
           _products: []
         }
       }
@@ -1383,12 +1391,18 @@ export default function PreApprovalPage() {
 
       const allPunchRemarks = new Set<string>()
       const allRemarks = new Set<string>()
+      const allRevertDispatchRemarks = new Set<string>()
+      const allRevertPlanningRemarks = new Set<string>()
       Object.values(grp._ordersMap).forEach((order: any) => {
         if (order.orderPunchRemarks) allPunchRemarks.add(order.orderPunchRemarks)
         if (order.remark) allRemarks.add(order.remark)
+        if (order.revertDispatchRemarks) allRevertDispatchRemarks.add(order.revertDispatchRemarks)
+        if (order.revertPlanningRemarks) allRevertPlanningRemarks.add(order.revertPlanningRemarks)
       })
       grp.orderPunchRemarks = Array.from(allPunchRemarks).join("; ")
       grp.remark = Array.from(allRemarks).join("; ")
+      grp.revertDispatchRemarks = Array.from(allRevertDispatchRemarks).join("; ")
+      grp.revertPlanningRemarks = Array.from(allRevertPlanningRemarks).join("; ")
 
 
       // Aggregate rate fields from ALL products for SKU Price List calculations
@@ -2456,6 +2470,8 @@ export default function PreApprovalPage() {
                       brokerName: rawOrder.brokerName || "—",
                       uploadSo: "so_document.pdf",
                       orderPunchRemarks: rawOrder.orderPunchRemarks || "—",
+                      revertDispatchRemarks: rawOrder.revertDispatchRemarks || "—",
+                      revertPlanningRemarks: rawOrder.revertPlanningRemarks || "—",
 
                       products: rawOrder._allProducts || [],
                     }

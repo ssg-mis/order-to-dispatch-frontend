@@ -334,10 +334,10 @@ export const dispatchPlanningApi = {
   /**
    * Revert dispatch planning to pre-approval
    */
-  revert: async (id: number, username: string): Promise<ApiResponse> => {
+  revert: async (id: number, username: string, remarks?: string): Promise<ApiResponse> => {
     return request(`/dispatch-planning/revert/${id}`, {
       method: 'POST',
-      body: JSON.stringify({ username }),
+      body: JSON.stringify({ username, remarks }),
     });
   },
 };
@@ -393,10 +393,10 @@ export const actualDispatchApi = {
   /**
    * Revert actual dispatch
    */
-  revert: async (dsrNumber: string, username: string): Promise<ApiResponse> => {
+  revert: async (dsrNumber: string, username: string, remarks?: string): Promise<ApiResponse> => {
     return request(`/actual-dispatch/revert/${dsrNumber}`, {
       method: 'POST',
-      body: JSON.stringify({ username }),
+      body: JSON.stringify({ username, remarks }),
     });
   },
 };

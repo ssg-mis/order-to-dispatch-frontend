@@ -76,7 +76,8 @@ export default function SecurityApprovalPage() {
       image: false,
       driverCond: false,
     },
-    verdict: "APPROVE", // Default selected value
+    verdict: "", // Removed default selection to force user intent
+    remarks: "", // Added state to track revert remarks
   })
 
   // Fetch pending security approvals from backend
@@ -187,6 +188,24 @@ export default function SecurityApprovalPage() {
       return
     }
 
+    if (!uploadData.verdict) {
+      toast({
+        title: "Error",
+        description: "Please select a Security Verdict",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (uploadData.verdict === "REJECT" && !uploadData.remarks?.trim()) {
+      toast({
+        title: "Error",
+        description: "Please provide a reason for rejecting via the Revert Remarks field",
+        variant: "destructive"
+      })
+      return
+    }
+
     setIsProcessing(true)
     try {
       const successfulSubmissions: any[] = []
@@ -203,7 +222,8 @@ export default function SecurityApprovalPage() {
               bilty_image: uploadData.biltyImage || null,
               vehicle_image_attachemrnt: uploadData.vehicleImages.length > 0 ? uploadData.vehicleImages.join(',') : null,
               verdict_status: uploadData.verdict, // Adding verdict to API 
-              username: user?.username || null // Add username for tracking
+              username: user?.username || null, // Add username for tracking
+              remarks: uploadData.verdict === 'REJECT' ? uploadData.remarks : null // Pass remarks if rejecting
             };
 
             console.log('[SECURITY] Submitting approval for ID:', recordId, submitData);
@@ -248,7 +268,8 @@ export default function SecurityApprovalPage() {
             image: false,
             driverCond: false,
           },
-          verdict: "APPROVE"
+          verdict: "",
+          remarks: "",
         });
 
         // Refresh data from backend
@@ -443,7 +464,8 @@ export default function SecurityApprovalPage() {
           image: false,
           driverCond: false,
         },
-        verdict: "APPROVE"
+        verdict: "",
+        remarks: "",
       })
       setIsDialogOpen(true)
     }
@@ -821,8 +843,10 @@ export default function SecurityApprovalPage() {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Security Verdict</Label>
-                      <Select value={uploadData.verdict} onValueChange={(v) => setUploadData(p => ({ ...p, verdict: v }))}>
-                        <SelectTrigger className={cn("h-14 border-2 rounded-2xl px-6 font-black text-sm uppercase transition-all", uploadData.verdict === "APPROVE" ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700")}>
+                      <Select value={uploadData.verdict} onValueChange={(v) => {
+                        setUploadData(p => ({ ...p, verdict: v, remarks: v === "APPROVE" ? "" : p.remarks }))
+                      }}>
+                        <SelectTrigger className={cn("h-14 border-2 rounded-2xl px-6 font-black text-sm uppercase transition-all", uploadData.verdict === "APPROVE" ? "border-green-200 bg-green-50 text-green-700" : uploadData.verdict === "REJECT" ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-white")}>
                           <SelectValue placeholder="Select verdict" />
                         </SelectTrigger>
                         <SelectContent>
@@ -832,6 +856,20 @@ export default function SecurityApprovalPage() {
                       </Select>
                     </div>
                   </div>
+
+                  {uploadData.verdict === "REJECT" && (
+                    <div className="space-y-3 animate-in fade-in slide-in-from-top-4 duration-300">
+                      <Label className="text-[10px] font-black uppercase text-red-600 tracking-widest ml-1">Reason for Rejection (Required)</Label>
+                      <div className="relative">
+                        <textarea
+                          placeholder="Please explain why this load is being rejected by security..."
+                          className="w-full h-24 border-2 border-red-200 bg-red-50/50 rounded-2xl p-4 font-medium text-sm text-slate-700 focus:border-red-500 focus:ring-4 focus:ring-red-100 transition-all resize-none placeholder:text-red-300/80"
+                          value={uploadData.remarks || ""}
+                          onChange={(e) => setUploadData(p => ({ ...p, remarks: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {Object.entries(uploadData.checklist).map(([key, val]) => (

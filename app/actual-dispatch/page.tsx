@@ -33,6 +33,7 @@ export default function ActualDispatchPage() {
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
   const [selectedGroups, setSelectedGroups] = useState<any[]>([])
   const [dialogSelectedProducts, setDialogSelectedProducts] = useState<string[]>([])
+  const [revertRemarks, setRevertRemarks] = useState("")
 
   // Consolidated State for Stages 6 & 7
   const [vehicleNumber, setVehicleNumber] = useState("")
@@ -230,7 +231,8 @@ export default function ActualDispatchPage() {
     { id: "overallStatus", label: "Overall Status of Order" },
     { id: "orderConfirmation", label: "Order Confirmation with Customer" },
     { id: "qtytobedispatched", label: "Qty to be Dispatched" },
-    { id: "dispatchfrom", label: "Dispatch from" }
+    { id: "dispatchfrom", label: "Dispatch from" },
+    { id: "revertSecurityRemarks", label: "Revert(Security-Guard) Remarks" }
   ]
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
@@ -242,6 +244,7 @@ export default function ActualDispatchPage() {
     "deliveryFrom",
     "orderPunchRemarks",
     "status",
+    "revertSecurityRemarks"
   ])
 
   // Fetch data from backend API
@@ -521,6 +524,7 @@ export default function ActualDispatchPage() {
           dispatchConfirmed: internalOrder.dispatch_date_confirmed || checklist.dispatch || "—",
           overallStatus: internalOrder.overall_status_of_order || checklist.overall || "—",
           orderConfirmation: internalOrder.order_confirmation_with_customer || checklist.confirm || "—",
+          revertSecurityRemarks: internalOrder.revert_security_remarks || order.revert_security_remarks || "—",
         }
       }
 
@@ -870,6 +874,11 @@ export default function ActualDispatchPage() {
   }
 
   const handleRevert = async () => {
+    if (!revertRemarks.trim()) {
+      toast({ title: "Validation Error", description: "Revert remarks are required", variant: "destructive" });
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const itemsToRevert = selectedGroups.flatMap(g => 
@@ -890,7 +899,7 @@ export default function ActualDispatchPage() {
         if (!dsrNumber) continue;
 
         try {
-          const res = await actualDispatchApi.revert(dsrNumber, user?.username || 'system');
+          const res = await actualDispatchApi.revert(dsrNumber, user?.username || 'system', revertRemarks.trim());
           if (res.success) {
             successfulReverts.push(dsrNumber);
           } else {
@@ -913,6 +922,7 @@ export default function ActualDispatchPage() {
         setDialogSelectedProducts([]);
         setConfirmDetails({});
         setSelectedGroups([]);
+        setRevertRemarks("");
         
         await fetchPendingDispatches();
         await fetchDispatchHistory();
@@ -1614,18 +1624,27 @@ export default function ActualDispatchPage() {
             )}
           </div>
 
-          <DialogFooter className="mt-4 border-t pt-4 px-8 pb-8 flex justify-between items-center sm:justify-between w-full">
-            <div className="flex gap-2">
+          <DialogFooter className="mt-4 border-t pt-4 px-8 pb-8 flex flex-col gap-4 sm:flex-col w-full">
+            <div className="flex items-end gap-3 w-full">
+              <div className="flex-1 space-y-1.5">
+                <Label className="text-[10px] font-black uppercase text-red-500 tracking-tighter ml-1">Revert Remarks <span className="text-red-500">*</span></Label>
+                <Input
+                  className="h-10 border-2 border-red-200 rounded-lg font-medium bg-white focus:border-red-400 transition-colors"
+                  placeholder="Enter reason for reverting..."
+                  value={revertRemarks}
+                  onChange={(e) => setRevertRemarks(e.target.value)}
+                />
+              </div>
               <Button 
                 variant="destructive" 
                 onClick={handleRevert} 
-                disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly}
-                className="font-black uppercase tracking-tight"
+                disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly || !revertRemarks.trim()}
+                className="font-black uppercase tracking-tight whitespace-nowrap"
               >
                 {isProcessing ? "Processing..." : `Revert to Pre-Approval (${dialogSelectedProducts.length})`}
               </Button>
             </div>
-            <div className="flex gap-2">
+            <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
               <Button onClick={performDispatchConfirmation} disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly} title={isReadOnly ? "View Only Access" : "Confirm Dispatch"}>
                 {isProcessing ? "Processing..." : `Confirm Dispatch (${dialogSelectedProducts.length})`}
