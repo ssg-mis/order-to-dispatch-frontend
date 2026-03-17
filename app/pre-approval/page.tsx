@@ -93,7 +93,7 @@ export default function PreApprovalPage() {
   const [preApprovalData, setPreApprovalData] = useState<any>(null)
   const [latestVarCalc, setLatestVarCalc] = useState<any>(null)
   const [varCalcHistory, setVarCalcHistory] = useState<any[]>([])
-  const [productRates, setProductRates] = useState<{ [key: string]: { skuName: string; approvalQty: string; rate: string; remark: string; productName: string; rateOfMaterial: string; orderQty?: string } }>({})
+  const [productRates, setProductRates] = useState<{ [key: string]: { skuName: string; approvalQty: string; rate: string; remark: string; productName: string; rateOfMaterial: string; orderQty?: string; ratePerLtr?: string; ratePer15Kg?: string } }>({})
   const [selectedRows, setSelectedRows] = useState<string[]>([])
   const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false)
   const [selectedProductRows, setSelectedProductRows] = useState<string[]>([])
@@ -230,7 +230,7 @@ export default function PreApprovalPage() {
     const landingCost = (gt / 1000) * netOilInGm + packingCost;
 
     return {
-      landingCost: parseFloat(landingCost.toFixed(2)),
+      landingCost: landingCost,
       margin: parseFloat(pricing.margin) || 0,
       noVarCalc: false,
       varCalcDate: varCalcMatch.calculation_date,
@@ -331,7 +331,7 @@ export default function PreApprovalPage() {
       return {
         sku: item.sku,
         formula: item.formula || "—",
-        calculatedRate: calculatedRate.toFixed(2)
+        calculatedRate: calculatedRate.toString()
       }
     })
   }
@@ -588,7 +588,7 @@ export default function PreApprovalPage() {
         try {
           const product = item._product
           const productKey = item._rowKey
-          const rateData = productRates[productKey]
+          const rateData: any = productRates[productKey]
 
           // Prepare submission data
           const submissionData = {
@@ -812,7 +812,7 @@ export default function PreApprovalPage() {
           if (enteredRate > maxAllowed) {
             toast({
               title: "Rate Too High",
-              description: `Final rate for ${rateData?.skuName} exceeds allowed margin (Max ₹${maxAllowed.toFixed(2)}).`,
+              description: `Final rate for ${rateData?.skuName} exceeds allowed margin (Max ₹${maxAllowed}).`,
               variant: "destructive"
             });
             setIsApproving(false);
@@ -2160,7 +2160,7 @@ export default function PreApprovalPage() {
                                                               ...productRates,
                                                               [rowKey]: {
                                                                 ...productRates[rowKey],
-                                                                rate: clampedValue.toFixed(2)
+                                                                rate: clampedValue.toString()
                                                               }
                                                             });
                                                             const newErrors = { ...rateValidationErrors };
@@ -2222,7 +2222,7 @@ export default function PreApprovalPage() {
                                                       return (
                                                         <>
                                                           <p className="text-[8px] text-slate-400 mt-1 text-center font-bold">
-                                                            Range: ₹{dynamicCost.landingCost} - ₹{maxRate.toFixed(2)}
+                                                            Range: ₹{dynamicCost.landingCost} - ₹{maxRate}
                                                           </p>
                                                           {warningElement}
                                                         </>

@@ -1070,8 +1070,8 @@ export default function OrderPunchPage() {
                           {preApprovalProducts.map((p) => (
                             <TableRow key={p.id} className="hover:bg-blue-50/30">
                               <TableCell className="font-medium py-2">{p.oilType}</TableCell>
-                              <TableCell className="font-semibold text-green-600 py-2">₹{p.ratePer15Kg || "0.00"}</TableCell>
-                              <TableCell className="font-semibold text-blue-600 py-2">₹{p.ratePerLtr || "0.00"}</TableCell>
+                              <TableCell className="font-semibold text-green-600 py-2">₹{p.ratePer15Kg || "—"}</TableCell>
+                              <TableCell className="font-semibold text-blue-600 py-2">₹{p.ratePerLtr || "—"}</TableCell>
                               <TableCell className="py-2 text-right">
                                 <Button
                                   type="button"

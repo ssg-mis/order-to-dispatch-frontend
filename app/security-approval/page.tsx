@@ -339,18 +339,22 @@ export default function SecurityApprovalPage() {
     return matches
   })
 
-  // Group orders by Customer Name (Party Name)
+  // Group orders by actual_1 date and Truck No
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order: any) => {
-      const partyName = order.party_name || order.partyName || "Unknown Customer"
-      const rawDoNumber = order.so_no || order.soNo || "—"
-      const doNumber = rawDoNumber.replace(/[A-Z]+$/, '')
-      if (!grouped[partyName]) {
-        grouped[partyName] = {
-          _rowKey: partyName,
-          customerName: partyName,
+      // Step 1: Create a grouping key based on date (YYYY-MM-DD) and truck_no
+      const actualDate = order.actual_1 ? order.actual_1.split('T')[0] : 'NoDate'
+      const truckNo = (order.truck_no || order.truckNo || 'NoTruck').toUpperCase().trim()
+      const groupKey = `${actualDate}_${truckNo}`
+
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = {
+          _rowKey: groupKey,
+          actualDate: actualDate,
+          truckNo: truckNo,
+          customerNames: new Set<string>(),
           doNumberList: new Set<string>(),
           _allProducts: [],
           _ordersMap: {}, // Group items by DO for interleaved view
@@ -358,7 +362,11 @@ export default function SecurityApprovalPage() {
         }
       }
 
-      const group = grouped[partyName]
+      const group = grouped[groupKey]
+      group.customerNames.add(order.party_name || order.partyName || "Unknown Customer")
+      
+      const rawDoNumber = order.so_no || order.soNo || "—"
+      const doNumber = rawDoNumber.replace(/[A-Z]+$/, '')
       group.doNumberList.add(doNumber)
 
       // Handle interleaved grouping (by unique DO)
@@ -387,7 +395,7 @@ export default function SecurityApprovalPage() {
 
       const product = {
         ...order,
-        _rowKey: `${partyName}-${order.d_sr_number || order.id}`,
+        _rowKey: `${groupKey}-${order.d_sr_number || order.id}`,
         id: order.id,
         specificOrderNo: doNumber,
         productName: order.product_name || order.productName,
@@ -409,17 +417,27 @@ export default function SecurityApprovalPage() {
       group._productCount = group._allProducts.length
     })
 
-    // Finalize groups (convert Set to comma string)
+    // Finalize groups
     return Object.values(grouped).map((group: any) => {
-      const isDisabled = group._allProducts.some((p: any) => p.planned_1 == null || p.actual_1 == null)
+      const uniqueCustomers = Array.from(group.customerNames as Set<string>)
+      const uniqueDos = Array.from(group.doNumberList as Set<string>)
+      const uniqueProcessIds = Array.from(new Set<string>(group._allProducts.map((p: any) => (p.processid as string) || "—")))
+
+      const formatLabel = (list: string[]) => {
+        if (list.length === 0) return "—"
+        if (list.length === 1) return list[0]
+        return `${list[0]} & ${list.length - 1} more`
+      }
+
       return {
         ...group,
         partySoDate: formatDate(group._allProducts[0]?.party_so_date),
-        doNumber: Array.from(group.doNumberList as Set<string>).join(", "),
-        processId: group._allProducts[0]?.processid || "—",
-        vehicleNo: (group._allProducts[0]?.truckNo || "—").toUpperCase(),
+        doNumber: formatLabel(uniqueDos),
+        customerName: formatLabel(uniqueCustomers),
+        processId: formatLabel(uniqueProcessIds),
+        vehicleNo: group.truckNo !== 'NOTRUCK' ? group.truckNo : "—",
         orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—",
-        isDisabled
+        isDisabled: group._allProducts.some((p: any) => p.planned_1 == null || p.actual_1 == null)
       }
     })
   }, [filteredPendingOrders])
@@ -531,7 +549,6 @@ export default function SecurityApprovalPage() {
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">VEHICLE NO.</TableHead>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">ORDER PUNCH REMARKS</TableHead>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">STATUS</TableHead>
-                <TableHead className="text-center text-[10px] uppercase font-black">ACTIONS</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -572,19 +589,11 @@ export default function SecurityApprovalPage() {
                         <Badge className="bg-orange-100 text-orange-700 border-orange-200 font-black text-[10px] uppercase">Pending Guard</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-center p-4">
-                      <Button variant="ghost" size="sm" onClick={() => {
-                        setSelectedItems([group._rowKey])
-                        handleOpenDialog()
-                      }}>
-                        <Settings2 className="w-4 h-4 text-slate-400 hover:text-purple-600" />
-                      </Button>
-                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-20">
+                  <TableCell colSpan={9} className="text-center py-20">
                     <div className="flex flex-col items-center gap-2">
                       <ShieldAlert className="w-12 h-12 text-slate-200" />
                       <p className="text-slate-400 font-black uppercase tracking-widest text-xs">No vehicles pending for security check</p>
