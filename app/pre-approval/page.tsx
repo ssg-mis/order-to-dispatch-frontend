@@ -82,6 +82,7 @@ export default function PreApprovalPage() {
     "deliveryDate",
     "oilType",
     "ratePer15Kg",
+    "ratePerLtr",
     "orderPunchRemarks",
     "revertDispatchRemarks",
     "revertPlanningRemarks"
