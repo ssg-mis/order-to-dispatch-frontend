@@ -180,7 +180,25 @@ export default function PreApprovalPage() {
     if (s.includes("palm") || s.includes("p.o")) return "Palm Oil";
     if (s.includes("soya") || s.includes("sbo") || s.includes("s.o")) return "Soya Oil";
     if (s.includes("rice") || s.includes("rbo") || s.includes("r.o")) return "Rice Oil";
-    return oilType; // Return as-is if no match
+    if (s.includes("sunflower")) return "Sunflower Oil";
+    return oilType.trim(); // Return as-is but trimmed
+  };
+
+  /**
+   * Robustly formats a date string or object to YYYY-MM-DD based on local time.
+   * This avoids the "day-shift" bug caused by toISOString() or UTC-based comparisons.
+   */
+  const formatToLocalYYYYMMDD = (dateInput: string | Date | null | undefined): string | null => {
+    if (!dateInput) return null;
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return null;
+    
+    // Extract local parts
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
   };
 
   // Find the best matching var_calc record for a given oil type and DO date
@@ -189,22 +207,60 @@ export default function PreApprovalPage() {
     if (!varCalcHistory.length || !oilType || !doDate) return null;
 
     const normalizedOil = normalizeOilType(oilType);
-    const targetDate = new Date(doDate);
-    targetDate.setHours(23, 59, 59, 999); // Include the entire target day
+    
+    // Support robust comparison by normalizing both to YYYY-MM-DD local strings
+    const targetDateStr = formatToLocalYYYYMMDD(doDate);
+    if (!targetDateStr) return null;
 
-    // Filter by oil_type, then find those with calculation_date <= targetDate
-    const matches = varCalcHistory
-      .filter(vc => {
-        if (!vc.oil_type) return false;
-        return normalizeOilType(vc.oil_type) === normalizedOil;
-      })
-      .filter(vc => {
-        if (!vc.calculation_date) return false;
-        return new Date(vc.calculation_date) <= targetDate;
-      })
-      .sort((a, b) => new Date(b.calculation_date).getTime() - new Date(a.calculation_date).getTime());
+    // --- DIAGNOSTIC LOGS (remove after debugging) ---
+    console.log(`[VAR_CALC_DEBUG] Input: oilType="${oilType}", doDate="${doDate}"`);
+    console.log(`[VAR_CALC_DEBUG] Normalized: oil="${normalizedOil}", targetDateStr="${targetDateStr}"`);
+    console.log(`[VAR_CALC_DEBUG] Total varCalcHistory records: ${varCalcHistory.length}`);
+    
+    // Log the first 5 history records to see what raw data looks like
+    varCalcHistory.slice(0, 10).forEach((vc: any, i: number) => {
+      const vcLocal = formatToLocalYYYYMMDD(vc.calculation_date);
+      console.log(`[VAR_CALC_DEBUG] History[${i}]: id=${vc.id}, oil_type="${vc.oil_type}", calculation_date="${vc.calculation_date}", localDate="${vcLocal}"`);
+    });
+    // --- END DIAGNOSTIC LOGS ---
 
-    return matches[0] || null; // Return the most recent one that is <= targetDate
+    // Filter by oil_type, then find those with calculation_date <= targetDate string
+    const oilMatches = varCalcHistory.filter(vc => {
+      if (!vc.oil_type) return false;
+      return normalizeOilType(vc.oil_type) === normalizedOil;
+    });
+    console.log(`[VAR_CALC_DEBUG] Oil type matches: ${oilMatches.length}`);
+
+    const matches = oilMatches
+      .filter(vc => {
+        const vcDateStr = formatToLocalYYYYMMDD(vc.calculation_date);
+        if (!vcDateStr) return false;
+        const pass = vcDateStr <= targetDateStr;
+        if (!pass) {
+          console.log(`[VAR_CALC_DEBUG] EXCLUDED: id=${vc.id}, vcDate="${vcDateStr}" > targetDate="${targetDateStr}"`);
+        }
+        return pass;
+      })
+      .sort((a, b) => {
+        const dateA = formatToLocalYYYYMMDD(a.calculation_date) || "";
+        const dateB = formatToLocalYYYYMMDD(b.calculation_date) || "";
+        
+        if (dateA !== dateB) {
+            return dateB.localeCompare(dateA); // Reverse chronological
+        }
+        
+        // Tie-breaker: use ID if available to ensure deterministic latest record
+        return (Number(b.id) || 0) - (Number(a.id) || 0);
+      });
+
+    const selected = matches[0] || null;
+    if (selected) {
+      console.log(`[VAR_CALC_DEBUG] SELECTED: id=${selected.id}, date="${selected.calculation_date}", localDate="${formatToLocalYYYYMMDD(selected.calculation_date)}", gt=${selected.gt}`);
+    } else {
+      console.log(`[VAR_CALC_DEBUG] NO MATCH FOUND after date filter. Matches count: ${matches.length}`);
+    }
+
+    return selected;
   };
 
   // Dynamically compute landing cost based on oil-type specific GT
@@ -445,6 +501,8 @@ export default function PreApprovalPage() {
         oilType: backendOrder.oil_type,
         uom: backendOrder.uom,
         orderQty: backendOrder.order_quantity,
+        order_quantity: backendOrder.order_quantity,
+        remaining_dispatch_qty: backendOrder.remaining_dispatch_qty,
         altUom: backendOrder.alternate_uom,
         altQty: backendOrder.order_quantity,
         ratePerLtr: backendOrder.rate_per_ltr,
@@ -1763,7 +1821,10 @@ export default function PreApprovalPage() {
                                             const isSelected = selectedProductRows.includes(rowKey)
                                             const hasError = qtyValidationErrors[rowKey]
                                             const isNew = product._isNew;
-                                            const maxQty = isNew ? (parseFloat(productRates[rowKey]?.orderQty || "0") || 0) : (parseFloat(product.orderQty) || 0)
+                                            const orderQty = parseFloat(product.order_quantity || product.orderQty || "0") || 0;
+                                            const remainingDispatchQty = parseFloat(product.remaining_dispatch_qty || product.remainingDispatchQty || "0") || 0;
+                                            const calculatedOrderQty = orderQty - remainingDispatchQty;
+                                            const maxQty = isNew ? (parseFloat(productRates[rowKey]?.orderQty || "0") || 0) : calculatedOrderQty;
 
                                             return (
                                               <TableRow
@@ -1828,7 +1889,7 @@ export default function PreApprovalPage() {
                                                   <div className="flex flex-col gap-1">
                                                     {!isNew ? (
                                                       <>
-                                                        <Badge variant="outline" className="border-blue-200 text-blue-700 font-black px-2">{maxQty}</Badge>
+                                                        <Badge variant="outline" className="border-blue-200 text-blue-700 font-black px-2">{calculatedOrderQty}</Badge>
                                                         {/* Show remaining qty if approval_qty < order_qty */}
                                                         {product.approvalQty && parseFloat(product.approvalQty) > 0 && parseFloat(product.approvalQty) < maxQty && (
                                                           <span className="text-[9px] text-amber-600 font-bold">
@@ -1851,7 +1912,7 @@ export default function PreApprovalPage() {
                                                                 (pOilType.includes("soya") || pOilType.includes("sbo")) && (currentOilType.includes("soya") || currentOilType.includes("sbo")) ||
                                                                 pOilType.includes("sunflower") && currentOilType.includes("sunflower");
                                                             });
-                                                            return sameOilTypeProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.orderQty) || 0), 0) || "";
+                                                            return sameOilTypeProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.order_quantity || p.orderQty) || 0), 0) || "";
                                                           })()}
                                                           placeholder="Auto"
                                                           disabled={true}
@@ -1935,11 +1996,15 @@ export default function PreApprovalPage() {
 
                                                       // Calculate total order qty for all products in this order
                                                       const allProducts = [...orderDetails._products, ...(dialogNewProducts[baseDo] || [])]
-                                                      const originalTotalOrderQty = orderDetails._products.reduce((sum: number, p: any) => sum + (parseFloat(p.orderQty) || 0), 0);
+                                                      const originalTotalOrderQty = orderDetails._products.reduce((sum: number, p: any) => {
+                                                        const pOrderQty = parseFloat(p.order_quantity || p.orderQty || "0") || 0;
+                                                        const pRemainingQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || "0") || 0;
+                                                        return sum + (pOrderQty - pRemainingQty);
+                                                      }, 0);
                                                       const totalOrderQty = allProducts.reduce((sum, p) => {
                                                         const pQty = p._isNew
                                                           ? (parseFloat(productRates[p._rowKey]?.orderQty || '0') || 0)
-                                                          : (parseFloat(p.orderQty) || 0)
+                                                          : (parseFloat(p.order_quantity || p.orderQty || "0") - parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || "0"))
                                                         return sum + pQty
                                                       }, 0)
 
@@ -1979,7 +2044,9 @@ export default function PreApprovalPage() {
                                                       })
 
                                                       const totalOilTypeOrderQty = sameOilTypeProducts.reduce((sum, p) => {
-                                                        return sum + (parseFloat(p.orderQty) || 0)
+                                                        const pOrderQty = parseFloat(p.order_quantity || p.orderQty || "0") || 0;
+                                                        const pRemainingQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || "0") || 0;
+                                                        return sum + (pOrderQty - pRemainingQty);
                                                       }, 0)
 
                                                       // Calculate ALREADY APPROVED qty for THIS oil type (excluding current row)
@@ -2027,9 +2094,11 @@ export default function PreApprovalPage() {
 
                                                         // Calculate remaining budget in other oil types
                                                         const otherOilTypeRemaining = otherOilTypeProducts.reduce((sum, p) => {
-                                                          const pOrderQty = parseFloat(p.orderQty) || 0
+                                                          const pOrderQty = parseFloat(p.order_quantity || p.orderQty || "0") || 0;
+                                                          const pRemainingQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || "0") || 0;
+                                                          const pCalculatedQty = pOrderQty - pRemainingQty;
                                                           const pApproved = parseFloat(productRates[p._rowKey]?.approvalQty || '0') || 0
-                                                          return sum + (pOrderQty - pApproved)
+                                                          return sum + (pCalculatedQty - pApproved)
                                                         }, 0)
 
                                                         const otherOilTypeName = otherOilTypeProducts[0]?.productName || otherOilTypeProducts[0]?.oilType || 'other product'
@@ -2287,8 +2356,10 @@ export default function PreApprovalPage() {
                                                 {[...orderDetails._products, ...(dialogNewProducts[baseDo] || [])].reduce((sum: number, p: any) => {
                                                   // Only count original products, not new SKUs
                                                   if (p._isNew) return sum;
-                                                  const qty = parseFloat(p.orderQty) || 0;
-                                                  return sum + qty;
+                                                  const pOrderQty = parseFloat(p.order_quantity || p.orderQty || "0") || 0;
+                                                  const pRemainingQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || "0") || 0;
+                                                  const calculatedQty = pOrderQty - pRemainingQty;
+                                                  return sum + calculatedQty;
                                                 }, 0)}
                                               </Badge>
                                             </TableCell>
@@ -2454,7 +2525,7 @@ export default function PreApprovalPage() {
                       itemConfirm: rawOrder.itemConfirm?.toUpperCase() || "YES",
                       productName: firstProduct?.productName || firstProduct?.oilType || "",
                       uom: firstProduct?.uom || "",
-                      orderQty: firstProduct?.orderQty || "",
+                      orderQty: (parseFloat(firstProduct?.order_quantity || firstProduct?.orderQty || "0") - parseFloat(firstProduct?.remaining_dispatch_qty || firstProduct?.remainingDispatchQty || "0")) || "—",
                       altUom: firstProduct?.altUom || "",
                       altQty: firstProduct?.altQty || "",
 
