@@ -437,7 +437,7 @@ export default function SecurityApprovalPage() {
         processId: formatLabel(uniqueProcessIds),
         vehicleNo: group.truckNo !== 'NOTRUCK' ? group.truckNo : "—",
         orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—",
-        isDisabled: group._allProducts.some((p: any) => p.planned_1 == null || p.actual_1 == null)
+        isDisabled: group._allProducts.some((p: any) => p.actual_1 == null)
       }
     })
   }, [filteredPendingOrders])
@@ -465,8 +465,8 @@ export default function SecurityApprovalPage() {
     const targets = displayRows.filter(r => selectedItems.includes(r._rowKey))
     if (targets.length > 0) {
       setSelectedGroups(targets)
-      // Select all products for all selected groups by default (only enabled ones)
-      const allRowKeys = targets.flatMap(g => g._allProducts.filter((p: any) => p.planned_1 != null && p.actual_1 != null).map((p: any) => p._rowKey))
+      // Select all products for all selected groups by default
+      const allRowKeys = targets.flatMap(g => g._allProducts.map((p: any) => p._rowKey))
       setSelectedProducts(allRowKeys)
 
       setUploadData({
@@ -631,9 +631,9 @@ export default function SecurityApprovalPage() {
 
                   {Object.entries(group._ordersMap).map(([baseDo, orderDetails]: [string, any], orderIdx) => {
                     const orderProducts = orderDetails._products;
-                    const enabledOrderProducts = orderProducts.filter((p: any) => p.planned_1 != null && p.actual_1 != null);
+                    const enabledOrderProducts = orderProducts;
                     const allOrderSelected = enabledOrderProducts.length > 0 && enabledOrderProducts.every((p: any) => selectedProducts.includes(p._rowKey));
-                    const isOrderDisabled = enabledOrderProducts.length === 0;
+                    const isOrderDisabled = false;
                     const isExpanded = expandedOrders.includes(baseDo);
                     const toggleExpand = () => {
                       setExpandedOrders(prev => isExpanded ? prev.filter(id => id !== baseDo) : [...prev, baseDo]);
@@ -776,7 +776,6 @@ export default function SecurityApprovalPage() {
                                   <TableRow key={product._rowKey} className={cn(selectedProducts.includes(product._rowKey) ? "bg-blue-50/20" : "", "h-14")}>
                                     <TableCell className="text-center p-2">
                                       <Checkbox
-                                        disabled={product.planned_1 == null || product.actual_1 == null}
                                         checked={selectedProducts.includes(product._rowKey)}
                                         onCheckedChange={() => {
                                           if (selectedProducts.includes(product._rowKey)) {
@@ -801,7 +800,7 @@ export default function SecurityApprovalPage() {
                                     <TableCell className="text-center p-2">
                                       {product.security_guard_status === 'REJECT' ? (
                                         <Badge variant="destructive" className="font-black text-[8px] uppercase">REJECTED BY SECURITY</Badge>
-                                      ) : product.planned_1 == null || product.actual_1 == null ? (
+                                      ) : product.actual_1 == null ? (
                                         <Badge variant="destructive" className="font-black text-[8px] uppercase">Pending Data</Badge>
                                       ) : (
                                         <Badge className="bg-green-100 text-green-700 border-green-200 font-black text-[9px] uppercase">Loaded OK</Badge>

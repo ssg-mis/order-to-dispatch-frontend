@@ -622,36 +622,32 @@ export default function CheckInvoicePage() {
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Fitness</p>
                                         {firstProd.fitness ? (
-                                          <a href={firstProd.fitness} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.fitness} alt="Fitness" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.fitness} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                            {firstProd.fitness_end_date ? new Date(firstProd.fitness_end_date).toLocaleDateString("en-GB") : "View Document"}
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Insurance</p>
                                         {firstProd.insurance ? (
-                                          <a href={firstProd.insurance} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.insurance} alt="Insurance" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.insurance} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                            {firstProd.insurance_end_date ? new Date(firstProd.insurance_end_date).toLocaleDateString("en-GB") : "View Document"}
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Pollution</p>
                                         {firstProd.polution ? (
-                                          <a href={firstProd.polution} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.polution} alt="Pollution" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.polution} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                            {firstProd.pollution_end_date ? new Date(firstProd.pollution_end_date).toLocaleDateString("en-GB") : "View Document"}
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Tax Copy</p>
                                         {firstProd.tax_copy ? (
-                                          <a href={firstProd.tax_copy} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.tax_copy} alt="Tax Copy" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.tax_copy} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                            {firstProd.tax_end_date ? new Date(firstProd.tax_end_date).toLocaleDateString("en-GB") : "View Document"}
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
@@ -659,18 +655,16 @@ export default function CheckInvoicePage() {
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 1</p>
                                         {firstProd.permit1 ? (
-                                          <a href={firstProd.permit1} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.permit1} alt="Permit 1" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.permit1} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                            {firstProd.permit1_end_date ? new Date(firstProd.permit1_end_date).toLocaleDateString("en-GB") : "View Document"}
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 2 (Out State)</p>
                                         {firstProd.permit2_out_state ? (
-                                          <a href={firstProd.permit2_out_state} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.permit2_out_state} alt="Permit 2" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.permit2_out_state} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                            {firstProd.permit2_end_date ? new Date(firstProd.permit2_end_date).toLocaleDateString("en-GB") : "View Document"}
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
@@ -691,9 +685,8 @@ export default function CheckInvoicePage() {
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Slip</p>
                                         {firstProd.weightment_slip_copy ? (
-                                          <a href={firstProd.weightment_slip_copy} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.weightment_slip_copy} alt="Weight Slip" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.weightment_slip_copy} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                            View Slip
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
@@ -738,7 +731,6 @@ export default function CheckInvoicePage() {
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">AMOUNT</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE NO</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE COPY</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE DATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">TRUCK NO</TableHead>
                                 </TableRow>
@@ -776,16 +768,12 @@ export default function CheckInvoicePage() {
                                       {product.amount ? `₹${product.amount.toFixed(2)}` : "—"}
                                     </TableCell>
                                     <TableCell className="text-center p-2 text-xs font-bold text-green-700">
-                                      {product.invoiceNo || "—"}
-                                    </TableCell>
-                                    <TableCell className="text-center p-2">
                                       {product.invoice_copy ? (
-                                        <a href={product.invoice_copy} target="_blank" rel="noopener noreferrer" className="inline-block">
-                                          <img src={product.invoice_copy} alt="Invoice" className="h-10 w-14 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer mx-auto" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'inline'; }} />
-                                          <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline font-bold">View Invoice</span>
+                                        <a href={product.invoice_copy} target="_blank" rel="noopener noreferrer" className="hover:text-green-900 underline">
+                                          {product.invoiceNo || "View Invoice"}
                                         </a>
                                       ) : (
-                                        <span className="text-[10px] text-slate-400 font-bold italic tracking-tighter">NO FILE</span>
+                                        <span>{product.invoiceNo || "—"}</span>
                                       )}
                                     </TableCell>
                                     <TableCell className="text-center p-2 text-xs font-black">
@@ -810,7 +798,7 @@ export default function CheckInvoicePage() {
                                   <TableCell className="text-center text-xs text-blue-700 font-black">
                                     ₹{allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0).toFixed(2)}
                                   </TableCell>
-                                  <TableCell colSpan={4} />
+                                  <TableCell colSpan={3} />
                                 </TableRow>
                               </TableBody>
                             </Table>
