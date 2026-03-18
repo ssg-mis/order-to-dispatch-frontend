@@ -496,8 +496,9 @@ export default function DispatchMaterialPage() {
       const baseDoMatch = orderId.match(/^(DO-\d+)/i)
       const baseDo = baseDoMatch ? baseDoMatch[1] : orderId
 
-      // Group by Order Number (baseDo)
-      const groupKey = baseDo
+      // Group by Party/Customer Name
+      const custName = order.customer_name || order.customerName || "Unknown"
+      const groupKey = custName
 
       if (!grouped[groupKey]) {
         grouped[groupKey] = {

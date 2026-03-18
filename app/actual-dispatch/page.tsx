@@ -474,8 +474,9 @@ export default function ActualDispatchPage() {
       const baseDoMatch = doNumber.match(/^(DO-\d+)/i)
       const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
 
-      // Use Base DO as the primary grouping key to merge duplicates and stripped alphabets
-      const groupKey = baseDo;
+      // Group by DO Date (party_so_date)
+      const doDate = order.party_so_date || order.partySoDate || order.timestamp || "Unknown Date";
+      const groupKey = doDate;
 
       if (!grouped[groupKey]) {
         grouped[groupKey] = {

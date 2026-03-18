@@ -181,8 +181,8 @@ export default function MakeInvoicePage() {
       const rawDoNumber = order.so_no || order.soNo || "—"
       const doNumber = rawDoNumber.replace(/[A-Z]+$/, "")
 
-      // Use unique ID as the primary grouping key for truly individual view
-      const groupKey = order.id.toString();
+      // Group by base DO number (stripping A, B, C suffixes)
+      const groupKey = doNumber;
 
       if (!grouped[groupKey]) {
         grouped[groupKey] = {
