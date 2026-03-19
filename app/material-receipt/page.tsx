@@ -215,9 +215,12 @@ export default function MaterialReceiptPage() {
           invoiceDate: order.invoice_date ? new Date(order.invoice_date).toLocaleDateString("en-IN") : "—",
           biltyNo: order.bilty_no || "—",
           rstNo: order.rst_no || "—",
+          weightmentSlip: order.weightment_slip_copy || null,
           grossWeight: order.gross_weight || "—",
           tareWeight: order.tare_weight || "—",
           netWeight: order.net_weight || "—",
+          weightDiff: order.weight_diff || "—",
+          extraWeight: order.extra_weight || "—",
           transporterName: order.transporter_name || "—",
           truckNo: order.truck_no || "—",
           diffReason: order.reason_of_difference_in_weight_if_any_speacefic || "—",
@@ -584,24 +587,32 @@ export default function MaterialReceiptPage() {
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">RST No</Label>
-                      <p className="font-medium">{selectedGroup.rstNo}</p>
+                      {selectedGroup.weightmentSlip ? (
+                        <a href={selectedGroup.weightmentSlip} target="_blank" rel="noopener noreferrer" className="block text-blue-600 hover:text-blue-800 underline font-black">
+                          #{selectedGroup.rstNo || "—"}
+                        </a>
+                      ) : (
+                        <p className="font-medium">#{selectedGroup.rstNo || "—"}</p>
+                      )}
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Gross Wt</Label>
-                      <p className="font-medium">{selectedGroup.grossWeight}</p>
+                      <Label className="text-xs text-muted-foreground">Gross / Tare / Net</Label>
+                      <p className="font-medium text-slate-900 leading-tight">
+                        {selectedGroup.grossWeight || "0"} / {selectedGroup.tareWeight || "0"} / <span className="text-blue-600 font-black">{selectedGroup.netWeight || "0"}</span>
+                      </p>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Tare Wt</Label>
-                      <p className="font-medium">{selectedGroup.tareWeight}</p>
+                      <Label className="text-xs text-muted-foreground">Weight Diff</Label>
+                      <p className="font-black text-amber-600">{selectedGroup.weightDiff || "0"}</p>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Net Wt</Label>
-                      <p className="font-medium">{selectedGroup.netWeight}</p>
+                      <Label className="text-xs text-muted-foreground">Extra Weight</Label>
+                      <p className="font-black text-purple-600">{selectedGroup.extraWeight || "0"}</p>
                     </div>
                     {selectedGroup.diffReason && selectedGroup.diffReason !== "—" && (
-                      <div className="col-span-2">
+                      <div className="col-span-1">
                         <Label className="text-xs text-muted-foreground">Diff Reason</Label>
-                        <p className="font-medium text-amber-600">{selectedGroup.diffReason}</p>
+                        <p className="font-medium text-red-500 italic">{selectedGroup.diffReason}</p>
                       </div>
                     )}
                   </div>

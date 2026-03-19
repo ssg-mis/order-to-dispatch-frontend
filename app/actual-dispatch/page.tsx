@@ -525,6 +525,13 @@ export default function ActualDispatchPage() {
           overallStatus: internalOrder.overall_status_of_order || checklist.overall || "—",
           orderConfirmation: internalOrder.order_confirmation_with_customer || checklist.confirm || "—",
           revertSecurityRemarks: internalOrder.revert_security_remarks || order.revert_security_remarks || "—",
+          grossWeight: internalOrder.gross_weight || "—",
+          tareWeight: internalOrder.tare_weight || "—",
+          netWeight: internalOrder.net_weight || "—",
+          weightDiff: internalOrder.weight_diff || "—",
+          extraWeight: internalOrder.extra_weight || "—",
+          weightmentSlip: internalOrder.weightment_slip_copy || null,
+          rstNo: internalOrder.rst_no || "—"
         }
       }
 
@@ -1131,6 +1138,30 @@ export default function ActualDispatchPage() {
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">DO Date</p>
                                     <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.partySoDate || "—"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">RST No</p>
+                                    {orderDetails.weightmentSlip || orderDetails.weightment_slip_copy ? (
+                                      <a href={orderDetails.weightmentSlip || orderDetails.weightment_slip_copy} target="_blank" rel="noopener noreferrer" className="text-sm font-black text-blue-600 hover:text-blue-800 underline leading-tight">
+                                        #{orderDetails.rstNo || orderDetails.rst_no || "—"}
+                                      </a>
+                                    ) : (
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">#{orderDetails.rstNo || orderDetails.rst_no || "—"}</p>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Gross / Tare / Net</p>
+                                    <p className="text-sm font-black text-slate-900 leading-tight">
+                                      {orderDetails.grossWeight} / {orderDetails.tareWeight} / <span className="text-blue-600 font-black">{orderDetails.netWeight}</span>
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Weight Diff</p>
+                                    <p className="text-sm font-black text-amber-600 leading-tight">{orderDetails.weightDiff}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Extra Weight</p>
+                                    <p className="text-sm font-black text-purple-600 leading-tight">{orderDetails.extraWeight || orderDetails.extra_weight || "0"}</p>
                                   </div>
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Transport</p>

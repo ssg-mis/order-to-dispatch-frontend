@@ -203,6 +203,13 @@ export default function MaterialLoadPage() {
              brokerName: order.broker_name || "—",
              skuName: order.sku_name || "—",
              approvalQty: order.approval_qty || "—",
+             grossWeight: order.gross_weight || "—",
+             tareWeight: order.tare_weight || "—",
+             netWeight: order.net_weight || "—",
+             weightDiff: order.weight_diff || "—",
+             extraWeight: order.extra_weight || "—",
+             weightmentSlip: order.weightment_slip_copy || null,
+             rstNo: order.rst_no || "—",
              
              _allProducts: [],
              _productCount: 0
@@ -509,6 +516,30 @@ export default function MaterialLoadPage() {
                   <div>
                     <Label className="text-xs text-muted-foreground">DO Date</Label>
                     <p className="font-medium">{selectedGroup.partySoDate || "—"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">RST No</Label>
+                    {selectedGroup.weightmentSlip || selectedGroup.weightment_slip_copy ? (
+                      <a href={selectedGroup.weightmentSlip || selectedGroup.weightment_slip_copy} target="_blank" rel="noopener noreferrer" className="block text-blue-600 hover:text-blue-800 underline font-black">
+                        #{selectedGroup.rstNo || "—"}
+                      </a>
+                    ) : (
+                      <p className="font-medium">#{selectedGroup.rstNo || "—"}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Gross / Tare / Net</Label>
+                    <p className="font-medium text-slate-900 leading-tight">
+                      {selectedGroup.grossWeight || "0"} / {selectedGroup.tareWeight || "0"} / <span className="text-blue-600 font-black">{selectedGroup.netWeight || "0"}</span>
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Weight Diff</Label>
+                    <p className="font-black text-amber-600">{selectedGroup.weightDiff || "0"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Extra Weight</Label>
+                    <p className="font-black text-purple-600">{selectedGroup.extraWeight || "0"}</p>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Transport Type</Label>

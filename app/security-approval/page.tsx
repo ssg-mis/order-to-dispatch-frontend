@@ -760,17 +760,33 @@ export default function SecurityApprovalPage() {
 
                               <div>
                                 <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">RST No</p>
-                                <p className="text-xs font-black text-slate-900">#{firstProd.rst_no || "—"}</p>
-                              </div>
-                              <div>
-                                <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Slip</p>
-                                <p className="text-xs font-bold text-slate-700">{firstProd.weightment_slip_copy || "—"}</p>
+                                {firstProd.weightment_slip_copy ? (
+                                  <a href={firstProd.weightment_slip_copy} target="_blank" rel="noopener noreferrer" className="text-sm font-black text-blue-600 hover:text-blue-800 underline">
+                                    #{firstProd.rst_no || "—"}
+                                  </a>
+                                ) : (
+                                  <p className="text-sm font-black text-slate-900">#{firstProd.rst_no || "—"}</p>
+                                )}
                               </div>
                               <div>
                                 <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
-                                <p className="text-xs font-black text-slate-900">{firstProd.gross_weight || "0"} / {firstProd.tare_weight || "0"} / <span className="text-blue-600">{firstProd.net_weight || "0"}</span></p>
+                                <p className="text-xs font-black text-slate-900 leading-tight">
+                                  {firstProd.gross_weight || firstProd.grossWeight || "0"} / {firstProd.tare_weight || firstProd.tareWeight || "0"} / <span className="text-blue-600 font-black">{firstProd.net_weight || firstProd.netWeight || "0"}</span>
+                                </p>
                               </div>
                               <div>
+                                <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff</p>
+                                <p className="text-xs font-black text-amber-600">{firstProd.weight_diff || "0"}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Extra Weight</p>
+                                <p className="text-xs font-black text-purple-600">{firstProd.extra_weight || "0"}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare</p>
+                                <p className="text-xs font-black text-slate-900">{firstProd.gross_weight || "0"} / {firstProd.tare_weight || "0"}</p>
+                              </div>
+                              <div className="md:col-span-1">
                                 <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff Reason</p>
                                 <p className="text-[10px] font-bold text-red-500 italic">{firstProd.reason_of_difference_in_weight_if_any_speacefic || "—"}</p>
                               </div>

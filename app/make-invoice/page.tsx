@@ -703,20 +703,27 @@ export default function MakeInvoicePage() {
 
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">RST No</p>
-                                        <p className="text-xs font-black text-slate-900">#{firstProd.rstNo || "—"}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Slip</p>
                                         {firstProd.weightment_slip_copy ? (
-                                          <a href={firstProd.weightment_slip_copy} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.weightment_slip_copy} alt="Weight Slip" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.weightment_slip_copy} target="_blank" rel="noopener noreferrer" className="text-sm font-black text-blue-600 hover:text-blue-800 underline">
+                                            #{firstProd.rstNo || "—"}
                                           </a>
-                                        ) : <span className="text-[10px] text-slate-400">—</span>}
+                                        ) : (
+                                          <p className="text-sm font-black text-slate-900">#{firstProd.rstNo || "—"}</p>
+                                        )}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
-                                        <p className="text-xs font-black text-slate-900">{firstProd.grossWeight || "0"} / {firstProd.tareWeight || "0"} / <span className="text-blue-600">{firstProd.netWeight ? firstProd.netWeight : (firstProd.grossWeight && firstProd.tareWeight ? (parseFloat(firstProd.grossWeight) - parseFloat(firstProd.tareWeight)).toFixed(0) : "0")}</span></p>
+                                        <p className="text-xs font-black text-slate-900 leading-tight">
+                                          {firstProd.grossWeight || "0"} / {firstProd.tareWeight || "0"} / <span className="text-blue-600 font-black">{firstProd.netWeight || "0"}</span>
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff</p>
+                                        <p className="text-xs font-black text-amber-600">{firstProd.weightDiff || "0"}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Extra Weight</p>
+                                        <p className="text-xs font-black text-purple-600">{firstProd.extraWeight || "0"}</p>
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff Reason</p>
