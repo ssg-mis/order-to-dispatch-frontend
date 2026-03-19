@@ -521,6 +521,10 @@ export default function DamageAdjustmentPage() {
                       <p className="font-medium">{selectedGroup.deliveryDate}</p>
                     </div>
                     <div>
+                      <Label className="text-xs text-muted-foreground">DO Date</Label>
+                      <p className="font-medium">{selectedGroup.partySoDate || "—"}</p>
+                    </div>
+                    <div>
                       <Label className="text-xs text-muted-foreground">Transport Type</Label>
                       <p className="font-medium">{selectedGroup.transportType}</p>
                     </div>

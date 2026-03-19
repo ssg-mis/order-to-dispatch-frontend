@@ -434,7 +434,7 @@ export default function VehicleDetailsPage() {
 
       {/* Split-View Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="!max-w-7xl max-h-[95vh] overflow-y-auto w-full">
+        <DialogContent className="max-w-7xl! max-h-[95vh] overflow-y-auto w-full">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-900">
               Vehicle Details Assignment - {selectedGroup?.doNumber}
@@ -466,6 +466,10 @@ export default function VehicleDetailsPage() {
                   <div>
                     <Label className="text-xs text-muted-foreground">Delivery Date</Label>
                     <p className="font-medium">{selectedGroup.deliveryDate}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">DO Date</Label>
+                    <p className="font-medium">{selectedGroup.partySoDate || "—"}</p>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Transport Type</Label>

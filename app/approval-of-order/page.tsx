@@ -757,6 +757,10 @@ export default function CommitmentReviewPage() {
                                     <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.deliveryDate)}</p>
                                   </div>
                                   <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">DO Date</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.partySoDate || "—"}</p>
+                                  </div>
+                                  <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Transport Type</p>
                                     <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.transportType || "—"}</p>
                                   </div>

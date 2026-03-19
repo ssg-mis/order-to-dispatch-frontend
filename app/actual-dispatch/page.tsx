@@ -475,8 +475,7 @@ export default function ActualDispatchPage() {
       const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
 
       // Group by DO Date (party_so_date)
-      const doDate = order.party_so_date || order.partySoDate || order.timestamp || "Unknown Date";
-      const groupKey = doDate;
+      const groupKey = baseDo;
 
       if (!grouped[groupKey]) {
         grouped[groupKey] = {
@@ -1128,6 +1127,10 @@ export default function ActualDispatchPage() {
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Date</p>
                                     <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.deliveryDate)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">DO Date</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.partySoDate || "—"}</p>
                                   </div>
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Transport</p>

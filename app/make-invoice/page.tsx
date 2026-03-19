@@ -219,7 +219,8 @@ export default function MakeInvoicePage() {
           brokerName: order.broker_name || "—",
           partyCredit: order.party_credit_status || "Good",
           totalAmount: order.total_amount_with_gst || "—",
-          oilType: order.oil_type || "—"
+          oilType: order.oil_type || "—",
+          partySoDate: formatDate(order.party_so_date || order.partySoDate)
         }
       }
 
@@ -629,42 +630,44 @@ export default function MakeInvoicePage() {
                                           {orderDetails.partyCredit}
                                         </Badge>
                                       </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">DO Date</p>
+                                        <p className="text-xs font-bold text-slate-700">
+                                          {orderDetails.partySoDate || "—"}
+                                        </p>
+                                      </div>
 
                                       <div className="md:col-span-4 h-px bg-slate-200 my-1" />
 
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Fitness</p>
                                         {firstProd.fitness ? (
-                                          <a href={firstProd.fitness} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.fitness} alt="Fitness" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.fitness} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                            {firstProd.fitness_end_date ? new Date(firstProd.fitness_end_date).toLocaleDateString("en-GB") : "View Document"}
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Insurance</p>
                                         {firstProd.insurance ? (
-                                          <a href={firstProd.insurance} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.insurance} alt="Insurance" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.insurance} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                            {firstProd.insurance_end_date ? new Date(firstProd.insurance_end_date).toLocaleDateString("en-GB") : "View Document"}
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Pollution</p>
                                         {firstProd.polution ? (
-                                          <a href={firstProd.polution} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.polution} alt="Pollution" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.polution} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                            {firstProd.pollution_end_date ? new Date(firstProd.pollution_end_date).toLocaleDateString("en-GB") : "View Document"}
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Tax Copy</p>
                                         {firstProd.tax_copy ? (
-                                          <a href={firstProd.tax_copy} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.tax_copy} alt="Tax Copy" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.tax_copy} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                            {firstProd.tax_end_date ? new Date(firstProd.tax_end_date).toLocaleDateString("en-GB") : "View Document"}
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
@@ -672,18 +675,16 @@ export default function MakeInvoicePage() {
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 1</p>
                                         {firstProd.permit1 ? (
-                                          <a href={firstProd.permit1} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.permit1} alt="Permit 1" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.permit1} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                            {firstProd.permit1_end_date ? new Date(firstProd.permit1_end_date).toLocaleDateString("en-GB") : "View Document"}
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 2 (Out State)</p>
                                         {firstProd.permit2_out_state ? (
-                                          <a href={firstProd.permit2_out_state} target="_blank" rel="noopener noreferrer" className="block">
-                                            <img src={firstProd.permit2_out_state} alt="Permit 2" className="h-12 w-16 object-cover rounded border border-slate-200 hover:opacity-80 transition-opacity cursor-pointer" onError={(e: any) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                            <span style={{ display: 'none' }} className="text-[10px] text-blue-600 underline">View</span>
+                                          <a href={firstProd.permit2_out_state} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                            {firstProd.permit2_end_date ? new Date(firstProd.permit2_end_date).toLocaleDateString("en-GB") : "View Document"}
                                           </a>
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>

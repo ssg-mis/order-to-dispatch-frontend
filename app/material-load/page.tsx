@@ -472,7 +472,7 @@ export default function MaterialLoadPage() {
 
       {/* Split-View Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="!max-w-[95vw] w-full max-h-[95vh] overflow-y-auto p-0">
+        <DialogContent className="max-w-[95vw]! w-full max-h-[95vh] overflow-y-auto p-0">
           <div className="p-6">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-900">
@@ -505,6 +505,10 @@ export default function MaterialLoadPage() {
                   <div>
                     <Label className="text-xs text-muted-foreground">Delivery Date</Label>
                     <p className="font-medium">{selectedGroup.deliveryDate}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">DO Date</Label>
+                    <p className="font-medium">{selectedGroup.partySoDate || "—"}</p>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Transport Type</Label>

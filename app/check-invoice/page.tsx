@@ -196,7 +196,8 @@ export default function CheckInvoicePage() {
           netWeight: order.net_weight,
           transporterName: order.transporter_name,
           truckNo: order.truck_no,
-          diffReason: order.reason_of_difference_in_weight_if_any_speacefic
+          diffReason: order.reason_of_difference_in_weight_if_any_speacefic,
+          partySoDate: formatDate(order.party_so_date || order.partySoDate)
         }
       }
 
@@ -613,6 +614,12 @@ export default function CheckInvoicePage() {
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Invoice Date</p>
                                         <p className="text-xs font-bold text-slate-700">
                                           {firstProd.invoiceDate ? new Date(firstProd.invoiceDate).toLocaleDateString("en-GB") : "—"}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">DO Date</p>
+                                        <p className="text-xs font-bold text-slate-700">
+                                          {orderDetails.partySoDate || "—"}
                                         </p>
                                       </div>
 

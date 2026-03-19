@@ -192,12 +192,12 @@ export default function PreApprovalPage() {
     if (!dateInput) return null;
     const d = new Date(dateInput);
     if (isNaN(d.getTime())) return null;
-    
+
     // Extract local parts
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
-    
+
     return `${year}-${month}-${day}`;
   };
 
@@ -207,7 +207,7 @@ export default function PreApprovalPage() {
     if (!varCalcHistory.length || !oilType || !doDate) return null;
 
     const normalizedOil = normalizeOilType(oilType);
-    
+
     // Support robust comparison by normalizing both to YYYY-MM-DD local strings
     const targetDateStr = formatToLocalYYYYMMDD(doDate);
     if (!targetDateStr) return null;
@@ -216,7 +216,7 @@ export default function PreApprovalPage() {
     console.log(`[VAR_CALC_DEBUG] Input: oilType="${oilType}", doDate="${doDate}"`);
     console.log(`[VAR_CALC_DEBUG] Normalized: oil="${normalizedOil}", targetDateStr="${targetDateStr}"`);
     console.log(`[VAR_CALC_DEBUG] Total varCalcHistory records: ${varCalcHistory.length}`);
-    
+
     // Log the first 5 history records to see what raw data looks like
     varCalcHistory.slice(0, 10).forEach((vc: any, i: number) => {
       const vcLocal = formatToLocalYYYYMMDD(vc.calculation_date);
@@ -244,11 +244,11 @@ export default function PreApprovalPage() {
       .sort((a, b) => {
         const dateA = formatToLocalYYYYMMDD(a.calculation_date) || "";
         const dateB = formatToLocalYYYYMMDD(b.calculation_date) || "";
-        
+
         if (dateA !== dateB) {
-            return dateB.localeCompare(dateA); // Reverse chronological
+          return dateB.localeCompare(dateA); // Reverse chronological
         }
-        
+
         // Tie-breaker: use ID if available to ensure deterministic latest record
         return (Number(b.id) || 0) - (Number(a.id) || 0);
       });
@@ -358,12 +358,12 @@ export default function PreApprovalPage() {
                   val += s[i++];
                 }
                 values.push(parseFloat(val));
-                i--; 
+                i--;
               } else if (s[i] === ')') {
                 while (ops.length > 0 && ops[ops.length - 1] !== '(') {
                   values.push(applyOp(ops.pop()!, values.pop()!, values.pop()!));
                 }
-                ops.pop(); 
+                ops.pop();
               } else if (['+', '-', '*', '/'].includes(s[i])) {
                 while (ops.length > 0 && precedence[ops[ops.length - 1]] >= precedence[s[i]]) {
                   values.push(applyOp(ops.pop()!, values.pop()!, values.pop()!));
@@ -786,7 +786,7 @@ export default function PreApprovalPage() {
       productName: "",
       oilType: bestOilType, // Use the oil type with highest remaining budget
       uom: "Ltr",
-      orderQty: "1",
+      orderQty: "",
       rateOfMaterial: "0",
       _isNew: true,
       _baseDo: baseDo,
@@ -809,7 +809,7 @@ export default function PreApprovalPage() {
         skuName: "",
         approvalQty: "",
         rateOfMaterial: "0",
-        orderQty: "1",
+        orderQty: "",
         rate: "",
         remark: ""
       }
@@ -1250,7 +1250,7 @@ export default function PreApprovalPage() {
         productName: sku,
         rateOfMaterial: rateValue,
         rate: rateValue,
-        ratePerLtr: finalRatePerLtr
+        ratePerLtr: finalRatePerLtr.toString()
       }
     }));
 
@@ -1470,11 +1470,14 @@ export default function PreApprovalPage() {
       let collected1LtrRate: string | null = null
 
       grp._allProducts?.forEach((product: any) => {
-        if (product.ratePer15Kg && !collected15KgRate) {
-          collected15KgRate = product.ratePer15Kg
+        const p15Rate = product.rate_per_15kg || product.ratePer15Kg;
+        const p1LtrRate = product.rate_per_ltr || product.ratePerLtr;
+        
+        if (p15Rate && !collected15KgRate) {
+          collected15KgRate = p15Rate
         }
-        if (product.ratePerLtr && !collected1LtrRate) {
-          collected1LtrRate = product.ratePerLtr
+        if (p1LtrRate && !collected1LtrRate) {
+          collected1LtrRate = p1LtrRate
         }
       })
 
@@ -1484,15 +1487,19 @@ export default function PreApprovalPage() {
       // Create a map of oil type to rates for this DO group
       const oilWiseRates: { [key: string]: { ratePer15Kg: string | null, ratePerLtr: string | null } } = {}
       grp._allProducts?.forEach((product: any) => {
-        const oilType = product.oilType || "General"
+        const oilType = product.oil_type || product.oilType || "General"
         if (!oilWiseRates[oilType]) {
           oilWiseRates[oilType] = { ratePer15Kg: null, ratePerLtr: null }
         }
-        if (product.ratePer15Kg && !oilWiseRates[oilType].ratePer15Kg) {
-          oilWiseRates[oilType].ratePer15Kg = product.ratePer15Kg
+        
+        const p15Rate = product.rate_per_15kg || product.ratePer15Kg;
+        const p1LtrRate = product.rate_per_ltr || product.ratePerLtr;
+
+        if (p15Rate && !oilWiseRates[oilType].ratePer15Kg) {
+          oilWiseRates[oilType].ratePer15Kg = p15Rate
         }
-        if (product.ratePerLtr && !oilWiseRates[oilType].ratePerLtr) {
-          oilWiseRates[oilType].ratePerLtr = product.ratePerLtr
+        if (p1LtrRate && !oilWiseRates[oilType].ratePerLtr) {
+          oilWiseRates[oilType].ratePerLtr = p1LtrRate
         }
       })
       grp.oilWiseRates = oilWiseRates
@@ -1501,15 +1508,19 @@ export default function PreApprovalPage() {
       Object.entries(grp._ordersMap).forEach(([baseDo, orderData]: [string, any]) => {
         const doOilWiseRates: { [key: string]: { ratePer15Kg: string | null, ratePerLtr: string | null } } = {}
         orderData._products?.forEach((product: any) => {
-          const oilType = product.oilType || "General"
+          const oilType = product.oil_type || product.oilType || "General"
           if (!doOilWiseRates[oilType]) {
             doOilWiseRates[oilType] = { ratePer15Kg: null, ratePerLtr: null }
           }
-          if (product.ratePer15Kg && !doOilWiseRates[oilType].ratePer15Kg) {
-            doOilWiseRates[oilType].ratePer15Kg = product.ratePer15Kg
+          
+          const p15Rate = product.rate_per_15kg || product.ratePer15Kg;
+          const p1LtrRate = product.rate_per_ltr || product.ratePerLtr;
+
+          if (p15Rate && !doOilWiseRates[oilType].ratePer15Kg) {
+            doOilWiseRates[oilType].ratePer15Kg = p15Rate
           }
-          if (product.ratePerLtr && !doOilWiseRates[oilType].ratePerLtr) {
-            doOilWiseRates[oilType].ratePerLtr = product.ratePerLtr
+          if (p1LtrRate && !doOilWiseRates[oilType].ratePerLtr) {
+            doOilWiseRates[oilType].ratePerLtr = p1LtrRate
           }
         })
         orderData.oilWiseRates = doOilWiseRates
@@ -1679,7 +1690,7 @@ export default function PreApprovalPage() {
                                       <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.endDate)}</p>
                                     </div>
                                     <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">SO Date</p>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">DO Date</p>
                                       <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.soDate)}</p>
                                     </div>
                                     <div>
@@ -1823,7 +1834,9 @@ export default function PreApprovalPage() {
                                             const isNew = product._isNew;
                                             const orderQty = parseFloat(product.order_quantity || product.orderQty || "0") || 0;
                                             const remainingDispatchQty = parseFloat(product.remaining_dispatch_qty || product.remainingDispatchQty || "0") || 0;
-                                            const calculatedOrderQty = orderQty - remainingDispatchQty;
+                                            
+                                            // Fix: Use the available remaining chunk size directly (falling back to initial order quantity if missing)
+                                            const calculatedOrderQty = parseFloat(product.remaining_dispatch_qty || product.remainingDispatchQty || product.order_quantity || product.orderQty || "0") || 0;
                                             const maxQty = isNew ? (parseFloat(productRates[rowKey]?.orderQty || "0") || 0) : calculatedOrderQty;
 
                                             return (
@@ -1997,15 +2010,14 @@ export default function PreApprovalPage() {
                                                       // Calculate total order qty for all products in this order
                                                       const allProducts = [...orderDetails._products, ...(dialogNewProducts[baseDo] || [])]
                                                       const originalTotalOrderQty = orderDetails._products.reduce((sum: number, p: any) => {
-                                                        const pOrderQty = parseFloat(p.order_quantity || p.orderQty || "0") || 0;
-                                                        const pRemainingQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || "0") || 0;
-                                                        return sum + (pOrderQty - pRemainingQty);
+                                                        const pQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0;
+                                                        return sum + pQty;
                                                       }, 0);
                                                       const totalOrderQty = allProducts.reduce((sum, p) => {
                                                         const pQty = p._isNew
                                                           ? (parseFloat(productRates[p._rowKey]?.orderQty || '0') || 0)
-                                                          : (parseFloat(p.order_quantity || p.orderQty || "0") - parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || "0"))
-                                                        return sum + pQty
+                                                          : (parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0);
+                                                        return sum + pQty;
                                                       }, 0)
 
                                                       // Calculate total approval qty including this change
@@ -2044,9 +2056,8 @@ export default function PreApprovalPage() {
                                                       })
 
                                                       const totalOilTypeOrderQty = sameOilTypeProducts.reduce((sum, p) => {
-                                                        const pOrderQty = parseFloat(p.order_quantity || p.orderQty || "0") || 0;
-                                                        const pRemainingQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || "0") || 0;
-                                                        return sum + (pOrderQty - pRemainingQty);
+                                                        const pQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0;
+                                                        return sum + pQty;
                                                       }, 0)
 
                                                       // Calculate ALREADY APPROVED qty for THIS oil type (excluding current row)
@@ -2094,11 +2105,9 @@ export default function PreApprovalPage() {
 
                                                         // Calculate remaining budget in other oil types
                                                         const otherOilTypeRemaining = otherOilTypeProducts.reduce((sum, p) => {
-                                                          const pOrderQty = parseFloat(p.order_quantity || p.orderQty || "0") || 0;
-                                                          const pRemainingQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || "0") || 0;
-                                                          const pCalculatedQty = pOrderQty - pRemainingQty;
+                                                          const pQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0;
                                                           const pApproved = parseFloat(productRates[p._rowKey]?.approvalQty || '0') || 0
-                                                          return sum + (pCalculatedQty - pApproved)
+                                                          return sum + (pQty - pApproved)
                                                         }, 0)
 
                                                         const otherOilTypeName = otherOilTypeProducts[0]?.productName || otherOilTypeProducts[0]?.oilType || 'other product'
@@ -2219,11 +2228,11 @@ export default function PreApprovalPage() {
                                                         if (dynamicCost && !dynamicCost.noVarCalc && dynamicCost.landingCost > 0 && !isNaN(enteredRate)) {
                                                           const minAllowed = dynamicCost.landingCost;
                                                           const maxAllowed = minAllowed * (1 + (dynamicCost.margin || 0) / 100);
-                                                          
+
                                                           let clampedValue = enteredRate;
                                                           if (enteredRate < minAllowed) clampedValue = minAllowed;
                                                           else if (enteredRate > maxAllowed) clampedValue = maxAllowed;
-                                                          
+
                                                           if (clampedValue !== enteredRate) {
                                                             setProductRates({
                                                               ...productRates,
@@ -2356,9 +2365,7 @@ export default function PreApprovalPage() {
                                                 {[...orderDetails._products, ...(dialogNewProducts[baseDo] || [])].reduce((sum: number, p: any) => {
                                                   // Only count original products, not new SKUs
                                                   if (p._isNew) return sum;
-                                                  const pOrderQty = parseFloat(p.order_quantity || p.orderQty || "0") || 0;
-                                                  const pRemainingQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || "0") || 0;
-                                                  const calculatedQty = pOrderQty - pRemainingQty;
+                                                  const calculatedQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0;
                                                   return sum + calculatedQty;
                                                 }, 0)}
                                               </Badge>
