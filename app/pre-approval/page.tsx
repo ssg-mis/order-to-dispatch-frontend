@@ -627,15 +627,15 @@ export default function PreApprovalPage() {
           return;
         }
 
-        if (enteredRate < rateOfMaterial) {
-          toast({
-            title: "Invalid Rate",
-            description: `Final rate for product in ${item._displayDo} cannot be less than ₹${rateOfMaterial.toFixed(2)}.`,
-            variant: "destructive"
-          });
-          setIsApproving(false);
-          return;
-        }
+        // if (enteredRate < rateOfMaterial) {
+        //   toast({
+        //     title: "Invalid Rate",
+        //     description: `Final rate for product in ${item._displayDo} cannot be less than ₹${rateOfMaterial.toFixed(2)}.`,
+        //     variant: "destructive"
+        //   });
+        //   setIsApproving(false);
+        //   return;
+        // }
       }
 
       const successfulApprovals: any[] = []
@@ -838,15 +838,15 @@ export default function PreApprovalPage() {
           return;
         }
 
-        if (enteredRate < rateOfMaterial) {
-          toast({
-            title: "Invalid Rate",
-            description: `Final rate for product in ${item._displayDo} cannot be less than ₹${rateOfMaterial.toFixed(2)}.`,
-            variant: "destructive"
-          });
-          setIsApproving(false);
-          return;
-        }
+        // if (enteredRate < rateOfMaterial) {
+        //   toast({
+        //     title: "Invalid Rate",
+        //     description: `Final rate for product in ${item._displayDo} cannot be less than ₹${rateOfMaterial.toFixed(2)}.`,
+        //     variant: "destructive"
+        //   });
+        //   setIsApproving(false);
+        //   return;
+        // }
 
         // Selling Price Validation (Landing Cost & Margin) - oil-type + DO-date aware
         const productOilType = product.oilType || product.productName || "";
