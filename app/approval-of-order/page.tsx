@@ -409,6 +409,16 @@ export default function CommitmentReviewPage() {
       }
       setSelectedItems([])
       setSelectedOrder(null)
+      // Reset form state after successful submission
+      setChecklistValues({
+        rate: "approve",
+        sku: "approve",
+        credit: "approve",
+        dispatch: "approve",
+        overall: "approve",
+        confirm: "approve",
+      })
+      setProcessId("")
     } finally {
       setIsConfirming(false)
     }
@@ -459,6 +469,17 @@ export default function CommitmentReviewPage() {
         const allKeys = selectedItems.flatMap(g => g._allProducts || []).map((p: any) => p._rowKey)
         setDialogSelectedProducts(allKeys)
       }
+      
+      // Reset form state whenever opening
+      setChecklistValues({
+        rate: "approve",
+        sku: "approve",
+        credit: "approve",
+        dispatch: "approve",
+        overall: "approve",
+        confirm: "approve",
+      })
+      setProcessId("")
     }
   }
 
