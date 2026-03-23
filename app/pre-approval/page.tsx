@@ -31,7 +31,7 @@ import { Badge } from "@/components/ui/badge"
 import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus, Check, Search, Package, Calculator, Save, Calendar } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
-import { skuApi, preApprovalApi, skuSellingPriceApi, varCalcApi } from "@/lib/api-service"
+import { skuApi, preApprovalApi, skuSellingPriceApi, varCalcApi, orderApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import {
@@ -720,14 +720,27 @@ export default function PreApprovalPage() {
     }
   }
 
-  const handleAddProductRow = (baseDo: string, orderData: any) => {
-    // Calculate next suffix (A, B, C...)
+  const handleAddProductRow = async (baseDo: string, orderData: any) => {
+    // Calculate next suffix (A, B, C...) by checking database AND local state
     const occupiedSuffixes = new Set<string>();
+    
+    // 1. Check local state
     [...(orderData._products || []), ...(dialogNewProducts[baseDo] || [])].forEach(p => {
       const id = p.orderNo || p._originalOrderId || "";
       const match = id.match(/([A-Z])$/i);
       if (match) occupiedSuffixes.add(match[1].toUpperCase());
     });
+
+    // 2. Check Database via API
+    try {
+      const dbSuffixes = await orderApi.getSuffixes(baseDo);
+      if (dbSuffixes.success && Array.isArray(dbSuffixes.data)) {
+        dbSuffixes.data.forEach((s: string) => occupiedSuffixes.add(s.toUpperCase()));
+      }
+    } catch (error) {
+      console.error("Error fetching suffixes from DB:", error);
+      // Fallback to local state only (already in occupiedSuffixes)
+    }
 
     let charCode = 65; // 'A'
     while (occupiedSuffixes.has(String.fromCharCode(charCode))) {

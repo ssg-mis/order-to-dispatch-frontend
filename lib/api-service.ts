@@ -170,6 +170,13 @@ export const orderApi = {
       method: 'DELETE',
     });
   },
+
+  /**
+   * Get all suffixes for a given order prefix
+   */
+  getSuffixes: async (prefix: string): Promise<ApiResponse<string[]>> => {
+    return request(API_ENDPOINTS.orders.getSuffixes(prefix));
+  },
 };
 
 /**
