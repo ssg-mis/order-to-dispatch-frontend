@@ -1132,7 +1132,7 @@ export const skuSellingPriceApi = {
  * Common API
  */
 export const commonApi = {
-  getNextId: async (type: 'customer' | 'depot' | 'broker' | 'sku'): Promise<ApiResponse<{ nextId: string; type: string; prefix: string }>> => {
+  getNextId: async (type: 'customer' | 'depot' | 'broker' | 'sku' | 'salesperson'): Promise<ApiResponse<{ nextId: string; type: string; prefix: string }>> => {
     return request(`/common/next-id?type=${type}`);
   },
 };
@@ -1167,6 +1167,42 @@ export const varCalcApi = {
   },
 };
 
+/**
+ * Salesperson API
+ */
+export const salespersonApi = {
+  getAll: async (params?: any): Promise<ApiResponse> => {
+    const queryString = params
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`/salespersons${queryString}`);
+  },
+
+  getById: async (id: string): Promise<ApiResponse> => {
+    return request(`/salespersons/${id}`);
+  },
+
+  create: async (data: any): Promise<ApiResponse> => {
+    return request('/salespersons', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (id: string, data: any): Promise<ApiResponse> => {
+    return request(`/salespersons/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: string): Promise<ApiResponse> => {
+    return request(`/salespersons/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
 export default {
   order: orderApi,
   preApproval: preApprovalApi,
@@ -1184,5 +1220,6 @@ export default {
   skuSellingPrice: skuSellingPriceApi,
   common: commonApi,
   varCalc: varCalcApi,
+  salesperson: salespersonApi,
 };
 

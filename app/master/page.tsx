@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { customerApi, depotApi, brokerApi, skuDetailsApi, commonApi, skuSellingPriceApi, varCalcApi } from "@/lib/api-service"
+import { customerApi, depotApi, brokerApi, skuDetailsApi, commonApi, skuSellingPriceApi, varCalcApi, salespersonApi } from "@/lib/api-service"
 
 import { useAuth } from "@/hooks/use-auth"
 import { Plus, Pencil, Trash2, Loader2, RefreshCw, Users, Warehouse, Briefcase, Search, Download, Package, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
@@ -56,6 +56,16 @@ interface Depot {
 }
 
 interface Broker {
+  broker_id: string
+  status: string
+  salesman_name: string
+  email_id: string
+  mobile_no: string
+  depot_name: string
+  depot_id: string
+}
+
+interface Salesperson {
   broker_id: string
   status: string
   salesman_name: string
@@ -117,6 +127,7 @@ export default function MasterPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [depots, setDepots] = useState<Depot[]>([])
   const [brokers, setBrokers] = useState<Broker[]>([])
+  const [salespersons, setSalespersons] = useState<Salesperson[]>([])
   const [skuDetails, setSkuDetails] = useState<SkuDetail[]>([])
   const [skuSellingPrices, setSkuSellingPrices] = useState<SkuSellingPrice[]>([])
   const [latestVarCalc, setLatestVarCalc] = useState<any>(null)
@@ -126,6 +137,7 @@ export default function MasterPage() {
   const [customerSort, setCustomerSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'customer_id', dir: 'asc' })
   const [depotSort, setDepotSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'depot_id', dir: 'asc' })
   const [brokerSort, setBrokerSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'broker_id', dir: 'asc' })
+  const [salespersonSort, setSalespersonSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'broker_id', dir: 'asc' })
   const [skuSort, setSkuSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'sku_code', dir: 'asc' })
   const [skuSellingPriceSort, setSkuSellingPriceSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'packing_material', dir: 'asc' })
 
@@ -162,6 +174,16 @@ export default function MasterPage() {
   })
 
   const [brokerForm, setBrokerForm] = useState<Partial<Broker>>({
+    broker_id: "",
+    status: "Active",
+    salesman_name: "",
+    email_id: "",
+    mobile_no: "",
+    depot_name: "",
+    depot_id: ""
+  })
+
+  const [salespersonForm, setSalespersonForm] = useState<Partial<Salesperson>>({
     broker_id: "",
     status: "Active",
     salesman_name: "",
@@ -221,6 +243,9 @@ export default function MasterPage() {
       } else if (activeTab === "brokers") {
         const res = await brokerApi.getAll(params)
         if (res.success) setBrokers(res.data)
+      } else if (activeTab === "salespersons") {
+        const res = await salespersonApi.getAll(params)
+        if (res.success) setSalespersons(res.data)
       } else if (activeTab === "sku_details") {
         const res = await skuDetailsApi.getAll(params)
         if (res.success) setSkuDetails(res.data)
@@ -282,6 +307,15 @@ export default function MasterPage() {
       depot_name: "",
       depot_id: ""
     })
+    setSalespersonForm({
+      broker_id: "",
+      status: "Active",
+      salesman_name: "",
+      email_id: "",
+      mobile_no: "",
+      depot_name: "",
+      depot_id: ""
+    })
     setSkuDetailsForm({
       status: "Active",
       sku_code: "",
@@ -323,6 +357,12 @@ export default function MasterPage() {
           res = await brokerApi.update(editingItem.broker_id, brokerForm)
         } else {
           res = await brokerApi.create(brokerForm)
+        }
+      } else if (activeTab === "salespersons") {
+        if (editingItem) {
+          res = await salespersonApi.update(editingItem.broker_id, salespersonForm)
+        } else {
+          res = await salespersonApi.create(salespersonForm)
         }
       } else if (activeTab === "sku_details") {
         if (editingItem) {
@@ -366,6 +406,8 @@ export default function MasterPage() {
         res = await depotApi.delete(deletingItem.depot_id)
       } else if (activeTab === "brokers") {
         res = await brokerApi.delete(deletingItem.broker_id)
+      } else if (activeTab === "salespersons") {
+        res = await salespersonApi.delete(deletingItem.broker_id)
       } else if (activeTab === "sku_details") {
         res = await skuDetailsApi.delete(deletingItem.id)
       } else if (activeTab === "sku_selling_price") {
@@ -389,7 +431,7 @@ export default function MasterPage() {
     }
   }
 
-  const fetchNextId = async (type: 'customer' | 'depot' | 'broker' | 'sku') => {
+  const fetchNextId = async (type: 'customer' | 'depot' | 'broker' | 'sku' | 'salesperson') => {
     try {
       const res = await commonApi.getNextId(type)
       if (res.success) {
@@ -416,6 +458,9 @@ export default function MasterPage() {
     } else if (activeTab === "brokers") {
       nextId = await fetchNextId('broker')
       setBrokerForm(prev => ({ ...prev, broker_id: nextId }))
+    } else if (activeTab === "salespersons") {
+      nextId = await fetchNextId('salesperson')
+      setSalespersonForm(prev => ({ ...prev, broker_id: nextId }))
     } else if (activeTab === "sku_details") {
       nextId = await fetchNextId('sku')
       setSkuDetailsForm(prev => ({ ...prev, sku_code: nextId }))
@@ -448,6 +493,8 @@ export default function MasterPage() {
       setDepotForm({ ...item })
     } else if (activeTab === "brokers") {
       setBrokerForm({ ...item })
+    } else if (activeTab === "salespersons") {
+      setSalespersonForm({ ...item })
     } else if (activeTab === "sku_details") {
       setSkuDetailsForm({ ...item })
     } else if (activeTab === "sku_selling_price") {
@@ -476,6 +523,11 @@ export default function MasterPage() {
   const filteredSkuDetails = skuDetails.filter(s => 
     s.sku_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
     s.sku_code?.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  const filteredSalespersons = salespersons.filter(s => 
+    s.salesman_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    s.broker_id?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const filteredSkuSellingPrices = skuSellingPrices.filter(s =>
@@ -513,6 +565,7 @@ export default function MasterPage() {
   const sortedCustomers = sortData(filteredCustomers, customerSort.col, customerSort.dir)
   const sortedDepots = sortData(filteredDepots, depotSort.col, depotSort.dir)
   const sortedBrokers = sortData(filteredBrokers, brokerSort.col, brokerSort.dir)
+  const sortedSalespersons = sortData(filteredSalespersons, salespersonSort.col, salespersonSort.dir)
   const sortedSkuDetails = sortData(filteredSkuDetails, skuSort.col, skuSort.dir)
   const sortedSkuSellingPrices = sortData(filteredSkuSellingPrices, skuSellingPriceSort.col, skuSellingPriceSort.dir)
 
@@ -629,7 +682,7 @@ export default function MasterPage() {
           <Input id="broker_id" value={brokerForm.broker_id} readOnly className="bg-slate-100" placeholder="Auto-generated" />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="salesman_name">Salesman Name *</Label>
+          <Label htmlFor="salesman_name">Broker Name *</Label>
           <Input id="salesman_name" value={brokerForm.salesman_name} onChange={e => setBrokerForm({...brokerForm, salesman_name: e.target.value})} placeholder="Enter name" />
         </div>
       </div>
@@ -652,16 +705,40 @@ export default function MasterPage() {
         <Label htmlFor="email_id">Email ID</Label>
         <Input id="email_id" value={brokerForm.email_id} onChange={e => setBrokerForm({...brokerForm, email_id: e.target.value})} placeholder="email@example.com" />
       </div>
+    </div>
+  )
+
+  const renderSalespersonForm = () => (
+    <div className="grid gap-4 py-4 px-1">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="depot_name_ref">Depot Name</Label>
-          <Input id="depot_name_ref" value={brokerForm.depot_name} onChange={e => setBrokerForm({...brokerForm, depot_name: e.target.value})} placeholder="Enter depot name" />
+          <Label htmlFor="broker_id">Salesperson ID *</Label>
+          <Input id="broker_id" value={salespersonForm.broker_id} readOnly className="bg-slate-100" placeholder="Auto-generated" />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="depot_id_ref">Depot ID</Label>
-          <Input id="depot_id_ref" value={brokerForm.depot_id} onChange={e => setBrokerForm({...brokerForm, depot_id: e.target.value})} placeholder="e.g. D-001" />
+          <Label htmlFor="salesman_name">Salesman Name *</Label>
+          <Input id="salesman_name" value={salespersonForm.salesman_name} onChange={e => setSalespersonForm({...salespersonForm, salesman_name: e.target.value})} placeholder="Enter name" />
         </div>
       </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="status">Status</Label>
+          <Select value={salespersonForm.status} onValueChange={val => setSalespersonForm({...salespersonForm, status: val})}>
+            <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="mobile_no">Mobile Number</Label>
+          <Input id="mobile_no" value={salespersonForm.mobile_no} onChange={e => setSalespersonForm({...salespersonForm, mobile_no: e.target.value})} placeholder="Enter number" />
+        </div>
+      </div>
+        <div className="space-y-2">
+          <Label htmlFor="email_id">Email ID</Label>
+          <Input id="email_id" value={salespersonForm.email_id} onChange={e => setSalespersonForm({...salespersonForm, email_id: e.target.value})} placeholder="email@example.com" />
+        </div>
     </div>
   )
 
@@ -908,17 +985,17 @@ export default function MasterPage() {
             <DialogTrigger asChild>
               <Button className="bg-primary hover:bg-primary/90 shadow-lg" disabled={isReadOnly} onClick={handleOpenAddDialog} title={isReadOnly ? "View Only Access" : `Add New ${activeTab.replace('_', ' ')}`}>
                 <Plus className="mr-2 h-4 w-4" />
-                Add New {activeTab === "customers" ? "Customer" : activeTab === "depots" ? "Depot" : activeTab === "sku_details" ? "SKU" : activeTab === "sku_selling_price" ? "SKU Price" : "Broker"}
+                Add New {activeTab === "customers" ? "Customer" : activeTab === "depots" ? "Depot" : activeTab === "sku_details" ? "SKU" : activeTab === "sku_selling_price" ? "SKU Price" : activeTab === "salespersons" ? "Salesperson" : "Broker"}
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-xl">
               <DialogHeader>
-                <DialogTitle>{editingItem ? "Edit" : "Add New"} {activeTab === "sku_details" ? "SKU" : activeTab === "sku_selling_price" ? "SKU Selling Price" : activeTab.slice(0, -1)}</DialogTitle>
+                <DialogTitle>{editingItem ? "Edit" : "Add New"} {activeTab === "sku_details" ? "SKU" : activeTab === "sku_selling_price" ? "SKU Selling Price" : activeTab === "salespersons" ? "Salesperson" : activeTab.slice(0, -1)}</DialogTitle>
                 <DialogDescription>
-                  Enter the details for the {activeTab === "sku_details" ? "SKU" : activeTab === "sku_selling_price" ? "SKU Selling Price" : activeTab.slice(0, -1)} record.
+                  Enter the details for the {activeTab === "sku_details" ? "SKU" : activeTab === "sku_selling_price" ? "SKU Selling Price" : activeTab === "salespersons" ? "Salesperson" : activeTab.slice(0, -1)} record.
                 </DialogDescription>
               </DialogHeader>
-              {activeTab === "customers" ? renderCustomerForm() : activeTab === "depots" ? renderDepotForm() : activeTab === "sku_details" ? renderSkuDetailsForm() : activeTab === "sku_selling_price" ? renderSkuSellingPriceForm() : renderBrokerForm()}
+              {activeTab === "customers" ? renderCustomerForm() : activeTab === "depots" ? renderDepotForm() : activeTab === "sku_details" ? renderSkuDetailsForm() : activeTab === "sku_selling_price" ? renderSkuSellingPriceForm() : activeTab === "salespersons" ? renderSalespersonForm() : renderBrokerForm()}
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button onClick={handleCreateOrUpdate} disabled={isSubmitting}>
@@ -944,6 +1021,10 @@ export default function MasterPage() {
           <TabsTrigger value="brokers" className="flex items-center gap-2 px-6 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-300">
             <Briefcase className="h-4 w-4" />
             Broker Details
+          </TabsTrigger>
+          <TabsTrigger value="salespersons" className="flex items-center gap-2 px-6 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-300">
+            <Users className="h-4 w-4" />
+            Salesperson
           </TabsTrigger>
           <TabsTrigger value="sku_details" className="flex items-center gap-2 px-6 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-300">
             <Package className="h-4 w-4" />
@@ -1104,11 +1185,9 @@ export default function MasterPage() {
               <table className="w-full caption-bottom text-sm">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('broker_id', brokerSort, setBrokerSort)}>ID <SortIcon col="broker_id" sort={brokerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('salesman_name', brokerSort, setBrokerSort)}>Salesman Name <SortIcon col="salesman_name" sort={brokerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('broker_id', brokerSort, setBrokerSort)}>ID <SortIcon col="broker_id" sort={brokerSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('salesman_name', brokerSort, setBrokerSort)}>Broker Name <SortIcon col="salesman_name" sort={brokerSort} /></TableHead>
                     <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('mobile_no', brokerSort, setBrokerSort)}>Contact (Mobile/Email) <SortIcon col="mobile_no" sort={brokerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('depot_name', brokerSort, setBrokerSort)}>Depot Name <SortIcon col="depot_name" sort={brokerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('depot_id', brokerSort, setBrokerSort)}>Depot ID <SortIcon col="depot_id" sort={brokerSort} /></TableHead>
                     <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('status', brokerSort, setBrokerSort)}>Status <SortIcon col="status" sort={brokerSort} /></TableHead>
                     <TableHead className="text-right pr-6 sticky top-0 z-10 bg-slate-50">Actions</TableHead>
                   </TableRow>
@@ -1128,8 +1207,6 @@ export default function MasterPage() {
                           <p className="text-slate-400">{item.email_id || "—"}</p>
                         </div>
                       </TableCell>
-                      <TableCell>{item.depot_name || "—"}</TableCell>
-                      <TableCell>{item.depot_id || "—"}</TableCell>
                       <TableCell>
                         <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
                           {item.status}
@@ -1141,6 +1218,70 @@ export default function MasterPage() {
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete Broker"}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="salespersons">
+          <Card className="shadow-xl border-none rounded-2xl bg-white">
+            <CardHeader className="bg-slate-50/50 border-b p-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="text-xl font-bold flex items-center gap-2">
+                    <Users className="h-5 w-5 text-primary" />
+                    Salespersons List
+                  </CardTitle>
+                  <CardDescription className="mt-1">Manage your salesperson database</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
+              <table className="w-full caption-bottom text-sm">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('broker_id', salespersonSort, setSalespersonSort)}>ID <SortIcon col="broker_id" sort={salespersonSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('salesman_name', salespersonSort, setSalespersonSort)}>Salesman Name <SortIcon col="salesman_name" sort={salespersonSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('mobile_no', salespersonSort, setSalespersonSort)}>Contact (Mobile/Email) <SortIcon col="mobile_no" sort={salespersonSort} /></TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('status', salespersonSort, setSalespersonSort)}>Status <SortIcon col="status" sort={salespersonSort} /></TableHead>
+                    <TableHead className="text-right pr-6 sticky top-0 z-10 bg-slate-50">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-20"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
+                  ) : sortedSalespersons.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-20 text-slate-400">No salespersons found</TableCell></TableRow>
+                  ) : sortedSalespersons.map(item => (
+                    <TableRow key={item.broker_id} className="hover:bg-slate-50/30 transition-colors">
+                      <TableCell className="font-medium pl-6">{item.broker_id}</TableCell>
+                      <TableCell className="font-semibold text-slate-900">{item.salesman_name}</TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          <p className="text-slate-600">{item.mobile_no || "—"}</p>
+                          <p className="text-slate-400">{item.email_id || "—"}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
+                          {item.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-6">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit Salesperson"}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete Salesperson"}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
