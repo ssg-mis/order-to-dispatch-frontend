@@ -483,11 +483,9 @@ export default function OrderPunchPage() {
           timestamp: new Date().toISOString()
         }
 
-        // Save workflow history
-        const { saveWorkflowHistory } = await import('@/lib/storage-utils')
-        saveWorkflowHistory(orderEntry)
+        // saveWorkflowHistory(orderEntry) - Removed as per user request to disable localStorage history
         
-        // Keep legacy keys for compatibility
+        // Keep legacy keys for compatibility with current workflow stages
         localStorage.setItem("orderData", JSON.stringify(orderEntry))
         if (orderType === "regular") {
             localStorage.setItem("commitmentReviewData", JSON.stringify({ orderData: orderEntry }))

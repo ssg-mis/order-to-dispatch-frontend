@@ -15,10 +15,9 @@ function HistoryContent() {
   const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
-    const savedHistory = localStorage.getItem("workflowHistory")
-    if (savedHistory) {
-      setHistoryLogs(JSON.parse(savedHistory))
-    }
+    // History from localStorage is disabled as per user request.
+    // In the future, this can be replaced with a backend API call.
+    setHistoryLogs([])
   }, [])
 
   const filteredLogs = historyLogs.filter(

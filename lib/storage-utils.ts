@@ -24,9 +24,6 @@ export const saveWorkflowHistory = (entry: Partial<OrderEntry>) => {
   if (typeof window === "undefined") return;
 
   try {
-    const rawHistory = localStorage.getItem("workflowHistory");
-    const history = rawHistory ? JSON.parse(rawHistory) : [];
-    
     const newEntry: OrderEntry = {
       doNumber: entry.doNumber || entry.orderNo || entry.soNumber || "ORD-UNKNOWN",
       customerName: entry.customerName || "Unknown",
@@ -37,25 +34,22 @@ export const saveWorkflowHistory = (entry: Partial<OrderEntry>) => {
       ...entry
     };
 
-    history.push(newEntry);
-    localStorage.setItem("workflowHistory", JSON.stringify(history));
+    // HISTORY PERSISTENCE DISABLED AS PER USER REQUEST
+    // const rawHistory = localStorage.getItem("workflowHistory");
+    // const history = rawHistory ? JSON.parse(rawHistory) : [];
+    // history.push(newEntry);
+    // localStorage.setItem("workflowHistory", JSON.stringify(history));
     
-    // Also update a 'masterOrders' map for quick lookup and reliability
-    const rawMaster = localStorage.getItem("masterOrders");
-    const master = rawMaster ? JSON.parse(rawMaster) : {};
-    
-    // Merge with existing master record to preserve fields (like orderType)
-    const id = newEntry.doNumber;
-    master[id] = {
-      ...(master[id] || {}),
-      ...newEntry
-    };
-    
-    localStorage.setItem("masterOrders", JSON.stringify(master));
+    // MASTER ORDERS PERSISTENCE DISABLED AS PER USER REQUEST
+    // const rawMaster = localStorage.getItem("masterOrders");
+    // const master = rawMaster ? JSON.parse(rawMaster) : {};
+    // const id = newEntry.doNumber;
+    // master[id] = { ...(master[id] || {}), ...newEntry };
+    // localStorage.setItem("masterOrders", JSON.stringify(master));
     
     return newEntry;
   } catch (error) {
-    console.error("Failed to save workflow history:", error);
+    console.error("Failed to process workflow history entry:", error);
   }
 };
 
@@ -70,20 +64,8 @@ export const getMasterOrders = (): OrderEntry[] => {
       return Object.values(JSON.parse(rawMaster));
     }
     
-    // Fallback: Reconstruct from history if master doesn't exist
-    const rawHistory = localStorage.getItem("workflowHistory");
-    if (!rawHistory) return [];
-    
-    const history = JSON.parse(rawHistory);
-    const master: Record<string, any> = {};
-    
-    history.forEach((h: any) => {
-       const id = h.doNumber || h.orderNo || h.soNumber;
-       if (!id) return;
-       master[id] = { ...(master[id] || {}), ...h };
-    });
-    
-    return Object.values(master);
+    // Fallback: Reconstruct from history if master doesn't exist is disabled
+    return [];
   } catch (e) {
     return [];
   }

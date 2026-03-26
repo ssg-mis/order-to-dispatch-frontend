@@ -211,21 +211,8 @@ export default function CommitmentReviewPage() {
       }
     } catch (error: any) {
       console.error("Failed to fetch history:", error);
-
-      // Fallback to localStorage
-      const savedHistory = localStorage.getItem("workflowHistory");
-      if (savedHistory) {
-        const historyData = JSON.parse(savedHistory);
-        const stageHistory = historyData
-          .filter((item: any) => item.stage === "Approval Of Order" || item.stage === "Commitment Review")
-          .map((item: any) => ({
-            ...item,
-            stage: "Approval Of Order",
-            date: item.date || (item.timestamp ? new Date(item.timestamp).toLocaleDateString("en-GB") : "-"),
-            remarks: item.remarks || "-"
-          }));
-        setHistory(stageHistory);
-      }
+      // Fallback to localStorage is disabled as per user request
+      setHistory([]);
     }
   };
 
@@ -342,7 +329,7 @@ export default function CommitmentReviewPage() {
             },
             orderType: orderData.orderType || "regular"
           }
-          saveWorkflowHistory(historyEntry)
+          // saveWorkflowHistory(historyEntry) - Removed as per user request to disable localStorage history
         } else {
           const finalData = {
             orderData: {
@@ -368,8 +355,8 @@ export default function CommitmentReviewPage() {
             orderType: item.orderType || "regular"
           }
 
-          saveWorkflowHistory(historyEntry)
-          setHistory((prev) => [...prev, historyEntry])
+          // saveWorkflowHistory(historyEntry) - Removed as per user request to disable localStorage history
+          // setHistory((prev) => [...prev, historyEntry]) - History state no longer used in localStorage context
         }
       }
 
