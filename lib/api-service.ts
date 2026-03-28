@@ -347,6 +347,16 @@ export const dispatchPlanningApi = {
       body: JSON.stringify({ username, remarks }),
     });
   },
+
+  /**
+   * Update transfer details for an order
+   */
+  updateTransferDetails: async (id: number, data: any): Promise<ApiResponse> => {
+    return request(`/dispatch-planning/update-transfer/${id}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 /**

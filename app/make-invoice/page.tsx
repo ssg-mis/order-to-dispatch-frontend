@@ -177,7 +177,7 @@ export default function MakeInvoicePage() {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order: any) => {
-      const partyName = order.party_name || order.partyName || "Unknown Customer"
+      const partyName = (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName || "Unknown Customer")
       const rawDoNumber = order.so_no || order.soNo || "—"
       const doNumber = rawDoNumber.replace(/[A-Z]+$/, "")
 
@@ -430,7 +430,7 @@ export default function MakeInvoicePage() {
   }
 
   // Use unique customer names for filter
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "Unknown"))))
 
   return (
     <WorkflowStageShell
@@ -440,6 +440,7 @@ export default function MakeInvoicePage() {
       historyData={historyOrders.map((order) => ({
         date: order.actual_5 ? new Date(order.actual_5).toLocaleDateString("en-GB") : "-",
         stage: "Make Invoice",
+        customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : order.party_name,
         status: "Completed",
         remarks: order.invoice_no || "Generated",
       }))}

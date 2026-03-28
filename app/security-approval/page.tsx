@@ -111,7 +111,7 @@ export default function SecurityApprovalPage() {
         const mappedHistory = response.data.approvals.map((record: any) => ({
           orderNo: record.so_no,
           doNumber: record.d_sr_number,
-          customerName: record.party_name,
+          customerName: (record.transfer === 'yes' && record.bill_company_name) ? record.bill_company_name : record.party_name,
           stage: "Security Approval",
           status: "Completed" as const,
           processedBy: "System",
@@ -363,7 +363,10 @@ export default function SecurityApprovalPage() {
       }
 
       const group = grouped[groupKey]
-      group.customerNames.add(order.party_name || order.partyName || "Unknown Customer")
+      const currentCustName = (order.transfer === 'yes' && order.bill_company_name) 
+        ? order.bill_company_name 
+        : (order.party_name || order.partyName || "Unknown Customer")
+      group.customerNames.add(currentCustName)
       
       const rawDoNumber = order.so_no || order.soNo || "—"
       const doNumber = rawDoNumber.replace(/[A-Z]+$/, '')

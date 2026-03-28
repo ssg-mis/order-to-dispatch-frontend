@@ -145,7 +145,7 @@ export default function CheckInvoicePage() {
 
     filteredPendingOrders.forEach((order: any) => {
       const invoiceNo = order.invoice_no || "No Invoice"
-      const partyName = order.party_name || order.partyName || "Unknown Customer"
+      const partyName = (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName || "Unknown Customer")
       const rawDoNumber = order.so_no || order.soNo || "—"
       const doNumber = rawDoNumber.replace(/[A-Z]+$/, "")
 
@@ -382,7 +382,7 @@ export default function CheckInvoicePage() {
     }
   }
 
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || order.partyName || "Unknown Customer")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName || "Unknown Customer"))))
 
   return (
     <WorkflowStageShell
@@ -392,6 +392,7 @@ export default function CheckInvoicePage() {
       historyData={historyOrders.map((order) => ({
         date: order.actual_6 ? new Date(order.actual_6).toLocaleDateString("en-GB") : order.invoice_date || "-",
         stage: "Check Invoice",
+        customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : order.party_name,
         status: order.status_1 || "Verified",
         remarks: order.remarks_2 || "-",
       }))}

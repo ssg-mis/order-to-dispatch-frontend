@@ -95,7 +95,7 @@ export default function MaterialLoadPage() {
         const mappedHistory = response.data.materialLoads.map((record: any) => ({
           orderNo: record.so_no,
           doNumber: record.d_sr_number,
-          customerName: record.party_name,
+          customerName: (record.transfer === 'yes' && record.bill_company_name) ? record.bill_company_name : record.party_name,
           stage: "Material Load",
           status: "Completed" as const,
           processedBy: "System",
@@ -177,7 +177,7 @@ export default function MaterialLoadPage() {
              _rowKey: baseDo,
              orderNo: baseDo,
              doNumber: baseDo,
-             customerName: order.party_name || order.partyName,
+              customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName),
              
              // Map all order details from JOIN
              deliveryPurpose: order.order_type_delivery_purpose || "—",

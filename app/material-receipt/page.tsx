@@ -197,7 +197,7 @@ export default function MaterialReceiptPage() {
           _rowKey: invoiceNo,
           doNumber: doNumber,
           invoiceNo: invoiceNo,
-          customerName: order.party_name || "—",
+          customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "—"),
 
           // Order Details from JOIN
           deliveryPurpose: order.order_type_delivery_purpose || "—",
@@ -401,7 +401,7 @@ export default function MaterialReceiptPage() {
     }
   }
 
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "Unknown"))))
 
   return (
     <WorkflowStageShell
@@ -411,6 +411,7 @@ export default function MaterialReceiptPage() {
       historyData={historyOrders.map((order) => ({
         date: order.actual_8 ? new Date(order.actual_8).toLocaleDateString("en-GB") : "-",
         stage: "Material Receipt",
+        customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : order.party_name,
         status: order.damage_status || "Completed",
         remarks: order.damage_status === "Damaged" ? `Damaged: ${order.damage_qty}` : "Received OK",
       }))}

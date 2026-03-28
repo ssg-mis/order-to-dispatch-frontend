@@ -85,7 +85,7 @@ export default function VehicleDetailsPage() {
         const mappedHistory = response.data.vehicleDetails.map((record: any) => ({
           orderNo: record.so_no,
           doNumber: record.d_sr_number,
-          customerName: record.party_name,
+          customerName: (record.transfer === 'yes' && record.bill_company_name) ? record.bill_company_name : record.party_name,
           stage: "Vehicle Details",
           status: "Completed" as const,
           processedBy: "System",
@@ -142,7 +142,7 @@ export default function VehicleDetailsPage() {
              _rowKey: baseDo,
              orderNo: baseDo,
              doNumber: baseDo,
-             customerName: order.party_name || order.customerName,
+             customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.customerName),
              
              // Map all order details from JOIN
              deliveryPurpose: order.order_type_delivery_purpose || "—",

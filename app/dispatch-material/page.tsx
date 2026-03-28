@@ -2,7 +2,7 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 
-import { useEffect, useState, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { WorkflowStageShell } from "@/components/workflow/workflow-stage-shell"
@@ -15,7 +15,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Settings2, ChevronDown, ChevronUp } from "lucide-react"
-import { dispatchPlanningApi } from "@/lib/api-service"
+import { dispatchPlanningApi, customerApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 
@@ -36,9 +36,24 @@ export default function DispatchMaterialPage() {
     packagingComplete: false,
     labelsAttached: false,
   })
-  const [dispatchDetails, setDispatchDetails] = useState<Record<string, { qty: string, transportType?: string, deliveryFrom?: string }>>({})
+  const [dispatchDetails, setDispatchDetails] = useState<Record<string, { 
+    qty: string, 
+    transportType?: string, 
+    deliveryFrom?: string, 
+    transfer?: string,
+    transferData?: {
+      billTo: { company: string; address: string };
+      shipTo: { company: string; address: string };
+      freightRate: string;
+    }
+  }>>({})
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
   const [revertRemarks, setRevertRemarks] = useState("")
+
+  const [allCustomers, setAllCustomers] = useState<any[]>([])
+  const [isTransferPopupOpen, setIsTransferPopupOpen] = useState(false)
+  const [currentTransferRowKey, setCurrentTransferRowKey] = useState<string | null>(null)
+  const isSavingTransferRef = useRef(false)
 
   const PAGE_COLUMNS = [
     { id: "partySoDate", label: "DO Date" },
@@ -128,9 +143,21 @@ export default function DispatchMaterialPage() {
     }
   };
 
+  const fetchCustomers = async () => {
+    try {
+      const response = await customerApi.getAll({ all: 'true' });
+      if (response.success) {
+        setAllCustomers(response.data);
+      }
+    } catch (error) {
+      console.error("[DISPATCH] Failed to fetch customers:", error);
+    }
+  };
+
   useEffect(() => {
     fetchPendingDispatches();
     fetchDispatchHistory();
+    fetchCustomers();
   }, [])
 
   const [selectedItems, setSelectedItems] = useState<any[]>([])
@@ -237,10 +264,17 @@ export default function DispatchMaterialPage() {
 
         try {
           if (orderId) {
+            const tData = dispatchDetails[rowKey]?.transferData;
             const dispatchData = {
               dispatch_from: deliveryVal,
               dispatch_qty: dispatchQty,
-              username: user?.username || null // Add username for tracking
+              username: user?.username || null,
+              transfer: dispatchDetails[rowKey]?.transfer || item.transfer || 'no',
+              bill_company_name: tData?.billTo?.company || item.bill_company_name || null,
+              bill_address: tData?.billTo?.address || item.bill_address || null,
+              ship_company_name: tData?.shipTo?.company || item.ship_company_name || null,
+              ship_address: tData?.shipTo?.address || item.ship_address || null,
+              freight_rate: tData?.freightRate !== undefined ? tData.freightRate : (item.freight_rate || 0)
             };
 
             const response = await dispatchPlanningApi.submit(orderId, dispatchData);
@@ -851,6 +885,7 @@ export default function DispatchMaterialPage() {
                               <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Approval</TableHead>
                               <TableHead className="w-32 text-[10px] uppercase font-black text-slate-500 tracking-wider">Qty to Dispatch</TableHead>
                               <TableHead className="w-40 text-[10px] uppercase font-black text-slate-500 tracking-wider">Delivery From</TableHead>
+                              <TableHead className="w-24 text-[10px] uppercase font-black text-slate-500 tracking-wider">Transfer</TableHead>
                               <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Remaining</TableHead>
                               <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Status</TableHead>
                             </TableRow>
@@ -887,6 +922,58 @@ export default function DispatchMaterialPage() {
                                       </SelectContent>
                                     </Select>
                                   </TableCell>
+                                  <TableCell className="p-2">
+                                    <div className="flex items-center gap-1 justify-center">
+                                      <Select 
+                                        value={dispatchDetails[rowKey]?.transfer || prod.transfer || "no"} 
+                                        onValueChange={(val) => {
+                                          setDispatchDetails((prev) => {
+                                            const existing = prev[rowKey] || {};
+                                            // Initialize transferData from prod if not already present in state
+                                            const transferData = existing.transferData || {
+                                              billTo: { 
+                                                company: prod.bill_company_name || "", 
+                                                address: prod.bill_address || "" 
+                                              },
+                                              shipTo: { 
+                                                company: prod.ship_company_name || "", 
+                                                address: prod.ship_address || "" 
+                                              },
+                                              freightRate: prod.freight_rate?.toString() || ""
+                                            };
+                                            return {
+                                              ...prev,
+                                              [rowKey]: { ...existing, transfer: val, transferData }
+                                            };
+                                          });
+                                          if (val === "yes") {
+                                            setCurrentTransferRowKey(rowKey);
+                                            setIsTransferPopupOpen(true);
+                                          }
+                                        }}
+                                      >
+                                        <SelectTrigger className="h-7 text-[10px] font-bold w-20"><SelectValue placeholder="Transfer" /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="yes" className="text-[10px]">Yes</SelectItem>
+                                          <SelectItem value="no" className="text-[10px]">No</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      {(dispatchDetails[rowKey]?.transfer === "yes" || (!dispatchDetails[rowKey]?.transfer && prod.transfer === "yes")) && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                          onClick={() => {
+                                            setCurrentTransferRowKey(rowKey);
+                                            setIsTransferPopupOpen(true);
+                                          }}
+                                          title="View Transfer Details"
+                                        >
+                                          <Settings2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </TableCell>
                                   <TableCell className="text-[10px] font-bold text-slate-500 p-2 text-center">{maxLimit}</TableCell>
                                   <TableCell className="p-2 text-center">
                                     <Badge variant="outline" className="text-[9px] bg-orange-50 text-orange-700 border-orange-200 uppercase font-black">Pending</Badge>
@@ -916,6 +1003,7 @@ export default function DispatchMaterialPage() {
                                   }, 0)}
                                 </Badge>
                               </TableCell>
+                              <TableCell />
                               <TableCell />
                               <TableCell className="p-3 text-center">
                                 <Badge variant="secondary" className="bg-slate-200 text-slate-700 font-black px-2 shadow-sm border-slate-300">
@@ -963,6 +1051,276 @@ export default function DispatchMaterialPage() {
                 {isProcessing ? "Processing..." : `Dispatch ${dialogSelectedProducts.length} Item(s)`}
               </Button>
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer Details Popup */}
+      <Dialog open={isTransferPopupOpen} onOpenChange={(open) => {
+        if (!open) {
+          if (!isSavingTransferRef.current && currentTransferRowKey) {
+            setDispatchDetails(prev => ({
+              ...prev,
+              [currentTransferRowKey]: { ...prev[currentTransferRowKey], transfer: "no" }
+            }));
+          }
+          setIsTransferPopupOpen(false);
+          isSavingTransferRef.current = false;
+        }
+      }}>
+        <DialogContent className="sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Transfer Details</DialogTitle>
+            <DialogDescription>
+              Provide Bill-to and Ship-to details for the material transfer.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-8 py-4">
+            {/* Bill To Column */}
+            <div className="space-y-4">
+              <h3 className="font-bold text-blue-800 border-b pb-1 uppercase text-sm">Bill To</h3>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Company Name <span className="text-red-500">*</span></Label>
+                  <Select 
+                    value={
+                      currentTransferRowKey 
+                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.billTo?.company ?? 
+                           allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.bill_company_name ?? "") 
+                        : ""
+                    } 
+                    onValueChange={(val) => {
+                      if (!currentTransferRowKey) return;
+                      const selectedCust = allCustomers.find(c => c.customer_name === val);
+                      let autoAddress = "";
+                      if (selectedCust) {
+                        autoAddress = [
+                          selectedCust.address_line_1,
+                          selectedCust.address_line_2,
+                          selectedCust.state,
+                          selectedCust.pincode
+                        ].filter(Boolean).join(", ");
+                      }
+                      
+                      const prevData = dispatchDetails[currentTransferRowKey]?.transferData || {
+                        billTo: { company: "", address: "" },
+                        shipTo: { company: "", address: "" },
+                        freightRate: ""
+                      };
+                      setDispatchDetails(prev => {
+                        const rowKey = currentTransferRowKey!;
+                        const rowDetail = prev[rowKey] || { qty: "0" };
+                        return {
+                          ...prev,
+                          [rowKey]: {
+                            ...rowDetail,
+                            transferData: { 
+                              ...prevData, 
+                              billTo: { ...prevData.billTo, company: val, address: autoAddress || prevData.billTo.address } 
+                            }
+                          }
+                        };
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select Company" /></SelectTrigger>
+                    <SelectContent>
+                      {allCustomers.map(cust => (
+                        <SelectItem key={cust.id} value={cust.customer_name} className="text-xs">{cust.customer_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Address</Label>
+                  <Input 
+                    placeholder="Enter Address" 
+                    className="h-9 text-xs font-medium" 
+                    value={
+                      currentTransferRowKey 
+                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.billTo?.address ?? 
+                           allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.bill_address ?? "") 
+                        : ""
+                    }
+                    onChange={(e) => {
+                      if (!currentTransferRowKey) return;
+                      const prevData = dispatchDetails[currentTransferRowKey]?.transferData || {
+                        billTo: { company: "", address: "" },
+                        shipTo: { company: "", address: "" },
+                        freightRate: ""
+                      };
+                      setDispatchDetails(prev => {
+                        const rowKey = currentTransferRowKey!;
+                        const rowDetail = prev[rowKey] || { qty: "0" };
+                        return {
+                          ...prev,
+                          [rowKey]: {
+                            ...rowDetail,
+                            transferData: { ...prevData, billTo: { ...prevData.billTo, address: e.target.value } }
+                          }
+                        };
+                      });
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Ship To Column */}
+            <div className="space-y-4">
+              <h3 className="font-bold text-green-800 border-b pb-1 uppercase text-sm">Ship To</h3>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Company Name <span className="text-red-500">*</span></Label>
+                  <Select 
+                    value={
+                      currentTransferRowKey 
+                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.shipTo?.company ?? 
+                           allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.ship_company_name ?? "") 
+                        : ""
+                    } 
+                    onValueChange={(val) => {
+                      if (!currentTransferRowKey) return;
+                      const selectedCust = allCustomers.find(c => c.customer_name === val);
+                      let autoAddress = "";
+                      if (selectedCust) {
+                        autoAddress = [
+                          selectedCust.address_line_1,
+                          selectedCust.address_line_2,
+                          selectedCust.state,
+                          selectedCust.pincode
+                        ].filter(Boolean).join(", ");
+                      }
+
+                      const prevData = dispatchDetails[currentTransferRowKey]?.transferData || {
+                        billTo: { company: "", address: "" },
+                        shipTo: { company: "", address: "" },
+                        freightRate: ""
+                      };
+                      setDispatchDetails(prev => {
+                        const rowDetail = prev[currentTransferRowKey || ""] || {};
+                        return {
+                          ...prev,
+                          [currentTransferRowKey || ""]: {
+                            ...rowDetail,
+                            transferData: { 
+                              ...prevData, 
+                              shipTo: { ...prevData.shipTo, company: val, address: autoAddress || prevData.shipTo.address } 
+                            }
+                          }
+                        };
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select Company" /></SelectTrigger>
+                    <SelectContent>
+                      {allCustomers.map(cust => (
+                        <SelectItem key={cust.id} value={cust.customer_name} className="text-xs">{cust.customer_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Address</Label>
+                  <Input 
+                    placeholder="Enter Address" 
+                    className="h-9 text-xs font-medium" 
+                    value={
+                      currentTransferRowKey 
+                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.shipTo?.address ?? 
+                           allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.ship_address ?? "") 
+                        : ""
+                    }
+                    onChange={(e) => {
+                      if (!currentTransferRowKey) return;
+                      const prevData = dispatchDetails[currentTransferRowKey]?.transferData || {
+                        billTo: { company: "", address: "" },
+                        shipTo: { company: "", address: "" },
+                        freightRate: ""
+                      };
+                      setDispatchDetails(prev => {
+                        const rowKey = currentTransferRowKey!;
+                        const rowDetail = prev[rowKey] || { qty: "0" };
+                        return {
+                          ...prev,
+                          [rowKey]: {
+                            ...rowDetail,
+                            transferData: { ...prevData, shipTo: { ...prevData.shipTo, address: e.target.value } }
+                          }
+                        };
+                      });
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-8 pb-4">
+            <div className="space-y-1.5 max-w-xs">
+              <Label className="text-xs font-bold">Freight Rate <span className="text-red-500">*</span></Label>
+              <Input 
+                type="number" 
+                min="0" 
+                placeholder="0.00" 
+                className="h-10 text-sm font-bold border-2 focus:border-blue-400" 
+                value={
+                  currentTransferRowKey 
+                    ? (dispatchDetails[currentTransferRowKey]?.transferData?.freightRate ?? 
+                       allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.freight_rate?.toString() ?? "") 
+                    : ""
+                }
+                onChange={(e) => {
+                  if (!currentTransferRowKey) return;
+                  let val = e.target.value;
+                  if (Number(val) < 0) val = "0";
+                  const prevData = dispatchDetails[currentTransferRowKey]?.transferData || {
+                    billTo: { company: "", address: "" },
+                    shipTo: { company: "", address: "" },
+                    freightRate: ""
+                  };
+                  setDispatchDetails(prev => {
+                    const rowKey = currentTransferRowKey!;
+                    const rowDetail = prev[rowKey] || { qty: "0" };
+                    return {
+                      ...prev,
+                      [rowKey]: {
+                        ...rowDetail,
+                        transferData: { ...prevData, freightRate: val }
+                      }
+                    };
+                  });
+                }}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="mt-6 border-t pt-4">
+            <Button variant="outline" onClick={() => {
+              if (currentTransferRowKey) {
+                setDispatchDetails(prev => ({
+                  ...prev,
+                  [currentTransferRowKey]: { ...prev[currentTransferRowKey], transfer: "no" }
+                }));
+              }
+              setIsTransferPopupOpen(false);
+            }}>Cancel</Button>
+            <Button 
+              onClick={() => {
+                // Validation
+                const data = currentTransferRowKey ? dispatchDetails[currentTransferRowKey]?.transferData : null;
+                if (!data || !data.billTo.company || !data.shipTo.company || data.freightRate === "") {
+                  toast({ title: "Validation Error", description: "Companies and Freight Rate (>=0) are mandatory.", variant: "destructive" });
+                  return;
+                }
+                isSavingTransferRef.current = true;
+                setIsTransferPopupOpen(false);
+              }}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              OK
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

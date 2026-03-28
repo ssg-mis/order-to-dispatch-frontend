@@ -176,7 +176,7 @@ export default function DamageAdjustmentPage() {
           _rowKey: invoiceNo,
           doNumber: doNumber,
           invoiceNo: invoiceNo,
-          customerName: order.party_name || "—",
+          customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "—"),
 
           // Order Details from JOIN
           deliveryPurpose: order.order_type_delivery_purpose || "—",
@@ -368,7 +368,7 @@ export default function DamageAdjustmentPage() {
     }
   }
 
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "Unknown"))))
 
   return (
     <WorkflowStageShell
@@ -378,6 +378,7 @@ export default function DamageAdjustmentPage() {
       historyData={historyOrders.map((order) => ({
         date: order.actual_9 ? new Date(order.actual_9).toLocaleDateString("en-GB") : "-",
         stage: "Damage Adjustment",
+        customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : order.party_name,
         status: order.status_2 || "Completed",
         remarks: order.credit_note_no ? `CN: ${order.credit_note_no}` : "-",
       }))}

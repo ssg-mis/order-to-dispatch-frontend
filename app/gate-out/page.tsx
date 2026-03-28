@@ -178,7 +178,7 @@ export default function GateOutPage() {
 
     filteredPendingOrders.forEach((order: any) => {
       const invoiceNo = order.invoice_no || "No Invoice"
-      const partyName = order.party_name || order.partyName || "Unknown Customer"
+      const partyName = (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName || "Unknown Customer")
       const doNumber = order.so_no || order.soNo || "—"
 
       // Extract date from actual_6 (Stage 10 completion date)
@@ -415,7 +415,7 @@ export default function GateOutPage() {
     }
   }
 
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || order.partyName || "Unknown Customer")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName || "Unknown Customer"))))
 
   return (
     <WorkflowStageShell
@@ -425,6 +425,7 @@ export default function GateOutPage() {
       historyData={historyOrders.map((order) => ({
         date: order.actual_7 ? new Date(order.actual_7).toLocaleDateString("en-GB") : "-",
         stage: "Gate Out",
+        customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : order.party_name,
         status: "Completed",
         remarks: order.gate_pass_copy ? "Pass Uploaded" : "-",
       }))}

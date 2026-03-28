@@ -1846,7 +1846,7 @@ export default function PreApprovalPage() {
                                             <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Appr. Qty</TableHead>
                                             <TableHead className="min-w-[140px] text-[10px] uppercase font-black text-slate-500 tracking-wider">Final Rate</TableHead>
                                             <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Remarks</TableHead>
-                                            <TableHead className="w-10 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">Action</TableHead>
+                                            {/* <TableHead className="w-10 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">Action</TableHead> */}
                                           </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -2346,7 +2346,7 @@ export default function PreApprovalPage() {
                                                     placeholder="Add review remark..."
                                                   />
                                                 </TableCell>
-                                                <TableCell className="p-2 text-center">
+                                                {/* <TableCell className="p-2 text-center">
                                                   {!isNew && (
                                                     <Button
                                                       variant="ghost"
@@ -2373,7 +2373,7 @@ export default function PreApprovalPage() {
                                                       <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                   )}
-                                                </TableCell>
+                                                </TableCell> */}
                                               </TableRow>
                                             )
                                           })}

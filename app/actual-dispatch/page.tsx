@@ -425,7 +425,7 @@ export default function ActualDispatchPage() {
   const filteredHistory = useMemo(() => {
     return historyOrders.map(order => ({
       orderNo: order.actualDispatchData?.orderNo || order.order_no || "-",
-      customerName: order.customerName || "-",
+      customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.customerName || "-"),
       timestamp: order.actualDispatchData?.confirmedAt || order.timestamp,
       date: new Date(order.actualDispatchData?.confirmedAt || order.timestamp || new Date()).toLocaleDateString("en-GB"),
       stage: "Actual Dispatch",
@@ -469,7 +469,7 @@ export default function ActualDispatchPage() {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order: any) => {
-      const custName = order.party_name || order.customerName || "Unknown"
+      const custName = (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.customerName || "Unknown")
       const doNumber = order.so_no || order.soNo || "DO-XXX"
       const baseDoMatch = doNumber.match(/^(DO-\d+)/i)
       const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
