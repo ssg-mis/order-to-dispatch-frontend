@@ -230,8 +230,8 @@ export default function MakeInvoicePage() {
         id: order.id,
         specificOrderNo: doNumber,
         productName: order.product_name,
-        rate: (parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1),
-        amount: ((parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1)) * (parseFloat(order.actual_qty_dispatch) || 0),
+        rate: ((parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1)) + (parseFloat(order.freight_rate) || 0),
+        amount: (((parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1)) + (parseFloat(order.freight_rate) || 0)) * (parseFloat(order.actual_qty_dispatch) || 0),
         qtyToDispatch: order.actual_qty_dispatch || 0,
         truckNo: order.truck_no,
         rstNo: order.rst_no,
@@ -266,6 +266,7 @@ export default function MakeInvoicePage() {
       doNumber: Array.from(group.doNumberList as Set<string>).join(", "),
       processId: group._allProducts[0]?.processid || "—",
       vehicleNo: (group._allProducts[0]?.truckNo || "—").toUpperCase(),
+      freightRate: group._allProducts[0]?.freight_rate || 0,
       orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—"
     }))
   }, [filteredPendingOrders])
@@ -323,8 +324,10 @@ export default function MakeInvoicePage() {
       group._allProducts.forEach((product: any) => {
         if (selectedProducts.includes(product._rowKey)) {
           const qty = parseFloat(product.qtyToDispatch) || 0;
-          // Use final_rate if available (from pre-approval stage)
-          const rate = parseFloat(product.final_rate || product.rate_per_ltr || product.rate_per_15kg || product.rate_of_material || 0);
+          // Use final_rate if available, and ADD freight_rate
+          const baseRate = parseFloat(product.final_rate || product.rate_per_ltr || product.rate_per_15kg || product.rate_of_material || 0);
+          const freightRate = parseFloat(product.freight_rate || 0);
+          const rate = baseRate + freightRate;
           totalQty += qty;
           totalBillAmount += qty * rate;
         }
@@ -438,15 +441,19 @@ export default function MakeInvoicePage() {
       description="Create proforma invoice grouped by DO Number."
       pendingCount={displayRows.length} // Count groups
       historyData={historyOrders.map((order) => ({
+        ...order,
         date: order.actual_5 ? new Date(order.actual_5).toLocaleDateString("en-GB") : "-",
         stage: "Make Invoice",
+        orderNo: order.so_no,
         customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : order.party_name,
         status: "Completed",
-        remarks: order.invoice_no || "Generated",
+        remarks: `${order.invoice_no || "Generated"} ${order.freight_rate ? `| Freight: ₹${order.freight_rate}` : ""}`,
+        rawData: order,
       }))}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
       remarksColName="Invoice No"
+      stageLevel={6}
     >
       <div className="space-y-4">
         {/* Action Bar */}
@@ -500,6 +507,7 @@ export default function MakeInvoicePage() {
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Freight Rate</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
@@ -522,6 +530,9 @@ export default function MakeInvoicePage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className="text-xs font-bold text-blue-600">₹{group.freightRate}</span>
                     </TableCell>
                     <TableCell className="text-center">
                       <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
@@ -613,13 +624,22 @@ export default function MakeInvoicePage() {
                                       </Badge>
                                     </div>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                      {/* Order Info */}
                                       <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Truck No</p>
-                                        <p className="text-sm font-black text-blue-800">{(firstProd.truckNo || "—").toUpperCase()}</p>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Delivery Purpose</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.deliveryPurpose}</p>
                                       </div>
                                       <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transporter</p>
-                                        <p className="text-xs font-bold text-slate-900 leading-tight">{firstProd.transporterName || "—"}</p>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Start Date / End Date</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">
+                                          {orderDetails.startDate ? new Date(orderDetails.startDate).toLocaleDateString("en-GB") : "—"} / {orderDetails.endDate ? new Date(orderDetails.endDate).toLocaleDateString("en-GB") : "—"}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">DO Date</p>
+                                        <p className="text-xs font-bold text-slate-700">
+                                          {orderDetails.partySoDate || "—"}
+                                        </p>
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transport Type</p>
@@ -632,14 +652,29 @@ export default function MakeInvoicePage() {
                                         </Badge>
                                       </div>
                                       <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">DO Date</p>
-                                        <p className="text-xs font-bold text-slate-700">
-                                          {orderDetails.partySoDate || "—"}
-                                        </p>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Customer Address</p>
+                                        <p className="text-[10px] font-medium text-slate-600 leading-tight truncate" title={orderDetails.address}>{orderDetails.address}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact Person</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.contactPerson} ({orderDetails.whatsapp})</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Broker / Advance</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.brokerName} / ₹{orderDetails.advanceAmount}</p>
                                       </div>
 
                                       <div className="md:col-span-4 h-px bg-slate-200 my-1" />
 
+                                      {/* Dispatch Info */}
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Truck No</p>
+                                        <p className="text-sm font-black text-blue-800">{(firstProd.truckNo || "—").toUpperCase()}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transporter</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-tight">{firstProd.transporterName || "—"}</p>
+                                      </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Fitness</p>
                                         {firstProd.fitness ? (
@@ -715,7 +750,7 @@ export default function MakeInvoicePage() {
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
                                         <p className="text-xs font-black text-slate-900 leading-tight">
-                                          {firstProd.grossWeight || "0"} / {firstProd.tareWeight || "0"} / <span className="text-blue-600 font-black">{firstProd.netWeight || "0"}</span>
+                                          {firstProd.grossWeight || "0"} / {firstProd.tareWeight || "0"} / <span className="text-blue-600 font-black">{((Number(firstProd.grossWeight || 0) - Number(firstProd.tareWeight || 0)) || "0").toString()}</span>
                                         </p>
                                       </div>
                                       <div>
@@ -758,6 +793,7 @@ export default function MakeInvoicePage() {
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">ACTUAL QTY DISPATCH</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">AMOUNT</TableHead>
+                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">FREIGHT RATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">VEHICLE NUMBER</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">STATUS</TableHead>
                                 </TableRow>
@@ -793,6 +829,9 @@ export default function MakeInvoicePage() {
                                     </TableCell>
                                     <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
                                       {product.amount ? `₹${product.amount.toFixed(2)}` : "—"}
+                                    </TableCell>
+                                    <TableCell className="text-center p-2 text-xs font-bold text-blue-600">
+                                      {product.freight_rate ? `₹${product.freight_rate}` : "₹0"}
                                     </TableCell>
                                     <TableCell className="text-center p-2">
                                       <div className="flex items-center justify-center gap-1.5">

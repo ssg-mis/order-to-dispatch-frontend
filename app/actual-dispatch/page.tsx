@@ -361,7 +361,9 @@ export default function ActualDispatchPage() {
 
 
   /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map(order => 
+    (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.customerName || "Unknown")
+  )))
 
   const [filterValues, setFilterValues] = useState({
     search: "",
@@ -380,7 +382,8 @@ export default function ActualDispatchPage() {
     }
 
     // Filter by Party Name
-    if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
+    const currentCustName = (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.customerName)
+    if (filterValues.partyName && filterValues.partyName !== "all" && currentCustName !== filterValues.partyName) {
       matches = false
     }
 
@@ -424,8 +427,10 @@ export default function ActualDispatchPage() {
   // Map backend data to display format with Grouping by Customer
   const filteredHistory = useMemo(() => {
     return historyOrders.map(order => ({
+      ...order,
+      rawData: order,
       orderNo: order.actualDispatchData?.orderNo || order.order_no || "-",
-      customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.customerName || "-"),
+      customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.customerName || "-"),
       timestamp: order.actualDispatchData?.confirmedAt || order.timestamp,
       date: new Date(order.actualDispatchData?.confirmedAt || order.timestamp || new Date()).toLocaleDateString("en-GB"),
       stage: "Actual Dispatch",
@@ -531,7 +536,8 @@ export default function ActualDispatchPage() {
           weightDiff: internalOrder.weight_diff || "—",
           extraWeight: internalOrder.extra_weight || "—",
           weightmentSlip: internalOrder.weightment_slip_copy || null,
-          rstNo: internalOrder.rst_no || "—"
+          rstNo: internalOrder.rst_no || "—",
+          weightDiffReason: internalOrder.reason_of_difference_in_weight_if_any_speacefic || "—"
         }
       }
 
@@ -819,12 +825,13 @@ export default function ActualDispatchPage() {
             rst_no: loadData.rstNo,
             gross_weight: parseFloat(loadData.grossWeight),
             tare_weight: parseFloat(loadData.tareWeight),
-            net_weight: parseFloat(loadData.grossWeightPacking) || null,
+            net_weight: parseFloat(loadData.netWeightPacking) || null,
             transporter_name: loadData.transporterName,
             reason_of_difference_in_weight_if_any_speacefic: loadData.reason,
             truck_no: loadData.truckNo || vehicleNumber,
             vehicle_no_plate_image: loadData.vehicleNoPlateImage || "pending",
             extra_weight: parseFloat(loadData.extraWeight) || 0,
+            difference: parseFloat(loadData.differanceWeight) || 0,
             username: user?.username || null // Add username for tracking
           };
 
@@ -1152,7 +1159,7 @@ export default function ActualDispatchPage() {
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Gross / Tare / Net</p>
                                     <p className="text-sm font-black text-slate-900 leading-tight">
-                                      {orderDetails.grossWeight} / {orderDetails.tareWeight} / <span className="text-blue-600 font-black">{orderDetails.netWeight}</span>
+                                      {orderDetails.grossWeight} / {orderDetails.tareWeight} / <span className="text-blue-600 font-black">{((Number(orderDetails.grossWeight || 0) - Number(orderDetails.tareWeight || 0)) || "0").toString()}</span>
                                     </p>
                                   </div>
                                   <div>

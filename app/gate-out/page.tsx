@@ -423,15 +423,19 @@ export default function GateOutPage() {
       description="Record gate out details and upload gate pass grouped by Customer."
       pendingCount={displayRows.length}
       historyData={historyOrders.map((order) => ({
+        ...order,
         date: order.actual_7 ? new Date(order.actual_7).toLocaleDateString("en-GB") : "-",
+        orderNo: order.so_no,
         stage: "Gate Out",
         customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : order.party_name,
         status: "Completed",
         remarks: order.gate_pass_copy ? "Pass Uploaded" : "-",
+        rawData: order,
       }))}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
       remarksColName="Evidence"
+      stageLevel={8}
     >
       <div className="space-y-4">
         {/* Action Bar */}
@@ -594,6 +598,7 @@ export default function GateOutPage() {
                                     </div>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                       {/* Order Info */}
+                                      {/* Order Info */}
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Delivery Purpose</p>
                                         <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.deliveryPurpose}</p>
@@ -619,6 +624,18 @@ export default function GateOutPage() {
                                         <Badge className={cn("text-[10px] font-black px-2 py-0.5", orderDetails.partyCredit === 'Good' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
                                           {orderDetails.partyCredit}
                                         </Badge>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Customer Address</p>
+                                        <p className="text-[10px] font-medium text-slate-600 leading-tight truncate" title={orderDetails.customerAddress}>{orderDetails.customerAddress}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact Person</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.contactPerson} ({orderDetails.whatsapp})</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Broker / Advance</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.brokerName} / ₹{orderDetails.advanceAmount}</p>
                                       </div>
 
                                       <div className="md:col-span-4 h-px bg-slate-200 my-1" />
@@ -720,7 +737,7 @@ export default function GateOutPage() {
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
                                         <p className="text-xs font-black text-slate-900 leading-tight">
-                                          {firstProd.grossWeight || "0"} / {firstProd.tareWeight || "0"} / <span className="text-blue-600 font-black">{firstProd.netWeight || "0"}</span>
+                                          {firstProd.grossWeight || "0"} / {firstProd.tareWeight || "0"} / <span className="text-blue-600 font-black">{((Number(firstProd.grossWeight || 0) - Number(firstProd.tareWeight || 0)) || "0").toString()}</span>
                                         </p>
                                       </div>
                                       <div>

@@ -207,8 +207,8 @@ export default function CheckInvoicePage() {
         id: order.id,
         specificOrderNo: doNumber,
         productName: order.product_name,
-        rate: (parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1),
-        amount: ((parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1)) * (parseFloat(order.actual_qty_dispatch || order.actual_qty || order.qty) || 0),
+        rate: ((parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1)) + (parseFloat(order.freight_rate) || 0),
+        amount: (((parseFloat(order.rate_of_material) || 0) * (parseFloat(order.nos_per_main_uom) || 1)) + (parseFloat(order.freight_rate) || 0)) * (parseFloat(order.actual_qty_dispatch || order.actual_qty || order.qty) || 0),
         invoiceNo: order.invoice_no,
         invoiceDate: order.invoice_date,
         billAmount: order.bill_amount,
@@ -248,6 +248,7 @@ export default function CheckInvoicePage() {
       processId: group._allProducts[0]?.processid || "—",
       vehicleNo: (group._allProducts[0]?.truckNo || "—").toUpperCase(),
       invoiceNo: group._allProducts[0]?.invoice_no || "—",
+      freightRate: group._allProducts[0]?.freight_rate || 0,
       orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—",
       // Group is reverted if ALL products have actual_5 = null (pushed back to Make Invoice)
       isReverted: group._allProducts.every((p: any) => !p.actual_5),
@@ -390,15 +391,19 @@ export default function CheckInvoicePage() {
       description="Review and verify invoices grouped by Customer."
       pendingCount={displayRows.length}
       historyData={historyOrders.map((order) => ({
+        ...order,
         date: order.actual_6 ? new Date(order.actual_6).toLocaleDateString("en-GB") : order.invoice_date || "-",
+        orderNo: order.so_no,
         stage: "Check Invoice",
         customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : order.party_name,
         status: order.status_1 || "Verified",
-        remarks: order.remarks_2 || "-",
+        remarks: `${order.remarks_2 || "-"} ${order.freight_rate ? `| Freight: ₹${order.freight_rate}` : ""}`,
+        rawData: order,
       }))}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
       remarksColName="Verification Status"
+      stageLevel={7}
     >
       <div className="space-y-4">
         {/* Action Bar */}
@@ -453,6 +458,7 @@ export default function CheckInvoicePage() {
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
                 {visibleColumns.includes("invoiceNo") && <TableHead className="whitespace-nowrap text-center">Invoice No.</TableHead>}
                 <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Freight Rate</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
@@ -482,6 +488,9 @@ export default function CheckInvoicePage() {
                     {visibleColumns.includes("invoiceNo") && <TableCell className="text-center text-xs font-medium">{group.invoiceNo}</TableCell>}
                     <TableCell className="text-center">
                       <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className="text-xs font-bold text-blue-600">₹{group.freightRate}</span>
                     </TableCell>
                     <TableCell className="text-center">
                       <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
@@ -607,14 +616,15 @@ export default function CheckInvoicePage() {
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Bilty No</p>
                                         <p className="text-xs font-black text-blue-600">{firstProd.biltyNo || firstProd.bilty_no || "—"}</p>
                                       </div>
+                                      {/* Order Info */}
                                       <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Invoice No</p>
-                                        <p className="text-xs font-black text-green-600">{firstProd.invoiceNo || "—"}</p>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Delivery Purpose</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.deliveryPurpose}</p>
                                       </div>
                                       <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Invoice Date</p>
-                                        <p className="text-xs font-bold text-slate-700">
-                                          {firstProd.invoiceDate ? new Date(firstProd.invoiceDate).toLocaleDateString("en-GB") : "—"}
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Start Date / End Date</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">
+                                          {orderDetails.startDate ? new Date(orderDetails.startDate).toLocaleDateString("en-GB") : "—"} / {orderDetails.endDate ? new Date(orderDetails.endDate).toLocaleDateString("en-GB") : "—"}
                                         </p>
                                       </div>
                                       <div>
@@ -622,6 +632,28 @@ export default function CheckInvoicePage() {
                                         <p className="text-xs font-bold text-slate-700">
                                           {orderDetails.partySoDate || "—"}
                                         </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transport Type</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.transportType}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Credit Status</p>
+                                        <Badge className={cn("text-[10px] font-black px-2 py-0.5", orderDetails.partyCredit === 'Good' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
+                                          {orderDetails.partyCredit}
+                                        </Badge>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Customer Address</p>
+                                        <p className="text-[10px] font-medium text-slate-600 leading-tight truncate" title={orderDetails.address}>{orderDetails.address}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact Person</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.contactPerson} ({orderDetails.whatsapp})</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Broker / Advance</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.brokerName} / ₹{orderDetails.advanceAmount}</p>
                                       </div>
 
                                       <div className="md:col-span-4 h-px bg-slate-200 my-1" />
@@ -689,7 +721,7 @@ export default function CheckInvoicePage() {
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
                                         <p className="text-xs font-black text-slate-900 leading-tight">
-                                          {firstProd.grossWeight || "0"} / {firstProd.tareWeight || "0"} / <span className="text-blue-600 font-black">{firstProd.netWeight || "0"}</span>
+                                          {firstProd.grossWeight || "0"} / {firstProd.tareWeight || "0"} / <span className="text-blue-600 font-black">{((Number(firstProd.grossWeight || 0) - Number(firstProd.tareWeight || 0)) || "0").toString()}</span>
                                         </p>
                                       </div>
                                       <div>
@@ -736,6 +768,7 @@ export default function CheckInvoicePage() {
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">ACTUAL QTY</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">AMOUNT</TableHead>
+                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">FREIGHT RATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE NO</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE DATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">TRUCK NO</TableHead>
@@ -772,6 +805,9 @@ export default function CheckInvoicePage() {
                                     </TableCell>
                                     <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
                                       {product.amount ? `₹${product.amount.toFixed(2)}` : "—"}
+                                    </TableCell>
+                                    <TableCell className="text-center p-2 text-xs font-bold text-blue-600">
+                                      {product.freight_rate ? `₹${product.freight_rate}` : "₹0"}
                                     </TableCell>
                                     <TableCell className="text-center p-2 text-xs font-bold text-green-700">
                                       {product.invoice_copy ? (

@@ -60,7 +60,7 @@ export default function VehicleDetailsPage() {
       console.log('[VEHICLE] Fetching pending vehicle details from API...');
       const response = await vehicleDetailsApi.getPending({ limit: 1000 });
       console.log('[VEHICLE] API Response:', response);
-      
+
       if (response.success && response.data.vehicleDetails) {
         setPendingOrders(response.data.vehicleDetails);
         console.log('[VEHICLE] Loaded', response.data.vehicleDetails.length, 'pending vehicle details');
@@ -80,7 +80,7 @@ export default function VehicleDetailsPage() {
   const fetchVehicleDetailsHistory = async () => {
     try {
       const response = await vehicleDetailsApi.getHistory({ limit: 1000 });
-      
+
       if (response.success && response.data.vehicleDetails) {
         const mappedHistory = response.data.vehicleDetails.map((record: any) => ({
           orderNo: record.so_no,
@@ -92,6 +92,7 @@ export default function VehicleDetailsPage() {
           timestamp: record.actual_2,
           date: record.actual_2 ? new Date(record.actual_2).toLocaleDateString("en-GB") : "-",
           remarks: record.remarks || "-",
+          rawData: record,
         }));
         setHistory(mappedHistory);
       }
@@ -108,100 +109,100 @@ export default function VehicleDetailsPage() {
 
   /* Filter logic */
   const [filterValues, setFilterValues] = useState({
-      status: "",
-      startDate: "",
-      endDate: "",
-      partyName: ""
+    status: "",
+    startDate: "",
+    endDate: "",
+    partyName: ""
   })
 
   const filteredPendingOrders = pendingOrders.filter(order => {
-      let matches = true
-      if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) matches = false
-      const orderDateStr = order.timestamp
-      if (orderDateStr) {
-          const orderDate = new Date(orderDateStr)
-          if (filterValues.startDate && orderDate < new Date(filterValues.startDate)) matches = false
-          if (filterValues.endDate && orderDate > new Date(filterValues.endDate)) matches = false
-      }
-      return matches
+    let matches = true
+    if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) matches = false
+    const orderDateStr = order.timestamp
+    if (orderDateStr) {
+      const orderDate = new Date(orderDateStr)
+      if (filterValues.startDate && orderDate < new Date(filterValues.startDate)) matches = false
+      if (filterValues.endDate && orderDate > new Date(filterValues.endDate)) matches = false
+    }
+    return matches
   })
-  
+
   // Group orders by Base DO Number (like Actual Dispatch)
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order: any) => {
-       const doNumber = order.so_no || order.soNo || "DO-XXX"
-       // Group by Base DO (e.g. DO-022 from DO-022A)
-       const baseDoMatch = doNumber.match(/^(DO-\d+)/i)
-       const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
+      const doNumber = order.so_no || order.soNo || "DO-XXX"
+      // Group by Base DO (e.g. DO-022 from DO-022A)
+      const baseDoMatch = doNumber.match(/^(DO-\d+)/i)
+      const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
 
-       if (!grouped[baseDo]) {
-          grouped[baseDo] = {
-             ...order,
-             _rowKey: baseDo,
-             orderNo: baseDo,
-             doNumber: baseDo,
-             customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.customerName),
-             
-             // Map all order details from JOIN
-             deliveryPurpose: order.order_type_delivery_purpose || "—",
-             orderType: order.order_type || "—",
-             startDate: order.start_date ? new Date(order.start_date).toLocaleDateString("en-IN") : "—",
-             endDate: order.end_date ? new Date(order.end_date).toLocaleDateString("en-IN") : "—",
-             deliveryDate: order.delivery_date ? new Date(order.delivery_date).toLocaleDateString("en-IN") : "—",
-             customerType: order.customer_type || "—",
-             partySoDate: order.party_so_date ? new Date(order.party_so_date).toLocaleDateString("en-IN") : "—",
-             oilType: order.oil_type || "—",
-             ratePer15kg: order.rate_per_15kg || "—",
-             ratePerLtr: order.rate_per_ltr || "—",
-             rateOfMaterial: order.rate_of_material || "—",
-             totalAmount: order.total_amount_with_gst || "—",
-             transportType: order.type_of_transporting || "—",
-             contactPerson: order.customer_contact_person_name || "—",
-             contactWhatsapp: order.customer_contact_person_whatsapp_no || "—",
-             customerAddress: order.customer_address || "—",
-             paymentTerms: order.payment_terms || "—",
-             advancePayment: order.advance_payment_to_be_taken || "—",
-             advanceAmount: order.advance_amount || "—",
-             isBroker: order.is_order_through_broker || "—",
-             brokerName: order.broker_name || "—",
-             skuName: order.sku_name || "—",
-             approvalQty: order.approval_qty || "—",
-             grossWeight: order.gross_weight || "—",
-             tareWeight: order.tare_weight || "—",
-             netWeight: order.net_weight || "—",
-             weightDiff: order.weight_diff || "—",
-             extraWeight: order.extra_weight || "—",
-             weightmentSlip: order.weightment_slip_copy || null,
-             rstNo: order.rst_no || "—",
-             
-             _allProducts: [],
-             _productCount: 0
-          }
-       }
-       
-       // Add product to group
-       grouped[baseDo]._allProducts.push({
+      if (!grouped[baseDo]) {
+        grouped[baseDo] = {
           ...order,
-          _rowKey: `${baseDo}-${order.d_sr_number || order.id}`,
-          id: order.id, // Keep DB ID for submission
-          specificOrderNo: doNumber, // Store specific DO (e.g. DO-022A)
-          productName: order.product_name || order.productName,
-          qtyToDispatch: order.qty_to_be_dispatched || order.qtyToDispatch,
-          deliveryFrom: order.dispatch_from || order.deliveryFrom,
-          dsrNumber: order.d_sr_number
-       })
-       
-       grouped[baseDo]._productCount = grouped[baseDo]._allProducts.length
+          _rowKey: baseDo,
+          orderNo: baseDo,
+          doNumber: baseDo,
+          customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.customerName),
+
+          // Map all order details from JOIN
+          deliveryPurpose: order.order_type_delivery_purpose || "—",
+          orderType: order.order_type || "—",
+          startDate: order.start_date ? new Date(order.start_date).toLocaleDateString("en-IN") : "—",
+          endDate: order.end_date ? new Date(order.end_date).toLocaleDateString("en-IN") : "—",
+          deliveryDate: order.delivery_date ? new Date(order.delivery_date).toLocaleDateString("en-IN") : "—",
+          customerType: order.customer_type || "—",
+          partySoDate: order.party_so_date ? new Date(order.party_so_date).toLocaleDateString("en-IN") : "—",
+          oilType: order.oil_type || "—",
+          ratePer15kg: order.rate_per_15kg || "—",
+          ratePerLtr: order.rate_per_ltr || "—",
+          rateOfMaterial: order.rate_of_material || "—",
+          totalAmount: order.total_amount_with_gst || "—",
+          transportType: order.type_of_transporting || "—",
+          contactPerson: order.customer_contact_person_name || "—",
+          contactWhatsapp: order.customer_contact_person_whatsapp_no || "—",
+          customerAddress: order.customer_address || "—",
+          paymentTerms: order.payment_terms || "—",
+          advancePayment: order.advance_payment_to_be_taken || "—",
+          advanceAmount: order.advance_amount || "—",
+          isBroker: order.is_order_through_broker || "—",
+          brokerName: order.broker_name || "—",
+          skuName: order.sku_name || "—",
+          approvalQty: order.approval_qty || "—",
+          grossWeight: order.gross_weight || "—",
+          tareWeight: order.tare_weight || "—",
+          netWeight: order.net_weight || "—",
+          weightDiff: order.weight_diff || "—",
+          extraWeight: order.extra_weight || "—",
+          weightmentSlip: order.weightment_slip_copy || null,
+          rstNo: order.rst_no || "—",
+
+          _allProducts: [],
+          _productCount: 0
+        }
+      }
+
+      // Add product to group
+      grouped[baseDo]._allProducts.push({
+        ...order,
+        _rowKey: `${baseDo}-${order.d_sr_number || order.id}`,
+        id: order.id, // Keep DB ID for submission
+        specificOrderNo: doNumber, // Store specific DO (e.g. DO-022A)
+        productName: order.product_name || order.productName,
+        qtyToDispatch: order.qty_to_be_dispatched || order.qtyToDispatch,
+        deliveryFrom: order.dispatch_from || order.deliveryFrom,
+        dsrNumber: order.d_sr_number
+      })
+
+      grouped[baseDo]._productCount = grouped[baseDo]._allProducts.length
     })
 
     return Object.values(grouped)
   }, [filteredPendingOrders])
 
   const toggleSelectItem = (itemKey: string) => {
-    setSelectedItems(prev => 
-      prev.includes(itemKey) 
+    setSelectedItems(prev =>
+      prev.includes(itemKey)
         ? prev.filter(k => k !== itemKey)
         : [...prev, itemKey]
     )
@@ -217,7 +218,7 @@ export default function VehicleDetailsPage() {
 
   const handleOpenDialog = () => {
     if (selectedItems.length === 0) return
-    
+
     const targetGroup = displayRows.find(r => r._rowKey === selectedItems[0])
     if (targetGroup) {
       setSelectedGroup(targetGroup)
@@ -236,19 +237,19 @@ export default function VehicleDetailsPage() {
       })
       return
     }
-    
+
     if (!selectedGroup) return
-    
+
     setIsProcessing(true)
     try {
       const successfulSubmissions: any[] = []
       const failedSubmissions: any[] = []
 
       // Submit only selected products
-      const productsToSubmit = selectedGroup._allProducts.filter((p: any) => 
+      const productsToSubmit = selectedGroup._allProducts.filter((p: any) =>
         selectedProducts.includes(p._rowKey)
       )
-      
+
       if (productsToSubmit.length === 0) {
         toast({
           title: "Error",
@@ -257,10 +258,10 @@ export default function VehicleDetailsPage() {
         })
         return
       }
-      
+
       for (const product of productsToSubmit) {
         const recordId = product.id;
-        
+
         try {
           if (recordId) {
             const submitData = {
@@ -278,7 +279,7 @@ export default function VehicleDetailsPage() {
             console.log('[VEHICLE] Submitting vehicle details for ID:', recordId, submitData);
             const response = await vehicleDetailsApi.submit(recordId, submitData);
             console.log('[VEHICLE] API Response:', response);
-            
+
             if (response.success) {
               successfulSubmissions.push({ product, response });
             } else {
@@ -359,12 +360,13 @@ export default function VehicleDetailsPage() {
       historyData={history}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
+      stageLevel={3}
     >
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
-          <Button 
+          <Button
             onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0} 
+            disabled={selectedItems.length === 0}
             className="bg-purple-600 hover:bg-purple-700"
           >
             <Truck className="mr-2 h-4 w-4" />
@@ -402,7 +404,7 @@ export default function VehicleDetailsPage() {
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>
                 <TableHead className="w-12 text-center">
-                    <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
+                  <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
@@ -413,19 +415,19 @@ export default function VehicleDetailsPage() {
             <TableBody>
               {displayRows.length > 0 ? (
                 displayRows.map((group) => (
-                   <TableRow key={group._rowKey} className={selectedItems.includes(group._rowKey) ? "bg-purple-50/50" : ""}>
-                      <TableCell className="text-center">
-                        <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
-                      </TableCell>
-                      <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
-                      <TableCell className="text-center text-xs">{group.customerName}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="secondary">{group._productCount} items</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge className="bg-purple-100 text-purple-700">Awaiting Vehicle</Badge>
-                      </TableCell>
-                   </TableRow>
+                  <TableRow key={group._rowKey} className={selectedItems.includes(group._rowKey) ? "bg-purple-50/50" : ""}>
+                    <TableCell className="text-center">
+                      <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
+                    </TableCell>
+                    <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
+                    <TableCell className="text-center text-xs">{group.customerName}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="secondary">{group._productCount} items</Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge className="bg-purple-100 text-purple-700">Awaiting Vehicle</Badge>
+                    </TableCell>
+                  </TableRow>
                 ))
               ) : (
                 <TableRow>
@@ -491,7 +493,7 @@ export default function VehicleDetailsPage() {
                   <div>
                     <Label className="text-xs text-muted-foreground">Gross / Tare / Net</Label>
                     <p className="font-medium text-slate-900 leading-tight">
-                      {selectedGroup.grossWeight || "0"} / {selectedGroup.tareWeight || "0"} / <span className="text-blue-600 font-black">{selectedGroup.netWeight || "0"}</span>
+                      {selectedGroup.grossWeight || "0"} / {selectedGroup.tareWeight || "0"} / <span className="text-blue-600 font-black">{((Number(selectedGroup.grossWeight || 0) - Number(selectedGroup.tareWeight || 0)) || "0").toString()}</span>
                     </p>
                   </div>
                   <div>
@@ -538,7 +540,7 @@ export default function VehicleDetailsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12">
-                        <Checkbox 
+                        <Checkbox
                           checked={selectedProducts.length === selectedGroup._allProducts.length}
                           onCheckedChange={(checked) => {
                             if (checked) {
@@ -558,12 +560,12 @@ export default function VehicleDetailsPage() {
                   </TableHeader>
                   <TableBody>
                     {selectedGroup._allProducts.map((product: any) => (
-                      <TableRow 
+                      <TableRow
                         key={product._rowKey}
                         className={selectedProducts.includes(product._rowKey) ? "bg-purple-50/30" : ""}
                       >
                         <TableCell>
-                          <Checkbox 
+                          <Checkbox
                             checked={selectedProducts.includes(product._rowKey)}
                             onCheckedChange={(checked) => {
                               if (checked) {
@@ -588,7 +590,7 @@ export default function VehicleDetailsPage() {
               {/* Vehicle Assignment Form */}
               <div className="border rounded-lg p-4 space-y-4">
                 <h3 className="text-sm font-semibold text-primary">Vehicle Information</h3>
-                
+
                 {/* Vehicle Number - NEW REQUIRED FIELD */}
                 <div>
                   <Label className="text-sm font-medium">Vehicle Number <span className="text-red-500">*</span></Label>
@@ -615,7 +617,7 @@ export default function VehicleDetailsPage() {
                 <div className="grid grid-cols-2 gap-4 pt-4 border-t">
                   <div className="space-y-2">
                     <Label>Check Status</Label>
-                    <Select value={vehicleData.checkStatus} onValueChange={(v) => setVehicleData({...vehicleData, checkStatus: v})}>
+                    <Select value={vehicleData.checkStatus} onValueChange={(v) => setVehicleData({ ...vehicleData, checkStatus: v })}>
                       <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Accept">Accept</SelectItem>
@@ -625,7 +627,7 @@ export default function VehicleDetailsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Remarks</Label>
-                    <Input value={vehicleData.remarks} onChange={(e) => setVehicleData({...vehicleData, remarks: e.target.value})} placeholder="Remarks" />
+                    <Input value={vehicleData.remarks} onChange={(e) => setVehicleData({ ...vehicleData, remarks: e.target.value })} placeholder="Remarks" />
                   </div>
                 </div>
               </div>
@@ -633,8 +635,8 @@ export default function VehicleDetailsPage() {
           )}
 
           <DialogFooter>
-            <Button 
-              onClick={handleAssignVehicle} 
+            <Button
+              onClick={handleAssignVehicle}
               disabled={!vehicleNumber.trim() || !vehicleData.checkStatus || isProcessing}
               className="bg-purple-600 hover:bg-purple-700"
             >

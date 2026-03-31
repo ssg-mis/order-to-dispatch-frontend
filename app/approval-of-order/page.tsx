@@ -197,6 +197,8 @@ export default function CommitmentReviewPage() {
 
       if (response.success && response.data.orders) {
         const mappedHistory = response.data.orders.map((order: any) => ({
+          ...order,
+          rawData: order,
           orderNo: order.order_no,
           customerName: order.customer_name,
           stage: "Approval Of Order",
@@ -456,7 +458,7 @@ export default function CommitmentReviewPage() {
         const allKeys = selectedItems.flatMap(g => g._allProducts || []).map((p: any) => p._rowKey)
         setDialogSelectedProducts(allKeys)
       }
-      
+
       // Reset form state whenever opening
       setChecklistValues({
         rate: "approve",

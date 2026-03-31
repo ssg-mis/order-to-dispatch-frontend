@@ -36,10 +36,10 @@ export default function DispatchMaterialPage() {
     packagingComplete: false,
     labelsAttached: false,
   })
-  const [dispatchDetails, setDispatchDetails] = useState<Record<string, { 
-    qty: string, 
-    transportType?: string, 
-    deliveryFrom?: string, 
+  const [dispatchDetails, setDispatchDetails] = useState<Record<string, {
+    qty: string,
+    transportType?: string,
+    deliveryFrom?: string,
     transfer?: string,
     transferData?: {
       billTo: { company: string; address: string };
@@ -400,18 +400,17 @@ export default function DispatchMaterialPage() {
   const allChecked = dispatchData.materialReady && dispatchData.packagingComplete && dispatchData.labelsAttached
 
 
-  /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customer_name || order.customerName || "Unknown")))
+  /* Extract unique customer names (No longer used for filter as requested) */
+  // const customerNames = Array.from(new Set(pendingOrders.map(order => order.customer_name || order.customerName || "Unknown")))
 
   const [filterValues, setFilterValues] = useState({
     search: "",
     status: "",
     startDate: "",
     endDate: "",
-    partyName: ""
   })
 
-  const filteredPendingOrders = pendingOrders.filter(order => {
+  const filteredPendingOrders = pendingOrders.filter((order: any) => {
     let matches = true
 
     // 1. Search Filter (DO Number, Customer Name, Product Name)
@@ -426,10 +425,10 @@ export default function DispatchMaterialPage() {
       }
     }
 
-    // 2. Party Name Filter
-    if (matches && filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
-      matches = false
-    }
+    /* Party Name Filter removed as requested */
+    // if (matches && filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
+    //   matches = false
+    // }
 
     // 3. Date Range Filter
     if (matches && (filterValues.startDate || filterValues.endDate)) {
@@ -478,7 +477,9 @@ export default function DispatchMaterialPage() {
 
   // Group by base DO number (removing uniqueness by Customer Name as per request)
   const filteredHistory = useMemo(() => {
-    return historyOrders.map(order => ({
+    return historyOrders.map((order: any) => ({
+      ...order,
+      rawData: order,
       orderNo: order.dispatchPlanningData?.orderNo || order.order_no || "-",
       customerName: order.customer_name || "-",
       timestamp: order.dispatchPlanningData?.confirmedAt || order.timestamp,
@@ -486,7 +487,7 @@ export default function DispatchMaterialPage() {
       stage: "Dispatch Planning",
       status: "Completed",
       remarks: order.dispatchPlanningData?.dispatchDate ? `Date: ${order.dispatchPlanningData.dispatchDate}` : "Dispatch Plannned",
-    })).filter(item => {
+    })).filter((item: any) => {
       let matches = true
 
       if (filterValues.search) {
@@ -497,9 +498,10 @@ export default function DispatchMaterialPage() {
         }
       }
 
-      if (filterValues.partyName && filterValues.partyName !== "all" && item.customerName !== filterValues.partyName) {
-        matches = false
-      }
+      /* Party Name Filter removed as requested */
+      // if (filterValues.partyName && filterValues.partyName !== "all" && item.customerName !== filterValues.partyName) {
+      //   matches = false
+      // }
 
       const itemDateStr = item.timestamp
       if (itemDateStr) {
@@ -530,9 +532,9 @@ export default function DispatchMaterialPage() {
       const baseDoMatch = orderId.match(/^(DO-\d+)/i)
       const baseDo = baseDoMatch ? baseDoMatch[1] : orderId
 
-      // Group by Party/Customer Name
+      // Group by individual DO Number as requested
       const custName = order.customer_name || order.customerName || "Unknown"
-      const groupKey = custName
+      const groupKey = baseDo // Group by DO instead of Customer Name
 
       if (!grouped[groupKey]) {
         grouped[groupKey] = {
@@ -591,7 +593,7 @@ export default function DispatchMaterialPage() {
         productName: order.product_name || order._product?.productName || order._product?.oilType,
         oilType: order.oil_type || order._product?.oilType,
         orderQty: order.order_quantity || order._product?.orderQty,
-        rate: order.rate || order._product?.rate,
+        rate: order.final_rate || order.rate_of_material || order.rate || order._product?.rate,
         approvalQty: order.approval_qty || order.order_quantity,
         remainingDispatchQty: order.remaining_dispatch_qty !== null ? order.remaining_dispatch_qty : (order.approval_qty || order.order_quantity),
       }
@@ -620,9 +622,9 @@ export default function DispatchMaterialPage() {
       description="Prepare and Dispatch Plannings for delivery."
       pendingCount={displayRows.length}
       historyData={filteredHistory}
-      partyNames={customerNames}
       onFilterChange={setFilterValues}
       showStatusFilter={true}
+      stageLevel={3}
     >
       <div className="flex justify-end gap-2">
         <DropdownMenu>
@@ -654,7 +656,7 @@ export default function DispatchMaterialPage() {
           onClick={handleOpenDialog}
           disabled={selectedItems.length === 0}
         >
-          {selectedItems.length > 1 ? `Select 1 Group to Dispatch` : `Dispatch Selected (${selectedItems.length})`}
+          {`Dispatch Selected (${selectedItems.length})`}
         </Button>
       </div>
 
@@ -679,7 +681,7 @@ export default function DispatchMaterialPage() {
           </TableHeader>
           <TableBody>
             {displayRows.length > 0 ? (
-              displayRows.map((row) => {
+              displayRows.map((row: any) => {
                 const isSelected = selectedItems.some(i => i._rowKey === row._rowKey);
 
                 return (
@@ -738,127 +740,121 @@ export default function DispatchMaterialPage() {
           </DialogHeader>
 
           <div className="space-y-8 mt-4">
-            {/* Group by Customer -> Multiple Orders -> Consolidated Table */}
             <div className="space-y-12 mt-6">
-              {(() => {
-                const groupedByCustomer: Record<string, any[]> = {};
-                selectedItems.forEach(item => {
-                  const custName = item.customerName || item.customer_name || "Unknown";
-                  if (!groupedByCustomer[custName]) groupedByCustomer[custName] = [];
-                  groupedByCustomer[custName].push(item);
-                });
+              {selectedItems.map((group: any, groupIdx: number) => {
+                const custName = group.customerName || group.customer_name || "Unknown";
+                const allProducts = group._allProducts || [];
 
-                return Object.entries(groupedByCustomer).map(([custName, items]) => (
-                  <div key={custName} className="space-y-6">
+                return (
+                  <div key={group._rowKey} className="space-y-6">
                     <h2 className="text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
                       {custName}
                       <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
-                        {items.reduce((acc, current) => acc + current._productCount, 0)} PRODUCTS
+                        {group._productCount} PRODUCTS
                       </Badge>
                     </h2>
 
-                    {items.map((group) => (
-                      Object.entries(group._ordersMap).map(([baseDo, orderDetails]: [string, any], orderIdx) => {
-                        const isExpanded = expandedOrders.includes(baseDo);
-                        const toggleExpand = () => {
-                          setExpandedOrders(prev => isExpanded ? prev.filter(id => id !== baseDo) : [...prev, baseDo]);
-                        };
+                    {/* Order Details Sections */}
+                    {Object.entries(group._ordersMap || {}).map(([baseDo, orderDetails]: [string, any], orderIdx) => {
+                      const isExpanded = expandedOrders.includes(baseDo);
+                      const toggleExpand = () => {
+                        setExpandedOrders(prev => isExpanded ? prev.filter(id => id !== baseDo) : [...prev, baseDo]);
+                      };
 
-                        return (
-                          <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
-                            <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
-                              <div className="flex items-center gap-4">
-                                <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
-                                  ORDER: {baseDo}
-                                </Badge>
-                                <div className="flex flex-col">
-                                  <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">Section {orderIdx + 1}</span>
-                                  <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products.length} Items Selected</span>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20 rounded-full">
-                                  {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                                </Button>
+                      return (
+                        <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
+                          <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
+                            <div className="flex items-center gap-4">
+                              <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
+                                ORDER: {baseDo}
+                              </Badge>
+                              <div className="flex flex-col">
+                                <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">Section {orderIdx + 1}</span>
+                                <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products?.length || 0} Items Selected</span>
                               </div>
                             </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20 rounded-full">
+                                {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                              </Button>
+                            </div>
+                          </div>
 
-                            {isExpanded && (
-                              <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
-                                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                          {isExpanded && (
+                            <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
+                              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Depo Name</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.depoName || "—"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Purpose</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.deliveryPurpose}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Order Type</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.orderType}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Dates</p>
+                                    <p className="text-xs font-bold text-slate-900">S: {formatDate(orderDetails.startDate)} | E: {formatDate(orderDetails.endDate)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Date</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.deliveryDate)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Transport</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.transportType}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Contact Person</p>
+                                    <p className="text-sm font-bold text-slate-900 truncate">{orderDetails.custContactName || "—"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">WhatsApp No.</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.whatsapp || "—"}</p>
+                                  </div>
+                                  <div className="col-span-2">
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Address</p>
+                                    <p className="text-sm font-bold text-slate-900 truncate" title={orderDetails.address}>{orderDetails.address}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Payment Terms</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.paymentTerms}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Advance Amount</p>
+                                    <p className="text-base font-black text-blue-700 leading-tight">
+                                      ₹{orderDetails.advanceAmount || 0} {orderDetails.advanceTaken ? "(REQ)" : "(NO)"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Broker</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.isBroker ? orderDetails.brokerName : "No"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Credit Status</p>
+                                    <Badge className={cn("text-[10px] font-bold px-2 py-0.5", orderDetails.creditStatus === 'Good' ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-red-100 text-red-700 hover:bg-red-100')}>
+                                      {orderDetails.creditStatus}
+                                    </Badge>
+                                  </div>
+                                  <div className="col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4 mt-2">
+                                    <div className="bg-amber-100 p-2 rounded-lg"><Settings2 className="h-5 w-5 text-amber-600" /></div>
                                     <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Depo Name</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.depoName || "—"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Purpose</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.deliveryPurpose}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Order Type</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.orderType}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Dates</p>
-                                      <p className="text-xs font-bold text-slate-900">S: {formatDate(orderDetails.startDate)} | E: {formatDate(orderDetails.endDate)}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Date</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.deliveryDate)}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Transport</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.transportType}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Contact Person</p>
-                                      <p className="text-sm font-bold text-slate-900 truncate">{orderDetails.custContactName || "—"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">WhatsApp No.</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.whatsapp || "—"}</p>
-                                    </div>
-                                    <div className="col-span-2">
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Address</p>
-                                      <p className="text-sm font-bold text-slate-900 truncate" title={orderDetails.address}>{orderDetails.address}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Payment Terms</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.paymentTerms}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Advance Amount</p>
-                                      <p className="text-base font-black text-blue-700 leading-tight">
-                                        ₹{orderDetails.advanceAmount || 0} {orderDetails.advanceTaken ? "(REQ)" : "(NO)"}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Broker</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.isBroker ? orderDetails.brokerName : "No"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Credit Status</p>
-                                      <Badge className={cn("text-[10px] font-bold px-2 py-0.5", orderDetails.creditStatus === 'Good' ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-red-100 text-red-700 hover:bg-red-100')}>
-                                        {orderDetails.creditStatus}
-                                      </Badge>
-                                    </div>
-                                    <div className="col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4 mt-2">
-                                      <div className="bg-amber-100 p-2 rounded-lg"><Settings2 className="h-5 w-5 text-amber-600" /></div>
-                                      <div>
-                                        <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
-                                        <p className="text-sm font-medium text-slate-700 italic leading-snug">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
-                                      </div>
+                                      <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
+                                      <p className="text-sm font-medium text-slate-700 italic leading-snug">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
                                     </div>
                                   </div>
                                 </div>
                               </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
 
                     <div className="space-y-4">
                       <div className="flex items-center justify-between border-b pb-2">
@@ -872,9 +868,9 @@ export default function DispatchMaterialPage() {
                             <TableRow>
                               <TableHead className="w-12 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">
                                 <Checkbox
-                                  checked={items.flatMap(i => i._allProducts).every(p => dialogSelectedProducts.includes(p._rowKey))}
+                                  checked={allProducts.length > 0 && allProducts.every((p: any) => dialogSelectedProducts.includes(p._rowKey))}
                                   onCheckedChange={(checked) => {
-                                    const keys = items.flatMap(i => i._allProducts).map(p => p._rowKey);
+                                    const keys = allProducts.map((p: any) => p._rowKey);
                                     if (checked) setDialogSelectedProducts(prev => Array.from(new Set([...prev, ...keys])));
                                     else setDialogSelectedProducts(prev => prev.filter(k => !keys.includes(k)));
                                   }}
@@ -882,6 +878,7 @@ export default function DispatchMaterialPage() {
                               </TableHead>
                               <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Sub-Order</TableHead>
                               <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Product Name</TableHead>
+                              <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Rate</TableHead>
                               <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Approval</TableHead>
                               <TableHead className="w-32 text-[10px] uppercase font-black text-slate-500 tracking-wider">Qty to Dispatch</TableHead>
                               <TableHead className="w-40 text-[10px] uppercase font-black text-slate-500 tracking-wider">Delivery From</TableHead>
@@ -891,7 +888,7 @@ export default function DispatchMaterialPage() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {items.flatMap(i => i._allProducts).map((prod) => {
+                            {allProducts.map((prod: any) => {
                               const rowKey = prod._rowKey;
                               const maxLimit = prod.remainingDispatchQty !== undefined ? prod.remainingDispatchQty : prod.approvalQty;
                               const currentDispatchQty = dispatchDetails[rowKey]?.qty !== undefined ? dispatchDetails[rowKey].qty : maxLimit;
@@ -903,7 +900,7 @@ export default function DispatchMaterialPage() {
                                   </TableCell>
                                   <TableCell className="text-[10px] font-semibold text-slate-700 p-1">{prod.orderNo || "—"}</TableCell>
                                   <TableCell className="font-medium text-[11px] p-2">{prod.productName || "—"}</TableCell>
-
+                                  <TableCell className="text-[10px] font-bold text-slate-600 p-2 text-center">₹{prod.rate || "—"}</TableCell>
                                   <TableCell className="text-[10px] font-bold text-blue-600 p-2 text-center">{prod.approvalQty || "—"}</TableCell>
                                   <TableCell className="p-2">
                                     <Input type="number" className="h-7 text-[10px] font-bold" value={currentDispatchQty} onChange={(e) => {
@@ -924,20 +921,20 @@ export default function DispatchMaterialPage() {
                                   </TableCell>
                                   <TableCell className="p-2">
                                     <div className="flex items-center gap-1 justify-center">
-                                      <Select 
-                                        value={dispatchDetails[rowKey]?.transfer || prod.transfer || "no"} 
+                                      <Select
+                                        value={dispatchDetails[rowKey]?.transfer || prod.transfer || "no"}
                                         onValueChange={(val) => {
                                           setDispatchDetails((prev) => {
                                             const existing = prev[rowKey] || {};
                                             // Initialize transferData from prod if not already present in state
                                             const transferData = existing.transferData || {
-                                              billTo: { 
-                                                company: prod.bill_company_name || "", 
-                                                address: prod.bill_address || "" 
+                                              billTo: {
+                                                company: prod.bill_company_name || "",
+                                                address: prod.bill_address || ""
                                               },
-                                              shipTo: { 
-                                                company: prod.ship_company_name || "", 
-                                                address: prod.ship_address || "" 
+                                              shipTo: {
+                                                company: prod.ship_company_name || "",
+                                                address: prod.ship_address || ""
                                               },
                                               freightRate: prod.freight_rate?.toString() || ""
                                             };
@@ -990,12 +987,12 @@ export default function DispatchMaterialPage() {
 
                               <TableCell className="p-3 text-center">
                                 <Badge variant="secondary" className="bg-blue-100 text-blue-800 font-black px-2 shadow-sm border-blue-200">
-                                  {items.flatMap(i => i._allProducts).reduce((sum, p) => sum + (parseFloat(p.approvalQty) || 0), 0)}
+                                  {allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.approvalQty) || 0), 0)}
                                 </Badge>
                               </TableCell>
                               <TableCell className="p-3">
                                 <Badge variant="secondary" className="bg-green-100 text-green-800 font-black px-2 shadow-sm border-green-200 w-full justify-center">
-                                  {items.flatMap(i => i._allProducts).reduce((sum, p) => {
+                                  {allProducts.reduce((sum: number, p: any) => {
                                     const rowKey = p._rowKey;
                                     const maxLimit = p.remainingDispatchQty !== undefined ? p.remainingDispatchQty : p.approvalQty;
                                     const currentDispatchQty = dispatchDetails[rowKey]?.qty !== undefined ? dispatchDetails[rowKey].qty : maxLimit;
@@ -1007,7 +1004,7 @@ export default function DispatchMaterialPage() {
                               <TableCell />
                               <TableCell className="p-3 text-center">
                                 <Badge variant="secondary" className="bg-slate-200 text-slate-700 font-black px-2 shadow-sm border-slate-300">
-                                  {items.flatMap(i => i._allProducts).reduce((sum, p) => {
+                                  {allProducts.reduce((sum: number, p: any) => {
                                     const maxLimit = p.remainingDispatchQty !== undefined ? p.remainingDispatchQty : p.approvalQty;
                                     return sum + (parseFloat(maxLimit) || 0);
                                   }, 0)}
@@ -1020,8 +1017,8 @@ export default function DispatchMaterialPage() {
                       </div>
                     </div>
                   </div>
-                ));
-              })()}
+                );
+              })}
             </div>
           </div>
 
@@ -1036,9 +1033,9 @@ export default function DispatchMaterialPage() {
                   onChange={(e) => setRevertRemarks(e.target.value)}
                 />
               </div>
-              <Button 
-                variant="destructive" 
-                onClick={handleRevert} 
+              <Button
+                variant="destructive"
+                onClick={handleRevert}
                 disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly || !revertRemarks.trim()}
                 className="font-black uppercase tracking-tight whitespace-nowrap"
               >
@@ -1083,13 +1080,13 @@ export default function DispatchMaterialPage() {
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold">Company Name <span className="text-red-500">*</span></Label>
-                  <Select 
+                  <Select
                     value={
-                      currentTransferRowKey 
-                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.billTo?.company ?? 
-                           allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.bill_company_name ?? "") 
+                      currentTransferRowKey
+                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.billTo?.company ??
+                          allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.bill_company_name ?? "")
                         : ""
-                    } 
+                    }
                     onValueChange={(val) => {
                       if (!currentTransferRowKey) return;
                       const selectedCust = allCustomers.find(c => c.customer_name === val);
@@ -1102,7 +1099,7 @@ export default function DispatchMaterialPage() {
                           selectedCust.pincode
                         ].filter(Boolean).join(", ");
                       }
-                      
+
                       const prevData = dispatchDetails[currentTransferRowKey]?.transferData || {
                         billTo: { company: "", address: "" },
                         shipTo: { company: "", address: "" },
@@ -1115,9 +1112,9 @@ export default function DispatchMaterialPage() {
                           ...prev,
                           [rowKey]: {
                             ...rowDetail,
-                            transferData: { 
-                              ...prevData, 
-                              billTo: { ...prevData.billTo, company: val, address: autoAddress || prevData.billTo.address } 
+                            transferData: {
+                              ...prevData,
+                              billTo: { ...prevData.billTo, company: val, address: autoAddress || prevData.billTo.address }
                             }
                           }
                         };
@@ -1134,13 +1131,13 @@ export default function DispatchMaterialPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold">Address</Label>
-                  <Input 
-                    placeholder="Enter Address" 
-                    className="h-9 text-xs font-medium" 
+                  <Input
+                    placeholder="Enter Address"
+                    className="h-9 text-xs font-medium"
                     value={
-                      currentTransferRowKey 
-                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.billTo?.address ?? 
-                           allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.bill_address ?? "") 
+                      currentTransferRowKey
+                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.billTo?.address ??
+                          allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.bill_address ?? "")
                         : ""
                     }
                     onChange={(e) => {
@@ -1173,13 +1170,13 @@ export default function DispatchMaterialPage() {
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold">Company Name <span className="text-red-500">*</span></Label>
-                  <Select 
+                  <Select
                     value={
-                      currentTransferRowKey 
-                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.shipTo?.company ?? 
-                           allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.ship_company_name ?? "") 
+                      currentTransferRowKey
+                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.shipTo?.company ??
+                          allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.ship_company_name ?? "")
                         : ""
-                    } 
+                    }
                     onValueChange={(val) => {
                       if (!currentTransferRowKey) return;
                       const selectedCust = allCustomers.find(c => c.customer_name === val);
@@ -1204,9 +1201,9 @@ export default function DispatchMaterialPage() {
                           ...prev,
                           [currentTransferRowKey || ""]: {
                             ...rowDetail,
-                            transferData: { 
-                              ...prevData, 
-                              shipTo: { ...prevData.shipTo, company: val, address: autoAddress || prevData.shipTo.address } 
+                            transferData: {
+                              ...prevData,
+                              shipTo: { ...prevData.shipTo, company: val, address: autoAddress || prevData.shipTo.address }
                             }
                           }
                         };
@@ -1223,13 +1220,13 @@ export default function DispatchMaterialPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold">Address</Label>
-                  <Input 
-                    placeholder="Enter Address" 
-                    className="h-9 text-xs font-medium" 
+                  <Input
+                    placeholder="Enter Address"
+                    className="h-9 text-xs font-medium"
                     value={
-                      currentTransferRowKey 
-                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.shipTo?.address ?? 
-                           allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.ship_address ?? "") 
+                      currentTransferRowKey
+                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.shipTo?.address ??
+                          allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.ship_address ?? "")
                         : ""
                     }
                     onChange={(e) => {
@@ -1260,15 +1257,15 @@ export default function DispatchMaterialPage() {
           <div className="px-8 pb-4">
             <div className="space-y-1.5 max-w-xs">
               <Label className="text-xs font-bold">Freight Rate <span className="text-red-500">*</span></Label>
-              <Input 
-                type="number" 
-                min="0" 
-                placeholder="0.00" 
-                className="h-10 text-sm font-bold border-2 focus:border-blue-400" 
+              <Input
+                type="number"
+                min="0"
+                placeholder="0.00"
+                className="h-10 text-sm font-bold border-2 focus:border-blue-400"
                 value={
-                  currentTransferRowKey 
-                    ? (dispatchDetails[currentTransferRowKey]?.transferData?.freightRate ?? 
-                       allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.freight_rate?.toString() ?? "") 
+                  currentTransferRowKey
+                    ? (dispatchDetails[currentTransferRowKey]?.transferData?.freightRate ??
+                      allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.freight_rate?.toString() ?? "")
                     : ""
                 }
                 onChange={(e) => {
@@ -1306,7 +1303,7 @@ export default function DispatchMaterialPage() {
               }
               setIsTransferPopupOpen(false);
             }}>Cancel</Button>
-            <Button 
+            <Button
               onClick={() => {
                 // Validation
                 const data = currentTransferRowKey ? dispatchDetails[currentTransferRowKey]?.transferData : null;

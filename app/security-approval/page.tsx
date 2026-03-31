@@ -109,6 +109,7 @@ export default function SecurityApprovalPage() {
 
       if (response.success && response.data.approvals) {
         const mappedHistory = response.data.approvals.map((record: any) => ({
+          ...record,
           orderNo: record.so_no,
           doNumber: record.d_sr_number,
           customerName: (record.transfer === 'yes' && record.bill_company_name) ? record.bill_company_name : record.party_name,
@@ -118,6 +119,7 @@ export default function SecurityApprovalPage() {
           timestamp: record.actual_4,
           date: record.actual_4 ? new Date(record.actual_4).toLocaleDateString("en-GB") : "-",
           remarks: record.bilty_no || "-",
+          rawData: record,
         }));
         setHistoryOrders(mappedHistory);
       }
@@ -363,11 +365,11 @@ export default function SecurityApprovalPage() {
       }
 
       const group = grouped[groupKey]
-      const currentCustName = (order.transfer === 'yes' && order.bill_company_name) 
-        ? order.bill_company_name 
+      const currentCustName = (order.transfer === 'yes' && order.bill_company_name)
+        ? order.bill_company_name
         : (order.party_name || order.partyName || "Unknown Customer")
       group.customerNames.add(currentCustName)
-      
+
       const rawDoNumber = order.so_no || order.soNo || "—"
       const doNumber = rawDoNumber.replace(/[A-Z]+$/, '')
       group.doNumberList.add(doNumber)
@@ -502,6 +504,7 @@ export default function SecurityApprovalPage() {
       partyNames={customerNames}
       onFilterChange={setFilterValues}
       remarksColName="Attachments"
+      stageLevel={5}
     >
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
@@ -774,7 +777,7 @@ export default function SecurityApprovalPage() {
                               <div>
                                 <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
                                 <p className="text-xs font-black text-slate-900 leading-tight">
-                                  {firstProd.gross_weight || firstProd.grossWeight || "0"} / {firstProd.tare_weight || firstProd.tareWeight || "0"} / <span className="text-blue-600 font-black">{firstProd.net_weight || firstProd.netWeight || "0"}</span>
+                                  {firstProd.gross_weight || firstProd.grossWeight || "0"} / {firstProd.tare_weight || firstProd.tareWeight || "0"} / <span className="text-blue-600 font-black">{((Number(firstProd.gross_weight || firstProd.grossWeight || 0) - Number(firstProd.tare_weight || firstProd.tareWeight || 0)) || "0").toString()}</span>
                                 </p>
                               </div>
                               <div>

@@ -211,6 +211,12 @@ export default function MaterialReceiptPage() {
           customerAddress: order.customer_address || "—",
           totalAmount: order.total_amount_with_gst || "—",
 
+          isBroker: order.is_order_through_broker || false,
+          brokerName: order.broker_name || "—",
+          advanceAmount: order.advance_amount || 0,
+          paymentTerms: order.payment_terms || "—",
+          partySoDate: order.party_so_date ? new Date(order.party_so_date).toLocaleDateString("en-IN") : "—",
+
           // Additional Details for Header (as requested)
           invoiceDate: order.invoice_date ? new Date(order.invoice_date).toLocaleDateString("en-IN") : "—",
           biltyNo: order.bilty_no || "—",
@@ -409,15 +415,19 @@ export default function MaterialReceiptPage() {
       description="Confirm material receipt and report any damages."
       pendingCount={displayRows.length}
       historyData={historyOrders.map((order) => ({
+        ...order,
         date: order.actual_8 ? new Date(order.actual_8).toLocaleDateString("en-GB") : "-",
+        orderNo: order.so_no,
         stage: "Material Receipt",
         customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : order.party_name,
         status: order.damage_status || "Completed",
         remarks: order.damage_status === "Damaged" ? `Damaged: ${order.damage_qty}` : "Received OK",
+        rawData: order,
       }))}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
       remarksColName="Condition"
+      stageLevel={9}
     >
       <div className="space-y-4">
         {/* Action Bar */}
@@ -567,17 +577,42 @@ export default function MaterialReceiptPage() {
 
                     {/* Additional invoice/weight details */}
                     <div>
-                      <Label className="text-xs text-muted-foreground">Invoice No</Label>
-                      <p className="font-medium text-blue-600">{selectedGroup.invoiceNo}</p>
+                      <Label className="text-xs text-muted-foreground">Delivery Purpose</Label>
+                      <p className="font-medium">{selectedGroup.deliveryPurpose}</p>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Invoice Date</Label>
-                      <p className="font-medium">{selectedGroup.invoiceDate}</p>
+                      <Label className="text-xs text-muted-foreground">Start / End Date</Label>
+                      <p className="font-medium">{selectedGroup.startDate} / {selectedGroup.endDate}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">DO Date</Label>
+                      <p className="font-medium">{selectedGroup.partySoDate}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Transport Type</Label>
+                      <p className="font-medium text-purple-600">{selectedGroup.transportType}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Contact Person</Label>
+                      <p className="font-medium">{selectedGroup.contactPerson} ({selectedGroup.contactWhatsapp})</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Broker / Advance</Label>
+                      <p className="font-medium text-blue-600">{selectedGroup.brokerName} / ₹{selectedGroup.advanceAmount}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Address</Label>
+                      <p className="font-medium truncate" title={selectedGroup.customerAddress}>{selectedGroup.customerAddress}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Invoice No / Date</Label>
+                      <p className="font-medium text-blue-600">{selectedGroup.invoiceNo} / {selectedGroup.invoiceDate}</p>
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Bilty No</Label>
                       <p className="font-medium">{selectedGroup.biltyNo}</p>
                     </div>
+
                     <div>
                       <Label className="text-xs text-muted-foreground">Truck No</Label>
                       <p className="font-medium">{selectedGroup.truckNo}</p>
@@ -599,7 +634,7 @@ export default function MaterialReceiptPage() {
                     <div>
                       <Label className="text-xs text-muted-foreground">Gross / Tare / Net</Label>
                       <p className="font-medium text-slate-900 leading-tight">
-                        {selectedGroup.grossWeight || "0"} / {selectedGroup.tareWeight || "0"} / <span className="text-blue-600 font-black">{selectedGroup.netWeight || "0"}</span>
+                        {selectedGroup.grossWeight || "0"} / {selectedGroup.tareWeight || "0"} / <span className="text-blue-600 font-black">{((Number(selectedGroup.grossWeight || 0) - Number(selectedGroup.tareWeight || 0)) || "0").toString()}</span>
                       </p>
                     </div>
                     <div>
