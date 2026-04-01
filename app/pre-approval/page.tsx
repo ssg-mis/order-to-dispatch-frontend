@@ -1381,17 +1381,16 @@ export default function PreApprovalPage() {
 
     return matches
   })
-
   // Group orders by base DO number (DO-022A, DO-022B → DO-022)
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order) => {
-      const originalOrderId = order.doNumber || order.orderNo || "DO-XXX"
+      const originalOrderId = order.doNumber || order.orderNo || "DO/26-27/0001"
 
       // Strip suffix (A, B, C...) from DO number for grouping/display
-      const baseDoMatch = originalOrderId.match(/^(DO-\d+)/i)
-      const baseDo = baseDoMatch ? baseDoMatch[1] : originalOrderId
+      const baseDoMatch = originalOrderId.match(/^(DO[-\/](?:\d{2}-\d{2}\/)?\d+)/i)
+      const baseDo = baseDoMatch ? baseDoMatch[1].toUpperCase() : originalOrderId
 
       // Group by Order Number (baseDo) instead of Customer Name
       const groupKey = baseDo

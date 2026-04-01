@@ -39,14 +39,14 @@ const STAGES = [
 
 /**
  * Strip trailing letter suffix(es) from order number.
- * DO-416A  → DO-416
- * DO-416B  → DO-416
- * DO-416   → DO-416
+ * DO/26-27/0001A  → DO/26-27/0001
+ * DO/26-27/0001B  → DO/26-27/0001
+ * DO/26-27/0001   → DO/26-27/0001
  */
-const getBaseOrderNo = (orderNo: string): string => {
+const getBaseOrderNo = (orderNo: string) => {
   if (!orderNo) return orderNo
-  // Remove one or more trailing uppercase/lowercase letters
-  return orderNo.replace(/[A-Za-z]+$/, '').replace(/-$/, '').trim()
+  const match = orderNo.match(/^(DO[-\/](?:\d{2}-\d{2}\/)?\d+)/i)
+  return match ? match[1].toUpperCase() : orderNo
 }
 
 const PAGE_SIZE = 20

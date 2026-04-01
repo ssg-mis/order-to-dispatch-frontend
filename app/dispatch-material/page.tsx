@@ -526,11 +526,10 @@ export default function DispatchMaterialPage() {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order: any) => {
-      const orderId = order.order_no || order.orderNo || "DO-XXX"
-
-      // Strip suffix (A, B, C...) from DO number for grouping/display
-      const baseDoMatch = orderId.match(/^(DO-\d+)/i)
-      const baseDo = baseDoMatch ? baseDoMatch[1] : orderId
+      const orderId = order.order_no || order.orderNo || "DO/26-27/0001"
+      // Group by Base DO (e.g. DO/26-27/0001 from DO/26-27/0001A)
+      const baseDoMatch = orderId.match(/^(DO[-\/](?:\d{2}-\d{2}\/)?\d+)/i)
+      const baseDo = baseDoMatch ? baseDoMatch[1].toUpperCase() : orderId
 
       // Group by individual DO Number as requested
       const custName = order.customer_name || order.customerName || "Unknown"

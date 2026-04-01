@@ -475,9 +475,10 @@ export default function ActualDispatchPage() {
 
     filteredPendingOrders.forEach((order: any) => {
       const custName = (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.customerName || "Unknown")
-      const doNumber = order.so_no || order.soNo || "DO-XXX"
-      const baseDoMatch = doNumber.match(/^(DO-\d+)/i)
-      const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
+      const doNumber = order.so_no || order.soNo || "DO/26-27/0001"
+      // Group by Base DO (e.g. DO/26-27/0001 from DO/26-27/0001A)
+      const baseDoMatch = doNumber.match(/^(DO[-\/](?:\d{2}-\d{2}\/)?\d+)/i)
+      const baseDo = baseDoMatch ? baseDoMatch[1].toUpperCase() : doNumber
 
       // Group by DO Date (party_so_date)
       const groupKey = baseDo;

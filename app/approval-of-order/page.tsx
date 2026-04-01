@@ -575,11 +575,10 @@ export default function CommitmentReviewPage() {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order) => {
-      const originalOrderId = order.doNumber || order.orderNo || "DO-XXX"
-
-      // Strip suffix (A, B, C...) from DO number for grouping/display
-      const baseDoMatch = originalOrderId.match(/^(DO-\d+)/i)
-      const baseDo = baseDoMatch ? baseDoMatch[1] : originalOrderId
+      const originalOrderId = order.doNumber || order.orderNo || "DO/26-27/0001"
+      // Group by Base DO (e.g. DO/26-27/0001 from DO/26-27/0001A)
+      const baseDoMatch = originalOrderId.match(/^(DO[-\/](?:\d{2}-\d{2}\/)?\d+)/i)
+      const baseDo = baseDoMatch ? baseDoMatch[1].toUpperCase() : originalOrderId
 
       // Group by Order Number (baseDo)
       const groupKey = baseDo
@@ -1004,8 +1003,8 @@ export default function CommitmentReviewPage() {
                   const orderDetails = Object.values(order._ordersMap)[0] as any || {}
 
                   const baseDos = Array.from(new Set(products.map((p: any) => {
-                    const id = p._originalOrderId || "DO-XXX"
-                    const match = id.match(/^(DO-\d+)/i)
+                    const id = p._originalOrderId || "DO/26-27/0001"
+                    const match = id.match(/^(DO[-\/](?:\d{2}-\d{2}\/)?\d+)/i)
                     return match ? match[1] : id
                   }))).join(", ")
 

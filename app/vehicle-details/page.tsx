@@ -132,10 +132,10 @@ export default function VehicleDetailsPage() {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order: any) => {
-      const doNumber = order.so_no || order.soNo || "DO-XXX"
-      // Group by Base DO (e.g. DO-022 from DO-022A)
-      const baseDoMatch = doNumber.match(/^(DO-\d+)/i)
-      const baseDo = baseDoMatch ? baseDoMatch[1] : doNumber
+      const doNumber = order.so_no || order.soNo || "DO/26-27/0001"
+      // Group by Base DO (e.g. DO/26-27/0001 from DO/26-27/0001A)
+      const baseDoMatch = doNumber.match(/^(DO[-\/](?:\d{2}-\d{2}\/)?\d+)/i)
+      const baseDo = baseDoMatch ? baseDoMatch[1].toUpperCase() : doNumber
 
       if (!grouped[baseDo]) {
         grouped[baseDo] = {
