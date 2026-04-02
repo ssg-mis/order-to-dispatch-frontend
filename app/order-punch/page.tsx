@@ -16,7 +16,7 @@ import { Save, FileUp, Plus, Trash2, CalendarIcon } from "lucide-react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
-import { customerApi, depotApi, skuApi, brokerApi, orderApi } from "@/lib/api-service"
+import { customerApi, depotApi, skuApi, brokerApi, orderApi, salespersonApi } from "@/lib/api-service"
 import { Combobox } from "@/components/ui/combobox"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -69,6 +69,10 @@ export default function OrderPunchPage() {
   // New state for Brokers
   const [brokers, setBrokers] = useState<any[]>([])
   const [isLoadingBrokers, setIsLoadingBrokers] = useState(false)
+
+  // New state for Salespersons
+  const [salespersons, setSalespersons] = useState<any[]>([])
+  const [isLoadingSalespersons, setIsLoadingSalespersons] = useState(false)
 
   // Function to fetch customers - declared before useEffect
   const fetchCustomers = async () => {
@@ -150,12 +154,32 @@ export default function OrderPunchPage() {
     }
   }
 
+  // Function to fetch Salespersons
+  const fetchSalespersons = async () => {
+    try {
+      setIsLoadingSalespersons(true)
+      const response = await salespersonApi.getAll()
+      if (response.success) {
+        setSalespersons(response.data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch salespersons:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load salesperson list",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingSalespersons(false)
+    }
+  }
+
   const [products, setProducts] = useState<ProductItem[]>([
     { id: "1", productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "", oilType: "" },
   ])
   const [customerType, setCustomerType] = useState<string>("existing")
   const [depoName, setDepoName] = useState<string>("Banari")
-  const [isBrokerOrder, setIsBrokerOrder] = useState<string>("YES")
+  const [isBrokerOrder, setIsBrokerOrder] = useState<string>("Broker")
   const [orderPurpose, setOrderPurpose] = useState<string>("week-on-week")
   const [orderType, setOrderType] = useState<string>("regular")
   const [advancePaymentTaken, setAdvancePaymentTaken] = useState<string>("NO")
@@ -205,6 +229,7 @@ export default function OrderPunchPage() {
     fetchDepots()
     fetchSkus()
     fetchBrokers()
+    fetchSalespersons()
   }, [])
 
   // Customer Auto-fill Effect
@@ -387,7 +412,7 @@ export default function OrderPunchPage() {
         payment_terms: paymentTerms || null,
         advance_payment_to_be_taken: advancePaymentTaken === "YES",
         advance_amount: advanceAmount ? parseFloat(advanceAmount) : null,
-        is_order_through_broker: isBrokerOrder === "YES",
+        is_order_through_broker: isBrokerOrder === "Broker" || isBrokerOrder === "Salesperson",
         broker_name: brokerName || null,
         type_of_transporting: transportType || null,
         order_punch_remarks: orderPunchRemarks || null,
@@ -638,7 +663,7 @@ export default function OrderPunchPage() {
   const resetForm = () => {
     setCustomerType("existing")
     setDepoName("Banari")
-    setIsBrokerOrder("YES")
+    setIsBrokerOrder("Broker")
     setOrderPurpose("week-on-week")
     setOrderType("regular")
     setAdvancePaymentTaken("NO")
@@ -900,12 +925,13 @@ export default function OrderPunchPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="contactPerson">Customer Contact Person Name</Label>
+                <Label htmlFor="contactPerson">Customer Contact Person Name <span className="text-red-500">*</span></Label>
                 <Input
                   id="contactPerson"
                   placeholder="Enter name"
                   value={contactPerson}
                   onChange={(e) => setContactPerson(e.target.value)}
+                  required
                 />
               </div>
 
@@ -994,6 +1020,8 @@ export default function OrderPunchPage() {
                   />
                 </div>
               )}
+
+
 
               {/* Pre-Approval Rates Section */}
               {orderType === "pre-approval" && (
@@ -1206,19 +1234,20 @@ export default function OrderPunchPage() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="isBroker">Is This Order Through Broker</Label>
+                <Label htmlFor="isBroker"> Is This Order Through</Label>
                 <Select value={isBrokerOrder} onValueChange={setIsBrokerOrder}>
                   <SelectTrigger id="isBroker">
-                    <SelectValue placeholder="Select YES/NO" />
+                    <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="NO">NO</SelectItem>
-                    <SelectItem value="YES">YES</SelectItem>
+                    <SelectItem value="Direct">Direct</SelectItem>
+                    <SelectItem value="Broker">Broker</SelectItem>
+                    <SelectItem value="Salesperson">Salesperson</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {isBrokerOrder === "YES" && (
+              {isBrokerOrder === "Broker" && (
                 <div className="space-y-2">
                   <Label htmlFor="brokerName">Broker Name (IF ORDER THROUGH BROKER)</Label>
                   <Combobox
@@ -1234,6 +1263,26 @@ export default function OrderPunchPage() {
                     searchPlaceholder="Search brokers..."
                     emptyText="No broker found."
                     disabled={isLoadingBrokers}
+                  />
+                </div>
+              )}
+
+              {isBrokerOrder === "Salesperson" && (
+                <div className="space-y-2">
+                  <Label htmlFor="brokerName">Salesperson Name</Label>
+                  <Combobox
+                    options={salespersons
+                      .filter(s => s && s.salesman_name) // Filter invalid salespersons
+                      .map((salesperson) => ({
+                        value: salesperson.salesman_name,
+                        label: salesperson.salesman_name
+                      }))}
+                    value={brokerName}
+                    onValueChange={setBrokerName}
+                    placeholder={isLoadingSalespersons ? "Loading salespersons..." : "Select salesperson"}
+                    searchPlaceholder="Search salespersons..."
+                    emptyText="No salesperson found."
+                    disabled={isLoadingSalespersons}
                   />
                 </div>
               )}
