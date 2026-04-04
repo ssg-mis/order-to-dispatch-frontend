@@ -255,6 +255,20 @@ export default function OrderPunchPage() {
     }
   }, [customerName, customerType, customers])
 
+  // Track which fields are auto-filled from the database
+  const selectedCustomerRecord = customerType === "existing" && customerName 
+    ? customers.find(c => c.customer_name === customerName)
+    : null;
+
+  const isContactPersonAutoFilled = !!(selectedCustomerRecord && selectedCustomerRecord.contact_person);
+  const isWhatsappNoAutoFilled = !!(selectedCustomerRecord && selectedCustomerRecord.contact);
+  const isAddressAutoFilled = !!(selectedCustomerRecord && (
+    selectedCustomerRecord.address_line_1 || 
+    selectedCustomerRecord.address_line_2 || 
+    selectedCustomerRecord.state || 
+    selectedCustomerRecord.pincode
+  ));
+
   // Week on Week / Future Period Date Logic - Initialize Start Date from DO Date
   useEffect(() => {
     if (orderPurpose === "week-on-week" || orderPurpose === "future-period") {
@@ -932,26 +946,34 @@ export default function OrderPunchPage() {
                   value={contactPerson}
                   onChange={(e) => setContactPerson(e.target.value)}
                   required
+                  disabled={isContactPersonAutoFilled}
+                  className={isContactPersonAutoFilled ? "bg-muted" : ""}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="whatsappNo">Customer Contact Person WhatsApp No.</Label>
+                <Label htmlFor="whatsappNo">Customer Contact Person WhatsApp No.<span className="text-red-500">*</span></Label>
                 <Input
                   id="whatsappNo"
                   placeholder="Enter WhatsApp number"
                   value={whatsappNo}
                   onChange={(e) => setWhatsappNo(e.target.value)}
+                  required
+                  disabled={isWhatsappNoAutoFilled}
+                  className={isWhatsappNoAutoFilled ? "bg-muted" : ""}
                 />
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="customerAddress">Customer Address</Label>
+                <Label htmlFor="customerAddress">Customer Address<span className="text-red-500">*</span></Label>
                 <Input
                   id="customerAddress"
                   placeholder="Enter full address"
                   value={customerAddress}
                   onChange={(e) => setCustomerAddress(e.target.value)}
+                  required
+                  disabled={isAddressAutoFilled}
+                  className={isAddressAutoFilled ? "bg-muted" : ""}
                 />
               </div>
 
