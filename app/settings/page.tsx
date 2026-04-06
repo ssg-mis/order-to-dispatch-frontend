@@ -240,6 +240,8 @@ export default function SettingsPage() {
           description: "User created successfully",
         })
         refetchUsers()
+        setIsAddDialogOpen(false)
+        resetForm()
       }
     } catch (error: any) {
       toast({
@@ -284,7 +286,9 @@ export default function SettingsPage() {
           title: "Success",
           description: "User updated successfully",
         })
+        setIsEditDialogOpen(false)
         setSelectedUser(null)
+        resetForm()
         refetchUsers()
       }
     } catch (error: any) {
@@ -310,6 +314,7 @@ export default function SettingsPage() {
           title: "Success",
           description: "User deleted successfully",
         })
+        setIsDeleteDialogOpen(false)
         setSelectedUser(null)
         refetchUsers()
       }
@@ -327,24 +332,50 @@ export default function SettingsPage() {
   // Open edit dialog with user data
   const openEditDialog = (user: User) => {
     setSelectedUser(user)
-    // Normalize page_access to PageAccessMap format
+    // Normalize page_access: parse JSON string if TEXT column, then convert to PageAccessMap
     let pa: PageAccessMap = {}
-    if (Array.isArray(user.page_access)) {
-      user.page_access.forEach(p => { pa[p] = 'modify' })
-    } else if (user.page_access && typeof user.page_access === 'object') {
-      pa = { ...user.page_access } as PageAccessMap
+    let pageAccessParsed: any = user.page_access
+    if (typeof pageAccessParsed === 'string') {
+      try { pageAccessParsed = JSON.parse(pageAccessParsed) } catch { pageAccessParsed = {} }
     }
+    if (Array.isArray(pageAccessParsed)) {
+      pageAccessParsed.forEach((p: string) => { pa[p] = 'modify' })
+    } else if (pageAccessParsed && typeof pageAccessParsed === 'object') {
+      pa = { ...pageAccessParsed } as PageAccessMap
+    }
+    // Normalize depo_access: parse JSON string (TEXT column) then ensure arrays
+    let rawDepoAccess: Record<string, unknown> = {}
+    const depoRaw = user.depo_access
+    if (typeof depoRaw === 'string') {
+      try { rawDepoAccess = JSON.parse(depoRaw) } catch { rawDepoAccess = {} }
+    } else if (depoRaw && typeof depoRaw === 'object') {
+      rawDepoAccess = depoRaw as Record<string, unknown>
+    }
+    const normalizedDepoAccess: Record<string, string[]> = {}
+    Object.entries(rawDepoAccess).forEach(([page, val]) => {
+      if (Array.isArray(val)) {
+        normalizedDepoAccess[page] = val.map(String)
+      } else if (typeof val === 'string') {
+        // Handle PostgreSQL text array format like {Banari,Dallrajhara}
+        normalizedDepoAccess[page] = (val as string)
+          .replace(/^\{/, '').replace(/\}$/, '')
+          .split(',')
+          .map((s: string) => s.replace(/^"/, '').replace(/"$/, '').trim())
+          .filter(Boolean)
+      } else {
+        normalizedDepoAccess[page] = []
+      }
+    })
+
     setFormData({
       username: user.username,
-      password: "", // We don't show the password
+      password: "",
       email: user.email || "",
       phone_no: user.phone_no || "",
       status: user.status,
       role: user.role,
-      page_access: (typeof user.page_access === 'object' && user.page_access !== null) 
-        ? user.page_access as PageAccessMap 
-        : {},
-      depo_access: user.depo_access || {}
+      page_access: pa,
+      depo_access: normalizedDepoAccess
     })
     setIsEditDialogOpen(true)
   }
@@ -609,7 +640,7 @@ export default function SettingsPage() {
                                 <div key={`${depo.depot_id || idx}-${page}`} className="flex items-center gap-2">
                                   <Checkbox 
                                     id={`add-depo-${page}-${depo.depot_id}`}
-                                    checked={(formData.depo_access[page] || []).includes(depo.depot_name)}
+                                    checked={(formData.depo_access[page] || []).some(d => d.toLowerCase() === depo.depot_name.toLowerCase())}
                                     onCheckedChange={() => toggleDepoAccess(page, depo.depot_name)}
                                   />
                                   <Label htmlFor={`add-depo-${page}-${depo.depot_id}`} className="text-xs font-normal cursor-pointer uppercase">{depo.depot_name}</Label>
@@ -1009,7 +1040,7 @@ export default function SettingsPage() {
                                 <div key={`${depo.depot_id || idx}-${page}`} className="flex items-center gap-2">
                                   <Checkbox 
                                     id={`edit-depo-${page}-${depo.depot_id}`}
-                                    checked={(formData.depo_access[page] || []).includes(depo.depot_name)}
+                                    checked={(formData.depo_access[page] || []).some(d => d.toLowerCase() === depo.depot_name.toLowerCase())}
                                     onCheckedChange={() => toggleDepoAccess(page, depo.depot_name)}
                                   />
                                   <Label htmlFor={`edit-depo-${page}-${depo.depot_id}`} className="text-xs font-normal cursor-pointer uppercase">{depo.depot_name}</Label>
