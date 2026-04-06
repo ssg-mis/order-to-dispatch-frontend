@@ -67,7 +67,7 @@ export function AsyncCombobox({
   })
 
   // Selected label state to show current value even before options are loaded
-  const [selectedLabel, setSelectedLabel] = React.useState<string>("")
+  const [selectedLabel, setSelectedLabel] = React.useState<string>(value || "")
 
   const loadOptions = React.useCallback(async (currentSearch: string, currentPage: number, isNewSearch: boolean) => {
     setIsLoading(true)
@@ -88,6 +88,13 @@ export function AsyncCombobox({
       setIsInitialLoading(false)
     }
   }, [fetchOptions, value])
+
+  // Load initial options if value is provided even before popover is opened
+  React.useEffect(() => {
+    if (value && options.length === 0) {
+      loadOptions("", 1, true)
+    }
+  }, [value, options.length, loadOptions])
 
   // Initial load
   React.useEffect(() => {

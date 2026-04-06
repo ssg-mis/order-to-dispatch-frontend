@@ -527,7 +527,6 @@ export default function CheckInvoicePage() {
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
                 {visibleColumns.includes("invoiceNo") && <TableHead className="whitespace-nowrap text-center">Invoice No.</TableHead>}
                 <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Freight Rate</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
@@ -573,9 +572,6 @@ export default function CheckInvoicePage() {
                     {visibleColumns.includes("invoiceNo") && <TableCell className="text-center text-xs font-medium">{group.invoiceNo}</TableCell>}
                     <TableCell className="text-center">
                       <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="text-xs font-bold text-blue-600">₹{group.freightRate}</span>
                     </TableCell>
                     <TableCell className="text-center">
                       <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
@@ -861,7 +857,6 @@ export default function CheckInvoicePage() {
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">ACTUAL QTY</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">AMOUNT</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">FREIGHT RATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE NO</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">INVOICE DATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">TRUCK NO</TableHead>
@@ -898,9 +893,6 @@ export default function CheckInvoicePage() {
                                     </TableCell>
                                     <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
                                       {product.amount ? `₹${product.amount.toFixed(2)}` : "—"}
-                                    </TableCell>
-                                    <TableCell className="text-center p-2 text-xs font-bold text-blue-600">
-                                      {product.freight_rate ? `₹${product.freight_rate}` : "₹0"}
                                     </TableCell>
                                     <TableCell className="text-center p-2 text-xs font-bold text-green-700">
                                       {product.invoice_copy ? (

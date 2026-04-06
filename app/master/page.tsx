@@ -144,7 +144,7 @@ export default function MasterPage() {
   } = useInfiniteQuery({
     queryKey: ["master-customers", searchTerm],
     queryFn: async ({ pageParam = 1 }) => {
-      const res = await customerApi.getAll({ page: pageParam, limit: 20, search: searchTerm })
+      const res = await customerApi.getAll({ page: pageParam, limit: 20, search: searchTerm, all: "true" })
       return res.success ? res.data : { customers: [], pagination: { total: 0 } }
     },
     initialPageParam: 1,
@@ -165,7 +165,7 @@ export default function MasterPage() {
   } = useInfiniteQuery({
     queryKey: ["master-depots", searchTerm],
     queryFn: async ({ pageParam = 1 }) => {
-      const res = await depotApi.getAll({ page: pageParam, limit: 20, search: searchTerm })
+      const res = await depotApi.getAll({ page: pageParam, limit: 20, search: searchTerm, all: "true" })
       return res.success ? res.data : { depots: [], pagination: { total: 0 } }
     },
     initialPageParam: 1,
@@ -186,7 +186,7 @@ export default function MasterPage() {
   } = useInfiniteQuery({
     queryKey: ["master-brokers", searchTerm],
     queryFn: async ({ pageParam = 1 }) => {
-      const res = await brokerApi.getAll({ page: pageParam, limit: 20, search: searchTerm })
+      const res = await brokerApi.getAll({ page: pageParam, limit: 20, search: searchTerm, all: "true" })
       return res.success ? res.data : { brokers: [], pagination: { total: 0 } }
     },
     initialPageParam: 1,
@@ -207,7 +207,7 @@ export default function MasterPage() {
   } = useInfiniteQuery({
     queryKey: ["master-salespersons", searchTerm],
     queryFn: async ({ pageParam = 1 }) => {
-      const res = await salespersonApi.getAll({ page: pageParam, limit: 20, search: searchTerm })
+      const res = await salespersonApi.getAll({ page: pageParam, limit: 20, search: searchTerm, all: "true" })
       return res.success ? res.data : { salespersons: [], pagination: { total: 0 } }
     },
     initialPageParam: 1,
@@ -228,7 +228,7 @@ export default function MasterPage() {
   } = useInfiniteQuery({
     queryKey: ["master-sku-details", searchTerm],
     queryFn: async ({ pageParam = 1 }) => {
-      const res = await skuDetailsApi.getAll({ page: pageParam, limit: 20, search: searchTerm })
+      const res = await skuDetailsApi.getAll({ page: pageParam, limit: 20, search: searchTerm, all: "true" })
       return res.success ? res.data : { skuDetails: [], pagination: { total: 0 } }
     },
     initialPageParam: 1,

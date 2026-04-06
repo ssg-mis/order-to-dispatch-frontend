@@ -733,98 +733,103 @@ export default function ActualDispatchPage() {
       return;
     }
 
-    // 2. Stage 6: Vehicle Documents Validation
-    const vehicleDocs = [
-      { key: 'fitness', label: 'Fitness Document', isFile: true },
-      { key: 'fitness_end_date', label: 'Fitness End Date' },
-      { key: 'insurance', label: 'Insurance Document', isFile: true },
-      { key: 'insurance_end_date', label: 'Insurance End Date' },
-      { key: 'tax_copy', label: 'Tax Copy Document', isFile: true },
-      { key: 'tax_end_date', label: 'Tax End Date' },
-      { key: 'polution', label: 'Pollution Document', isFile: true },
-      { key: 'pollution_end_date', label: 'Pollution End Date' },
-      { key: 'permit1', label: 'Permit 1 Document', isFile: true },
-      { key: 'permit1_end_date', label: 'Permit 1 End Date' },
-      { key: 'permit2_out_state', label: 'Permit 2 Document', isFile: true },
-      { key: 'permit2_end_date', label: 'Permit 2 End Date' },
-    ];
+    // 2. Stage 6: Vehicle Document Validation
+    // ONLY IF DEPO IS BANARI
+    const isBanari = selectedDepoTab?.toUpperCase() === 'BANARI';
 
-    for (const doc of vehicleDocs) {
-      const val = vehicleData[doc.key as keyof typeof vehicleData];
-      // Skip required check for Permit 2 (both file and date are optional)
-      if (doc.key === 'permit2_out_state' || doc.key === 'permit2_end_date') continue;
+    if (isBanari) {
+      const vehicleDocs = [
+        { key: 'fitness', label: 'Fitness' },
+        { key: 'fitness_end_date', label: 'Fitness Expiry' },
+        { key: 'insurance', label: 'Insurance' },
+        { key: 'insurance_end_date', label: 'Insurance Expiry' },
+        { key: 'tax_copy', label: 'Tax' },
+        { key: 'tax_end_date', label: 'Tax Expiry' },
+        { key: 'polution', label: 'Pollution' },
+        { key: 'pollution_end_date', label: 'Pollution Expiry' },
+        { key: 'permit1', label: 'Permit 1' },
+        { key: 'permit1_end_date', label: 'Permit 1 Expiry' },
+        { key: 'permit2_out_state', label: 'Permit 2' },
+        { key: 'permit2_end_date', label: 'Permit 2 Expiry' },
+      ];
 
-      if (!val) {
-        toast({
-          title: "Validation Error",
-          description: `${doc.label} is required (Stage 6)`,
-          variant: "destructive"
-        });
+      for (const doc of vehicleDocs) {
+        const val = vehicleData[doc.key as keyof typeof vehicleData];
+        // Skip required check for Permit 2 (both file and date are optional)
+        if (doc.key === 'permit2_out_state' || doc.key === 'permit2_end_date') continue;
+
+        if (!val) {
+          toast({
+            title: "Validation Error",
+            description: `${doc.label} is required (Stage 6) for BANARI`,
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+
+      if (!vehicleData.checkStatus) {
+        toast({ title: "Validation Error", description: "Vehicle Check Status is required", variant: "destructive" });
         return;
       }
-    }
-
-    if (!vehicleData.checkStatus) {
-      toast({ title: "Validation Error", description: "Vehicle Check Status is required", variant: "destructive" });
-      return;
-    }
-    // Remarks mandatory ONLY if status is Reject
-    if (vehicleData.checkStatus === "Reject" && !vehicleData.remarks.trim()) {
-      toast({ title: "Validation Error", description: "Vehicle Remarks are required for rejection", variant: "destructive" });
-      return;
-    }
-
-    // 3. Stage 7: Weightment Audit Validation
-    if (!loadData.actualQty || parseFloat(loadData.actualQty) <= 0) {
-      toast({ title: "Validation Error", description: "Valid Actual Qty is required", variant: "destructive" });
-      return;
-    }
-    if (!loadData.rstNo.trim()) {
-      toast({ title: "Validation Error", description: "RST No is required", variant: "destructive" });
-      return;
-    }
-    // Weightment Slip and No Plate Image are now optional per user request
-    if (!loadData.grossWeight || parseFloat(loadData.grossWeight) <= 0) {
-      toast({ title: "Validation Error", description: "Valid Gross Weight is required", variant: "destructive" });
-      return;
-    }
-    if (!loadData.tareWeight || parseFloat(loadData.tareWeight) <= 0) {
-      toast({ title: "Validation Error", description: "Valid Tare Weight is required", variant: "destructive" });
-      return;
-    }
-    if (!loadData.checkStatus) {
-      toast({ title: "Validation Error", description: "Quality Status (STG 7) is required", variant: "destructive" });
-      return;
-    }
-    if (!loadData.transporterName.trim()) {
-      toast({ title: "Validation Error", description: "Transporter Name is required", variant: "destructive" });
-      return;
-    }
-    // Reason mandatory ONLY if status is Reject
-    if (loadData.checkStatus === "Reject" && !loadData.reason.trim()) {
-      toast({ title: "Validation Error", description: "Weight Difference Reason is required for load rejection", variant: "destructive" });
-      return;
-    }
-
-    // 4. Validate Document End Dates (Min Today + 5 Days)
-    const dateFields = [
-      { key: 'fitness_end_date', label: 'Fitness' },
-      { key: 'insurance_end_date', label: 'Insurance' },
-      { key: 'tax_end_date', label: 'Tax' },
-      { key: 'pollution_end_date', label: 'Pollution' },
-      { key: 'permit1_end_date', label: 'Permit 1' },
-      { key: 'permit2_end_date', label: 'Permit 2' },
-    ];
-
-    for (const field of dateFields) {
-      const dateVal = vehicleData[field.key as keyof typeof vehicleData];
-      if (dateVal && dateVal < minDate) {
-        toast({
-          title: "Date Error",
-          description: `${field.label} End Date must be at least 5 days from today (Min: ${formatDate(minDate)})`,
-          variant: "destructive"
-        });
+      // Remarks mandatory ONLY if status is Reject
+      if (vehicleData.checkStatus === "Reject" && !vehicleData.remarks.trim()) {
+        toast({ title: "Validation Error", description: "Vehicle Remarks are required for rejection", variant: "destructive" });
         return;
+      }
+
+      // 3. Stage 7: Weightment Audit Validation
+      if (!loadData.actualQty || parseFloat(loadData.actualQty) <= 0) {
+        toast({ title: "Validation Error", description: "Valid Actual Qty is required", variant: "destructive" });
+        return;
+      }
+      if (!loadData.rstNo.trim()) {
+        toast({ title: "Validation Error", description: "RST No is required", variant: "destructive" });
+        return;
+      }
+      // Weightment Slip and No Plate Image are now optional per user request
+      if (!loadData.grossWeight || parseFloat(loadData.grossWeight) <= 0) {
+        toast({ title: "Validation Error", description: "Valid Gross Weight is required", variant: "destructive" });
+        return;
+      }
+      if (!loadData.tareWeight || parseFloat(loadData.tareWeight) <= 0) {
+        toast({ title: "Validation Error", description: "Valid Tare Weight is required", variant: "destructive" });
+        return;
+      }
+      if (!loadData.checkStatus) {
+        toast({ title: "Validation Error", description: "Quality Status (STG 7) is required", variant: "destructive" });
+        return;
+      }
+      if (!loadData.transporterName.trim()) {
+        toast({ title: "Validation Error", description: "Transporter Name is required", variant: "destructive" });
+        return;
+      }
+      // Reason mandatory ONLY if status is Reject
+      if (loadData.checkStatus === "Reject" && !loadData.reason.trim()) {
+        toast({ title: "Validation Error", description: "Weight Difference Reason is required for load rejection", variant: "destructive" });
+        return;
+      }
+
+      // 4. Validate Document End Dates (Min Today + 5 Days)
+      const dateFields = [
+        { key: 'fitness_end_date', label: 'Fitness' },
+        { key: 'insurance_end_date', label: 'Insurance' },
+        { key: 'tax_end_date', label: 'Tax' },
+        { key: 'pollution_end_date', label: 'Pollution' },
+        { key: 'permit1_end_date', label: 'Permit 1' },
+        { key: 'permit2_end_date', label: 'Permit 2' },
+      ];
+
+      for (const field of dateFields) {
+        const dateVal = vehicleData[field.key as keyof typeof vehicleData];
+        if (dateVal && dateVal < minDate) {
+          toast({
+            title: "Date Error",
+            description: `${field.label} End Date must be at least 5 days from today (Min: ${formatDate(minDate)})`,
+            variant: "destructive"
+          });
+          return;
+        }
       }
     }
 

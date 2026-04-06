@@ -571,7 +571,6 @@ export default function MakeInvoicePage() {
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Freight Rate</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
@@ -609,9 +608,6 @@ export default function MakeInvoicePage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="text-xs font-bold text-blue-600">₹{group.freightRate}</span>
                     </TableCell>
                     <TableCell className="text-center">
                       <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
@@ -880,7 +876,6 @@ export default function MakeInvoicePage() {
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">ACTUAL QTY DISPATCH</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">AMOUNT</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">FREIGHT RATE</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">VEHICLE NUMBER</TableHead>
                                   <TableHead className="text-[10px] uppercase font-black text-center h-10">STATUS</TableHead>
                                 </TableRow>
@@ -916,9 +911,6 @@ export default function MakeInvoicePage() {
                                     </TableCell>
                                     <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
                                       {product.amount ? `₹${product.amount.toFixed(2)}` : "—"}
-                                    </TableCell>
-                                    <TableCell className="text-center p-2 text-xs font-bold text-blue-600">
-                                      {product.freight_rate ? `₹${product.freight_rate}` : "₹0"}
                                     </TableCell>
                                     <TableCell className="text-center p-2">
                                       <div className="flex items-center justify-center gap-1.5">
