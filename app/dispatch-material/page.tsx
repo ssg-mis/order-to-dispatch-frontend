@@ -11,20 +11,35 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
+import { AsyncCombobox } from "@/components/ui/async-combobox"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Settings2, ChevronDown, ChevronUp } from "lucide-react"
-import { dispatchPlanningApi, customerApi } from "@/lib/api-service"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { dispatchPlanningApi, customerApi, depotApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { useInView } from "react-intersection-observer"
+import { Loader2 } from "lucide-react"
 
 export default function DispatchMaterialPage() {
   const router = useRouter()
   const { toast } = useToast()
   const { isReadOnly, user } = useAuth()
-  const [pendingOrders, setPendingOrders] = useState<any[]>([])
-  const [historyOrders, setHistoryOrders] = useState<any[]>([])
+  const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
+  const { ref: pendingEndRef, inView: pendingInView } = useInView()
+  const { ref: historyEndRef, inView: historyInView } = useInView()
+
+  const [filterValues, setFilterValues] = useState({
+    search: "",
+    status: "",
+    startDate: "",
+    endDate: "",
+  })
+  const [activeDepots, setActiveDepots] = useState<any[]>([])
+  const [selectedDepoTab, setSelectedDepoTab] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [selectedGroup, setSelectedGroup] = useState<any>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -107,58 +122,132 @@ export default function DispatchMaterialPage() {
   ])
 
 
-  // Fetch pending dispatches from backend API
-  const fetchPendingDispatches = async () => {
-    try {
-      console.log('[DISPATCH] Fetching pending dispatches from API...');
-      const response = await dispatchPlanningApi.getPending({ limit: 1000 });
-      console.log('[DISPATCH] API Response:', response);
-
-      if (response.success && response.data.dispatches) {
-        setPendingOrders(response.data.dispatches);
-        console.log('[DISPATCH] Loaded', response.data.dispatches.length, 'pending dispatches');
-      }
-    } catch (error: any) {
-      console.error("[DISPATCH] Failed to fetch pending dispatches:", error);
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to load pending dispatches",
-        variant: "destructive",
+  // Pending query with infinite pagination
+  const {
+    data: pendingData,
+    fetchNextPage: fetchNextPending,
+    hasNextPage: hasNextPending,
+    isFetchingNextPage: isFetchingNextPending,
+    isLoading: isPendingLoading,
+    refetch: refetchPending,
+  } = useInfiniteQuery({
+    queryKey: ["dispatch-pending", filterValues],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await (dispatchPlanningApi.getPending as any)({
+        page: pageParam,
+        limit: 20,
+        order_no: filterValues.search,
+        start_date: filterValues.startDate,
+        end_date: filterValues.endDate,
+        depo_names: user?.role !== 'admin' ? user?.depo_access?.['Dispatch Planning'] : undefined
       });
-      setPendingOrders([]); // Clear on error - don't use cache
-    }
-  };
+      return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.dispatches?.length || 0), 0);
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
+    },
+  });
 
-  // Fetch dispatch history from backend API
-  const fetchDispatchHistory = async () => {
-    try {
-      const response = await dispatchPlanningApi.getHistory({ limit: 1000 });
+  // History query with infinite pagination (lazy loaded)
+  const {
+    data: historyData,
+    fetchNextPage: fetchNextHistory,
+    hasNextPage: hasNextHistory,
+    isFetchingNextPage: isFetchingNextHistory,
+    isLoading: isHistoryLoading,
+    refetch: refetchHistory,
+  } = useInfiniteQuery({
+    queryKey: ["dispatch-history", filterValues],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await (dispatchPlanningApi.getHistory as any)({
+        page: pageParam,
+        limit: 20,
+        order_no: filterValues.search,
+        start_date: filterValues.startDate,
+        end_date: filterValues.endDate,
+        depo_names: user?.role !== 'admin' ? user?.depo_access?.['Dispatch Planning'] : undefined
+      });
+      return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.dispatches?.length || 0), 0);
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
+    },
+    enabled: activeTab === "history",
+  });
 
-      if (response.success && response.data.dispatches) {
-        setHistoryOrders(response.data.dispatches);
-      }
-    } catch (error: any) {
-      console.error("[DISPATCH] Failed to fetch history:", error);
-      setHistoryOrders([]); // Clear on error - don't use cache
+  const pendingOrders = useMemo(() => {
+    return pendingData?.pages.flatMap((page) => page.dispatches) || [];
+  }, [pendingData]);
+
+  const historyOrders = useMemo(() => {
+    return historyData?.pages.flatMap((page) => page.dispatches) || [];
+  }, [historyData]);
+
+  useEffect(() => {
+    if (pendingInView && hasNextPending) {
+      fetchNextPending();
     }
-  };
+  }, [pendingInView, hasNextPending, fetchNextPending]);
+
+  useEffect(() => {
+    if (historyInView && hasNextHistory) {
+      fetchNextHistory();
+    }
+  }, [historyInView, hasNextHistory, fetchNextHistory]);
 
   const fetchCustomers = async () => {
     try {
       const response = await customerApi.getAll({ all: 'true' });
       if (response.success) {
-        setAllCustomers(response.data);
+        const customerList = response.data.customers || (Array.isArray(response.data) ? response.data : []);
+        setAllCustomers(customerList);
       }
     } catch (error) {
       console.error("[DISPATCH] Failed to fetch customers:", error);
     }
   };
 
+  const fetchDepots = async () => {
+    try {
+      const response = await depotApi.getAll({ all: 'false' });
+      if (response.success && response.data?.depots) {
+        let depots = response.data.depots;
+        
+        // Filter by user permissions if not admin
+        if (user && user.role !== 'admin' && user.depo_access?.['Dispatch Planning']) {
+          const allowedDepos = user.depo_access['Dispatch Planning'];
+          depots = depots.filter((d: any) => allowedDepos.includes(d.depot_name));
+        }
+
+        setActiveDepots(depots);
+        // Set first active depot as default if nothing is selected or current selected is not in active list
+        if (depots.length > 0 && !depots.some((d: any) => d.depot_name === selectedDepoTab)) {
+          setSelectedDepoTab(depots[0].depot_name);
+        }
+      }
+    } catch (error) {
+      console.error("[DISPATCH] Failed to fetch depots:", error);
+    }
+  };
+
   useEffect(() => {
-    fetchPendingDispatches();
-    fetchDispatchHistory();
     fetchCustomers();
+    fetchDepots();
   }, [])
+
+  const availableDepos = useMemo(() => {
+    return activeDepots.map(d => d.depot_name);
+  }, [activeDepots]);
+
+  useEffect(() => {
+    if (availableDepos.length > 0 && (!selectedDepoTab || !availableDepos.includes(selectedDepoTab))) {
+      setSelectedDepoTab(availableDepos[0]);
+    }
+  }, [availableDepos, selectedDepoTab]);
 
   const [selectedItems, setSelectedItems] = useState<any[]>([])
   const [dialogSelectedProducts, setDialogSelectedProducts] = useState<string[]>([])
@@ -302,8 +391,8 @@ export default function DispatchMaterialPage() {
         setDialogSelectedProducts([]);
         setIsDialogOpen(false);
 
-        await fetchPendingDispatches();
-        await fetchDispatchHistory();
+        await refetchPending();
+        await refetchHistory();
 
         setTimeout(() => {
           router.push("/actual-dispatch")
@@ -375,8 +464,8 @@ export default function DispatchMaterialPage() {
         setDispatchDetails({});
         setRevertRemarks("");
 
-        await fetchPendingDispatches();
-        await fetchDispatchHistory();
+        await refetchPending();
+        await refetchHistory();
       }
 
       if (failedReverts.length > 0) {
@@ -403,79 +492,26 @@ export default function DispatchMaterialPage() {
   /* Extract unique customer names (No longer used for filter as requested) */
   // const customerNames = Array.from(new Set(pendingOrders.map(order => order.customer_name || order.customerName || "Unknown")))
 
-  const [filterValues, setFilterValues] = useState({
-    search: "",
-    status: "",
-    startDate: "",
-    endDate: "",
-  })
-
   const filteredPendingOrders = pendingOrders.filter((order: any) => {
-    let matches = true
+    // API already handles search and date range
+    if (!filterValues.status) return true;
 
-    // 1. Search Filter (DO Number, Customer Name, Product Name)
-    if (filterValues.search) {
-      const searchTerm = filterValues.search.toLowerCase();
-      const orderNo = (order.order_no || order.orderNo || "").toLowerCase();
-      const customerName = (order.customerName || order.customer_name || "").toLowerCase();
-      const productName = (order.product_name || "").toLowerCase();
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const targetDateStr = order.deliveryDate || order.timestamp
+    if (!targetDateStr) return true;
 
-      if (!orderNo.includes(searchTerm) && !customerName.includes(searchTerm) && !productName.includes(searchTerm)) {
-        matches = false;
-      }
+    const targetDate = new Date(targetDateStr)
+    targetDate.setHours(0, 0, 0, 0)
+
+    if (filterValues.status === "expire") {
+      return targetDate < today
+    } else if (filterValues.status === "on-time") {
+      return targetDate >= today
     }
-
-    /* Party Name Filter removed as requested */
-    // if (matches && filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
-    //   matches = false
-    // }
-
-    // 3. Date Range Filter
-    if (matches && (filterValues.startDate || filterValues.endDate)) {
-      const orderDateStr = order.dispatchData?.dispatchDate || order.deliveryDate || order.timestamp;
-      if (orderDateStr) {
-        const orderDate = new Date(orderDateStr);
-        orderDate.setHours(0, 0, 0, 0);
-
-        if (filterValues.startDate) {
-          const start = new Date(filterValues.startDate)
-          start.setHours(0, 0, 0, 0)
-          if (orderDate < start) matches = false
-        }
-        if (matches && filterValues.endDate) {
-          const end = new Date(filterValues.endDate)
-          end.setHours(0, 0, 0, 0)
-          if (orderDate > end) matches = false
-        }
-      } else if (filterValues.startDate || filterValues.endDate) {
-        // If filtering by date but order has no date, treat as no match
-        matches = false;
-      }
-    }
-
-    // 4. Status Filter (On Time / Expire)
-    if (matches && filterValues.status) {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const targetDateStr = order.deliveryDate || order.timestamp
-      if (targetDateStr) {
-        const targetDate = new Date(targetDateStr)
-        targetDate.setHours(0, 0, 0, 0)
-
-        if (filterValues.status === "expire") {
-          if (targetDate >= today) matches = false
-        } else if (filterValues.status === "on-time") {
-          if (targetDate < today) matches = false
-        }
-      } else {
-        matches = false;
-      }
-    }
-
-    return matches
+    return true
   })
 
-  // Group by base DO number (removing uniqueness by Customer Name as per request)
   const filteredHistory = useMemo(() => {
     return historyOrders.map((order: any) => ({
       ...order,
@@ -487,40 +523,8 @@ export default function DispatchMaterialPage() {
       stage: "Dispatch Planning",
       status: "Completed",
       remarks: order.dispatchPlanningData?.dispatchDate ? `Date: ${order.dispatchPlanningData.dispatchDate}` : "Dispatch Plannned",
-    })).filter((item: any) => {
-      let matches = true
-
-      if (filterValues.search) {
-        const search = filterValues.search.toLowerCase()
-        if (!item.orderNo?.toLowerCase().includes(search) &&
-          !item.customerName?.toLowerCase().includes(search)) {
-          matches = false
-        }
-      }
-
-      /* Party Name Filter removed as requested */
-      // if (filterValues.partyName && filterValues.partyName !== "all" && item.customerName !== filterValues.partyName) {
-      //   matches = false
-      // }
-
-      const itemDateStr = item.timestamp
-      if (itemDateStr) {
-        const itemDate = new Date(itemDateStr)
-        if (filterValues.startDate) {
-          const start = new Date(filterValues.startDate)
-          start.setHours(0, 0, 0, 0)
-          if (itemDate < start) matches = false
-        }
-        if (filterValues.endDate) {
-          const end = new Date(filterValues.endDate)
-          end.setHours(23, 59, 59, 999)
-          if (itemDate > end) matches = false
-        }
-      }
-
-      return matches
-    })
-  }, [historyOrders, filterValues])
+    }))
+  }, [historyOrders])
 
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
@@ -612,11 +616,18 @@ export default function DispatchMaterialPage() {
         orderPunchRemarks: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.orderPunchRemarks))).filter(Boolean).join("; ") || "—",
         _productCount: group._allProducts.length
       };
-    }).filter(group => group._productCount > 0)
-  }, [filteredPendingOrders])
+    }).filter(group => {
+      if (group._productCount <= 0) return false;
+      if (!selectedDepoTab) return true;
+      return (group.depoName || "").trim().toUpperCase() === selectedDepoTab.trim().toUpperCase();
+    })
+  }, [filteredPendingOrders, selectedDepoTab])
+
+  const customerNames = Array.from(new Set(pendingOrders.map(order => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "Unknown Customer"))))
 
   return (
     <WorkflowStageShell
+      partyNames={customerNames}
       title="Stage 4: Dispatch Planning"
       description="Prepare and Dispatch Plannings for delivery."
       pendingCount={displayRows.length}
@@ -624,6 +635,23 @@ export default function DispatchMaterialPage() {
       onFilterChange={setFilterValues}
       showStatusFilter={true}
       stageLevel={3}
+      onTabChange={setActiveTab}
+      isHistoryLoading={isHistoryLoading}
+      historyFooter={
+        <div ref={historyEndRef} className="py-4 flex justify-center">
+          {isFetchingNextHistory && (
+            <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-xs tracking-widest ">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>LOADING MORE DISPATCH HISTORY...</span>
+            </div>
+          )}
+          {!hasNextHistory && historyOrders.length > 0 && (
+            <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest bg-slate-50 px-4 py-1.5 rounded-full border border-slate-100 italic">
+              END OF HISTORY
+            </span>
+          )}
+        </div>
+      }
     >
       <div className="flex justify-end gap-2">
         <DropdownMenu>
@@ -659,6 +687,24 @@ export default function DispatchMaterialPage() {
         </Button>
       </div>
 
+      {activeDepots.length > 0 && (
+        <div className="mt-4 mb-2">
+          <Tabs value={selectedDepoTab} onValueChange={setSelectedDepoTab} className="w-full">
+            <TabsList className="bg-slate-100/50 p-1 h-auto flex-wrap justify-start gap-1 border border-slate-200/60 rounded-xl shadow-sm">
+              {activeDepots.map((depo) => (
+                <TabsTrigger
+                  key={depo.depot_id}
+                  value={depo.depot_name}
+                  className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all"
+                >
+                  {depo.depot_name}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
+
       <Card className="border-none shadow-sm overflow-hidden overflow-auto max-h-[600px]">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
@@ -679,7 +725,21 @@ export default function DispatchMaterialPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {displayRows.length > 0 ? (
+            {isPendingLoading && pendingOrders.length === 0 ? (
+              [...Array(5)].map((_, i) => (
+                <TableRow key={i} className="opacity-40 border-b border-slate-50">
+                  <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
+                  {PAGE_COLUMNS.filter(col => visibleColumns.includes(col.id)).map(col => (
+                    <TableCell key={col.id} className="py-4">
+                      <div className={cn(
+                        "h-3 bg-slate-200 animate-pulse rounded-full mx-auto",
+                        col.id === 'customerName' ? "w-32" : col.id === 'orderNo' ? "w-24" : "w-16"
+                      )} />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : displayRows.length > 0 ? (
               displayRows.map((row: any) => {
                 const isSelected = selectedItems.some(i => i._rowKey === row._rowKey);
 
@@ -725,6 +785,14 @@ export default function DispatchMaterialPage() {
             )}
           </TableBody>
         </Table>
+        <div ref={pendingEndRef} className="py-2 flex justify-center">
+          {isFetchingNextPending && (
+            <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-[10px]">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>LOADING MORE...</span>
+            </div>
+          )}
+        </div>
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -1079,15 +1147,29 @@ export default function DispatchMaterialPage() {
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold">Company Name <span className="text-red-500">*</span></Label>
-                  <Select
+                  <AsyncCombobox
+                    placeholder="Select Company"
+                    searchPlaceholder="Search customers..."
                     value={
                       currentTransferRowKey
                         ? (dispatchDetails[currentTransferRowKey]?.transferData?.billTo?.company ??
                           allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.bill_company_name ?? "")
                         : ""
                     }
+                    fetchOptions={async (search: string, page: number) => {
+                      const res = await customerApi.getAll({ search, page, limit: 20 });
+                      const customers = res.data.customers || [];
+                      return {
+                        options: customers.map((c: any) => ({ value: c.customer_name, label: c.customer_name })),
+                        hasMore: (customers.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
+                      };
+                    }}
                     onValueChange={(val) => {
                       if (!currentTransferRowKey) return;
+
+                      // For auto address population, we still try to find in current loaded allCustomers
+                      // or we could fetch it. For now, since user already has allCustomers, let's stick to it.
+                      // Wait, we should probably fetch it if not found.
                       const selectedCust = allCustomers.find(c => c.customer_name === val);
                       let autoAddress = "";
                       if (selectedCust) {
@@ -1119,14 +1201,8 @@ export default function DispatchMaterialPage() {
                         };
                       });
                     }}
-                  >
-                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select Company" /></SelectTrigger>
-                    <SelectContent>
-                      {allCustomers.map(cust => (
-                        <SelectItem key={cust.id} value={cust.customer_name} className="text-xs">{cust.customer_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    className="h-9 text-xs"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold">Address</Label>
@@ -1135,8 +1211,8 @@ export default function DispatchMaterialPage() {
                     className="h-9 text-xs font-medium"
                     value={
                       currentTransferRowKey
-                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.billTo?.address ??
-                          allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.bill_address ?? "")
+                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.billTo?.address ||
+                          allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.bill_address || "")
                         : ""
                     }
                     onChange={(e) => {
@@ -1169,13 +1245,23 @@ export default function DispatchMaterialPage() {
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold">Company Name <span className="text-red-500">*</span></Label>
-                  <Select
+                  <AsyncCombobox
+                    placeholder="Select Company"
+                    searchPlaceholder="Search customers..."
                     value={
                       currentTransferRowKey
-                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.shipTo?.company ??
-                          allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.ship_company_name ?? "")
+                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.shipTo?.company ||
+                          allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.ship_company_name || "")
                         : ""
                     }
+                    fetchOptions={async (search: string, page: number) => {
+                      const res = await customerApi.getAll({ search, page, limit: 20 });
+                      const customers = res.data.customers || [];
+                      return {
+                        options: customers.map((c: any) => ({ value: c.customer_name, label: c.customer_name })),
+                        hasMore: (customers.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
+                      };
+                    }}
                     onValueChange={(val) => {
                       if (!currentTransferRowKey) return;
                       const selectedCust = allCustomers.find(c => c.customer_name === val);
@@ -1208,14 +1294,8 @@ export default function DispatchMaterialPage() {
                         };
                       });
                     }}
-                  >
-                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select Company" /></SelectTrigger>
-                    <SelectContent>
-                      {allCustomers.map(cust => (
-                        <SelectItem key={cust.id} value={cust.customer_name} className="text-xs">{cust.customer_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    className="h-9 text-xs"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold">Address</Label>
@@ -1224,8 +1304,8 @@ export default function DispatchMaterialPage() {
                     className="h-9 text-xs font-medium"
                     value={
                       currentTransferRowKey
-                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.shipTo?.address ??
-                          allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.ship_address ?? "")
+                        ? (dispatchDetails[currentTransferRowKey]?.transferData?.shipTo?.address ||
+                          allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.ship_address || "")
                         : ""
                     }
                     onChange={(e) => {
@@ -1263,8 +1343,8 @@ export default function DispatchMaterialPage() {
                 className="h-10 text-sm font-bold border-2 focus:border-blue-400"
                 value={
                   currentTransferRowKey
-                    ? (dispatchDetails[currentTransferRowKey]?.transferData?.freightRate ??
-                      allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.freight_rate?.toString() ?? "")
+                    ? (dispatchDetails[currentTransferRowKey]?.transferData?.freightRate ||
+                      allProductsFromSelectedGroups.find(p => p._rowKey === currentTransferRowKey)?.freight_rate?.toString() || "")
                     : ""
                 }
                 onChange={(e) => {

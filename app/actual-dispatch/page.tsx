@@ -15,16 +15,31 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Settings2, ChevronDown, ChevronUp, Truck, Weight } from "lucide-react"
-import { actualDispatchApi, vehicleDetailsApi, materialLoadApi, skuApi, orderApi } from "@/lib/api-service"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { actualDispatchApi, vehicleDetailsApi, materialLoadApi, skuApi, orderApi, depotApi } from "@/lib/api-service"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/hooks/use-auth"
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { useInView } from "react-intersection-observer"
+import { Loader2 } from "lucide-react"
 
 export default function ActualDispatchPage() {
   const router = useRouter()
   const { toast } = useToast()
   const { isReadOnly, user } = useAuth()
-  const [pendingOrders, setPendingOrders] = useState<any[]>([])
-  const [historyOrders, setHistoryOrders] = useState<any[]>([])
+  const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
+  const { ref: pendingEndRef, inView: pendingInView } = useInView()
+  const { ref: historyEndRef, inView: historyInView } = useInView()
+
+  const [filterValues, setFilterValues] = useState({
+    search: "",
+    status: "",
+    startDate: "",
+    endDate: "",
+    partyName: ""
+  })
+  const [activeDepots, setActiveDepots] = useState<any[]>([])
+  const [selectedDepoTab, setSelectedDepoTab] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [skus, setSkus] = useState<any[]>([])
   const [selectedOrders, setSelectedOrders] = useState<string[]>([])
@@ -247,38 +262,80 @@ export default function ActualDispatchPage() {
     "revertSecurityRemarks"
   ])
 
-  // Fetch data from backend API
-  const fetchPendingDispatches = async () => {
-    try {
-      console.log('[ACTUAL DISPATCH] Fetching pending from API...');
-      const response = await actualDispatchApi.getPending({ limit: 1000 });
-      console.log('[ACTUAL DISPATCH] API Response:', response);
-
-      if (response.success && response.data.dispatches) {
-        setPendingOrders(response.data.dispatches);
-        console.log('[ACTUAL DISPATCH] Loaded', response.data.dispatches.length, 'pending dispatches');
-      }
-    } catch (error: any) {
-      console.error("[ACTUAL DISPATCH] Failed to fetch pending:", error);
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to load pending dispatches",
-        variant: "destructive",
+  // Pending query with infinite pagination
+  const {
+    data: pendingData,
+    fetchNextPage: fetchNextPending,
+    hasNextPage: hasNextPending,
+    isFetchingNextPage: isFetchingNextPending,
+    isLoading: isPendingLoading,
+    refetch: refetchPending,
+  } = useInfiniteQuery({
+    queryKey: ["actual-dispatch-pending", filterValues],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await (actualDispatchApi.getPending as any)({
+        page: pageParam,
+        limit: 20,
+        so_no: filterValues.search,
+        party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
+        depo_names: user?.role !== 'admin' ? user?.depo_access?.['Actual Dispatch'] : undefined
       });
-    }
-  };
+      return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.dispatches?.length || 0), 0);
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
+    },
+  });
 
-  const fetchDispatchHistory = async () => {
-    try {
-      const response = await actualDispatchApi.getHistory({ limit: 1000 });
+  // History query with infinite pagination (lazy loaded)
+  const {
+    data: historyData,
+    fetchNextPage: fetchNextHistory,
+    hasNextPage: hasNextHistory,
+    isFetchingNextPage: isFetchingNextHistory,
+    isLoading: isHistoryLoading,
+    refetch: refetchHistory,
+  } = useInfiniteQuery({
+    queryKey: ["actual-dispatch-history", filterValues],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await (actualDispatchApi.getHistory as any)({
+        page: pageParam,
+        limit: 20,
+        so_no: filterValues.search,
+        party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
+        depo_names: user?.role !== 'admin' ? user?.depo_access?.['Actual Dispatch'] : undefined
+      });
+      return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.dispatches?.length || 0), 0);
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
+    },
+    enabled: activeTab === "history",
+  });
 
-      if (response.success && response.data.dispatches) {
-        setHistoryOrders(response.data.dispatches);
-      }
-    } catch (error: any) {
-      console.error("[ACTUAL DISPATCH] Failed to fetch history:", error);
+  const pendingOrders = useMemo(() => {
+    return pendingData?.pages.flatMap((page) => page.dispatches) || [];
+  }, [pendingData]);
+
+  const historyOrders = useMemo(() => {
+    return historyData?.pages.flatMap((page) => page.dispatches) || [];
+  }, [historyData]);
+
+  useEffect(() => {
+    if (pendingInView && hasNextPending) {
+      fetchNextPending();
     }
-  };
+  }, [pendingInView, hasNextPending, fetchNextPending]);
+
+  useEffect(() => {
+    if (historyInView && hasNextHistory) {
+      fetchNextHistory();
+    }
+  }, [historyInView, hasNextHistory, fetchNextHistory]);
 
   // Fetch SKU details for weight calculations
   const fetchSkus = async () => {
@@ -301,11 +358,43 @@ export default function ActualDispatchPage() {
     }
   }
 
+  const fetchDepots = async () => {
+    try {
+      const response = await depotApi.getAll({ all: 'false' });
+      if (response.success && response.data?.depots) {
+        let depots = response.data.depots;
+
+        // Filter by user permissions if not admin
+        if (user && user.role !== 'admin' && user.depo_access?.['Actual Dispatch']) {
+          const allowedDepos = user.depo_access['Actual Dispatch'];
+          depots = depots.filter((d: any) => allowedDepos.includes(d.depot_name));
+        }
+
+        setActiveDepots(depots);
+        // Set first active depot as default if nothing is selected or current selected is not in active list
+        if (depots.length > 0 && !depots.some((d: any) => d.depot_name === selectedDepoTab)) {
+          setSelectedDepoTab(depots[0].depot_name);
+        }
+      }
+    } catch (error) {
+      console.error("[ACTUAL DISPATCH] Failed to fetch depots:", error);
+    }
+  };
+
   useEffect(() => {
-    fetchPendingDispatches()
-    fetchDispatchHistory()
     fetchSkus()
+    fetchDepots()
   }, [])
+
+  const availableDepos = useMemo(() => {
+    return activeDepots.map(d => d.depot_name);
+  }, [activeDepots]);
+
+  useEffect(() => {
+    if (availableDepos.length > 0 && (!selectedDepoTab || !availableDepos.includes(selectedDepoTab))) {
+      setSelectedDepoTab(availableDepos[0]);
+    }
+  }, [availableDepos, selectedDepoTab]);
 
   // Auto-calculate Net Weight (Gross - Tare)
   useEffect(() => {
@@ -361,17 +450,10 @@ export default function ActualDispatchPage() {
 
 
   /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => 
+  const customerNames = Array.from(new Set(pendingOrders.map(order =>
     (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.customerName || "Unknown")
   )))
 
-  const [filterValues, setFilterValues] = useState({
-    search: "",
-    status: "",
-    startDate: "",
-    endDate: "",
-    partyName: ""
-  })
 
   const filteredPendingOrders = pendingOrders.filter(order => {
     let matches = true
@@ -424,7 +506,6 @@ export default function ActualDispatchPage() {
     return matches
   })
 
-  // Map backend data to display format with Grouping by Customer
   const filteredHistory = useMemo(() => {
     return historyOrders.map(order => ({
       ...order,
@@ -436,39 +517,8 @@ export default function ActualDispatchPage() {
       stage: "Actual Dispatch",
       status: "Completed",
       remarks: "Dispatch Confirmed",
-    })).filter(item => {
-      let matches = true
-
-      if (filterValues.search) {
-        const search = filterValues.search.toLowerCase()
-        if (!item.orderNo?.toLowerCase().includes(search) &&
-          !item.customerName?.toLowerCase().includes(search)) {
-          matches = false
-        }
-      }
-
-      if (filterValues.partyName && filterValues.partyName !== "all" && item.customerName !== filterValues.partyName) {
-        matches = false
-      }
-
-      const itemDateStr = item.timestamp
-      if (itemDateStr) {
-        const itemDate = new Date(itemDateStr)
-        if (filterValues.startDate) {
-          const start = new Date(filterValues.startDate)
-          start.setHours(0, 0, 0, 0)
-          if (itemDate < start) matches = false
-        }
-        if (filterValues.endDate) {
-          const end = new Date(filterValues.endDate)
-          end.setHours(23, 59, 59, 999)
-          if (itemDate > end) matches = false
-        }
-      }
-
-      return matches
-    })
-  }, [historyOrders, filterValues])
+    }))
+  }, [historyOrders])
 
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
@@ -571,8 +621,12 @@ export default function ActualDispatchPage() {
         orderPunchRemarks: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.orderPunchRemarks))).filter(Boolean).join("; ") || "—",
         _productCount: group._allProducts.length
       };
+    }).filter(group => {
+      if (group._productCount <= 0) return false;
+      if (!selectedDepoTab) return true;
+      return (group.depoName || "").trim().toUpperCase() === selectedDepoTab.trim().toUpperCase();
     })
-  }, [filteredPendingOrders])
+  }, [filteredPendingOrders, selectedDepoTab])
 
   const toggleSelectAll = () => {
     if (selectedOrders.length === displayRows.length) {
@@ -862,8 +916,8 @@ export default function ActualDispatchPage() {
         setSelectedGroups([]);
         setDialogSelectedProducts([]);
 
-        await fetchPendingDispatches();
-        await fetchDispatchHistory();
+        await refetchPending();
+        await refetchHistory();
 
         setTimeout(() => {
           router.push("/security-approval")
@@ -896,7 +950,7 @@ export default function ActualDispatchPage() {
 
     setIsProcessing(true);
     try {
-      const itemsToRevert = selectedGroups.flatMap(g => 
+      const itemsToRevert = selectedGroups.flatMap(g =>
         g._allProducts.filter((p: any) => dialogSelectedProducts.includes(p._rowKey))
       );
 
@@ -930,7 +984,7 @@ export default function ActualDispatchPage() {
           title: "Revert Successful",
           description: `${successfulReverts.length} item(s) reverted to Pre-Approval.`,
         });
-        
+
         // Reset and refresh
         setIsDialogOpen(false);
         setSelectedOrders([]);
@@ -938,9 +992,9 @@ export default function ActualDispatchPage() {
         setConfirmDetails({});
         setSelectedGroups([]);
         setRevertRemarks("");
-        
-        await fetchPendingDispatches();
-        await fetchDispatchHistory();
+
+        await refetchPending();
+        await refetchHistory();
       }
 
       if (failedReverts.length > 0) {
@@ -970,6 +1024,23 @@ export default function ActualDispatchPage() {
       partyNames={customerNames}
       onFilterChange={setFilterValues}
       remarksColName="Confirmation"
+      onTabChange={setActiveTab}
+      isHistoryLoading={isHistoryLoading}
+      historyFooter={
+        <div ref={historyEndRef} className="py-4 flex justify-center">
+          {isFetchingNextHistory && (
+            <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-xs tracking-widest ">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>LOADING MORE DISPATCH HISTORY...</span>
+            </div>
+          )}
+          {!hasNextHistory && historyOrders.length > 0 && (
+            <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest bg-slate-50 px-4 py-1.5 rounded-full border border-slate-100 italic">
+              END OF HISTORY
+            </span>
+          )}
+        </div>
+      }
     >
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
@@ -1004,6 +1075,24 @@ export default function ActualDispatchPage() {
           </Button>
         </div>
 
+        {activeDepots.length > 0 && (
+          <div className="mt-4 mb-2">
+            <Tabs value={selectedDepoTab} onValueChange={setSelectedDepoTab} className="w-full">
+              <TabsList className="bg-slate-100/50 p-1 h-auto flex-wrap justify-start gap-1 border border-slate-200/60 rounded-xl shadow-sm">
+                {activeDepots.map((depo: any) => (
+                  <TabsTrigger
+                    key={depo.depot_id}
+                    value={depo.depot_name}
+                    className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all"
+                  >
+                    {depo.depot_name}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
+        )}
+
         <Card className="border-none shadow-sm overflow-auto max-h-150">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
@@ -1023,7 +1112,21 @@ export default function ActualDispatchPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayRows.length > 0 ? (
+              {isPendingLoading && pendingOrders.length === 0 ? (
+                [...Array(5)].map((_, i) => (
+                  <TableRow key={i} className="opacity-40 border-b border-slate-50">
+                    <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
+                    {PAGE_COLUMNS.filter(col => visibleColumns.includes(col.id)).map(col => (
+                      <TableCell key={col.id} className="py-4">
+                        <div className={cn(
+                          "h-3 bg-slate-200 animate-pulse rounded-full mx-auto",
+                          col.id === 'customerName' ? "w-32" : col.id === 'orderNo' ? "w-24" : "w-16"
+                        )} />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : displayRows.length > 0 ? (
                 displayRows.map((row) => {
                   const rowKey = row._rowKey;
                   return (
@@ -1065,6 +1168,14 @@ export default function ActualDispatchPage() {
               )}
             </TableBody>
           </Table>
+          <div ref={pendingEndRef} className="py-2 flex justify-center">
+            {isFetchingNextPending && (
+              <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-[10px]">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>LOADING MORE...</span>
+              </div>
+            )}
+          </div>
         </Card>
       </div>
 
@@ -1678,9 +1789,9 @@ export default function ActualDispatchPage() {
                   onChange={(e) => setRevertRemarks(e.target.value)}
                 />
               </div>
-              <Button 
-                variant="destructive" 
-                onClick={handleRevert} 
+              <Button
+                variant="destructive"
+                onClick={handleRevert}
                 disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly || !revertRemarks.trim()}
                 className="font-black uppercase tracking-tight whitespace-nowrap"
               >

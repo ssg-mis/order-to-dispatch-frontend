@@ -20,6 +20,8 @@ import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { approvalApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { useInView } from "react-intersection-observer"
 
 
 export default function CommitmentReviewPage() {
@@ -47,6 +49,7 @@ export default function CommitmentReviewPage() {
     { id: "partySoDate", label: "DO Date" },
     { id: "orderNo", label: "DO Number" },
     { id: "soNo", label: "DO No." },
+    { id: "orderCategory", label: "Order Category" },
     { id: "deliveryPurpose", label: "Order Type (Delivery Purpose)" },
     { id: "startDate", label: "Start Date" },
     { id: "endDate", label: "End Date" },
@@ -82,6 +85,7 @@ export default function CommitmentReviewPage() {
     "partySoDate",
     "orderNo",
     "customerName",
+    "orderCategory",
     "productName",
     "rate",
     "orderPunchRemarks",
@@ -89,8 +93,6 @@ export default function CommitmentReviewPage() {
   ])
 
   // State for list of orders
-  const [isLoading, setIsLoading] = useState(true)
-  const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [selectedOrder, setSelectedOrder] = useState<any>(null) // For the dialog interaction
   const [sourceOfMaterial, setSourceOfMaterial] = useState<string>("in-stock")
 
@@ -106,8 +108,18 @@ export default function CommitmentReviewPage() {
   const [processId, setProcessId] = useState<string>("")
 
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
+  const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
 
-  const [history, setHistory] = useState<any[]>([])
+  const { ref: pendingEndRef, inView: pendingInView } = useInView()
+  const { ref: historyEndRef, inView: historyInView } = useInView()
+
+  const [filterValues, setFilterValues] = useState({
+    search: "",
+    status: "",
+    startDate: "",
+    endDate: "",
+    partyName: ""
+  })
 
   // Map backend data (snake_case) to frontend format (camelCase)
   const mapBackendOrderToFrontend = (backendOrder: any) => {
@@ -134,6 +146,7 @@ export default function CommitmentReviewPage() {
       brokerName: backendOrder.broker_name,
       transportType: backendOrder.type_of_transporting,
       depoName: backendOrder.depo_name,
+      orderCategory: backendOrder.order_category,
       orderPunchRemarks: backendOrder.order_punch_remarks,
       remark: backendOrder.remark,
       totalWithGst: backendOrder.total_amount_with_gst,
@@ -162,67 +175,94 @@ export default function CommitmentReviewPage() {
     };
   };
 
-  // Fetch pending approvals from backend
-  const fetchPendingApprovals = async () => {
-    try {
-      setIsLoading(true);
-      const response = await approvalApi.getPending({ limit: 1000 });
-
-      if (response.success && response.data.orders) {
-        const mappedOrders = response.data.orders.map(mapBackendOrderToFrontend);
-        setPendingOrders(mappedOrders);
-      }
-    } catch (error: any) {
-      console.error("Failed to fetch pending approvals:", error);
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to load pending approvals from server",
-        variant: "destructive",
+  // Pending query with infinite pagination
+  const {
+    data: pendingData,
+    fetchNextPage: fetchNextPending,
+    hasNextPage: hasNextPending,
+    isFetchingNextPage: isFetchingNextPending,
+    isLoading: isPendingLoading,
+    refetch: refetchPending,
+  } = useInfiniteQuery({
+    queryKey: ["approval-pending", filterValues],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await approvalApi.getPending({
+        page: pageParam,
+        limit: 20,
+        order_no: filterValues.search,
+        customer_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
+        start_date: filterValues.startDate,
+        end_date: filterValues.endDate,
       });
+      return response.success ? response.data : { orders: [], pagination: { total: 0 } };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.orders?.length || 0), 0);
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
+    },
+  });
 
-      // Fallback to localStorage if API fails
-      const savedPending = localStorage.getItem("approvalPendingItems");
-      if (savedPending) {
-        setPendingOrders(JSON.parse(savedPending));
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // History query with infinite pagination (lazy loaded)
+  const {
+    data: historyData,
+    fetchNextPage: fetchNextHistory,
+    hasNextPage: hasNextHistory,
+    isFetchingNextPage: isFetchingNextHistory,
+    isLoading: isHistoryLoading,
+    refetch: refetchHistory,
+  } = useInfiniteQuery({
+    queryKey: ["approval-history", filterValues],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await approvalApi.getHistory({
+        page: pageParam,
+        limit: 20,
+        order_no: filterValues.search,
+        customer_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
+        start_date: filterValues.startDate,
+        end_date: filterValues.endDate,
+      });
+      return response.success ? response.data : { orders: [], pagination: { total: 0 } };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.orders?.length || 0), 0);
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
+    },
+    enabled: activeTab === "history",
+  });
 
-  // Fetch approval history from backend
-  const fetchHistory = async () => {
-    try {
-      const response = await approvalApi.getHistory({ limit: 1000 });
+  const pendingOrders = useMemo(() => {
+    return pendingData?.pages.flatMap((page) => page.orders.map(mapBackendOrderToFrontend)) || [];
+  }, [pendingData]);
 
-      if (response.success && response.data.orders) {
-        const mappedHistory = response.data.orders.map((order: any) => ({
-          ...order,
-          rawData: order,
-          orderNo: order.order_no,
-          customerName: order.customer_name,
-          stage: "Approval Of Order",
-          status: order.overall_status_of_order === true ? "Approved" :
-            order.overall_status_of_order === false ? "Rejected" : "Completed",
-          processedBy: "System",
-          timestamp: order.actual_2,
-          date: order.actual_2 ? new Date(order.actual_2).toLocaleDateString("en-GB") : "-",
-          remarks: order.remark || "-",
-        }));
-        setHistory(mappedHistory);
-      }
-    } catch (error: any) {
-      console.error("Failed to fetch history:", error);
-      // Fallback to localStorage is disabled as per user request
-      setHistory([]);
-    }
-  };
+  const historyItems = useMemo(() => {
+    return historyData?.pages.flatMap((page) => page.orders.map((order: any) => ({
+      ...order,
+      rawData: order,
+      orderNo: order.order_no,
+      customerName: order.customer_name,
+      stage: "Approval Of Order",
+      status: order.overall_status_of_order === true ? "Approved" :
+        order.overall_status_of_order === false ? "Rejected" : "Completed",
+      processedBy: "System",
+      timestamp: order.actual_2,
+      date: order.actual_2 ? new Date(order.actual_2).toLocaleDateString("en-GB") : "-",
+      remarks: order.remark || "-",
+    }))) || [];
+  }, [historyData]);
 
   useEffect(() => {
-    // Fetch data from backend
-    fetchPendingApprovals();
-    fetchHistory();
-  }, [])
+    if (pendingInView && hasNextPending) {
+      fetchNextPending();
+    }
+  }, [pendingInView, hasNextPending, fetchNextPending]);
+
+  useEffect(() => {
+    if (historyInView && hasNextHistory) {
+      fetchNextHistory();
+    }
+  }, [historyInView, hasNextHistory, fetchNextHistory]);
 
   const checkItems = [
     { id: "rate", label: "Rate Right?" },
@@ -371,8 +411,8 @@ export default function CommitmentReviewPage() {
         })
 
         // Refresh data from backend
-        await fetchPendingApprovals()
-        await fetchHistory()
+        await refetchPending()
+        await refetchHistory()
       }
 
       if (failedApprovals.length > 0) {
@@ -475,100 +515,28 @@ export default function CommitmentReviewPage() {
   /* Extract unique customer names */
   const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
 
-  const [filterValues, setFilterValues] = useState({
-    search: "",
-    status: "",
-    startDate: "",
-    endDate: "",
-    partyName: ""
-  })
-
   const filteredPendingOrders = pendingOrders.filter(order => {
-    let matches = true
+    // API handles search, party name and date range.
+    // We only need to handle the "Status" (On Time / Expire) filter if present
+    if (!filterValues.status || filterValues.status === "all") return true
 
-    // Filter by Party Name
-    if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
-      matches = false
+    const targetDateStr = order.deliveryData?.expectedDeliveryDate || order.deliveryDate || order.timestamp
+    if (!targetDateStr) return true
+
+    const targetDate = new Date(targetDateStr)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    if (filterValues.status === "expire") {
+      return targetDate < today
     }
-
-    // Filter by Date Range
-    // Check for timestamp or date field
-    const orderDateStr = order.deliveryData?.date || order.date || order.timestamp
-    if (orderDateStr) {
-      const orderDate = new Date(orderDateStr)
-      if (filterValues.startDate) {
-        const start = new Date(filterValues.startDate)
-        start.setHours(0, 0, 0, 0)
-        if (orderDate < start) matches = false
-      }
-      if (filterValues.endDate) {
-        const end = new Date(filterValues.endDate)
-        end.setHours(23, 59, 59, 999)
-        if (orderDate > end) matches = false
-      }
+    if (filterValues.status === "on-time") {
+      return targetDate >= today
     }
-
-    // Filter by Status (Simulating Expiry based on arbitrary logic if no due date, 
-    // typically approval is needed ASAP so maybe compare created date vs today)
-    // For now, let's use the same logic: "on-time" if recent, "expire" if old (>7 days?)
-    // OR better, if the order object has a due date.
-    // Let's assume deliveryDate exists as in other stages, or default to checking 'timestamp' vs today.
-
-    if (filterValues.status) {
-      const targetDateStr = order.deliveryData?.expectedDeliveryDate || order.deliveryDate || order.timestamp
-      if (targetDateStr) {
-        const targetDate = new Date(targetDateStr)
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-
-        if (filterValues.status === "expire") {
-          // If Expected Date is in past, it's expired/overdue? OR if it's "Expire" status.
-          // Let's assume "Expire" means "Overdue"
-          if (targetDate < today) matches = true // keeping 'expire' matches
-          else matches = false
-        } else if (filterValues.status === "on-time") {
-          if (targetDate >= today) matches = true
-          else matches = false
-        }
-      }
-    }
-
-    return matches
+    return true
   })
 
-  const filteredHistory = useMemo(() => {
-    return history.filter(item => {
-      let matches = true
-
-      if (filterValues.search) {
-        const search = filterValues.search.toLowerCase()
-        if (!item.orderNo?.toLowerCase().includes(search) &&
-          !item.customerName?.toLowerCase().includes(search)) {
-          matches = false
-        }
-      }
-
-      if (filterValues.partyName && filterValues.partyName !== "all" && item.customerName !== filterValues.partyName) {
-        matches = false
-      }
-
-      if (filterValues.startDate) {
-        const start = new Date(filterValues.startDate)
-        start.setHours(0, 0, 0, 0)
-        const itemDate = new Date(item.timestamp)
-        if (itemDate < start) matches = false
-      }
-
-      if (filterValues.endDate) {
-        const end = new Date(filterValues.endDate)
-        end.setHours(23, 59, 59, 999)
-        const itemDate = new Date(item.timestamp)
-        if (itemDate > end) matches = false
-      }
-
-      return matches
-    })
-  }, [history, filterValues])
+  const filteredHistory = historyItems;
 
   // Group by base DO number (removing uniqueness by Customer Name)
   const displayRows = useMemo(() => {
@@ -615,8 +583,9 @@ export default function CommitmentReviewPage() {
           advancePaymentTaken: order.advancePaymentTaken,
           advanceAmount: order.advanceAmount,
           isBrokerOrder: order.isBrokerOrder,
-          brokerName: order.brokerName,
-          depoName: order.depoName,
+          brokerName: order.broker_name,
+          depoName: order.depo_name,
+          orderCategory: order.orderCategory,
           orderPunchRemarks: order.orderPunchRemarks,
           remark: order.remark,
           partySoDate: formatDate(order.partySoDate),
@@ -627,7 +596,7 @@ export default function CommitmentReviewPage() {
       // Aggregate products and link them to their original order ID
       products.forEach((prod: any) => {
         const pName = prod.productName || prod.oilType;
-        const isVerified = history.some(h =>
+        const isVerified = historyItems.some((h: any) =>
           (h.orderNo === originalOrderId || h.orderNo === baseDo) &&
           (h.data?.orderData?._product?.productName === pName || h.data?.orderData?._product?.oilType === pName)
         );
@@ -666,6 +635,23 @@ export default function CommitmentReviewPage() {
       historyData={filteredHistory}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
+      onTabChange={setActiveTab}
+      isHistoryLoading={isHistoryLoading}
+      historyFooter={
+        <div ref={historyEndRef} className="py-4 flex justify-center">
+          {isFetchingNextHistory && (
+            <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>LOADING MORE...</span>
+            </div>
+          )}
+          {!hasNextHistory && historyItems.length > 0 && (
+            <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest bg-slate-50 px-4 py-1 rounded-full border border-slate-100 italic">
+              END OF HISTORY
+            </span>
+          )}
+        </div>
+      }
     >
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
@@ -748,6 +734,10 @@ export default function CommitmentReviewPage() {
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Purpose</p>
                                     <p className="text-sm font-bold text-slate-900 leading-tight capitalize">{orderDetails.orderPurpose?.replace(/-/g, ' ') || "—"}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Order Category</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight capitalize">{orderDetails.orderCategory || "—"}</p>
                                   </div>
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Order Type</p>
@@ -987,17 +977,22 @@ export default function CommitmentReviewPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8">
-                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      <span>Loading pending approvals...</span>
-                    </div>
-                  </TableCell>
-                </TableRow>
+              {isPendingLoading && pendingOrders.length === 0 ? (
+                [...Array(5)].map((_, i) => (
+                  <TableRow key={i} className="opacity-40 border-b border-slate-50">
+                    <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
+                    {PAGE_COLUMNS.filter(col => visibleColumns.includes(col.id)).map(col => (
+                      <TableCell key={col.id} className="py-4">
+                        <div className={cn(
+                          "h-3 bg-slate-200 animate-pulse rounded-full mx-auto",
+                          col.id === 'customerName' ? "w-32" : col.id === 'orderNo' ? "w-24" : "w-16"
+                        )} />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
               ) : displayRows.length > 0 ? (
-                displayRows.map((order: any, index: number) => {
+                displayRows.map((order: any) => {
                   const products = order._allProducts || []
                   const firstProduct = products[0] || {}
                   const orderDetails = Object.values(order._ordersMap)[0] as any || {}
@@ -1010,7 +1005,7 @@ export default function CommitmentReviewPage() {
 
                   const oilTypes = Array.from(new Set(products.map((p: any) => p.oilType || p.productName))).filter(Boolean).join(", ")
 
-                  const row = {
+                  const row: any = {
                     orderNo: baseDos || "—",
                     deliveryPurpose: orderDetails.orderPurpose || "—",
                     customerType: orderDetails.customerType || "—",
@@ -1021,8 +1016,8 @@ export default function CommitmentReviewPage() {
                     startDate: orderDetails.startDate || "—",
                     endDate: orderDetails.endDate || "—",
                     deliveryDate: orderDetails.deliveryDate || "—",
+                    orderCategory: orderDetails.orderCategory || "—",
 
-                    // Rates & Product Details - Show Summary
                     oilType: oilTypes || "—",
                     ratePerLtr: firstProduct?.ratePerLtr || "—",
                     ratePer15Kg: firstProduct?.rateLtr || "—",
@@ -1033,7 +1028,6 @@ export default function CommitmentReviewPage() {
                     altQty: products.reduce((sum: number, p: any) => sum + (Number(p.altQty) || 0), 0).toFixed(2),
                     rate: firstProduct?.rate || "—",
 
-                    // Extended Columns
                     totalWithGst: products.reduce((sum: number, p: any) => sum + (Number(p.totalWithGst) || 0), 0).toFixed(2) || "—",
                     transportType: orderDetails.transportType || "—",
                     contactPerson: orderDetails.contactPerson || "—",
@@ -1046,7 +1040,6 @@ export default function CommitmentReviewPage() {
                     brokerName: orderDetails.brokerName || "—",
                     uploadSo: "do_document.pdf",
                     orderPunchRemarks: order.orderPunchRemarks || "—",
-
                     status: "Pending",
                   }
 
@@ -1062,16 +1055,19 @@ export default function CommitmentReviewPage() {
                         />
                       </TableCell>
                       {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                        <TableCell key={col.id} className="whitespace-nowrap text-center">
+                        <TableCell key={col.id} className={cn(
+                          "whitespace-nowrap text-center text-xs",
+                          col.id === 'orderNo' ? "text-blue-700 font-bold" : "text-slate-600"
+                        )}>
                           {col.id === "status" ? (
                             <div className="flex justify-center gap-2">
-                              <Badge variant="outline" className="text-xs bg-slate-100 text-slate-700 border-slate-200">
+                              <Badge variant="outline" className="text-[10px] bg-slate-100 text-slate-700 border-slate-200 uppercase font-black tracking-tighter">
                                 {order._productCount} Items
                               </Badge>
                             </div>
                           ) : col.id === "productName" ? (
                             <span className="font-medium text-slate-700">{row.productName}</span>
-                          ) : row[col.id as keyof typeof row]}
+                          ) : row[col.id]}
                         </TableCell>
                       ))}
                     </TableRow>
@@ -1079,13 +1075,21 @@ export default function CommitmentReviewPage() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={visibleColumns.length + 2} className="text-center py-4 text-muted-foreground">
+                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
                     No orders pending for commitment review
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
+          <div ref={pendingEndRef} className="py-2 flex justify-center">
+            {isFetchingNextPending && (
+              <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-[10px]">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>LOADING MORE...</span>
+              </div>
+            )}
+          </div>
         </Card>
       </div>
     </WorkflowStageShell>

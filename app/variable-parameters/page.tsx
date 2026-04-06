@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -35,6 +35,9 @@ import {
     TableRow
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { useInView } from "react-intersection-observer"
+import { Loader2 } from "lucide-react"
 
 const OIL_TYPES = ["Palm Oil", "Soya Oil", "Rice Oil"] as const;
 type OilType = typeof OIL_TYPES[number];
@@ -48,8 +51,8 @@ const OIL_TYPE_COLORS: Record<OilType, { bg: string; border: string; text: strin
 export default function VariableParametersPage() {
     const { toast } = useToast()
     const [isSaving, setIsSaving] = useState(false)
-    const [historyData, setHistoryData] = useState<any[]>([])
-    const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+    const [activeTab, setActiveTab] = useState<string>("configure")
+    const { ref: historyEndRef, inView: historyInView } = useInView()
     const [selectedOilType, setSelectedOilType] = useState<OilType>("Palm Oil")
     const getLocalISODate = (dateInput?: string | Date) => {
         const d = dateInput ? new Date(dateInput) : new Date();
@@ -68,22 +71,42 @@ export default function VariableParametersPage() {
         calculation_date: getLocalISODate()
     })
 
-    // Independent history fetch
-    const fetchHistory = useCallback(async () => {
-        setIsLoadingHistory(true)
-        try {
-            const response = await varCalcApi.getAll()
-            if (response.success) {
-                setHistoryData(response.data || [])
-            } else {
-                console.error("History fetch failed:", response.message)
-            }
-        } catch (error) {
-            console.error("Failed to fetch history:", error)
-        } finally {
-            setIsLoadingHistory(false)
+    // History query with infinite pagination
+    const {
+        data: historyDataPage,
+        fetchNextPage: fetchNextHistory,
+        hasNextPage: hasNextHistory,
+        isFetchingNextPage: isFetchingNextHistory,
+        isLoading: isHistoryLoading,
+        refetch: refetchHistory,
+    } = useInfiniteQuery({
+        queryKey: ["var-calc-history"],
+        queryFn: async ({ pageParam = 1 }) => {
+            const response = await varCalcApi.getAll({
+                page: pageParam,
+                limit: 20
+            });
+            return response.success ? response.data : { history: [], pagination: { total: 0 } };
+        },
+        initialPageParam: 1,
+        getNextPageParam: (lastPage, allPages) => {
+            const currentCount = allPages.reduce((sum, page) => sum + (Array.isArray(page) ? page.length : (page.history?.length || 0)), 0);
+            const total = Array.isArray(lastPage) ? 0 : (lastPage.pagination?.total || 0);
+            return currentCount < total ? allPages.length + 1 : undefined;
+        },
+        enabled: activeTab === "history",
+    });
+
+    const historyData = useMemo(() => {
+        if (!historyDataPage) return [];
+        return historyDataPage.pages.flatMap(page => Array.isArray(page) ? page : (page.history || []));
+    }, [historyDataPage]);
+
+    useEffect(() => {
+        if (historyInView && hasNextHistory) {
+            fetchNextHistory();
         }
-    }, [])
+    }, [historyInView, hasNextHistory, fetchNextHistory]);
 
     // Independent latest fetch
     const fetchLatest = useCallback(async () => {
@@ -106,8 +129,7 @@ export default function VariableParametersPage() {
 
     useEffect(() => {
         fetchLatest()
-        fetchHistory()
-    }, [fetchLatest, fetchHistory])
+    }, [fetchLatest])
 
     // Auto-calculation logic
     useEffect(() => {
@@ -152,7 +174,7 @@ export default function VariableParametersPage() {
                     title: "Success",
                     description: `Variable parameters saved for ${selectedOilType}`,
                 })
-                fetchHistory() // Refresh history after save
+                refetchHistory() // Refresh history after save
             }
         } catch (error: any) {
             toast({
@@ -178,7 +200,7 @@ export default function VariableParametersPage() {
                     </div>
                 </div>
 
-                <Tabs defaultValue="configure" className="w-full">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                     <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-6 bg-slate-100 p-1 rounded-xl h-12">
                         <TabsTrigger value="configure" className="rounded-lg text-sm font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all flex items-center gap-2">
                             <Calculator className="h-4 w-4" />
@@ -377,75 +399,103 @@ export default function VariableParametersPage() {
                                 </Badge>
                             </CardHeader>
                             <CardContent className="p-0">
-                                <div className="overflow-x-auto">
-                                    <Table>
-                                        <TableHeader className="bg-slate-50">
-                                            <TableRow className="hover:bg-transparent border-slate-200">
-                                                <TableHead className="w-[200px] text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Calculation Date</TableHead>
-                                                <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Oil Type</TableHead>
-                                                <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Loose Oil Rate</TableHead>
-                                                <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Freight Rate</TableHead>
-                                                <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Base Total</TableHead>
-                                                <TableHead className="text-[11px] font-black uppercase tracking-wider h-14 text-emerald-600">GST (5%)</TableHead>
-                                                <TableHead className="text-right text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Grand Total</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {isLoadingHistory ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={7} className="h-64 text-center">
-                                                        <div className="flex flex-col items-center gap-3">
-                                                            <div className="h-8 w-8 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
-                                                            <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Fetching history...</span>
-                                                        </div>
-                                                    </TableCell>
+                                <div className="flex flex-col h-[600px]">
+                                    <div className="flex-1 overflow-auto rounded-b-2xl">
+                                        <Table>
+                                            <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
+                                                <TableRow className="hover:bg-transparent border-slate-200">
+                                                    <TableHead className="w-[200px] text-[11px] font-black uppercase text-slate-400 tracking-wider h-14 pl-6">Calculation Date</TableHead>
+                                                    <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Oil Type</TableHead>
+                                                    <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Loose Oil Rate</TableHead>
+                                                    <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Freight Rate</TableHead>
+                                                    <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-wider h-14">Base Total</TableHead>
+                                                    <TableHead className="text-[11px] font-black uppercase tracking-wider h-14 text-emerald-600">GST (5%)</TableHead>
+                                                    <TableHead className="text-right text-[11px] font-black uppercase text-slate-400 tracking-wider h-14 pr-8">Grand Total</TableHead>
                                                 </TableRow>
-                                            ) : historyData.length === 0 ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={7} className="h-64 text-center">
-                                                        <div className="flex flex-col items-center gap-4 grayscale opacity-40">
-                                                            <History className="h-12 w-12 text-slate-400" />
-                                                            <p className="font-bold text-slate-500 uppercase tracking-widest">No historical data found</p>
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ) : (
-                                                historyData.map((row, idx) => (
-                                                    <TableRow key={row.id || idx} className="hover:bg-indigo-50/30 transition-colors border-slate-100 group">
-                                                        <TableCell className="font-bold text-slate-900 py-5">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 group-hover:scale-125 transition-transform" />
-                                                                {row.calculation_date ? new Date(row.calculation_date).toLocaleDateString('en-GB', {
-                                                                    day: '2-digit', month: 'short', year: 'numeric'
-                                                                }) : 'N/A'}
+                                            </TableHeader>
+                                            <TableBody>
+                                                {isHistoryLoading && historyData.length === 0 ? (
+                                                    [...Array(5)].map((_, i) => (
+                                                        <TableRow key={i} className="opacity-40 border-b border-slate-50">
+                                                            <TableCell className="py-5 pl-6"><div className="h-4 w-32 bg-slate-200 animate-pulse rounded" /></TableCell>
+                                                            <TableCell><div className="h-4 w-20 bg-slate-200 animate-pulse rounded-full" /></TableCell>
+                                                            <TableCell><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                                                            <TableCell><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                                                            <TableCell><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                                                            <TableCell><div className="h-4 w-16 bg-slate-100 animate-pulse rounded" /></TableCell>
+                                                            <TableCell className="text-right pr-8"><div className="h-6 w-20 bg-slate-200 animate-pulse rounded ml-auto" /></TableCell>
+                                                        </TableRow>
+                                                    ))
+                                                ) : historyData.length === 0 ? (
+                                                    <TableRow>
+                                                        <TableCell colSpan={7} className="h-64 text-center">
+                                                            <div className="flex flex-col items-center gap-4 grayscale opacity-40">
+                                                                <History className="h-12 w-12 text-slate-400" />
+                                                                <p className="font-bold text-slate-500 uppercase tracking-widest">No historical data found</p>
                                                             </div>
                                                         </TableCell>
-                                                        <TableCell>
-                                                            {row.oil_type ? (
-                                                                <Badge className={`font-bold text-xs px-3 py-1 rounded-full ${
-                                                                    row.oil_type === 'Palm Oil' ? 'bg-orange-100 text-orange-700 hover:bg-orange-100' :
-                                                                    row.oil_type === 'Soya Oil' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' :
-                                                                    row.oil_type === 'Rice Oil' ? 'bg-lime-100 text-lime-700 hover:bg-lime-100' :
-                                                                    'bg-slate-100 text-slate-700 hover:bg-slate-100'
-                                                                }`}>
-                                                                    {row.oil_type}
-                                                                </Badge>
-                                                            ) : (
-                                                                <span className="text-slate-400 text-xs">—</span>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell className="font-mono font-medium text-slate-600">₹{row.loose_1_kg_oil_rate ?? row.oil_rate ?? '0.00'}</TableCell>
-                                                        <TableCell className="font-mono font-medium text-slate-600">₹{row.freight_rate ?? '0.00'}</TableCell>
-                                                        <TableCell className="font-mono font-medium text-slate-600">₹{row.total ?? '0.00'}</TableCell>
-                                                        <TableCell className="font-mono font-bold text-emerald-600">₹{row.five_percent_gst ?? row.gst ?? '0.00'}</TableCell>
-                                                        <TableCell className="text-right font-mono font-black text-indigo-600 pr-8 text-lg">
-                                                            ₹{row.gt ?? '0.00'}
-                                                        </TableCell>
                                                     </TableRow>
-                                                ))
-                                            )}
-                                        </TableBody>
-                                    </Table>
+                                                ) : (
+                                                    <>
+                                                        {historyData.map((row, idx) => (
+                                                            <TableRow key={row.id || idx} className="hover:bg-indigo-50/30 transition-colors border-slate-100 group">
+                                                                <TableCell className="font-bold text-slate-900 py-5 pl-6">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 group-hover:scale-125 transition-transform" />
+                                                                        {row.calculation_date ? new Date(row.calculation_date).toLocaleDateString('en-GB', {
+                                                                            day: '2-digit', month: 'short', year: 'numeric'
+                                                                        }) : 'N/A'}
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    {row.oil_type ? (
+                                                                        <Badge className={`font-bold text-xs px-3 py-1 rounded-full ${
+                                                                            row.oil_type === 'Palm Oil' ? 'bg-orange-100 text-orange-700 hover:bg-orange-100' :
+                                                                            row.oil_type === 'Soya Oil' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' :
+                                                                            row.oil_type === 'Rice Oil' ? 'bg-lime-100 text-lime-700 hover:bg-lime-100' :
+                                                                            'bg-slate-100 text-slate-700 hover:bg-slate-100'
+                                                                        }`}>
+                                                                            {row.oil_type}
+                                                                        </Badge>
+                                                                    ) : (
+                                                                        <span className="text-slate-400 text-xs">—</span>
+                                                                    )}
+                                                                </TableCell>
+                                                                <TableCell className="font-mono font-medium text-slate-600">₹{row.loose_1_kg_oil_rate ?? row.oil_rate ?? '0.00'}</TableCell>
+                                                                <TableCell className="font-mono font-medium text-slate-600">₹{row.freight_rate ?? '0.00'}</TableCell>
+                                                                <TableCell className="font-mono font-medium text-slate-600">₹{row.total ?? '0.00'}</TableCell>
+                                                                <TableCell className="font-mono font-bold text-emerald-600">₹{row.five_percent_gst ?? row.gst ?? '0.00'}</TableCell>
+                                                                <TableCell className="text-right font-mono font-black text-indigo-600 pr-8 text-lg">
+                                                                    ₹{row.gt ?? '0.00'}
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                        {/* Infinite Scroll Sentinel */}
+                                                        <TableRow ref={historyEndRef}>
+                                                            <TableCell colSpan={7} className="p-0 h-16 border-none">
+                                                                {isFetchingNextHistory && (
+                                                                    <div className="flex items-center justify-center py-4 bg-slate-50/20">
+                                                                        <div className="flex gap-1.5 items-center bg-white px-4 py-1.5 rounded-full shadow-sm border border-slate-100">
+                                                                            <div className="h-1.5 w-1.5 bg-indigo-500 animate-bounce [animation-delay:-0.3s]"></div>
+                                                                            <div className="h-1.5 w-1.5 bg-indigo-500 animate-bounce [animation-delay:-0.15s]"></div>
+                                                                            <div className="h-1.5 w-1.5 bg-indigo-500 animate-bounce"></div>
+                                                                            <span className="text-xs font-medium ml-2 text-slate-500 uppercase tracking-widest">Loading...</span>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                {!hasNextHistory && historyData.length > 0 && (
+                                                                    <div className="flex justify-center flex-col items-center py-6 grayscale opacity-20">
+                                                                        <div className="h-px w-12 bg-slate-300 mb-2" />
+                                                                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">End of records</span>
+                                                                    </div>
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    </>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>

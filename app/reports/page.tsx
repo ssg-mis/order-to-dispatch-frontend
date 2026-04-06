@@ -12,6 +12,22 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from "recharts"
+import { useQuery } from "@tanstack/react-query"
+import { 
+  useReactTable, 
+  getCoreRowModel, 
+  getPaginationRowModel,
+  flexRender,
+  ColumnDef
+} from "@tanstack/react-table"
+import { 
+  ChevronLeft, 
+  ChevronRight as ChevronRightIcon,
+  ChevronsLeft,
+  ChevronsRight
+} from "lucide-react"
+import { reportsApi } from "@/lib/api-service"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api/v1"
 
@@ -63,8 +79,6 @@ function downloadPDF() {
 
 // ─── Main Report Page ──────────────────────────────────────────────────────
 export default function ReportsPage() {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"summary" | "skus" | "timeline">("summary")
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null)
 
@@ -78,27 +92,25 @@ export default function ReportsPage() {
 
   const hasFilters = filterOrderNo || filterCompany || (filterOilType !== "All") || filterSku || filterFrom || filterTo
 
-  const fetchReport = useCallback(async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (filterOrderNo) params.set("order_no", filterOrderNo)
-      if (filterCompany) params.set("customer_name", filterCompany)
-      if (filterOilType !== "All") params.set("oil_type", filterOilType)
-      if (filterSku) params.set("sku_name", filterSku)
-      if (filterFrom) params.set("from_date", filterFrom)
-      if (filterTo) params.set("to_date", filterTo)
+  // TanStack Query
+  const { data: reportResp, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ["reports", filterOrderNo, filterCompany, filterOilType, filterSku, filterFrom, filterTo],
+    queryFn: async () => {
+      const params: any = {}
+      if (filterOrderNo) params.order_no = filterOrderNo
+      if (filterCompany) params.customer_name = filterCompany
+      if (filterOilType !== "All") params.oil_type = filterOilType
+      if (filterSku) params.sku_name = filterSku
+      if (filterFrom) params.from_date = filterFrom
+      if (filterTo) params.to_date = filterTo
 
-      const res = await fetch(`${API}/reports?${params}`)
-      if (res.ok) {
-        const json = await res.json()
-        if (json.success) setData(json.data)
-      }
-    } catch (e) { console.error(e) }
-    setLoading(false)
-  }, [filterOrderNo, filterCompany, filterOilType, filterSku, filterFrom, filterTo])
+      const res = await reportsApi.getReport(params)
+      return res.success ? res.data : null
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  })
 
-  useEffect(() => { fetchReport() }, []) // initial load
+  const data = reportResp
 
   const clearFilters = () => {
     setFilterOrderNo(""); setFilterCompany(""); setFilterOilType("All")
@@ -108,6 +120,23 @@ export default function ReportsPage() {
   const summary = data?.summary || {}
   const topSkus: any[] = data?.topSkus || []
   const orderTimeline: any[] = data?.orderTimeline || []
+
+  // ─── TANSTACK TABLE FOR SUMMARY/TIMELINE ───
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 15 })
+
+  const summaryTable = useReactTable({
+    data: orderTimeline,
+    columns: [], // We use manual columns for now to match exactly your layout
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onPaginationChange: setPagination,
+    state: { pagination },
+  })
+
+  // Reset pagination when data changes (e.g. filter applied)
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, pageIndex: 0 }))
+  }, [filterOrderNo, filterCompany, filterOilType, filterSku, filterFrom, filterTo])
 
   // Chart data for top SKUs — full names for tooltip, short label for Y axis
   const chartData = topSkus.slice(0, 10).map(s => ({
@@ -198,9 +227,9 @@ export default function ReportsPage() {
             <FileText className="h-3.5 w-3.5" /> PDF
           </Button>
           <Button size="sm" className="rounded-xl text-xs font-bold gap-1.5" style={{ background: "oklch(0.42 0.18 265)" }}
-            onClick={fetchReport} disabled={loading}>
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            {loading ? "Loading…" : "Apply Filters"}
+            onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
+            {isFetching ? "Loading…" : "Apply Filters"}
           </Button>
         </div>
       </div>
@@ -272,12 +301,21 @@ export default function ReportsPage() {
                   <card.icon className="h-4 w-4" style={{ color: card.color }} />
                 </div>
               </div>
-              {card.count !== null && (
-                <div className="text-3xl font-black text-slate-900 tracking-tight leading-none">{fmt(card.count, 0)}</div>
+              {isLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-8 w-16" />
+                  <Skeleton className="h-5 w-24" />
+                </div>
+              ) : (
+                <>
+                  {card.count !== null && (
+                    <div className="text-3xl font-black text-slate-900 tracking-tight leading-none">{fmt(card.count, 0)}</div>
+                  )}
+                  <div className="text-lg font-black mt-0.5" style={{ color: card.color }}>
+                    {fmt(card.kg || 0)} kg
+                  </div>
+                </>
               )}
-              <div className="text-lg font-black mt-0.5" style={{ color: card.color }}>
-                {fmt(card.kg || 0)} kg
-              </div>
               <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">{card.label}</div>
             </div>
           ))}
@@ -317,7 +355,7 @@ export default function ReportsPage() {
                 <span className="text-slate-400 text-xs">({orderTimeline.length} orders)</span>
               </div>
             </div>
-            <ScrollArea style={{ height: "480px" }}>
+            <ScrollArea style={{ height: "540px" }}>
               <Table>
                 <TableHeader style={{ background: "oklch(0.98 0.01 245)", position: "sticky", top: 0, zIndex: 1 }}>
                   <TableRow style={{ borderColor: "oklch(0.90 0.025 245)" }}>
@@ -328,7 +366,17 @@ export default function ReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orderTimeline.map((o, i) => {
+                  {isLoading ? (
+                    Array(5).fill(0).map((_, i) => (
+                      <TableRow key={i} style={{ borderColor: "oklch(0.93 0.015 245)" }}>
+                        {Array(9).fill(0).map((_, j) => (
+                          <TableCell key={j} className={j === 0 ? "pl-6 py-4" : j === 8 ? "pr-6 py-4" : "py-4"}>
+                            <Skeleton className="h-5 w-full" />
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : summaryTable.getRowModel().rows.map(({ original: o }, i) => {
                     const isCompleted = o.stages.some((s: any) => s.stage === "Gate Out" && s.actual)
                     return (
                       <TableRow key={i} className="hover:bg-slate-50/80 transition-colors" style={{ borderColor: "oklch(0.93 0.015 245)" }}>
@@ -340,15 +388,12 @@ export default function ReportsPage() {
                             {normalizeOilType(o.oil_type)}
                           </span>
                         </TableCell>
-                        {/* SKU name — wrap, show full */}
                         <TableCell className="py-3 text-sm text-slate-700 max-w-[200px]">
                           <span className="whitespace-normal break-words leading-snug">{o.sku_name || "—"}</span>
                         </TableCell>
-                        {/* Raw order qty (units/boxes) */}
                         <TableCell className="py-3 font-bold text-slate-700 tabular-nums text-sm">
                           {fmt(o.order_quantity, 0)}
                         </TableCell>
-                        {/* Order qty converted to KG via sku_weight */}
                         <TableCell className="py-3 font-black text-slate-800 tabular-nums">
                           <div className="flex flex-col">
                             <span className="text-sm">{fmt(o.order_quantity_kg ?? parseFloat(o.order_quantity) ?? 0, 1)} kg</span>
@@ -357,7 +402,6 @@ export default function ReportsPage() {
                             )}
                           </div>
                         </TableCell>
-                        {/* UOM: show main_uom / alternate_uom */}
                         <TableCell className="py-3 text-xs text-slate-500 font-semibold">
                           {o.uom || "—"}
                         </TableCell>
@@ -370,12 +414,45 @@ export default function ReportsPage() {
                       </TableRow>
                     )
                   })}
-                  {orderTimeline.length === 0 && !loading && (
-                    <TableRow><TableCell colSpan={8} className="text-center py-20 text-slate-400 text-sm font-bold">No data found — try adjusting filters</TableCell></TableRow>
+                  {orderTimeline.length === 0 && !isLoading && (
+                    <TableRow><TableCell colSpan={9} className="text-center py-20 text-slate-400 text-sm font-bold">No data found — try adjusting filters</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
             </ScrollArea>
+
+            {/* Pagination Controls */}
+            {!isLoading && orderTimeline.length > pagination.pageSize && (
+              <div className="px-6 py-3 border-t bg-slate-50/50 flex items-center justify-between" style={{ borderColor: "oklch(0.90 0.025 245)" }}>
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  Showing <span className="text-slate-900 mx-1">{Math.min(orderTimeline.length, pagination.pageIndex * pagination.pageSize + 1)}</span>
+                  to <span className="text-slate-900 mx-1">{Math.min(orderTimeline.length, (pagination.pageIndex + 1) * pagination.pageSize)}</span>
+                  of <span className="text-slate-900 mx-1">{orderTimeline.length}</span> orders
+                </div>
+                <div className="flex items-center gap-1.5 font-black">
+                  <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                    onClick={() => summaryTable.previousPage()} disabled={!summaryTable.getCanPreviousPage()}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  {Array.from({ length: summaryTable.getPageCount() }).map((_, i) => {
+                    // Only show 5 pages around current
+                    if (Math.abs(i - pagination.pageIndex) > 2 && i !== 0 && i !== summaryTable.getPageCount() - 1) return null
+                    if (Math.abs(i - pagination.pageIndex) === 3) return <span key={i} className="px-1 text-slate-400 opacity-50">...</span>
+                    return (
+                      <Button key={i} variant={pagination.pageIndex === i ? "default" : "outline"} size="icon"
+                        className="h-8 w-8 rounded-lg text-xs" style={pagination.pageIndex === i ? { background: "oklch(0.42 0.18 265)" } : {}}
+                        onClick={() => summaryTable.setPageIndex(i)}>
+                        {i + 1}
+                      </Button>
+                    )
+                  })}
+                  <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                    onClick={() => summaryTable.nextPage()} disabled={!summaryTable.getCanNextPage()}>
+                    <ChevronRightIcon className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -482,9 +559,18 @@ export default function ReportsPage() {
               <span className="text-xs text-slate-400">Click order to expand stages</span>
             </div>
 
-            <ScrollArea style={{ height: 560 }}>
+            <ScrollArea style={{ height: 620 }}>
               <div className="divide-y" style={{ borderColor: "oklch(0.93 0.015 245)" }}>
-                {orderTimeline.map((order, i) => (
+                {isLoading ? (
+                  Array(6).fill(0).map((_, i) => (
+                    <div key={i} className="px-6 py-4 flex items-center gap-4">
+                      <Skeleton className="h-6 w-6 rounded-full" />
+                      <Skeleton className="h-5 w-24" />
+                      <Skeleton className="h-5 flex-1" />
+                      <Skeleton className="h-5 w-20" />
+                    </div>
+                  ))
+                ) : summaryTable.getRowModel().rows.map(({ original: order }, i) => (
                   <div key={i}>
                     {/* Order header row */}
                     <button
@@ -541,19 +627,52 @@ export default function ReportsPage() {
                     )}
                   </div>
                 ))}
-                {orderTimeline.length === 0 && !loading && (
+                {orderTimeline.length === 0 && !isLoading && (
                   <div className="text-center py-20 text-slate-400 text-sm font-bold">No data found — try adjusting filters</div>
                 )}
               </div>
             </ScrollArea>
+
+            {/* Pagination Controls */}
+            {!isLoading && orderTimeline.length > pagination.pageSize && (
+              <div className="px-6 py-3 border-t bg-slate-50/50 flex items-center justify-between" style={{ borderColor: "oklch(0.90 0.025 245)" }}>
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  Showing <span className="text-slate-900 mx-1">{Math.min(orderTimeline.length, pagination.pageIndex * pagination.pageSize + 1)}</span>
+                  to <span className="text-slate-900 mx-1">{Math.min(orderTimeline.length, (pagination.pageIndex + 1) * pagination.pageSize)}</span>
+                  of <span className="text-slate-900 mx-1">{orderTimeline.length}</span> orders
+                </div>
+                <div className="flex items-center gap-1.5 font-black">
+                  <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                    onClick={() => summaryTable.previousPage()} disabled={!summaryTable.getCanPreviousPage()}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  {Array.from({ length: summaryTable.getPageCount() }).map((_, i) => {
+                    // Only show 5 pages around current
+                    if (Math.abs(i - pagination.pageIndex) > 2 && i !== 0 && i !== summaryTable.getPageCount() - 1) return null
+                    if (Math.abs(i - pagination.pageIndex) === 3) return <span key={i} className="px-1 text-slate-400 opacity-50">...</span>
+                    return (
+                      <Button key={i} variant={pagination.pageIndex === i ? "default" : "outline"} size="icon"
+                        className="h-8 w-8 rounded-lg text-xs" style={pagination.pageIndex === i ? { background: "oklch(0.42 0.18 265)" } : {}}
+                        onClick={() => summaryTable.setPageIndex(i)}>
+                        {i + 1}
+                      </Button>
+                    )
+                  })}
+                  <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                    onClick={() => summaryTable.nextPage()} disabled={!summaryTable.getCanNextPage()}>
+                    <ChevronRightIcon className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Loading overlay */}
-        {loading && (
+        {/* Loading overlay for fetching more data */}
+        {isFetching && !isLoading && (
           <div className="flex items-center justify-center py-12 gap-3 text-slate-400">
             <div className="h-5 w-5 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
-            <span className="text-sm font-bold">Generating report…</span>
+            <span className="text-sm font-bold">Updating report…</span>
           </div>
         )}
       </div>

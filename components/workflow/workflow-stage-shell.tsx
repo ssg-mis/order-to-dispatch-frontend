@@ -20,6 +20,23 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { AsyncCombobox } from "@/components/ui/async-combobox"
+import { customerApi } from "@/lib/api-service"
+import { cn } from "@/lib/utils"
+import { Check, ChevronsUpDown } from "lucide-react"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 
 interface WorkflowStageShellProps {
   title: string
@@ -29,10 +46,14 @@ interface WorkflowStageShellProps {
   historyData: any[]
   historyContent?: React.ReactNode
   partyNames?: string[]
+  fetchPartyOptions?: (search: string, page: number) => Promise<{ options: any[]; hasMore: boolean }>
   onFilterChange?: (filters: { search: string; status: string; startDate: string; endDate: string; partyName: string }) => void
   remarksColName?: string
   showStatusFilter?: boolean
   stageLevel?: number
+  onTabChange?: (tab: "pending" | "history") => void
+  historyFooter?: React.ReactNode
+  isHistoryLoading?: boolean
 }
 
 const FIELD_GROUPS: Record<string, number> = {
@@ -104,6 +125,10 @@ export function WorkflowStageShell({
   remarksColName,
   showStatusFilter = false,
   stageLevel = 99,
+  onTabChange,
+  historyFooter,
+  isHistoryLoading = false,
+  fetchPartyOptions,
 }: WorkflowStageShellProps) {
   const [filters, setFilters] = React.useState({
     search: "",
@@ -115,6 +140,7 @@ export function WorkflowStageShell({
 
   const [selectedHistoryItem, setSelectedHistoryItem] = React.useState<any>(null)
   const [historySearch, setHistorySearch] = React.useState("")
+  const [partySearchOpen, setPartySearchOpen] = React.useState(false)
 
   const updateFilter = (key: keyof typeof filters, value: string) => {
     const newFilters = { ...filters, [key]: value }
@@ -161,7 +187,11 @@ export function WorkflowStageShell({
           </Badge>
         </div>
 
-        <Tabs defaultValue="pending" className="w-full">
+        <Tabs 
+          defaultValue="pending" 
+          className="w-full"
+          onValueChange={(val) => onTabChange?.(val as "pending" | "history")}
+        >
           <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-2 bg-muted/50 p-1 rounded-lg h-9">
             <TabsTrigger value="pending" className="rounded-md text-xs py-1">
               Pending Tasks
@@ -238,17 +268,90 @@ export function WorkflowStageShell({
               {/* Party Name Select */}
               <div className="space-y-1">
                 <Label className="text-xs font-medium text-muted-foreground">Party Name</Label>
-                <Select value={filters.partyName} onValueChange={(val) => updateFilter("partyName", val)}>
-                  <SelectTrigger className="w-full h-8 bg-background px-3 text-sm">
-                    <SelectValue placeholder="Select Party Name" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Parties</SelectItem>
-                    {partyNames.map((name, i) => (
-                      <SelectItem key={i} value={name}>{name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {partyNames && partyNames.length > 0 ? (
+                  <Popover open={partySearchOpen} onOpenChange={setPartySearchOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={partySearchOpen}
+                        className="w-full h-8 justify-between bg-background px-3 text-xs font-medium border-slate-200"
+                      >
+                        <span className="truncate">
+                          {filters.partyName === "all" || !filters.partyName 
+                            ? "All Parties" 
+                            : filters.partyName}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search parties..." />
+                        <CommandList>
+                          <CommandEmpty>No party found.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              value="all"
+                              onSelect={() => {
+                                updateFilter("partyName", "all")
+                                setPartySearchOpen(false)
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  filters.partyName === "all" ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              All Parties
+                            </CommandItem>
+                            {partyNames.map((name) => (
+                              <CommandItem
+                                key={name}
+                                value={name}
+                                onSelect={(currentValue) => {
+                                  updateFilter("partyName", currentValue === filters.partyName ? "" : currentValue)
+                                  setPartySearchOpen(false)
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    filters.partyName === name ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <AsyncCombobox
+                    placeholder="Select Party Name"
+                    searchPlaceholder="Search parties..."
+                    value={filters.partyName}
+                    onValueChange={(val) => updateFilter("partyName", val)}
+                    onSelectOption={(opt: any) => {
+                      // Optional: handle specific selection if needed
+                    }}
+                    fetchOptions={fetchPartyOptions || (async (search: string, page: number) => {
+                      const res = await customerApi.getAll({ search, page, limit: 20 });
+                      const list = res.data.customers || [];
+                      return {
+                        options: [
+                          { value: "all", label: "All Parties" },
+                          ...list.map((c: any) => ({ value: c.customer_name, label: c.customer_name }))
+                        ],
+                        hasMore: (list.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
+                      };
+                    })}
+                    className="w-full h-8 bg-background text-xs font-medium"
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -262,8 +365,8 @@ export function WorkflowStageShell({
               <div className="mt-4">{historyContent}</div>
             ) : (
               <Card className="border-none shadow-sm overflow-hidden">
-                {historyData && historyData.length > 0 ? (
-                  <div className="overflow-x-auto">
+                {isHistoryLoading ? (
+                  <div className="p-0 border-none shadow-none">
                     <table className="w-full text-sm table-fixed">
                       <thead className="bg-muted/30 border-b text-[10px] uppercase font-black text-slate-500 tracking-wider">
                         <tr>
@@ -271,47 +374,75 @@ export function WorkflowStageShell({
                           <th className="px-4 py-3 text-left w-[18%]">Order No.</th>
                           <th className="px-4 py-3 text-left w-[18%]">Party Name</th>
                           <th className="px-4 py-3 text-left text-center w-[12%]">Status</th>
-                          <th className="px-4 py-3 text-left w-[25%]">{remarksColName || "Remarks"}</th>
+                          <th className="px-4 py-3 text-left w-[25%]">Remarks</th>
                           <th className="px-4 py-3 text-center w-[15%]">Action</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {historyData.map((item, i) => (
-                          <tr key={i} className="border-b hover:bg-muted/20 transition-colors">
-                            <td className="px-4 py-3 text-xs">{item.date || "-"}</td>
-                            <td className="px-4 py-3 font-bold text-blue-700 text-xs">{item.orderNo || "-"}</td>
-                            <td className="px-4 py-3 text-xs font-semibold capitalize">{item.customerName || "-"}</td>
-                            <td className="px-4 py-3 text-center">
-                              <span
-                                className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tight ${item.status === "Approved" || item.status === "Completed" || item.status === "Verified"
-                                    ? "bg-green-100 text-green-700 border border-green-200"
-                                    : item.status === "Rejected"
-                                      ? "bg-red-100 text-red-700 border border-red-200"
-                                      : "bg-slate-100 text-slate-700 border border-slate-200"
-                                  }`}
-                              >
-                                {item.status || "Completed"}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-[10px] text-muted-foreground font-medium italic">
-                              {item.remarks || "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 px-2 text-[10px] font-black bg-white hover:bg-blue-50 hover:text-blue-700 border-2 transition-all uppercase italic tracking-tighter"
-                                onClick={() => setSelectedHistoryItem(item.rawData || item)}
-                              >
-                                <Eye className="mr-1 h-3 w-3" />
-                                View
-                              </Button>
-                            </td>
+                        {[...Array(5)].map((_, i) => (
+                          <tr key={i} className="border-b transition-colors opacity-60">
+                            <td className="px-4 py-4"><div className="h-3 w-16 bg-slate-200 animate-pulse rounded-full" /></td>
+                            <td className="px-4 py-4"><div className="h-3 w-24 bg-blue-100 animate-pulse rounded-full" /></td>
+                            <td className="px-4 py-4"><div className="h-3 w-32 bg-slate-200 animate-pulse rounded-full" /></td>
+                            <td className="px-4 py-4 flex justify-center"><div className="h-4 w-16 bg-slate-200 animate-pulse rounded-full" /></td>
+                            <td className="px-4 py-4"><div className="h-3 w-full bg-slate-100 animate-pulse rounded-full" /></td>
+                            <td className="px-4 py-4 flex justify-center"><div className="h-7 w-12 bg-slate-200 animate-pulse rounded-full" /></td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+                ) : historyData && historyData.length > 0 ? (
+                    <div className="overflow-x-auto max-h-[600px] overflow-y-auto relative">
+                      <table className="w-full text-sm table-fixed">
+                        <thead className="bg-muted/30 border-b text-[10px] uppercase font-black text-slate-500 tracking-wider sticky top-0 z-10 shadow-sm">
+                          <tr>
+                            <th className="px-4 py-3 text-left w-[12%]">Date</th>
+                            <th className="px-4 py-3 text-left w-[18%]">Order No.</th>
+                            <th className="px-4 py-3 text-left w-[18%]">Party Name</th>
+                            <th className="px-4 py-3 text-left text-center w-[12%]">Status</th>
+                            <th className="px-4 py-3 text-left w-[25%]">{remarksColName || "Remarks"}</th>
+                            <th className="px-4 py-3 text-center w-[15%]">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {historyData.map((item, i) => (
+                            <tr key={i} className="border-b hover:bg-muted/20 transition-colors">
+                              <td className="px-4 py-3 text-xs">{item.date || "-"}</td>
+                              <td className="px-4 py-3 font-bold text-blue-700 text-xs">{item.orderNo || "-"}</td>
+                              <td className="px-4 py-3 text-xs font-semibold capitalize">{item.customerName || "-"}</td>
+                              <td className="px-4 py-3 text-center">
+                                <span
+                                  className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tight ${item.status === "Approved" || item.status === "Completed" || item.status === "Verified"
+                                      ? "bg-green-100 text-green-700 border border-green-200"
+                                      : item.status === "Rejected"
+                                        ? "bg-red-100 text-red-700 border border-red-200"
+                                        : "bg-slate-100 text-slate-700 border border-slate-200"
+                                    }`}
+                                >
+                                  {item.status || "Completed"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-[10px] text-muted-foreground font-medium italic">
+                                {item.remarks || "-"}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 px-2 text-[10px] font-black bg-white hover:bg-blue-50 hover:text-blue-700 border-2 transition-all uppercase italic tracking-tighter"
+                                  onClick={() => setSelectedHistoryItem(item.rawData || item)}
+                                >
+                                  <Eye className="mr-1 h-3 w-3" />
+                                  View
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {historyFooter}
+                    </div>
                 ) : (
                   <div className="p-8 text-center text-muted-foreground">No history records found.</div>
                 )}

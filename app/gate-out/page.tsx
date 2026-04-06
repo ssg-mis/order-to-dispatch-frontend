@@ -24,13 +24,25 @@ import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { gateOutApi, orderApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { useInView } from "react-intersection-observer"
+import { Loader2 } from "lucide-react"
 
 export default function GateOutPage() {
   const router = useRouter()
   const { toast } = useToast()
   const { isReadOnly, user } = useAuth()
-  const [pendingOrders, setPendingOrders] = useState<any[]>([])
-  const [historyOrders, setHistoryOrders] = useState<any[]>([])
+  const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
+  const { ref: pendingEndRef, inView: pendingInView } = useInView()
+  const { ref: historyEndRef, inView: historyInView } = useInView()
+
+  const [filterValues, setFilterValues] = useState({
+    status: "",
+    startDate: "",
+    endDate: "",
+    partyName: "",
+    search: ""
+  })
   const [isProcessing, setIsProcessing] = useState(false)
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "—";
@@ -71,29 +83,78 @@ export default function GateOutPage() {
     vehicleLoadedImageName: "",
   })
 
-  // Fetch Pending
-  const fetchPending = async () => {
-    try {
-      const response = await gateOutApi.getPending({ limit: 1000 });
-      if (response.success && response.data.orders) {
-        setPendingOrders(response.data.orders);
-      }
-    } catch (error) {
-      console.error("Failed to fetch pending gate out:", error);
-    }
-  }
+  // Pending query with infinite pagination
+  const {
+    data: pendingData,
+    fetchNextPage: fetchNextPending,
+    hasNextPage: hasNextPending,
+    isFetchingNextPage: isFetchingNextPending,
+    isLoading: isPendingLoading,
+    refetch: refetchPending,
+  } = useInfiniteQuery({
+    queryKey: ["gate-out-pending", filterValues],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await gateOutApi.getPending({
+        page: pageParam,
+        limit: 20,
+        so_no: filterValues.search,
+        party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
+      });
+      return response.success ? response.data : { orders: [], pagination: { total: 0 } };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.orders?.length || 0), 0);
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
+    },
+  });
 
-  // Fetch History
-  const fetchHistory = async () => {
-    try {
-      const response = await gateOutApi.getHistory({ limit: 1000 });
-      if (response.success && response.data.orders) {
-        setHistoryOrders(response.data.orders);
-      }
-    } catch (error) {
-      console.error("Failed to fetch history:", error);
+  // History query with infinite pagination (lazy loaded)
+  const {
+    data: historyData,
+    fetchNextPage: fetchNextHistory,
+    hasNextPage: hasNextHistory,
+    isFetchingNextPage: isFetchingNextHistory,
+    isLoading: isHistoryLoading,
+    refetch: refetchHistory,
+  } = useInfiniteQuery({
+    queryKey: ["gate-out-history", filterValues],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await gateOutApi.getHistory({
+        page: pageParam,
+        limit: 20,
+        so_no: filterValues.search,
+        party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
+      });
+      return response.success ? response.data : { orders: [], pagination: { total: 0 } };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.orders?.length || 0), 0);
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
+    },
+    enabled: activeTab === "history",
+  });
+
+  const pendingOrders = useMemo(() => {
+    return pendingData?.pages.flatMap((page) => page.orders) || [];
+  }, [pendingData]);
+
+  const historyOrders = useMemo(() => {
+    return historyData?.pages.flatMap((page) => page.orders) || [];
+  }, [historyData]);
+
+  useEffect(() => {
+    if (pendingInView && hasNextPending) {
+      fetchNextPending();
     }
-  }
+  }, [pendingInView, hasNextPending, fetchNextPending]);
+
+  useEffect(() => {
+    if (historyInView && hasNextHistory) {
+      fetchNextHistory();
+    }
+  }, [historyInView, hasNextHistory, fetchNextHistory]);
 
   const handleFileUpload = async (file: File, type: 'gatePass' | 'vehicleImage') => {
     if (!file) return;
@@ -132,18 +193,8 @@ export default function GateOutPage() {
     }
   };
 
-  useEffect(() => {
-    fetchPending();
-    fetchHistory();
-  }, [])
 
   /* Filter Logic */
-  const [filterValues, setFilterValues] = useState({
-    status: "",
-    startDate: "",
-    endDate: "",
-    partyName: ""
-  })
 
   const filteredPendingOrders = pendingOrders.filter(order => {
     let matches = true
@@ -388,8 +439,8 @@ export default function GateOutPage() {
           description: `Successfully processed ${successfulSubmissions.length} items.`,
         })
 
-        await fetchPending();
-        await fetchHistory();
+        await refetchPending();
+        await refetchHistory();
 
         setIsDialogOpen(false)
         setSelectedItems([])
@@ -415,10 +466,13 @@ export default function GateOutPage() {
     }
   }
 
+
+
   const customerNames = Array.from(new Set(pendingOrders.map(order => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName || "Unknown Customer"))))
 
   return (
     <WorkflowStageShell
+      partyNames={customerNames}
       title="Stage 11: Gate Out"
       description="Record gate out details and upload gate pass grouped by Customer."
       pendingCount={displayRows.length}
@@ -432,10 +486,26 @@ export default function GateOutPage() {
         remarks: order.gate_pass_copy ? "Pass Uploaded" : "-",
         rawData: order,
       }))}
-      partyNames={customerNames}
       onFilterChange={setFilterValues}
-      remarksColName="Evidence"
+      showStatusFilter={true}
       stageLevel={8}
+      onTabChange={setActiveTab}
+      isHistoryLoading={isHistoryLoading}
+      historyFooter={
+        <div ref={historyEndRef} className="py-4 flex justify-center">
+          {isFetchingNextHistory && (
+            <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-xs tracking-widest ">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>LOADING MORE GATE OUT HISTORY...</span>
+            </div>
+          )}
+          {!hasNextHistory && historyOrders.length > 0 && (
+            <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest bg-slate-50 px-4 py-1.5 rounded-full border border-slate-100 italic">
+              END OF HISTORY
+            </span>
+          )}
+        </div>
+      }
     >
       <div className="space-y-4">
         {/* Action Bar */}
@@ -495,7 +565,22 @@ export default function GateOutPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayRows.length > 0 ? (
+              {isPendingLoading && pendingOrders.length === 0 ? (
+                [...Array(5)].map((_, i) => (
+                  <TableRow key={i} className="opacity-40 border-b border-slate-50">
+                    <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
+                    <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center py-4"><div className="h-3 w-40 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center py-4"><div className="h-3 w-16 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    {visibleColumns.includes("invoiceNo") && <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>}
+                    <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center py-4"><div className="h-3 w-32 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center py-4"><div className="h-5 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                  </TableRow>
+                ))
+              ) : displayRows.length > 0 ? (
                 displayRows.map((group) => (
                   <TableRow key={group._rowKey} className={selectedItems.includes(group._rowKey) ? "bg-blue-50/50" : ""}>
                     <TableCell className="text-center">
@@ -522,13 +607,21 @@ export default function GateOutPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     No orders pending for gate out
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
+          <div ref={pendingEndRef} className="py-2 flex justify-center">
+            {isFetchingNextPending && (
+              <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-[10px]">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>LOADING MORE...</span>
+              </div>
+            )}
+          </div>
         </Card>
       </div>
 

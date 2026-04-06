@@ -12,6 +12,7 @@ interface User {
   username: string
   role: string
   page_access: string[] | PageAccessMap | null
+  depo_access: Record<string, string[]> | null
 }
 
 // URL path → page name mapping (matches PAGE_ACCESS_OPTIONS in settings)

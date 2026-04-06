@@ -16,8 +16,8 @@ import { Save, FileUp, Plus, Trash2, CalendarIcon } from "lucide-react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
-import { customerApi, depotApi, skuApi, brokerApi, orderApi, salespersonApi } from "@/lib/api-service"
-import { Combobox } from "@/components/ui/combobox"
+import { customerApi, depotApi, skuDetailsApi, brokerApi, orderApi, salespersonApi } from "@/lib/api-service"
+import { AsyncCombobox } from "@/components/ui/async-combobox"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import {
@@ -80,7 +80,9 @@ export default function OrderPunchPage() {
       setIsLoadingCustomers(true)
       const response = await customerApi.getAll()
       if (response.success) {
-        setCustomers(response.data)
+        // Correctly extract customers array from paginated response
+        const customerData = response.data.customers || (Array.isArray(response.data) ? response.data : [])
+        setCustomers(customerData)
       }
     } catch (error) {
       console.error("Failed to fetch customers:", error)
@@ -100,7 +102,9 @@ export default function OrderPunchPage() {
       setIsLoadingDepots(true)
       const response = await depotApi.getAll()
       if (response.success) {
-        setDepots(response.data)
+        // Correctly extract depots array from paginated response
+        const depotData = response.data.depots || (Array.isArray(response.data) ? response.data : [])
+        setDepots(depotData)
       }
     } catch (error) {
       console.error("Failed to fetch depots:", error)
@@ -118,9 +122,11 @@ export default function OrderPunchPage() {
   const fetchSkus = async () => {
     try {
       setIsLoadingSkus(true)
-      const response = await skuApi.getAll()
+      const response = await skuDetailsApi.getAll()
       if (response.success) {
-        setSkus(response.data)
+        // Correctly extract skuDetails array from paginated response
+        const skuData = response.data.skuDetails || (Array.isArray(response.data) ? response.data : [])
+        setSkus(skuData)
       }
     } catch (error) {
       console.error("Failed to fetch SKUs:", error)
@@ -140,7 +146,9 @@ export default function OrderPunchPage() {
       setIsLoadingBrokers(true)
       const response = await brokerApi.getAll()
       if (response.success) {
-        setBrokers(response.data)
+        // Correctly extract brokers array from paginated response
+        const brokerData = response.data.brokers || (Array.isArray(response.data) ? response.data : [])
+        setBrokers(brokerData)
       }
     } catch (error) {
       console.error("Failed to fetch brokers:", error)
@@ -160,7 +168,9 @@ export default function OrderPunchPage() {
       setIsLoadingSalespersons(true)
       const response = await salespersonApi.getAll()
       if (response.success) {
-        setSalespersons(response.data)
+        // Correctly extract salespersons array from paginated response
+        const salespersonData = response.data.salespersons || (Array.isArray(response.data) ? response.data : [])
+        setSalespersons(salespersonData)
       }
     } catch (error) {
       console.error("Failed to fetch salespersons:", error)
@@ -191,7 +201,8 @@ export default function OrderPunchPage() {
   const [customerAddress, setCustomerAddress] = useState<string>("")
   const [deliveryAddress, setDeliveryAddress] = useState<string>("")
   const [sameAsCustomerAddress, setSameAsCustomerAddress] = useState<boolean>(true)
-  
+  const [orderCategory, setOrderCategory] = useState<string>("Sales")
+
   // Pre-Approval Products State
   const [preApprovalProducts, setPreApprovalProducts] = useState<PreApprovalProduct[]>([])
 
@@ -201,7 +212,7 @@ export default function OrderPunchPage() {
     ratePer15Kg: "",
     ratePerLtr: ""
   })
-  
+
   const [brokerName, setBrokerName] = useState<string>("Ashish Motwani")
   const [deliveryDate, setDeliveryDate] = useState<string>("")
   const [deliveryDateError, setDeliveryDateError] = useState<string>("")
@@ -237,11 +248,11 @@ export default function OrderPunchPage() {
     if (customerType === "existing" && customerName) {
       // Find customer in the fetched list
       const selectedCustomer = customers.find(c => c.customer_name === customerName)
-      
+
       if (selectedCustomer) {
         setContactPerson(selectedCustomer.contact_person || "")
         setWhatsappNo(selectedCustomer.contact || "") // Using 'contact' field for WhatsApp
-        
+
         // Construct full address
         const parts = [
           selectedCustomer.address_line_1,
@@ -249,7 +260,7 @@ export default function OrderPunchPage() {
           selectedCustomer.state,
           selectedCustomer.pincode
         ].filter(Boolean)
-        
+
         setCustomerAddress(parts.join(", "))
       }
     }
@@ -296,7 +307,7 @@ export default function OrderPunchPage() {
       const delivery = new Date(deliveryDate)
       const start = new Date(startDate)
       const end = new Date(endDate)
-      
+
       if (delivery < start || delivery > end) {
         setDeliveryDateError(`You selected a date not between the start and end date (${startDate} to ${endDate})`)
       } else {
@@ -314,26 +325,33 @@ export default function OrderPunchPage() {
     }
   }, [sameAsCustomerAddress, customerAddress])
 
+  // Handle Order Category Change Logic
+  useEffect(() => {
+    if (orderCategory === "Stock Transfer") {
+      setIsBrokerOrder("Direct")
+    }
+  }, [orderCategory])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     // Validate based on Order Type
     if (orderType === "regular" || orderType === "pre-approval") {
       // For regular and pre-approval, validate products
-      const invalidProduct = products.find((p) => 
-        !p.productName || 
-        !p.orderQty || parseFloat(p.orderQty) <= 0 || 
-        !p.rate || parseFloat(p.rate) <= 0
+      const invalidProduct = products.find((p) =>
+        !p.productName ||
+        !p.orderQty || parseFloat(p.orderQty) <= 0 ||
+        (orderCategory !== "Stock Transfer" && (!p.rate || parseFloat(p.rate) <= 0))
       )
 
       if (depoName && invalidProduct) {
         let errorDesc = "Please fill in product details for all rows."
         if (!invalidProduct.productName) {
-           errorDesc = "Please select a product for all rows."
+          errorDesc = "Please select a product for all rows."
         } else if (!invalidProduct.orderQty || parseFloat(invalidProduct.orderQty) <= 0) {
-           errorDesc = `Order Quantity is mandatory and must be greater than 0 for ${invalidProduct.productName || 'the selected product'}.`
+          errorDesc = `Order Quantity is mandatory and must be greater than 0 for ${invalidProduct.productName || 'the selected product'}.`
         } else if (!invalidProduct.rate || parseFloat(invalidProduct.rate) <= 0) {
-           errorDesc = `Rate is mandatory and must be greater than 0 for ${invalidProduct.productName || 'the selected product'}.`
+          errorDesc = `Rate is mandatory and must be greater than 0 for ${invalidProduct.productName || 'the selected product'}.`
         }
 
         toast({
@@ -355,7 +373,7 @@ export default function OrderPunchPage() {
         })
         return
       }
-      
+
       if (orderPurpose === "week-on-week" && !deliveryDate) {
         toast({
           title: "Validation Error",
@@ -364,7 +382,7 @@ export default function OrderPunchPage() {
         })
         return
       }
-      
+
       if (orderPurpose === "future-period" && !futurePeriodDate) {
         toast({
           title: "Validation Error",
@@ -388,7 +406,7 @@ export default function OrderPunchPage() {
 
     try {
       let uploadedSoUrl = null
-      
+
       // Upload SO Copy if selected
       if (soFile) {
         try {
@@ -408,7 +426,7 @@ export default function OrderPunchPage() {
 
       // Prepare data for backend API
       const customerNameValue = customerName
-      
+
       // Prepare common order data
       const orderData: any = {
         customer_name: customerNameValue,
@@ -434,6 +452,7 @@ export default function OrderPunchPage() {
         futureperioddate: futurePeriodDate || null, // Add future period date
         upload_so: uploadedSoUrl, // Add uploaded SO copy URL
         username: user?.username || null, // Add username for tracking
+        order_category: orderCategory,
       }
 
       // Add products array for backend (for regular and pre-approval order types)
@@ -447,7 +466,7 @@ export default function OrderPunchPage() {
           if (orderType === "pre-approval") {
             const productNameLower = (p.productName || "").toLowerCase()
             let matchedRate = null
-            
+
             // Robust auto-detection of oil type from product name
             if (productNameLower.includes("palm") || productNameLower.includes("p.o.") || productNameLower.includes(" po ")) {
               oilTypeVal = "Palm Oil"
@@ -512,50 +531,51 @@ export default function OrderPunchPage() {
           orderPunchRemarks,
           advanceAmount,
           products: products.map(p => ({
-             ...p,
-             uom: p.uom || "Ltr",
-             altUom: p.altUom || "Kg"
+            ...p,
+            uom: p.uom || "Ltr",
+            altUom: p.altUom || "Kg"
           })),
           preApprovalProducts,
+          orderCategory,
           stage: orderType === "regular" ? "Approval Of Order" : "Pre-Approval",
           status: "Pending" as const,
           timestamp: new Date().toISOString()
         }
 
         // saveWorkflowHistory(orderEntry) - Removed as per user request to disable localStorage history
-        
+
         // Keep legacy keys for compatibility with current workflow stages
         localStorage.setItem("orderData", JSON.stringify(orderEntry))
         if (orderType === "regular") {
-            localStorage.setItem("commitmentReviewData", JSON.stringify({ orderData: orderEntry }))
+          localStorage.setItem("commitmentReviewData", JSON.stringify({ orderData: orderEntry }))
         }
 
         // Show success message with prominently displayed order number
         toast({
-            title: "✅ Order Created Successfully!",
-            description: `Order Number: ${backendOrderNo.replace(/[A-Z]$/i, '')}`,
-            duration: 5000,
+          title: "✅ Order Created Successfully!",
+          description: `Order Number: ${backendOrderNo.replace(/[A-Z]$/i, '')}`,
+          duration: 5000,
         })
-        
+
         // Show additional alert for emphasis
         alert(`Order created successfully!\n\nOrder Number: ${backendOrderNo.replace(/[A-Z]$/i, '')}\n\nThis order has been saved to the database.`)
-        
+
         resetForm()
-        
+
         setTimeout(() => {
-            router.push(orderType === "regular" ? "/approval-of-order" : "/pre-approval")
+          router.push(orderType === "regular" ? "/approval-of-order" : "/pre-approval")
         }, 1500)
       }
 
     } catch (error: any) {
       console.error('Error submitting order:', error)
-      
+
       let errorMessage = error.message || "Failed to save order to database. Please try again."
-      
+
       if (errorMessage.includes("too long for type character varying")) {
         errorMessage = "One or more fields exceed maximum length. Check: WhatsApp number (max 20 chars), Payment Terms, Transport Type."
       }
-      
+
       toast({
         title: "Error Saving Order",
         description: errorMessage,
@@ -580,7 +600,7 @@ export default function OrderPunchPage() {
   }
 
   const updateProduct = (id: string, field: keyof ProductItem, value: string) => {
-    setProducts((prevProducts) => 
+    setProducts((prevProducts) =>
       prevProducts.map((p) => {
         if (p.id !== id) return p;
         return { ...p, [field]: value };
@@ -591,9 +611,9 @@ export default function OrderPunchPage() {
   // Handle product selection and auto-fill UOM fields
   const handleProductSelect = (productId: string, skuName: string) => {
     const selectedSku = skus.find((sku) => sku.sku_name === skuName)
-    
+
     if (selectedSku) {
-      setProducts((prevProducts) => 
+      setProducts((prevProducts) =>
         prevProducts.map((p) => {
           if (p.id !== productId) return p;
           return {
@@ -643,14 +663,14 @@ export default function OrderPunchPage() {
 
     setPreApprovalProducts([
       ...preApprovalProducts,
-      { 
-        id: Math.random().toString(36).substr(2, 9), 
-        oilType: currentPreApproval.oilType, 
-        ratePer15Kg: currentPreApproval.ratePer15Kg, 
-        ratePerLtr: currentPreApproval.ratePerLtr, 
+      {
+        id: Math.random().toString(36).substr(2, 9),
+        oilType: currentPreApproval.oilType,
+        ratePer15Kg: currentPreApproval.ratePer15Kg,
+        ratePerLtr: currentPreApproval.ratePerLtr,
       },
     ])
-    
+
     // Reset current input
     setCurrentPreApproval({
       ...currentPreApproval,
@@ -666,7 +686,7 @@ export default function OrderPunchPage() {
   }
 
   const updatePreApprovalProduct = (id: string, field: keyof PreApprovalProduct, value: string) => {
-    setPreApprovalProducts((prevProducts) => 
+    setPreApprovalProducts((prevProducts) =>
       prevProducts.map((p) => {
         if (p.id !== id) return p;
         return { ...p, [field]: value };
@@ -676,6 +696,7 @@ export default function OrderPunchPage() {
 
   const resetForm = () => {
     setCustomerType("existing")
+    setOrderCategory("Sales")
     setDepoName("Banari")
     setIsBrokerOrder("Broker")
     setOrderPurpose("week-on-week")
@@ -735,6 +756,19 @@ export default function OrderPunchPage() {
               <div className="space-y-2">
                 <Label htmlFor="soDate">DO Date</Label>
                 <Input id="soDate" type="date" value={soDate} onChange={(e) => setSoDate(e.target.value)} />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="orderCategory">ORDER CATEGORY</Label>
+                <Select value={orderCategory} onValueChange={setOrderCategory}>
+                  <SelectTrigger id="orderCategory">
+                    <SelectValue placeholder="Select Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Sales">Sales</SelectItem>
+                    <SelectItem value="Stock Transfer">Stock Transfer</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -884,7 +918,7 @@ export default function OrderPunchPage() {
                       </p>
                     </div>
                   )}
-                  <div className="hidden md:block"></div> 
+                  <div className="hidden md:block"></div>
                 </>
               )}
 
@@ -914,19 +948,27 @@ export default function OrderPunchPage() {
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="customerName">Customer Name</Label>
                 {customerType === "existing" ? (
-                  <Combobox
-                    options={customers
-                      .filter(c => c && c.customer_name) // Filter invalid customers
-                      .map((customer) => ({
-                        value: customer.customer_name,
-                        label: customer.customer_name
-                      }))}
+                  <AsyncCombobox
+                    placeholder={isLoadingCustomers ? "Loading..." : "Select existing customer"}
+                    searchPlaceholder="Search customers..."
                     value={customerName}
                     onValueChange={setCustomerName}
-                    placeholder={isLoadingCustomers ? "Loading customers..." : "Select existing customer"}
-                    searchPlaceholder="Search customers..."
-                    emptyText="No customer found."
-                    disabled={isLoadingCustomers}
+                    onSelectOption={(opt: any) => {
+                      if (opt.original) {
+                        setCustomers(prev => {
+                          const exists = prev.find(c => c.id === opt.original.id);
+                          return exists ? prev : [...prev, opt.original];
+                        });
+                      }
+                    }}
+                    fetchOptions={async (search: string, page: number) => {
+                      const res = await customerApi.getAll({ search, page, limit: 20 });
+                      const list = res.data.customers || [];
+                      return {
+                        options: list.map((c: any) => ({ value: c.customer_name, label: c.customer_name, original: c })),
+                        hasMore: (list.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
+                      };
+                    }}
                   />
                 ) : (
                   <Input
@@ -979,14 +1021,14 @@ export default function OrderPunchPage() {
 
               <div className="space-y-2 md:col-span-2">
                 <div className="flex items-center space-x-2 mb-2">
-                   <Checkbox 
-                      id="sameAsCustomer" 
-                      checked={sameAsCustomerAddress}
-                      onCheckedChange={(checked) => setSameAsCustomerAddress(checked as boolean)}
-                   />
-                   <Label htmlFor="sameAsCustomer" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                      Same as Customer Address
-                   </Label>
+                  <Checkbox
+                    id="sameAsCustomer"
+                    checked={sameAsCustomerAddress}
+                    onCheckedChange={(checked) => setSameAsCustomerAddress(checked as boolean)}
+                  />
+                  <Label htmlFor="sameAsCustomer" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Same as Customer Address
+                  </Label>
                 </div>
                 <Label htmlFor="deliveryAddress">Delivery Address</Label>
                 <Input
@@ -1001,20 +1043,29 @@ export default function OrderPunchPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="depoName">Depo Name</Label>
-                <Select value={depoName} onValueChange={setDepoName} disabled={isLoadingDepots}>
-                  <SelectTrigger id="depoName">
-                    <SelectValue placeholder={isLoadingDepots ? "Loading depots..." : "Select Depo"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {depots
-                      .filter(d => d && d.depot_id && d.depot_name) // Filter invalid depots
-                      .map((depot) => (
-                      <SelectItem key={depot.depot_id} value={depot.depot_name}>
-                        {depot.depot_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <AsyncCombobox
+                  placeholder="Select Depo"
+                  searchPlaceholder="Search depots..."
+                  value={depoName}
+                  onValueChange={setDepoName}
+                  onSelectOption={(opt: any) => {
+                    if (opt.original) {
+                      setDepots(prev => {
+                        const exists = prev.find(d => d.depot_id === opt.original.depot_id);
+                        return exists ? prev : [...prev, opt.original];
+                      });
+                    }
+                  }}
+                  fetchOptions={async (search: string, page: number) => {
+                    const res = await depotApi.getAll({ search, page, limit: 20 });
+                    const list = res.data.depots || [];
+                    return {
+                      options: list.map((d: any) => ({ value: d.depot_name, label: d.depot_name, original: d })),
+                      hasMore: (list.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
+                    };
+                  }}
+                  className="w-full"
+                />
               </div>
 
               <div className="space-y-2">
@@ -1056,8 +1107,8 @@ export default function OrderPunchPage() {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-white p-4 rounded-md shadow-sm border border-blue-100">
                     <div className="space-y-2">
                       <Label htmlFor="currentOilType">Oil Type</Label>
-                      <Select 
-                        value={currentPreApproval.oilType} 
+                      <Select
+                        value={currentPreApproval.oilType}
                         onValueChange={(val) => setCurrentPreApproval(prev => ({ ...prev, oilType: val }))}
                       >
                         <SelectTrigger id="currentOilType">
@@ -1092,8 +1143,8 @@ export default function OrderPunchPage() {
                         className="font-semibold text-blue-600"
                       />
                     </div>
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       onClick={addPreApprovalProduct}
                       disabled={isReadOnly}
                       className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
@@ -1149,79 +1200,93 @@ export default function OrderPunchPage() {
                   <div className="space-y-4">
                     {products.map((product, idx) => (
                       <div key={product.id} className="flex gap-4 items-end p-4 border rounded-lg bg-card shadow-sm relative pt-8">
-                         <div className="absolute top-2 left-4 text-[10px] font-bold text-blue-500/80 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest">
-                             Product {idx + 1}
-                         </div>
-                         <div className="grid grid-cols-2 gap-4 flex-1 md:grid-cols-11">
+                        <div className="absolute top-2 left-4 text-[10px] font-bold text-blue-500/80 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest">
+                          Product {idx + 1}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 flex-1 md:grid-cols-11">
                           <div className={`space-y-1.5 col-span-2 md:col-span-5`}>
-                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Name</Label>
-                             <Combobox
-                               options={skus
-                                 .filter(s => s && s.sku_name) // Filter invalid SKUs
-                                 .filter(s => {
-                                   // Dynamic Filter: Only show products matching the oil types in the Pre-Approval Rates list
-                                   if (orderType !== "pre-approval" || preApprovalProducts.length === 0) return true;
-                                   
-                                   const skuNameLower = s.sku_name.toLowerCase();
-                                   return preApprovalProducts.some(pap => {
-                                     const oilType = pap.oilType.toLowerCase();
-                                     if (oilType.includes("palm")) return skuNameLower.includes("palm") || skuNameLower.includes("p.o.");
-                                     if (oilType.includes("rice")) return skuNameLower.includes("rice") || skuNameLower.includes("r.o.") || skuNameLower.includes("rbo");
-                                     if (oilType.includes("soya")) return skuNameLower.includes("soya") || skuNameLower.includes("s.o.") || skuNameLower.includes("sbo");
-                                     return false;
-                                   });
-                                 })
-                                 .filter(s => !products.some(p => p.productName === s.sku_name && p.id !== product.id)) // Filter already selected products
-                                 .map((sku) => ({
-                                   value: sku.sku_name,
-                                   label: sku.sku_name
-                                 }))}
-                               value={product.productName}
-                               onValueChange={(val) => handleProductSelect(product.id, val)}
-                               placeholder={isLoadingSkus ? "Loading..." : "Select product"}
-                               searchPlaceholder="Search products..."
-                               emptyText="No product found."
-                               disabled={isLoadingSkus}
-                               className="h-10"
-                             />
+                            <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Name</Label>
+                            <AsyncCombobox
+                              placeholder={isLoadingSkus ? "Loading..." : "Select product"}
+                              searchPlaceholder="Search products..."
+                              value={product.productName}
+                              onValueChange={(val) => handleProductSelect(product.id, val)}
+                              onSelectOption={(opt: any) => {
+                                if (opt.original) {
+                                  setSkus(prev => {
+                                    const exists = prev.find(s => s.sku_id === opt.original.sku_id);
+                                    return exists ? prev : [...prev, opt.original];
+                                  });
+                                }
+                              }}
+                              fetchOptions={async (search: string, page: number) => {
+                                // Manual check for pre-approval filter
+                                const res = await skuDetailsApi.getAll({ search, page, limit: 20 });
+                                let list = res.data.skuDetails || [];
+                                
+                                // Local filter for pre-approval types if needed
+                                if (orderType === "pre-approval" && preApprovalProducts.length > 0) {
+                                  list = list.filter((s: any) => {
+                                    const skuNameLower = s.sku_name.toLowerCase();
+                                    return (Array.isArray(preApprovalProducts) ? preApprovalProducts : []).some(pap => {
+                                      const oilType = pap.oilType.toLowerCase();
+                                      if (oilType.includes("palm")) return skuNameLower.includes("palm") || skuNameLower.includes("p.o.");
+                                      if (oilType.includes("rice")) return skuNameLower.includes("rice") || skuNameLower.includes("r.o.") || skuNameLower.includes("rbo");
+                                      if (oilType.includes("soya")) return skuNameLower.includes("soya") || skuNameLower.includes("s.o.") || skuNameLower.includes("sbo");
+                                      return false;
+                                    });
+                                  });
+                                }
+
+                                return {
+                                  options: list.map((sku: any) => ({
+                                    value: sku.sku_name,
+                                    label: sku.sku_name,
+                                    original: sku
+                                  })),
+                                  hasMore: (list.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
+                                };
+                              }}
+                              className="h-10"
+                            />
                           </div>
 
                           <div className="space-y-1.5 col-span-1 md:col-span-2">
-                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">UOM</Label>
-                             <Input
-                               value={product.uom}
-                               onChange={(e) => updateProduct(product.id, "uom", e.target.value)}
-                               placeholder="UOM"
-                               className="h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 bg-muted"
-                               readOnly
-                             />
+                            <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">UOM</Label>
+                            <Input
+                              value={product.uom}
+                              onChange={(e) => updateProduct(product.id, "uom", e.target.value)}
+                              placeholder="UOM"
+                              className="h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400 bg-muted"
+                              readOnly
+                            />
                           </div>
 
                           <div className="space-y-1.5 col-span-1 md:col-span-2">
-                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Order Qty <span className="text-red-500">*</span></Label>
-                             <Input
-                               type="number"
-                               value={product.orderQty}
-                               onChange={(e) => updateProduct(product.id, "orderQty", e.target.value)}
-                               placeholder="0"
-                               className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
-                             />
+                            <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Order Qty <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="number"
+                              value={product.orderQty}
+                              onChange={(e) => updateProduct(product.id, "orderQty", e.target.value)}
+                              placeholder="0"
+                              className="bg-background h-10 border-slate-200 focus:border-blue-400 focus:ring-blue-400"
+                            />
                           </div>
-                      
+
                           {/* Rate field for both types, but auto-filled for Pre-Approval */}
                           <div className="space-y-1.5 col-span-2 md:col-span-2">
-                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate <span className="text-red-500">*</span></Label>
-                             <Input
-                               type="number"
-                               value={product.rate}
-                               onChange={(e) => updateProduct(product.id, "rate", e.target.value)}
-                               placeholder="0.00"
-                               className="bg-background h-11 min-w-[120px] border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600 text-base px-3"
-                             />
+                            <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Rate {orderCategory !== "Stock Transfer" && <span className="text-red-500">*</span>} {orderCategory === "Stock Transfer" && <span className="text-[10px] lowercase">(Optional)</span>}</Label>
+                            <Input
+                              type="number"
+                              value={product.rate}
+                              onChange={(e) => updateProduct(product.id, "rate", e.target.value)}
+                              placeholder="0.00"
+                              className="bg-background h-11 min-w-[120px] border-slate-200 focus:border-blue-400 focus:ring-blue-400 font-semibold text-blue-600 text-base px-3"
+                            />
                           </div>
 
 
-                          
+
                         </div>
 
                         <div className="flex-none mb-1 pt-6">
@@ -1272,18 +1337,27 @@ export default function OrderPunchPage() {
               {isBrokerOrder === "Broker" && (
                 <div className="space-y-2">
                   <Label htmlFor="brokerName">Broker Name (IF ORDER THROUGH BROKER)</Label>
-                  <Combobox
-                    options={brokers
-                      .filter(b => b && b.salesman_name) // Filter invalid brokers
-                      .map((broker) => ({
-                        value: broker.salesman_name,
-                        label: broker.salesman_name
-                      }))}
+                  <AsyncCombobox
+                    placeholder={isLoadingBrokers ? "Loading..." : "Select broker"}
+                    searchPlaceholder="Search brokers..."
                     value={brokerName}
                     onValueChange={setBrokerName}
-                    placeholder={isLoadingBrokers ? "Loading brokers..." : "Select broker"}
-                    searchPlaceholder="Search brokers..."
-                    emptyText="No broker found."
+                    onSelectOption={(opt: any) => {
+                      if (opt.original) {
+                        setBrokers(prev => {
+                          const exists = prev.find(b => b.id === opt.original.id);
+                          return exists ? prev : [...prev, opt.original];
+                        });
+                      }
+                    }}
+                    fetchOptions={async (search: string, page: number) => {
+                      const res = await brokerApi.getAll({ search, page, limit: 20 });
+                      const list = res.data.brokers || [];
+                      return {
+                        options: list.map((b: any) => ({ value: b.salesman_name, label: b.salesman_name, original: b })),
+                        hasMore: (list.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
+                      };
+                    }}
                     disabled={isLoadingBrokers}
                   />
                 </div>
@@ -1292,18 +1366,27 @@ export default function OrderPunchPage() {
               {isBrokerOrder === "Salesperson" && (
                 <div className="space-y-2">
                   <Label htmlFor="brokerName">Salesperson Name</Label>
-                  <Combobox
-                    options={salespersons
-                      .filter(s => s && s.salesman_name) // Filter invalid salespersons
-                      .map((salesperson) => ({
-                        value: salesperson.salesman_name,
-                        label: salesperson.salesman_name
-                      }))}
+                  <AsyncCombobox
+                    placeholder={isLoadingSalespersons ? "Loading..." : "Select salesperson"}
+                    searchPlaceholder="Search salespersons..."
                     value={brokerName}
                     onValueChange={setBrokerName}
-                    placeholder={isLoadingSalespersons ? "Loading salespersons..." : "Select salesperson"}
-                    searchPlaceholder="Search salespersons..."
-                    emptyText="No salesperson found."
+                    onSelectOption={(opt: any) => {
+                      if (opt.original) {
+                        setSalespersons(prev => {
+                          const exists = prev.find(s => s.id === opt.original.id);
+                          return exists ? prev : [...prev, opt.original];
+                        });
+                      }
+                    }}
+                    fetchOptions={async (search: string, page: number) => {
+                      const res = await salespersonApi.getAll({ search, page, limit: 20 });
+                      const list = res.data.salespersons || [];
+                      return {
+                        options: list.map((s: any) => ({ value: s.salesman_name, label: s.salesman_name, original: s })),
+                        hasMore: (list.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
+                      };
+                    }}
                     disabled={isLoadingSalespersons}
                   />
                 </div>
@@ -1355,9 +1438,9 @@ export default function OrderPunchPage() {
 
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="orderPunchRemarks">Remarks</Label>
-                <Textarea 
-                  id="orderPunchRemarks" 
-                  placeholder="Enter any additional remarks here..." 
+                <Textarea
+                  id="orderPunchRemarks"
+                  placeholder="Enter any additional remarks here..."
                   value={orderPunchRemarks}
                   onChange={(e) => setOrderPunchRemarks(e.target.value)}
                   className="min-h-25"

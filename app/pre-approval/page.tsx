@@ -31,7 +31,7 @@ import { Badge } from "@/components/ui/badge"
 import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus, Check, Search, Package, Calculator, Save, Calendar } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
-import { skuApi, preApprovalApi, skuSellingPriceApi, varCalcApi, orderApi } from "@/lib/api-service"
+import { skuApi, preApprovalApi, skuSellingPriceApi, varCalcApi, orderApi, skuDetailsApi, customerApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import {
@@ -41,8 +41,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { AsyncCombobox } from "@/components/ui/async-combobox"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { useInView } from "react-intersection-observer"
 
 
 
@@ -88,8 +91,7 @@ export default function PreApprovalPage() {
     "revertPlanningRemarks"
   ])
   const [isApproving, setIsApproving] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [pendingOrders, setPendingOrders] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(false)
   const [preApprovalData, setPreApprovalData] = useState<any>(null)
   const [latestVarCalc, setLatestVarCalc] = useState<any>(null)
   const [varCalcHistory, setVarCalcHistory] = useState<any[]>([])
@@ -101,7 +103,15 @@ export default function PreApprovalPage() {
   const [rateValidationErrors, setRateValidationErrors] = useState<{ [key: string]: string }>({})
   const [qtyInfoNotices, setQtyInfoNotices] = useState<{ [key: string]: string }>({})
 
-  const [history, setHistory] = useState<any[]>([])
+  const [filterValues, setFilterValues] = useState({
+    search: "",
+    status: "",
+    startDate: "",
+    endDate: "",
+    partyName: ""
+  })
+
+  const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
   const [dialogNewProducts, setDialogNewProducts] = useState<{ [key: string]: any[] }>({})
 
@@ -129,25 +139,25 @@ export default function PreApprovalPage() {
   const [catalogContext, setCatalogContext] = useState<{ orderNo: string, oilWiseRates: any } | null>(null)
 
   // Fetch SKUs
-  useEffect(() => {
-    const fetchSkus = async () => {
-      try {
-        const response = await skuApi.getAll()
-        if (response.success && Array.isArray(response.data)) {
-          // Map to just names or keep full objects if more info needed later
-          // Currently the UI seems to just list names in the command list
-          setSkuMaster(response.data.map((sku: any) => sku.sku_name))
-        }
-      } catch (error) {
-        console.error("Failed to fetch SKUs:", error)
-        toast({
-          title: "Warning",
-          description: "Failed to load SKU list. Please try refeshing.",
-          variant: "destructive",
-        })
+  const fetchSkus = async () => {
+    try {
+      const response = await skuDetailsApi.getAll()
+      if (response.success) {
+        // Extract array from paginated response
+        const skuData = response.data.skuDetails || (Array.isArray(response.data) ? response.data : [])
+        setSkuMaster(skuData.map((sku: any) => sku.sku_name))
       }
+    } catch (error) {
+      console.error("Failed to fetch SKUs:", error)
+      toast({
+        title: "Warning",
+        description: "Failed to load SKU list. Please try refeshing.",
+        variant: "destructive",
+      })
     }
+  }
 
+  useEffect(() => {
     fetchSkus()
   }, [])
 
@@ -514,60 +524,101 @@ export default function PreApprovalPage() {
     };
   };
 
-  // Fetch pending orders from backend
-  const fetchPendingOrders = async () => {
-    try {
-      setIsLoading(true);
-      const response = await preApprovalApi.getPending({ limit: 1000 });
-
-      if (response.success && response.data.orders) {
-        const mappedOrders = response.data.orders.map(mapBackendOrderToFrontend);
-        setPendingOrders(mappedOrders);
-      }
-    } catch (error: any) {
-      console.error("Failed to fetch pending orders:", error);
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to load pending orders from server",
-        variant: "destructive",
+  // Infinite Query for Pending Orders
+  const {
+    data: pendingData,
+    fetchNextPage: fetchNextPending,
+    hasNextPage: hasNextPending,
+    isFetchingNextPage: isFetchingNextPending,
+    isLoading: isPendingLoading,
+    refetch: refetchPending,
+  } = useInfiniteQuery({
+    queryKey: ["pendingOrders", filterValues],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await preApprovalApi.getPending({
+        page: pageParam,
+        limit: 20,
+        order_no: filterValues.search,
+        customer_name: filterValues.partyName !== "all" ? filterValues.partyName : undefined,
+        start_date: filterValues.startDate,
+        end_date: filterValues.endDate,
       });
-      setPendingOrders([]); // Clear on error - don't use cache
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return response.success ? response.data : { orders: [], pagination: { total: 0 } };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.orders?.length || 0), 0);
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
+    },
+  });
 
-  // Fetch history from backend
-  const fetchHistory = async () => {
-    try {
-      const response = await preApprovalApi.getHistory({ limit: 1000 });
+  const pendingOrders = useMemo(() => {
+    return pendingData?.pages.flatMap((page) => page.orders.map(mapBackendOrderToFrontend)) || [];
+  }, [pendingData]);
 
-      if (response.success && response.data.orders) {
-        const mappedHistory = response.data.orders.map((order: any) => ({
-          ...order,
-          rawData: order,
-          orderNo: order.order_no,
-          customerName: order.customer_name,
-          stage: "Pre-Approval",
-          status: "Completed" as const,
-          processedBy: "System",
-          timestamp: order.actual_1,
-          date: order.actual_1 ? new Date(order.actual_1).toLocaleDateString("en-GB") : "-",
-          remarks: order.remark || "-",
-        }));
-        setHistory(mappedHistory);
-      }
-    } catch (error: any) {
-      console.error("Failed to fetch history:", error);
-      setHistory([]); // Clear on error - don't use cache
-    }
-  };
+  // Infinite Query for History
+  const {
+    data: historyData,
+    fetchNextPage: fetchNextHistory,
+    hasNextPage: hasNextHistory,
+    isFetchingNextPage: isFetchingNextHistory,
+    isLoading: isHistoryLoading,
+    refetch: refetchHistory,
+  } = useInfiniteQuery({
+    queryKey: ["approvalHistory", filterValues],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await preApprovalApi.getHistory({
+        page: pageParam,
+        limit: 20,
+        order_no: filterValues.search,
+        customer_name: filterValues.partyName !== "all" ? filterValues.partyName : undefined,
+        start_date: filterValues.startDate,
+        end_date: filterValues.endDate,
+      });
+      return response.success ? response.data : { orders: [], pagination: { total: 0 } };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.orders?.length || 0), 0);
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
+    },
+    enabled: activeTab === "history",
+  });
+
+  const history = useMemo(() => {
+    return historyData?.pages.flatMap((page) => 
+      page.orders.map((order: any) => ({
+        ...order,
+        rawData: order,
+        orderNo: order.order_no,
+        customerName: order.customer_name,
+        stage: "Pre-Approval",
+        status: "Completed" as const,
+        processedBy: "System",
+        timestamp: order.actual_1,
+        date: order.actual_1 ? new Date(order.actual_1).toLocaleDateString("en-GB") : "-",
+        remarks: order.remark || "-",
+      }))
+    ) || [];
+  }, [historyData]);
+
+  const { ref: pendingEndRef, inView: pendingEndInView } = useInView();
+  const { ref: historyEndRef, inView: historyEndInView } = useInView();
 
   useEffect(() => {
-    // Fetch data from backend
-    fetchPendingOrders();
-    fetchHistory();
+    if (pendingEndInView && hasNextPending && !isFetchingNextPending) {
+      fetchNextPending();
+    }
+  }, [pendingEndInView, hasNextPending, isFetchingNextPending, fetchNextPending]);
 
+  useEffect(() => {
+    if (historyEndInView && hasNextHistory && !isFetchingNextHistory) {
+      fetchNextHistory();
+    }
+  }, [historyEndInView, hasNextHistory, isFetchingNextHistory, fetchNextHistory]);
+
+  useEffect(() => {
+    // Initial fetch - Latest Var Calc
     const fetchLatestVarCalc = async () => {
       try {
         const response = await varCalcApi.getLatest();
@@ -704,8 +755,8 @@ export default function PreApprovalPage() {
         })
 
         // Refresh data from backend
-        await fetchPendingOrders()
-        await fetchHistory()
+        await refetchPending()
+        await refetchHistory()
       }
 
       if (failedApprovals.length > 0) {
@@ -1038,8 +1089,8 @@ export default function PreApprovalPage() {
 
       if (successfulApprovals.length > 0) {
         toast({ title: "Success", description: "Approvals and additions processed." });
-        await fetchPendingOrders();
-        await fetchHistory();
+        await refetchPending();
+        await refetchHistory();
         setDialogNewProducts({});
       }
 
@@ -1067,7 +1118,7 @@ export default function PreApprovalPage() {
           title: "Product Deleted",
           description: `Product from ${displayDo} has been removed.`,
         });
-        fetchPendingOrders();
+        refetchPending();
       }
     } catch (error: any) {
       console.error("Failed to delete product:", error);
@@ -1293,94 +1344,38 @@ export default function PreApprovalPage() {
 
 
 
-  const destinationColumnsCount = visibleColumns.length + 1
-
-  /* Extract unique customer names */
   const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
 
-  const [filterValues, setFilterValues] = useState({
-    search: "",
-    status: "",
-    startDate: "",
-    endDate: "",
-    partyName: ""
-  })
+  const destinationColumnsCount = visibleColumns.length + 1
 
   const filteredHistory = useMemo(() => {
-    return history.filter(item => {
-      let matches = true
+    // Basic filtering is now done at API level, but we can keep it as a safety layer for any edge cases
+    return history;
+  }, [history])
 
-      if (filterValues.search) {
-        const search = filterValues.search.toLowerCase()
-        if (!item.orderNo?.toLowerCase().includes(search) &&
-          !item.customerName?.toLowerCase().includes(search)) {
-          matches = false
-        }
-      }
+  const filteredPendingOrders = useMemo(() => {
+    return pendingOrders.filter(order => {
+      // API handles search, party name and date range.
+      // We only need to handle the "Status" (On Time / Expire) filter if present
+      if (!filterValues.status || filterValues.status === "all") return true
 
-      if (filterValues.partyName && filterValues.partyName !== "all" && item.customerName !== filterValues.partyName) {
-        matches = false
-      }
-
-      if (filterValues.startDate) {
-        const start = new Date(filterValues.startDate)
-        start.setHours(0, 0, 0, 0)
-        const itemDate = new Date(item.timestamp)
-        if (itemDate < start) matches = false
-      }
-
-      if (filterValues.endDate) {
-        const end = new Date(filterValues.endDate)
-        end.setHours(23, 59, 59, 999)
-        const itemDate = new Date(item.timestamp)
-        if (itemDate > end) matches = false
-      }
-
-      return matches
-    })
-  }, [history, filterValues])
-
-  const filteredPendingOrders = pendingOrders.filter(order => {
-    let matches = true
-
-    // Filter by Party Name
-    if (filterValues.partyName && filterValues.partyName !== "all" && order.customerName !== filterValues.partyName) {
-      matches = false
-    }
-
-    // Filter by Date Range (using deliveryDate or soDate as fallback)
-    const orderDateStr = order.deliveryDate || order.soDate
-    if (orderDateStr) {
-      const orderDate = new Date(orderDateStr)
-      if (filterValues.startDate) {
-        const start = new Date(filterValues.startDate)
-        if (orderDate < start) matches = false
-      }
-      if (filterValues.endDate) {
-        const end = new Date(filterValues.endDate)
-        if (orderDate > end) matches = false
-      }
-    }
-
-    // Filter by Status (On Time / Expire)
-    // "Expire" = deliveryDate is in the past
-    // "On Time" = deliveryDate is today or future
-    if (filterValues.status) {
       const today = new Date()
-      today.setHours(0, 0, 0, 0) // normalized today
-
-      if (orderDateStr) {
-        const deliveryDate = new Date(orderDateStr)
-        if (filterValues.status === "expire") {
-          if (deliveryDate >= today) matches = false
-        } else if (filterValues.status === "on-time") {
-          if (deliveryDate < today) matches = false
-        }
+      today.setHours(0, 0, 0, 0)
+      
+      // Use deliveryDate or soDate as fallback
+      const orderDateStr = order.deliveryDate || order.soDate
+      if (!orderDateStr) return true
+      
+      const deliveryDate = new Date(orderDateStr)
+      if (filterValues.status === "expire") {
+        return deliveryDate < today
       }
-    }
-
-    return matches
-  })
+      if (filterValues.status === "on-time") {
+        return deliveryDate >= today
+      }
+      return true
+    })
+  }, [pendingOrders, filterValues.status])
   // Group orders by base DO number (DO-022A, DO-022B → DO-022)
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
@@ -1613,6 +1608,21 @@ export default function PreApprovalPage() {
       historyData={filteredHistory}
       partyNames={customerNames}
       onFilterChange={setFilterValues}
+      onTabChange={setActiveTab}
+      isHistoryLoading={isHistoryLoading}
+      historyFooter={
+        <div ref={historyEndRef} className="py-4 flex justify-center">
+          {isFetchingNextHistory && (
+            <div className="flex items-center gap-2 text-muted-foreground text-xs italic font-bold uppercase tracking-tighter">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Loading more history...
+            </div>
+          )}
+          {!hasNextHistory && history.length > 0 && (
+            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest opacity-40">End of history</span>
+          )}
+        </div>
+      }
     >
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
@@ -1960,41 +1970,31 @@ export default function PreApprovalPage() {
                                                   </div>
                                                 </TableCell>
                                                 <TableCell className="p-2 min-w-45">
-                                                  <Select
+                                                  <AsyncCombobox
                                                     value={productRates[rowKey]?.skuName || ""}
                                                     onValueChange={(value: string) => handleSkuSelection(value, rowKey, product, orderDetails)}
                                                     disabled={!isSelected}
-                                                  >
-                                                    <SelectTrigger className="h-9 w-full bg-white px-3 border-slate-200 text-xs font-bold shadow-sm">
-                                                      <SelectValue placeholder="Select SKU..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent className="max-h-[300px]">
-                                                      {skuMaster.filter(sku => {
-                                                        const skuLower = sku.toLowerCase();
-
-                                                        // Get this specific product's oil type
-                                                        const productOilType = (product.oilType || product.productName || "").toLowerCase();
-
-                                                        // Filter SKU based on this product's oil type only
-                                                        if (productOilType.includes("palm")) {
-                                                          return skuLower.includes("palm");
-                                                        } else if (productOilType.includes("rice") || productOilType.includes("rbo")) {
-                                                          return skuLower.includes("rbo") || skuLower.includes("rice");
-                                                        } else if (productOilType.includes("soya") || productOilType.includes("sbo")) {
-                                                          return skuLower.includes("sbo") || skuLower.includes("soya");
-                                                        } else if (productOilType.includes("sunflower")) {
-                                                          return skuLower.includes("sun");
-                                                        }
-
-                                                        // If no specific oil type identified, show all SKUs (fallback)
+                                                    placeholder="Select SKU..."
+                                                    searchPlaceholder="Search products..."
+                                                    fetchOptions={async (search: string, page: number) => {
+                                                      const res = await skuDetailsApi.getAll({ search, page, limit: 20 });
+                                                      let list = res.data.skuDetails || [];
+                                                      const productOilType = (product.oilType || product.productName || "").toLowerCase();
+                                                      list = list.filter((sku: any) => {
+                                                        const skuLower = sku.sku_name.toLowerCase();
+                                                        if (productOilType.includes("palm")) return skuLower.includes("palm") || skuLower.includes("p.o.");
+                                                        if (productOilType.includes("rice") || productOilType.includes("rbo")) return skuLower.includes("rbo") || skuLower.includes("rice") || skuLower.includes("r.o.");
+                                                        if (productOilType.includes("soya") || productOilType.includes("sbo")) return skuLower.includes("sbo") || skuLower.includes("soya") || skuLower.includes("s.o.");
+                                                        if (productOilType.includes("sunflower")) return skuLower.includes("sun");
                                                         return true;
-                                                      }).map((sku) => (
-                                                        <SelectItem key={sku} value={sku} className="cursor-pointer py-2.5 px-4 text-xs font-bold hover:bg-blue-50 hover:text-blue-700 transition-colors">
-                                                          {sku.replace(/MLT/g, 'ML')}
-                                                        </SelectItem>
-                                                      ))}
-                                                    </SelectContent>
-                                                  </Select>
+                                                      });
+                                                      return {
+                                                        options: list.map((sku: any) => ({ value: sku.sku_name, label: sku.sku_name })),
+                                                        hasMore: (list.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
+                                                      };
+                                                    }}
+                                                    className="h-9 w-full bg-white text-xs font-bold"
+                                                  />
                                                 </TableCell>
                                                 <TableCell className="p-2">
                                                   <div className="relative">
@@ -2510,19 +2510,24 @@ export default function PreApprovalPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8">
-                        <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                          <span>Loading pending approvals...</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                  {isPendingLoading && pendingOrders.length === 0 ? (
+                    [...Array(5)].map((_, i) => (
+                      <TableRow key={i} className="opacity-40 border-b border-slate-50">
+                        <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
+                        {PAGE_COLUMNS.filter(col => visibleColumns.includes(col.id)).map(col => (
+                          <TableCell key={col.id} className="py-4">
+                            <div className={cn(
+                              "h-3 bg-slate-200 animate-pulse rounded-full mx-auto",
+                              col.id === 'customerName' ? "w-32" : col.id === 'soNo' ? "w-20" : "w-16"
+                            )} />
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
                   ) : displayRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={visibleColumns.length + 1} className="text-center py-8 text-muted-foreground">
-                        No Data pending for Pre Approval
+                        {isPendingLoading ? "Fetching more..." : "No Data pending for Pre Approval"}
                       </TableCell>
                     </TableRow>
                   ) : displayRows.map((rawOrder, i) => {
@@ -2597,6 +2602,17 @@ export default function PreApprovalPage() {
                   })}
                 </TableBody>
               </Table>
+              <div ref={pendingEndRef} className="py-4 flex justify-center border-t border-slate-50 bg-slate-50/30">
+                {isFetchingNextPending && (
+                  <div className="flex items-center gap-2 text-muted-foreground text-xs italic font-bold uppercase tracking-tighter">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Loading more orders...
+                  </div>
+                )}
+                {!hasNextPending && displayRows.length > 0 && (
+                  <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest opacity-40">All orders loaded</span>
+                )}
+              </div>
             </Card>
           </div>
 

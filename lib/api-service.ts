@@ -792,6 +792,7 @@ export const userApi = {
     limit?: number;
     role?: string;
     status?: string;
+    search?: string;
   }): Promise<ApiResponse> => {
     const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
@@ -1104,8 +1105,11 @@ export const skuSellingPriceApi = {
   /**
    * Get all SKU selling prices (landing cost + margin)
    */
-  getAll: async (): Promise<ApiResponse> => {
-    return request('/skus/sku-selling-price');
+  getAll: async (params?: any): Promise<ApiResponse> => {
+    const queryString = params
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`/skus/sku-selling-price${queryString}`);
   },
 
   /**
@@ -1172,8 +1176,11 @@ export const varCalcApi = {
   /**
    * Get all calculation variables (history)
    */
-  getAll: async (): Promise<ApiResponse> => {
-    return request('/common/var-calc/history');
+  getAll: async (params?: any): Promise<ApiResponse> => {
+    const queryString = params
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`/common/var-calc/history${queryString}`);
   },
 };
 
@@ -1213,7 +1220,33 @@ export const salespersonApi = {
   },
 };
 
+/**
+ * Dashboard API
+ */
+export const dashboardApi = {
+  getStats: async (): Promise<ApiResponse> => {
+    return request(API_ENDPOINTS.dashboard.stats);
+  },
+  getOverview: async (): Promise<ApiResponse> => {
+    return request(API_ENDPOINTS.dashboard.overview);
+  },
+};
+
+/**
+ * Reports API
+ */
+export const reportsApi = {
+  getReport: async (params?: any): Promise<ApiResponse> => {
+    const queryString = params
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`${API_ENDPOINTS.reports.get}${queryString}`);
+  },
+};
+
 export default {
+  dashboard: dashboardApi,
+  reports: reportsApi,
   order: orderApi,
   preApproval: preApprovalApi,
   approval: approvalApi,

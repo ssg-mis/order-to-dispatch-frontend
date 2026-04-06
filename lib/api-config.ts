@@ -47,4 +47,15 @@ export const API_ENDPOINTS = {
     history: '/actual-dispatch/history',
     submit: (dsrNumber: string) => `/actual-dispatch/submit/${dsrNumber}`,
   },
+  
+  // Dashboard Endpoints
+  dashboard: {
+    stats: '/dashboard/stats',
+    overview: '/dashboard/overview',
+  },
+  
+  // Reports Endpoints
+  reports: {
+    get: '/reports',
+  },
 };

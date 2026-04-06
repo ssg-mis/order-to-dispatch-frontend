@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { customerApi, depotApi, brokerApi, skuDetailsApi, commonApi, skuSellingPriceApi, varCalcApi, salespersonApi } from "@/lib/api-service"
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { useInView } from "react-intersection-observer"
 
 import { useAuth } from "@/hooks/use-auth"
 import { Plus, Pencil, Trash2, Loader2, RefreshCw, Users, Warehouse, Briefcase, Search, Download, Package, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
@@ -119,18 +121,163 @@ export default function MasterPage() {
   const { toast } = useToast()
   const { isReadOnly } = useAuth()
   const [activeTab, setActiveTab] = useState("customers")
-  const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
 
-  // Data states
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [depots, setDepots] = useState<Depot[]>([])
-  const [brokers, setBrokers] = useState<Broker[]>([])
-  const [salespersons, setSalespersons] = useState<Salesperson[]>([])
-  const [skuDetails, setSkuDetails] = useState<SkuDetail[]>([])
-  const [skuSellingPrices, setSkuSellingPrices] = useState<SkuSellingPrice[]>([])
+  const { ref: customerEndRef, inView: customerInView } = useInView()
+  const { ref: depotEndRef, inView: depotInView } = useInView()
+  const { ref: brokerEndRef, inView: brokerInView } = useInView()
+  const { ref: salespersonEndRef, inView: salespersonInView } = useInView()
+  const { ref: skuEndRef, inView: skuInView } = useInView()
+  const { ref: skuSellingPriceEndRef, inView: skuSellingPriceInView } = useInView()
+
+  // --- Queries ---
+
+  // Customers
+  const {
+    data: customerData,
+    fetchNextPage: fetchNextCustomer,
+    hasNextPage: hasNextCustomer,
+    isFetchingNextPage: isFetchingNextCustomer,
+    isLoading: isCustomerLoading,
+    refetch: refetchCustomer,
+  } = useInfiniteQuery({
+    queryKey: ["master-customers", searchTerm],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await customerApi.getAll({ page: pageParam, limit: 20, search: searchTerm })
+      return res.success ? res.data : { customers: [], pagination: { total: 0 } }
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.customers?.length || 0), 0)
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined
+    }
+  })
+
+  // Depots
+  const {
+    data: depotData,
+    fetchNextPage: fetchNextDepot,
+    hasNextPage: hasNextDepot,
+    isFetchingNextPage: isFetchingNextDepot,
+    isLoading: isDepotLoading,
+    refetch: refetchDepot,
+  } = useInfiniteQuery({
+    queryKey: ["master-depots", searchTerm],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await depotApi.getAll({ page: pageParam, limit: 20, search: searchTerm })
+      return res.success ? res.data : { depots: [], pagination: { total: 0 } }
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.depots?.length || 0), 0)
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined
+    }
+  })
+
+  // Brokers
+  const {
+    data: brokerData,
+    fetchNextPage: fetchNextBroker,
+    hasNextPage: hasNextBroker,
+    isFetchingNextPage: isFetchingNextBroker,
+    isLoading: isBrokerLoading,
+    refetch: refetchBroker,
+  } = useInfiniteQuery({
+    queryKey: ["master-brokers", searchTerm],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await brokerApi.getAll({ page: pageParam, limit: 20, search: searchTerm })
+      return res.success ? res.data : { brokers: [], pagination: { total: 0 } }
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.brokers?.length || 0), 0)
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined
+    }
+  })
+
+  // Salespersons
+  const {
+    data: salespersonData,
+    fetchNextPage: fetchNextSalesperson,
+    hasNextPage: hasNextSalesperson,
+    isFetchingNextPage: isFetchingNextSalesperson,
+    isLoading: isSalespersonLoading,
+    refetch: refetchSalesperson,
+  } = useInfiniteQuery({
+    queryKey: ["master-salespersons", searchTerm],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await salespersonApi.getAll({ page: pageParam, limit: 20, search: searchTerm })
+      return res.success ? res.data : { salespersons: [], pagination: { total: 0 } }
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.salespersons?.length || 0), 0)
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined
+    }
+  })
+
+  // SKU Details
+  const {
+    data: skuData,
+    fetchNextPage: fetchNextSku,
+    hasNextPage: hasNextSku,
+    isFetchingNextPage: isFetchingNextSku,
+    isLoading: isSkuLoading,
+    refetch: refetchSku,
+  } = useInfiniteQuery({
+    queryKey: ["master-sku-details", searchTerm],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await skuDetailsApi.getAll({ page: pageParam, limit: 20, search: searchTerm })
+      return res.success ? res.data : { skuDetails: [], pagination: { total: 0 } }
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.skuDetails?.length || 0), 0)
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined
+    }
+  })
+
+  // SKU Selling Price
+  const {
+    data: skuSellingPriceData,
+    fetchNextPage: fetchNextSkuSellingPrice,
+    hasNextPage: hasNextSkuSellingPrice,
+    isFetchingNextPage: isFetchingNextSkuSellingPrice,
+    isLoading: isSkuSellingPriceLoading,
+    refetch: refetchSkuSellingPrice,
+  } = useInfiniteQuery({
+    queryKey: ["master-sku-selling-price", searchTerm],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await skuSellingPriceApi.getAll({ page: pageParam, limit: 20, search: searchTerm })
+      return res.success ? res.data : { skus: [], pagination: { total: 0 } }
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.skus?.length || 0), 0)
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined
+    }
+  })
+
   const [latestVarCalc, setLatestVarCalc] = useState<any>(null)
+
+  // Memoized data lists
+  const customers = useMemo(() => customerData?.pages.flatMap(p => p?.customers || []) || [], [customerData])
+  const depots = useMemo(() => depotData?.pages.flatMap(p => p?.depots || []) || [], [depotData])
+  const brokers = useMemo(() => brokerData?.pages.flatMap(p => p?.brokers || []) || [], [brokerData])
+  const salespersons = useMemo(() => salespersonData?.pages.flatMap(p => p?.salespersons || []) || [], [salespersonData])
+  const skuDetails = useMemo(() => skuData?.pages.flatMap(p => p?.skuDetails || []) || [], [skuData])
+  const skuSellingPrices = useMemo(() => skuSellingPriceData?.pages.flatMap(p => p?.skus || []) || [], [skuSellingPriceData])
+
+  // Infinite Scroll Observers
+  useEffect(() => { if (customerInView && hasNextCustomer) fetchNextCustomer() }, [customerInView, hasNextCustomer, fetchNextCustomer])
+  useEffect(() => { if (depotInView && hasNextDepot) fetchNextDepot() }, [depotInView, hasNextDepot, fetchNextDepot])
+  useEffect(() => { if (brokerInView && hasNextBroker) fetchNextBroker() }, [brokerInView, hasNextBroker, fetchNextBroker])
+  useEffect(() => { if (salespersonInView && hasNextSalesperson) fetchNextSalesperson() }, [salespersonInView, hasNextSalesperson, fetchNextSalesperson])
+  useEffect(() => { if (skuInView && hasNextSku) fetchNextSku() }, [skuInView, hasNextSku, fetchNextSku])
+  useEffect(() => { if (skuSellingPriceInView && hasNextSkuSellingPrice) fetchNextSkuSellingPrice() }, [skuSellingPriceInView, hasNextSkuSellingPrice, fetchNextSkuSellingPrice])
+
+  const isLoading = isCustomerLoading || isDepotLoading || isBrokerLoading || isSalespersonLoading || isSkuLoading || isSkuSellingPriceLoading
 
 
   // Sort states
@@ -230,47 +377,16 @@ export default function MasterPage() {
 
   // --- Data Fetching ---
 
-  const fetchData = async () => {
-    setIsLoading(true)
+  const fetchVarCalc = useCallback(async () => {
     try {
-      const params = { all: 'true' }
-      if (activeTab === "customers") {
-        const res = await customerApi.getAll(params)
-        if (res.success) setCustomers(res.data)
-      } else if (activeTab === "depots") {
-        const res = await depotApi.getAll(params)
-        if (res.success) setDepots(res.data)
-      } else if (activeTab === "brokers") {
-        const res = await brokerApi.getAll(params)
-        if (res.success) setBrokers(res.data)
-      } else if (activeTab === "salespersons") {
-        const res = await salespersonApi.getAll(params)
-        if (res.success) setSalespersons(res.data)
-      } else if (activeTab === "sku_details") {
-        const res = await skuDetailsApi.getAll(params)
-        if (res.success) setSkuDetails(res.data)
-      } else if (activeTab === "sku_selling_price") {
-        const res = await skuSellingPriceApi.getAll()
-        if (res.success) setSkuSellingPrices(res.data)
-        
-        // Also fetch latest var calc for landing cost recalculation
-        const varRes = await varCalcApi.getLatest()
-        if (varRes.success) setLatestVarCalc(varRes.data)
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to fetch data",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
+      const varRes = await varCalcApi.getLatest()
+      if (varRes.success) setLatestVarCalc(varRes.data)
+    } catch (e) { console.error("Var calc fetch failed") }
+  }, [])
 
   useEffect(() => {
-    fetchData()
-  }, [activeTab])
+    if (activeTab === "sku_selling_price") fetchVarCalc()
+  }, [activeTab, fetchVarCalc])
 
   // --- Handlers ---
 
@@ -382,7 +498,13 @@ export default function MasterPage() {
         toast({ title: "Success", description: editingItem ? "Updated successfully" : "Created successfully" })
         setIsDialogOpen(false)
         resetForms()
-        fetchData()
+        // Refetch appropriate query
+        if (activeTab === "customers") refetchCustomer()
+        else if (activeTab === "depots") refetchDepot()
+        else if (activeTab === "brokers") refetchBroker()
+        else if (activeTab === "salespersons") refetchSalesperson()
+        else if (activeTab === "sku_details") refetchSku()
+        else if (activeTab === "sku_selling_price") refetchSkuSellingPrice()
       }
     } catch (error: any) {
       toast({
@@ -418,7 +540,13 @@ export default function MasterPage() {
         toast({ title: "Success", description: "Deleted successfully" })
         setIsDeleteDialogOpen(false)
         setDeletingItem(null)
-        fetchData()
+        // Refetch appropriate query
+        if (activeTab === "customers") refetchCustomer()
+        else if (activeTab === "depots") refetchDepot()
+        else if (activeTab === "brokers") refetchBroker()
+        else if (activeTab === "salespersons") refetchSalesperson()
+        else if (activeTab === "sku_details") refetchSku()
+        else if (activeTab === "sku_selling_price") refetchSkuSellingPrice()
       }
     } catch (error: any) {
       toast({
@@ -506,32 +634,32 @@ export default function MasterPage() {
   // --- Filter Logic ---
 
   const filteredCustomers = customers.filter(c => 
-    c.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.customer_id?.toLowerCase().includes(searchTerm.toLowerCase())
+    c?.customer_name?.toLowerCase()?.includes(searchTerm.toLowerCase()) || 
+    c?.customer_id?.toLowerCase()?.includes(searchTerm.toLowerCase())
   )
 
   const filteredDepots = depots.filter(d => 
-    d.depot_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    d.depot_id?.toLowerCase().includes(searchTerm.toLowerCase())
+    d?.depot_name?.toLowerCase()?.includes(searchTerm.toLowerCase()) || 
+    d?.depot_id?.toLowerCase()?.includes(searchTerm.toLowerCase())
   )
 
   const filteredBrokers = brokers.filter(b => 
-    b.salesman_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    b.broker_id?.toLowerCase().includes(searchTerm.toLowerCase())
+    b?.salesman_name?.toLowerCase()?.includes(searchTerm.toLowerCase()) || 
+    b?.broker_id?.toLowerCase()?.includes(searchTerm.toLowerCase())
   )
 
   const filteredSkuDetails = skuDetails.filter(s => 
-    s.sku_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    s.sku_code?.toLowerCase().includes(searchTerm.toLowerCase())
+    s?.sku_name?.toLowerCase()?.includes(searchTerm.toLowerCase()) || 
+    s?.sku_code?.toLowerCase()?.includes(searchTerm.toLowerCase())
   )
 
   const filteredSalespersons = salespersons.filter(s => 
-    s.salesman_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    s.broker_id?.toLowerCase().includes(searchTerm.toLowerCase())
+    s?.salesman_name?.toLowerCase()?.includes(searchTerm.toLowerCase()) || 
+    s?.broker_id?.toLowerCase()?.includes(searchTerm.toLowerCase())
   )
 
   const filteredSkuSellingPrices = skuSellingPrices.filter(s =>
-    s.packing_material?.toLowerCase().includes(searchTerm.toLowerCase())
+    s?.packing_material?.toLowerCase()?.includes(searchTerm.toLowerCase())
   )
 
   // --- Sort helpers ---
@@ -539,8 +667,8 @@ export default function MasterPage() {
 
   const sortData = <T extends Record<string, any>>(data: T[], col: string, dir: SortDir): T[] => {
     return [...data].sort((a, b) => {
-      const av = a[col] ?? ''
-      const bv = b[col] ?? ''
+      const av = (a && a[col]) ?? ''
+      const bv = (b && b[col]) ?? ''
       return dir === 'asc'
         ? String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' })
         : String(bv).localeCompare(String(av), undefined, { numeric: true, sensitivity: 'base' })
@@ -974,7 +1102,18 @@ export default function MasterPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <Button variant="outline" onClick={fetchData} disabled={isLoading}>
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              if (activeTab === "customers") refetchCustomer()
+              else if (activeTab === "depots") refetchDepot()
+              else if (activeTab === "brokers") refetchBroker()
+              else if (activeTab === "salespersons") refetchSalesperson()
+              else if (activeTab === "sku_details") refetchSku()
+              else if (activeTab === "sku_selling_price") refetchSkuSellingPrice()
+            }} 
+            disabled={isLoading}
+          >
             <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
@@ -1050,55 +1189,86 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
-              <table className="w-full caption-bottom text-sm">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('customer_id', customerSort, setCustomerSort)}>ID <SortIcon col="customer_id" sort={customerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('customer_name', customerSort, setCustomerSort)}>Customer Name <SortIcon col="customer_name" sort={customerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('contact_person', customerSort, setCustomerSort)}>Contact Person <SortIcon col="contact_person" sort={customerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('email', customerSort, setCustomerSort)}>Email/Contact <SortIcon col="email" sort={customerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('state', customerSort, setCustomerSort)}>Location <SortIcon col="state" sort={customerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('status', customerSort, setCustomerSort)}>Status <SortIcon col="status" sort={customerSort} /></TableHead>
-                    <TableHead className="text-right pr-6 sticky top-0 z-10 bg-slate-50">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-20"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                  ) : sortedCustomers.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-20 text-slate-400">No customers found</TableCell></TableRow>
-                  ) : sortedCustomers.map(item => (
-                    <TableRow key={item.id} className="hover:bg-slate-50/30 transition-colors">
-                      <TableCell className="font-medium pl-6">{item.customer_id}</TableCell>
-                      <TableCell className="font-semibold text-slate-900">{item.customer_name}</TableCell>
-                      <TableCell>{item.contact_person || "—"}</TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <p className="text-slate-600">{item.email || "—"}</p>
-                          <p className="text-slate-400">{item.contact || "—"}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>{item.state ? `${item.state} (${item.pincode})` : "—"}</TableCell>
-                      <TableCell>
-                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
-                          {item.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right pr-6">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit Customer"}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete Customer"}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </table>
+              <div className="flex flex-col h-[600px]">
+                <div className="flex-1 overflow-auto rounded-b-2xl">
+                  <table className="w-full caption-bottom text-sm">
+                    <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
+                      <TableRow className="hover:bg-transparent border-b">
+                        <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('customer_id', customerSort, setCustomerSort)}>ID <SortIcon col="customer_id" sort={customerSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('customer_name', customerSort, setCustomerSort)}>Customer Name <SortIcon col="customer_name" sort={customerSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('contact_person', customerSort, setCustomerSort)}>Contact Person <SortIcon col="contact_person" sort={customerSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('email', customerSort, setCustomerSort)}>Email/Contact <SortIcon col="email" sort={customerSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('state', customerSort, setCustomerSort)}>Location <SortIcon col="state" sort={customerSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('status', customerSort, setCustomerSort)}>Status <SortIcon col="status" sort={customerSort} /></TableHead>
+                        <TableHead className="text-right pr-6">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {isCustomerLoading && customers.length === 0 ? (
+                        [...Array(8)].map((_, i) => (
+                          <TableRow key={i} className="opacity-40 border-b border-slate-50 h-16">
+                            <TableCell className="pl-6"><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-32 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-24 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-8 w-40 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-28 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-6 w-20 bg-slate-200 animate-pulse rounded-full" /></TableCell>
+                            <TableCell className="pr-6"><div className="h-8 w-16 bg-slate-100 animate-pulse rounded ml-auto" /></TableCell>
+                          </TableRow>
+                        ))
+                      ) : customers.length === 0 ? (
+                        <TableRow><TableCell colSpan={7} className="text-center py-20 text-slate-400">No customers found</TableCell></TableRow>
+                      ) : (
+                        <>
+                          {sortedCustomers.map(item => (
+                            <TableRow key={item.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-50 h-16">
+                              <TableCell className="font-medium pl-6">{item.customer_id}</TableCell>
+                              <TableCell className="font-semibold text-slate-900">{item.customer_name}</TableCell>
+                              <TableCell>{item.contact_person || "—"}</TableCell>
+                              <TableCell>
+                                <div className="text-sm">
+                                  <p className="text-slate-600 font-medium">{item.email || "—"}</p>
+                                  <p className="text-slate-400 text-xs">{item.contact || "—"}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell>{item.state ? `${item.state} (${item.pincode})` : "—"}</TableCell>
+                              <TableCell>
+                                <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
+                                  {item.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right pr-6">
+                                <div className="flex justify-end gap-2">
+                                  <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit Customer"}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete Customer"}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {/* Infinite Scroll Sentinel */}
+                          <TableRow ref={customerEndRef}>
+                            <TableCell colSpan={7} className="p-0 h-12 border-none">
+                              {isFetchingNextCustomer && (
+                                <div className="flex items-center justify-center py-4 text-slate-400 bg-slate-50/20">
+                                  <div className="flex gap-1.5 items-center bg-white px-4 py-1.5 rounded-full shadow-sm border border-slate-100">
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]"></div>
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]"></div>
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce"></div>
+                                    <span className="text-xs font-medium ml-2 text-slate-500">Loading more customers...</span>
+                                  </div>
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                    </TableBody>
+                  </table>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1118,50 +1288,81 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
-              <table className="w-full caption-bottom text-sm">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('depot_id', depotSort, setDepotSort)}>ID <SortIcon col="depot_id" sort={depotSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('depot_name', depotSort, setDepotSort)}>Depot Name <SortIcon col="depot_name" sort={depotSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('depot_address', depotSort, setDepotSort)}>Address <SortIcon col="depot_address" sort={depotSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('state', depotSort, setDepotSort)}>State <SortIcon col="state" sort={depotSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('salesman_broker_name', depotSort, setDepotSort)}>Salesman/Broker <SortIcon col="salesman_broker_name" sort={depotSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('status', depotSort, setDepotSort)}>Status <SortIcon col="status" sort={depotSort} /></TableHead>
-                    <TableHead className="text-right pr-6 sticky top-0 z-10 bg-slate-50">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-20"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                  ) : sortedDepots.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-20 text-slate-400">No depots found</TableCell></TableRow>
-                  ) : sortedDepots.map(item => (
-                    <TableRow key={item.depot_id} className="hover:bg-slate-50/30 transition-colors">
-                      <TableCell className="font-medium pl-6">{item.depot_id}</TableCell>
-                      <TableCell className="font-semibold text-slate-900">{item.depot_name}</TableCell>
-                      <TableCell className="max-w-xs truncate">{item.depot_address || "—"}</TableCell>
-                      <TableCell>{item.state || "—"}</TableCell>
-                      <TableCell>{item.salesman_broker_name || "—"}</TableCell>
-                      <TableCell>
-                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
-                          {item.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right pr-6">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit Depot"}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete Depot"}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </table>
+              <div className="flex flex-col h-[600px]">
+                <div className="flex-1 overflow-auto rounded-b-2xl">
+                  <table className="w-full caption-bottom text-sm">
+                    <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
+                      <TableRow className="hover:bg-transparent border-b">
+                        <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('depot_id', depotSort, setDepotSort)}>ID <SortIcon col="depot_id" sort={depotSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('depot_name', depotSort, setDepotSort)}>Depot Name <SortIcon col="depot_name" sort={depotSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('depot_address', depotSort, setDepotSort)}>Address <SortIcon col="depot_address" sort={depotSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('state', depotSort, setDepotSort)}>State <SortIcon col="state" sort={depotSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('salesman_broker_name', depotSort, setDepotSort)}>Salesman/Broker <SortIcon col="salesman_broker_name" sort={depotSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('status', depotSort, setDepotSort)}>Status <SortIcon col="status" sort={depotSort} /></TableHead>
+                        <TableHead className="text-right pr-6">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {isDepotLoading && depots.length === 0 ? (
+                        [...Array(8)].map((_, i) => (
+                          <TableRow key={i} className="opacity-40 border-b border-slate-50 h-16">
+                            <TableCell className="pl-6"><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-32 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-48 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-24 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-28 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-6 w-20 bg-slate-200 animate-pulse rounded-full" /></TableCell>
+                            <TableCell className="pr-6"><div className="h-8 w-16 bg-slate-100 animate-pulse rounded ml-auto" /></TableCell>
+                          </TableRow>
+                        ))
+                      ) : depots.length === 0 ? (
+                        <TableRow><TableCell colSpan={7} className="text-center py-20 text-slate-400">No depots found</TableCell></TableRow>
+                      ) : (
+                        <>
+                          {sortedDepots.map(item => (
+                            <TableRow key={item.depot_id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-50 h-16">
+                              <TableCell className="font-medium pl-6">{item.depot_id}</TableCell>
+                              <TableCell className="font-semibold text-slate-900">{item.depot_name}</TableCell>
+                              <TableCell className="max-w-xs truncate text-slate-600">{item.depot_address || "—"}</TableCell>
+                              <TableCell className="text-slate-600">{item.state || "—"}</TableCell>
+                              <TableCell className="text-slate-600">{item.salesman_broker_name || "—"}</TableCell>
+                              <TableCell>
+                                <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
+                                  {item.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right pr-6">
+                                <div className="flex justify-end gap-2">
+                                  <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit Depot"}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete Depot"}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {/* Infinite Scroll Sentinel */}
+                          <TableRow ref={depotEndRef}>
+                            <TableCell colSpan={7} className="p-0 h-12 border-none">
+                              {isFetchingNextDepot && (
+                                <div className="flex items-center justify-center py-4 text-slate-400 bg-slate-50/20">
+                                  <div className="flex gap-1.5 items-center bg-white px-4 py-1.5 rounded-full shadow-sm border border-slate-100">
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]"></div>
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]"></div>
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce"></div>
+                                    <span className="text-xs font-medium ml-2 text-slate-500">Loading more depots...</span>
+                                  </div>
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                    </TableBody>
+                  </table>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1181,51 +1382,80 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
-              <table className="w-full caption-bottom text-sm">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('broker_id', brokerSort, setBrokerSort)}>ID <SortIcon col="broker_id" sort={brokerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('salesman_name', brokerSort, setBrokerSort)}>Broker Name <SortIcon col="salesman_name" sort={brokerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('mobile_no', brokerSort, setBrokerSort)}>Contact (Mobile/Email) <SortIcon col="mobile_no" sort={brokerSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('status', brokerSort, setBrokerSort)}>Status <SortIcon col="status" sort={brokerSort} /></TableHead>
-                    <TableHead className="text-right pr-6 sticky top-0 z-10 bg-slate-50">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-20"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                  ) : sortedBrokers.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-20 text-slate-400">No brokers found</TableCell></TableRow>
-                  ) : sortedBrokers.map(item => (
-                    <TableRow key={item.broker_id} className="hover:bg-slate-50/30 transition-colors">
-                      <TableCell className="font-medium pl-6">{item.broker_id}</TableCell>
-                      <TableCell className="font-semibold text-slate-900">{item.salesman_name}</TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <p className="text-slate-600">{item.mobile_no || "—"}</p>
-                          <p className="text-slate-400">{item.email_id || "—"}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
-                          {item.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right pr-6">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit Broker"}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete Broker"}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </table>
+              <div className="flex flex-col h-[600px]">
+                <div className="flex-1 overflow-auto rounded-b-2xl">
+                  <table className="w-full caption-bottom text-sm">
+                    <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
+                      <TableRow className="hover:bg-transparent border-b">
+                        <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('broker_id', brokerSort, setBrokerSort)}>ID <SortIcon col="broker_id" sort={brokerSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('salesman_name', brokerSort, setBrokerSort)}>Broker Name <SortIcon col="salesman_name" sort={brokerSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('mobile_no', brokerSort, setBrokerSort)}>Contact (Mobile/Email) <SortIcon col="mobile_no" sort={brokerSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('status', brokerSort, setBrokerSort)}>Status <SortIcon col="status" sort={brokerSort} /></TableHead>
+                        <TableHead className="text-right pr-6">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {isBrokerLoading && brokers.length === 0 ? (
+                        [...Array(8)].map((_, i) => (
+                          <TableRow key={i} className="opacity-40 border-b border-slate-50 h-16">
+                            <TableCell className="pl-6"><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-32 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-8 w-40 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-6 w-20 bg-slate-200 animate-pulse rounded-full" /></TableCell>
+                            <TableCell className="pr-6"><div className="h-8 w-16 bg-slate-100 animate-pulse rounded ml-auto" /></TableCell>
+                          </TableRow>
+                        ))
+                      ) : brokers.length === 0 ? (
+                        <TableRow><TableCell colSpan={5} className="text-center py-20 text-slate-400">No brokers found</TableCell></TableRow>
+                      ) : (
+                        <>
+                          {sortedBrokers.map(item => (
+                            <TableRow key={item.broker_id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-50 h-16">
+                              <TableCell className="font-medium pl-6">{item.broker_id}</TableCell>
+                              <TableCell className="font-semibold text-slate-900">{item.salesman_name}</TableCell>
+                              <TableCell>
+                                <div className="text-sm">
+                                  <p className="text-slate-600 font-medium">{item.mobile_no || "—"}</p>
+                                  <p className="text-slate-400 text-xs">{item.email_id || "—"}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
+                                  {item.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right pr-6">
+                                <div className="flex justify-end gap-2">
+                                  <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit Broker"}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete Broker"}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {/* Infinite Scroll Sentinel */}
+                          <TableRow ref={brokerEndRef}>
+                            <TableCell colSpan={5} className="p-0 h-12 border-none">
+                              {isFetchingNextBroker && (
+                                <div className="flex items-center justify-center py-4 text-slate-400 bg-slate-50/20">
+                                  <div className="flex gap-1.5 items-center bg-white px-4 py-1.5 rounded-full shadow-sm border border-slate-100">
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]"></div>
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]"></div>
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce"></div>
+                                    <span className="text-xs font-medium ml-2 text-slate-500">Loading more brokers...</span>
+                                  </div>
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                    </TableBody>
+                  </table>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1245,51 +1475,80 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
-              <table className="w-full caption-bottom text-sm">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('broker_id', salespersonSort, setSalespersonSort)}>ID <SortIcon col="broker_id" sort={salespersonSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('salesman_name', salespersonSort, setSalespersonSort)}>Salesman Name <SortIcon col="salesman_name" sort={salespersonSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('mobile_no', salespersonSort, setSalespersonSort)}>Contact (Mobile/Email) <SortIcon col="mobile_no" sort={salespersonSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('status', salespersonSort, setSalespersonSort)}>Status <SortIcon col="status" sort={salespersonSort} /></TableHead>
-                    <TableHead className="text-right pr-6 sticky top-0 z-10 bg-slate-50">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-20"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                  ) : sortedSalespersons.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-20 text-slate-400">No salespersons found</TableCell></TableRow>
-                  ) : sortedSalespersons.map(item => (
-                    <TableRow key={item.broker_id} className="hover:bg-slate-50/30 transition-colors">
-                      <TableCell className="font-medium pl-6">{item.broker_id}</TableCell>
-                      <TableCell className="font-semibold text-slate-900">{item.salesman_name}</TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <p className="text-slate-600">{item.mobile_no || "—"}</p>
-                          <p className="text-slate-400">{item.email_id || "—"}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
-                          {item.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right pr-6">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit Salesperson"}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete Salesperson"}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </table>
+              <div className="flex flex-col h-[600px]">
+                <div className="flex-1 overflow-auto rounded-b-2xl">
+                  <table className="w-full caption-bottom text-sm">
+                    <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
+                      <TableRow className="hover:bg-transparent border-b">
+                        <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('broker_id', salespersonSort, setSalespersonSort)}>ID <SortIcon col="broker_id" sort={salespersonSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('salesman_name', salespersonSort, setSalespersonSort)}>Salesman Name <SortIcon col="salesman_name" sort={salespersonSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('mobile_no', salespersonSort, setSalespersonSort)}>Contact (Mobile/Email) <SortIcon col="mobile_no" sort={salespersonSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('status', salespersonSort, setSalespersonSort)}>Status <SortIcon col="status" sort={salespersonSort} /></TableHead>
+                        <TableHead className="text-right pr-6">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {isSalespersonLoading && salespersons.length === 0 ? (
+                        [...Array(8)].map((_, i) => (
+                          <TableRow key={i} className="opacity-40 border-b border-slate-50 h-16">
+                            <TableCell className="pl-6"><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-32 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-8 w-40 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-6 w-20 bg-slate-200 animate-pulse rounded-full" /></TableCell>
+                            <TableCell className="pr-6"><div className="h-8 w-16 bg-slate-100 animate-pulse rounded ml-auto" /></TableCell>
+                          </TableRow>
+                        ))
+                      ) : salespersons.length === 0 ? (
+                        <TableRow><TableCell colSpan={5} className="text-center py-20 text-slate-400">No salespersons found</TableCell></TableRow>
+                      ) : (
+                        <>
+                          {sortedSalespersons.map(item => (
+                            <TableRow key={item.broker_id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-50 h-16">
+                              <TableCell className="font-medium pl-6">{item.broker_id}</TableCell>
+                              <TableCell className="font-semibold text-slate-900">{item.salesman_name}</TableCell>
+                              <TableCell>
+                                <div className="text-sm">
+                                  <p className="text-slate-600 font-medium">{item.mobile_no || "—"}</p>
+                                  <p className="text-slate-400 text-xs">{item.email_id || "—"}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
+                                  {item.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right pr-6">
+                                <div className="flex justify-end gap-2">
+                                  <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit Salesperson"}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete Salesperson"}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {/* Infinite Scroll Sentinel */}
+                          <TableRow ref={salespersonEndRef}>
+                            <TableCell colSpan={5} className="p-0 h-12 border-none">
+                              {isFetchingNextSalesperson && (
+                                <div className="flex items-center justify-center py-4 text-slate-400 bg-slate-50/20">
+                                  <div className="flex gap-1.5 items-center bg-white px-4 py-1.5 rounded-full shadow-sm border border-slate-100">
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]"></div>
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]"></div>
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce"></div>
+                                    <span className="text-xs font-medium ml-2 text-slate-500">Loading more salespersons...</span>
+                                  </div>
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                    </TableBody>
+                  </table>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1309,52 +1568,84 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
-              <table className="w-full caption-bottom text-sm">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('sku_code', skuSort, setSkuSort)}>ID <SortIcon col="sku_code" sort={skuSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('sku_name', skuSort, setSkuSort)}>SKU Name <SortIcon col="sku_name" sort={skuSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('main_uom', skuSort, setSkuSort)}>Main UOM <SortIcon col="main_uom" sort={skuSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('alternate_uom', skuSort, setSkuSort)}>Alt. UOM <SortIcon col="alternate_uom" sort={skuSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('packing_weight', skuSort, setSkuSort)}>Packing Wt <SortIcon col="packing_weight" sort={skuSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('gross_weight', skuSort, setSkuSort)}>Gross Wt <SortIcon col="gross_weight" sort={skuSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('status', skuSort, setSkuSort)}>Status <SortIcon col="status" sort={skuSort} /></TableHead>
-                    <TableHead className="text-right pr-6 sticky top-0 z-10 bg-slate-50">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-20"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                  ) : sortedSkuDetails.length === 0 ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-20 text-slate-400">No SKUs found</TableCell></TableRow>
-                  ) : sortedSkuDetails.map(item => (
-                    <TableRow key={item.id} className="hover:bg-slate-50/30 transition-colors">
-                      <TableCell className="font-semibold text-slate-900 pl-6">{item.sku_code}</TableCell>
-                      <TableCell>{item.sku_name}</TableCell>
-                      <TableCell>{item.main_uom}</TableCell>
-                      <TableCell>{item.alternate_uom}</TableCell>
-                      <TableCell>{item.packing_weight}</TableCell>
-                      <TableCell>{item.gross_weight}</TableCell>
-                      <TableCell>
-                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
-                          {item.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right pr-6">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit SKU"}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete SKU"}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </table>
+              <div className="flex flex-col h-[600px]">
+                <div className="flex-1 overflow-auto rounded-b-2xl">
+                  <table className="w-full caption-bottom text-sm">
+                    <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
+                      <TableRow className="hover:bg-transparent border-b">
+                        <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('sku_code', skuSort, setSkuSort)}>ID <SortIcon col="sku_code" sort={skuSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('sku_name', skuSort, setSkuSort)}>SKU Name <SortIcon col="sku_name" sort={skuSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('main_uom', skuSort, setSkuSort)}>Main UOM <SortIcon col="main_uom" sort={skuSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('alternate_uom', skuSort, setSkuSort)}>Alt. UOM <SortIcon col="alternate_uom" sort={skuSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('packing_weight', skuSort, setSkuSort)}>Packing Wt <SortIcon col="packing_weight" sort={skuSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('gross_weight', skuSort, setSkuSort)}>Gross Wt <SortIcon col="gross_weight" sort={skuSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('status', skuSort, setSkuSort)}>Status <SortIcon col="status" sort={skuSort} /></TableHead>
+                        <TableHead className="text-right pr-6">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {isSkuLoading && skuDetails.length === 0 ? (
+                        [...Array(8)].map((_, i) => (
+                          <TableRow key={i} className="opacity-40 border-b border-slate-50 h-16">
+                            <TableCell className="pl-6"><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-40 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-12 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-12 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-6 w-20 bg-slate-200 animate-pulse rounded-full" /></TableCell>
+                            <TableCell className="pr-6"><div className="h-8 w-16 bg-slate-100 animate-pulse rounded ml-auto" /></TableCell>
+                          </TableRow>
+                        ))
+                      ) : skuDetails.length === 0 ? (
+                        <TableRow><TableCell colSpan={8} className="text-center py-20 text-slate-400">No SKUs found</TableCell></TableRow>
+                      ) : (
+                        <>
+                          {sortedSkuDetails.map(item => (
+                            <TableRow key={item.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-50 h-16">
+                              <TableCell className="font-semibold text-slate-900 pl-6">{item.sku_code}</TableCell>
+                              <TableCell className="text-slate-700">{item.sku_name}</TableCell>
+                              <TableCell className="text-slate-600">{item.main_uom}</TableCell>
+                              <TableCell className="text-slate-600">{item.alternate_uom}</TableCell>
+                              <TableCell className="text-slate-600 font-medium">{item.packing_weight}</TableCell>
+                              <TableCell className="text-slate-600 font-medium">{item.gross_weight}</TableCell>
+                              <TableCell>
+                                <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
+                                  {item.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right pr-6">
+                                <div className="flex justify-end gap-2">
+                                  <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit SKU"}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete SKU"}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {/* Infinite Scroll Sentinel */}
+                          <TableRow ref={skuEndRef}>
+                            <TableCell colSpan={8} className="p-0 h-12 border-none">
+                              {isFetchingNextSku && (
+                                <div className="flex items-center justify-center py-4 text-slate-400 bg-slate-50/20">
+                                  <div className="flex gap-1.5 items-center bg-white px-4 py-1.5 rounded-full shadow-sm border border-slate-100">
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]"></div>
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]"></div>
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce"></div>
+                                    <span className="text-xs font-medium ml-2 text-slate-500">Loading more SKUs...</span>
+                                  </div>
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                    </TableBody>
+                  </table>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1374,60 +1665,98 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
-              <table className="w-full caption-bottom text-sm">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('packing_material', skuSellingPriceSort, setSkuSellingPriceSort)}>Packing Material <SortIcon col="packing_material" sort={skuSellingPriceSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('sku_weight', skuSellingPriceSort, setSkuSellingPriceSort)}>Weight <SortIcon col="sku_weight" sort={skuSellingPriceSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('sku_unit', skuSellingPriceSort, setSkuSellingPriceSort)}>Unit <SortIcon col="sku_unit" sort={skuSellingPriceSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('conversion_formula', skuSellingPriceSort, setSkuSellingPriceSort)}>Conv. Form <SortIcon col="conversion_formula" sort={skuSellingPriceSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('sku_weight_in_gm', skuSellingPriceSort, setSkuSellingPriceSort)}>SKU Wght(gm) <SortIcon col="sku_weight_in_gm" sort={skuSellingPriceSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('packing_material_weight_in_gm', skuSellingPriceSort, setSkuSellingPriceSort)}>Pack Mat. Wght <SortIcon col="packing_material_weight_in_gm" sort={skuSellingPriceSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('net_oil_in_gm', skuSellingPriceSort, setSkuSellingPriceSort)}>Net Oil(gm) <SortIcon col="net_oil_in_gm" sort={skuSellingPriceSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('packing_cost', skuSellingPriceSort, setSkuSellingPriceSort)}>Pack Cost <SortIcon col="packing_cost" sort={skuSellingPriceSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('var', skuSellingPriceSort, setSkuSellingPriceSort)}>VAR <SortIcon col="var" sort={skuSellingPriceSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('landing_cost', skuSellingPriceSort, setSkuSellingPriceSort)}>Landing Cost <SortIcon col="landing_cost" sort={skuSellingPriceSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('margin', skuSellingPriceSort, setSkuSellingPriceSort)}>Margin <SortIcon col="margin" sort={skuSellingPriceSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('actual_margin', skuSellingPriceSort, setSkuSellingPriceSort)}>Actual Margin <SortIcon col="actual_margin" sort={skuSellingPriceSort} /></TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-slate-100 sticky top-0 z-10 bg-slate-50" onClick={() => toggleSort('selling_cost', skuSellingPriceSort, setSkuSellingPriceSort)}>Selling Cost <SortIcon col="selling_cost" sort={skuSellingPriceSort} /></TableHead>
-                    <TableHead className="text-right pr-6 sticky top-0 z-10 bg-slate-50">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow><TableCell colSpan={14} className="text-center py-20"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                  ) : sortedSkuSellingPrices.length === 0 ? (
-                    <TableRow><TableCell colSpan={14} className="text-center py-20 text-slate-400">No SKU Prices found</TableCell></TableRow>
-                  ) : sortedSkuSellingPrices.map(item => (
-                    <TableRow key={item.id} className="hover:bg-slate-50/30 transition-colors">
-                      <TableCell className="font-semibold text-slate-900 pl-6">{item.packing_material}</TableCell>
-                      <TableCell>{item.sku_weight}</TableCell>
-                      <TableCell>{item.sku_unit}</TableCell>
-                      <TableCell>{item.conversion_formula}</TableCell>
-                      <TableCell>{item.sku_weight_in_gm}</TableCell>
-                      <TableCell>{item.packing_material_weight_in_gm}</TableCell>
-                      <TableCell>{item.net_oil_in_gm}</TableCell>
-                      <TableCell>{item.packing_cost}</TableCell>
-                      <TableCell>{item.var}</TableCell>
-                      <TableCell className="font-medium text-slate-700">{item.landing_cost}</TableCell>
-                      <TableCell>{item.margin}</TableCell>
-                      <TableCell>{item.actual_margin}</TableCell>
-                      <TableCell className="font-medium text-emerald-600">{item.selling_cost}</TableCell>
-                      <TableCell className="text-right pr-6">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit SKU Price"}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete SKU Price"}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </table>
+              <div className="flex flex-col h-[600px]">
+                <div className="flex-1 overflow-auto rounded-b-2xl">
+                  <table className="w-full caption-bottom text-sm">
+                    <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
+                      <TableRow className="hover:bg-transparent border-b">
+                        <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('packing_material', skuSellingPriceSort, setSkuSellingPriceSort)}>Packing Material <SortIcon col="packing_material" sort={skuSellingPriceSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('sku_weight', skuSellingPriceSort, setSkuSellingPriceSort)}>Weight <SortIcon col="sku_weight" sort={skuSellingPriceSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('sku_unit', skuSellingPriceSort, setSkuSellingPriceSort)}>Unit <SortIcon col="sku_unit" sort={skuSellingPriceSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('conversion_formula', skuSellingPriceSort, setSkuSellingPriceSort)}>Conv. Form <SortIcon col="conversion_formula" sort={skuSellingPriceSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('sku_weight_in_gm', skuSellingPriceSort, setSkuSellingPriceSort)}>SKU Wght(gm) <SortIcon col="sku_weight_in_gm" sort={skuSellingPriceSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('packing_material_weight_in_gm', skuSellingPriceSort, setSkuSellingPriceSort)}>Pack Mat. Wght <SortIcon col="packing_material_weight_in_gm" sort={skuSellingPriceSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('net_oil_in_gm', skuSellingPriceSort, setSkuSellingPriceSort)}>Net Oil(gm) <SortIcon col="net_oil_in_gm" sort={skuSellingPriceSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('packing_cost', skuSellingPriceSort, setSkuSellingPriceSort)}>Pack Cost <SortIcon col="packing_cost" sort={skuSellingPriceSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('var', skuSellingPriceSort, setSkuSellingPriceSort)}>VAR <SortIcon col="var" sort={skuSellingPriceSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('landing_cost', skuSellingPriceSort, setSkuSellingPriceSort)}>Landing Cost <SortIcon col="landing_cost" sort={skuSellingPriceSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('margin', skuSellingPriceSort, setSkuSellingPriceSort)}>Margin <SortIcon col="margin" sort={skuSellingPriceSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('actual_margin', skuSellingPriceSort, setSkuSellingPriceSort)}>Actual Margin <SortIcon col="actual_margin" sort={skuSellingPriceSort} /></TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('selling_cost', skuSellingPriceSort, setSkuSellingPriceSort)}>Selling Cost <SortIcon col="selling_cost" sort={skuSellingPriceSort} /></TableHead>
+                        <TableHead className="text-right pr-6">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {isSkuSellingPriceLoading && skuSellingPrices.length === 0 ? (
+                        [...Array(8)].map((_, i) => (
+                          <TableRow key={i} className="opacity-40 border-b border-slate-50 h-16">
+                            <TableCell className="pl-6"><div className="h-4 w-32 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-12 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-12 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-12 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-20 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-20 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell><div className="h-4 w-24 bg-slate-200 animate-pulse rounded" /></TableCell>
+                            <TableCell className="pr-6"><div className="h-8 w-16 bg-slate-100 animate-pulse rounded ml-auto" /></TableCell>
+                          </TableRow>
+                        ))
+                      ) : skuSellingPrices.length === 0 ? (
+                        <TableRow><TableCell colSpan={14} className="text-center py-20 text-slate-400">No SKU Prices found</TableCell></TableRow>
+                      ) : (
+                        <>
+                          {sortedSkuSellingPrices.map(item => (
+                            <TableRow key={item.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-50 h-16">
+                              <TableCell className="font-semibold text-slate-900 pl-6">{item.packing_material}</TableCell>
+                              <TableCell className="text-slate-600 font-medium">{item.sku_weight}</TableCell>
+                              <TableCell className="text-slate-500">{item.sku_unit}</TableCell>
+                              <TableCell className="text-slate-500">{item.conversion_formula}</TableCell>
+                              <TableCell className="text-slate-500">{item.sku_weight_in_gm}</TableCell>
+                              <TableCell className="text-slate-500">{item.packing_material_weight_in_gm}</TableCell>
+                              <TableCell className="text-slate-500">{item.net_oil_in_gm}</TableCell>
+                              <TableCell className="text-slate-500">{item.packing_cost}</TableCell>
+                              <TableCell className="text-slate-500">{item.var}</TableCell>
+                              <TableCell className="font-bold text-slate-700 underline decoration-slate-200 decoration-2 underline-offset-4">{item.landing_cost}</TableCell>
+                              <TableCell className="text-slate-600">{item.margin}</TableCell>
+                              <TableCell className="text-slate-600 font-medium">{item.actual_margin}</TableCell>
+                              <TableCell className="font-bold text-emerald-600 bg-emerald-50/50 rounded-lg px-2 py-1 inline-block mt-2 ml-4 mb-2">{item.selling_cost}</TableCell>
+                              <TableCell className="text-right pr-6">
+                                <div className="flex justify-end gap-2">
+                                  <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit SKU Price"}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete SKU Price"}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {/* Infinite Scroll Sentinel */}
+                          <TableRow ref={skuSellingPriceEndRef}>
+                            <TableCell colSpan={14} className="p-0 h-12 border-none">
+                              {isFetchingNextSkuSellingPrice && (
+                                <div className="flex items-center justify-center py-4 text-slate-400 bg-slate-50/20">
+                                  <div className="flex gap-1.5 items-center bg-white px-4 py-1.5 rounded-full shadow-sm border border-slate-100">
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]"></div>
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]"></div>
+                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce"></div>
+                                    <span className="text-xs font-medium ml-2 text-slate-500">Loading more prices...</span>
+                                  </div>
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                    </TableBody>
+                  </table>
+                </div>
               </div>
             </CardContent>
           </Card>

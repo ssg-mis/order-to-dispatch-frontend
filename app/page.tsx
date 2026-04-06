@@ -18,23 +18,25 @@ import { Input } from "@/components/ui/input"
 import { useAuth } from "@/hooks/use-auth"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useRouter } from "next/navigation"
+import { Skeleton } from "@/components/ui/skeleton"
+import { cn } from "@/lib/utils"
 
 // ─── Stage Definitions ────────────────────────────────────────────────────
 const STAGES = [
-  { id: "Order Punch",       label: "Order Punch",             shortLabel: "Order",    color: "#6366f1", url: "/order-punch" },
-  { id: "Pre-Approval",      label: "Pre Approval",            shortLabel: "Pre App",  color: "#8b5cf6", url: "/pre-approval" },
-  { id: "Approval Of Order", label: "Approval of Order",       shortLabel: "Approval", color: "#a855f7", url: "/approval-of-order" },
-  { id: "Dispatch Planning", label: "Dispatch Planning",       shortLabel: "Plan",     color: "#ec4899", url: "/dispatch-material" },
-  { id: "Actual Dispatch",   label: "Actual Dispatch",         shortLabel: "Dispatch", color: "#f43f5e", url: "/actual-dispatch" },
-  { id: "Vehicle Details",   label: "Vehicle Details",         shortLabel: "Vehicle",  color: "#f97316", url: "/vehicle-details" },
-  { id: "Material Load",     label: "Material Load",           shortLabel: "Load",     color: "#f59e0b", url: "/material-load" },
+  { id: "Order Punch", label: "Order Punch", shortLabel: "Order", color: "#6366f1", url: "/order-punch" },
+  { id: "Pre-Approval", label: "Pre Approval", shortLabel: "Pre App", color: "#8b5cf6", url: "/pre-approval" },
+  { id: "Approval Of Order", label: "Approval of Order", shortLabel: "Approval", color: "#a855f7", url: "/approval-of-order" },
+  { id: "Dispatch Planning", label: "Dispatch Planning", shortLabel: "Plan", color: "#ec4899", url: "/dispatch-material" },
+  { id: "Actual Dispatch", label: "Actual Dispatch", shortLabel: "Dispatch", color: "#f43f5e", url: "/actual-dispatch" },
+  { id: "Vehicle Details", label: "Vehicle Details", shortLabel: "Vehicle", color: "#f97316", url: "/vehicle-details" },
+  { id: "Material Load", label: "Material Load", shortLabel: "Load", color: "#f59e0b", url: "/material-load" },
   { id: "Security Approval", label: "Security Guard Approval", shortLabel: "Security", color: "#eab308", url: "/security-approval" },
-  { id: "Make Invoice",      label: "Invoice (Proforma)",      shortLabel: "Invoice",  color: "#84cc16", url: "/make-invoice" },
-  { id: "Check Invoice",     label: "Check Invoice",           shortLabel: "Check",    color: "#22c55e", url: "/check-invoice" },
-  { id: "Gate Out",          label: "Gate Out",                shortLabel: "Gate",     color: "#10b981", url: "/gate-out" },
-  { id: "Material Receipt",  label: "Confirm Receipt",         shortLabel: "Receipt",  color: "#14b8a6", url: "/material-receipt" },
-  { id: "Damage Adjustment", label: "Damage Adjustment",       shortLabel: "Damage",   color: "#06b6d4", url: "/damage-adjustment" },
-  { id: "Final Delivery",    label: "Final Delivery",          shortLabel: "Done",     color: "#22d3ee", url: "/" }
+  { id: "Make Invoice", label: "Invoice (Proforma)", shortLabel: "Invoice", color: "#84cc16", url: "/make-invoice" },
+  { id: "Check Invoice", label: "Check Invoice", shortLabel: "Check", color: "#22c55e", url: "/check-invoice" },
+  { id: "Gate Out", label: "Gate Out", shortLabel: "Gate", color: "#10b981", url: "/gate-out" },
+  { id: "Material Receipt", label: "Confirm Receipt", shortLabel: "Receipt", color: "#14b8a6", url: "/material-receipt" },
+  { id: "Damage Adjustment", label: "Damage Adjustment", shortLabel: "Damage", color: "#06b6d4", url: "/damage-adjustment" },
+  { id: "Final Delivery", label: "Final Delivery", shortLabel: "Done", color: "#22d3ee", url: "/" }
 ]
 
 /**
@@ -60,6 +62,7 @@ export default function Dashboard() {
   const [lastSync, setLastSync] = useState(new Date())
   const [isMounted, setIsMounted] = useState(false)
   const [backendData, setBackendData] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   // Pipeline state
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
@@ -87,10 +90,14 @@ export default function Dashboard() {
           const r = await res.json()
           if (r.success) setBackendData(r.data)
         }
-      } catch (e) { console.error(e) }
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setIsLoading(false)
+      }
     }
     load()
-    const iv = setInterval(() => { load(); setLastSync(new Date()) }, 8000)
+    const iv = setInterval(() => { load(); setLastSync(new Date()) }, 30000) // Increase interval for dashboard overview
     return () => clearInterval(iv)
   }, [])
 
@@ -109,6 +116,7 @@ export default function Dashboard() {
   const stats = useMemo(() => {
     if (!backendData) return {
       total: 0, active: 0, completed: 0, delayed: 0, cancelled: 0,
+      totalPaymentAmount: 0, totalDamageQty: 0,
       stageCounts: [], recentOrders: [], createdToday: 0, dispatchedToday: 0,
       invoicedToday: 0, deliveredToday: 0, timelineData: [],
       pendingOrdersList: [], completedOrdersList: [], dispatchPlanningList: [],
@@ -122,6 +130,8 @@ export default function Dashboard() {
       completed: backendData.completed || 0,
       delayed: backendData.delayed || 0,
       cancelled: backendData.cancelled || 0,
+      totalPaymentAmount: backendData.totalPaymentAmount || 0,
+      totalDamageQty: backendData.totalDamageQty || 0,
       stageCounts: backendData.stageCounts || [],
       recentOrders: orders,
       createdToday: backendData.createdToday || 0,
@@ -133,12 +143,20 @@ export default function Dashboard() {
       completedOrdersList: orders.filter((o: any) => o.status === 'completed'),
       dispatchPlanningList: orders.filter((o: any) => o.stage === 'Dispatch Planning'),
       damagesOrdersList: orders.filter((o: any) => o.stage === 'Damage Adjustment'),
-      invoicesOrdersList: orders.filter((o: any) => ['Make Invoice','Check Invoice'].includes(o.stage)),
+      invoicesOrdersList: orders.filter((o: any) => ['Make Invoice', 'Check Invoice'].includes(o.stage)),
       delayedOrdersList: orders.filter((o: any) => o.status === 'pending'),
       cancelledOrdersList: orders.filter((o: any) => o.status === 'cancelled'),
       totalOrdersList: orders
     }
   }, [backendData])
+
+  const fmtCurrency = (val: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0
+    }).format(val);
+  }
 
   /**
    * Group orders by their base order number.
@@ -206,7 +224,9 @@ export default function Dashboard() {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {[
+          {isLoading ? (
+            Array(5).fill(0).map((_, i) => <KPICardSkeleton key={i} />)
+          ) : [
             { title: "Total Orders", value: stats.total, icon: Package, color: "#6366f1", trend: "Total", onClick: () => openDialog("total") },
             { title: "Active Orders", value: stats.active, icon: Activity, color: "#f59e0b", trend: "In Progress", onClick: () => openDialog("pending") },
             { title: "Completed", value: stats.completed, icon: CheckCircle2, color: "#10b981", trend: "Fulfilled", onClick: () => openDialog("completed") },
@@ -228,7 +248,7 @@ export default function Dashboard() {
             </div>
             <Tabs value={timeRange} onValueChange={setTimeRange} className="w-auto">
               <TabsList className="h-9 p-1 gap-0.5 rounded-xl" style={{ background: "oklch(0.91 0.03 245)" }}>
-                {["today","week","month"].map(t => (
+                {["today", "week", "month"].map(t => (
                   <TabsTrigger key={t} value={t}
                     className="rounded-lg h-7 px-4 text-[10px] font-black uppercase tracking-widest transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm"
                     style={{ color: timeRange === t ? "oklch(0.42 0.18 265)" : "oklch(0.52 0.04 245)" }}>
@@ -240,18 +260,24 @@ export default function Dashboard() {
           </div>
           <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              <MiniStatCard icon={Activity} label="Pending Orders" value={stats.active} badge="Live Status" badgeColor="#f59e0b" cardBg="oklch(0.99 0.04 75 / 0.4)" borderColor="oklch(0.88 0.08 75)" iconColor="#f59e0b" onClick={() => openDialog("pending")} />
-              <MiniStatCard icon={CheckCircle2} label="Complete Orders" value={stats.completed} badge="Success" badgeColor="#10b981" cardBg="oklch(0.98 0.04 155 / 0.4)" borderColor="oklch(0.88 0.08 155)" iconColor="#10b981" onClick={() => openDialog("completed")} />
-              <MiniStatCard icon={Layers} label="Dispatch Planning"
-                value={(stats.stageCounts.find((s: any) => s.id === "Dispatch Planning")?.pending || 0) + (stats.stageCounts.find((s: any) => s.id === "Dispatch Planning")?.completed || 0)}
-                badge="Planning" badgeColor="#6366f1" cardBg="oklch(0.98 0.03 265 / 0.4)" borderColor="oklch(0.88 0.06 265)" iconColor="#6366f1"
-                subData={[
-                  { label: "P", value: stats.stageCounts.find((s: any) => s.id === "Dispatch Planning")?.pending || 0, color: "#f59e0b" },
-                  { label: "C", value: stats.stageCounts.find((s: any) => s.id === "Dispatch Planning")?.completed || 0, color: "#10b981" }
-                ]}
-                onClick={() => openDialog("dispatch")} />
-              <MiniStatCard icon={AlertTriangle} label="Damages (Count)" value={stats.stageCounts.find((s: any) => s.id === "Damage Adjustment")?.pending || 0} badge="Critical" badgeColor="#f43f5e" cardBg="oklch(0.99 0.04 25 / 0.4)" borderColor="oklch(0.88 0.08 25)" iconColor="#f43f5e" onClick={() => openDialog("damages")} />
-              <MiniStatCard icon={FileText} label="Total Payment" value={stats.stageCounts.find((s: any) => s.id === "Make Invoice")?.completed || 0} badge="Payment" badgeColor="#8b5cf6" cardBg="oklch(0.98 0.03 295 / 0.4)" borderColor="oklch(0.88 0.06 295)" iconColor="#8b5cf6" onClick={() => openDialog("invoices")} />
+              {isLoading ? (
+                Array(5).fill(0).map((_, i) => <MiniStatCardSkeleton key={i} />)
+              ) : (
+                <>
+                  <MiniStatCard icon={Activity} label="Pending Orders" value={stats.active} badge="Live Status" badgeColor="#f59e0b" cardBg="oklch(0.99 0.04 75 / 0.4)" borderColor="oklch(0.88 0.08 75)" iconColor="#f59e0b" onClick={() => openDialog("pending")} />
+                  <MiniStatCard icon={CheckCircle2} label="Complete Orders" value={stats.completed} badge="Success" badgeColor="#10b981" cardBg="oklch(0.98 0.04 155 / 0.4)" borderColor="oklch(0.88 0.08 155)" iconColor="#10b981" onClick={() => openDialog("completed")} />
+                  <MiniStatCard icon={Layers} label="Dispatch Planning"
+                    value={(stats.stageCounts.find((s: any) => s.id === "Dispatch Planning")?.pending || 0) + (stats.stageCounts.find((s: any) => s.id === "Dispatch Planning")?.completed || 0)}
+                    badge="Planning" badgeColor="#6366f1" cardBg="oklch(0.98 0.03 265 / 0.4)" borderColor="oklch(0.88 0.06 265)" iconColor="#6366f1"
+                    subData={[
+                      { label: "P", value: stats.stageCounts.find((s: any) => s.id === "Dispatch Planning")?.pending || 0, color: "#f59e0b" },
+                      { label: "C", value: stats.stageCounts.find((s: any) => s.id === "Dispatch Planning")?.completed || 0, color: "#10b981" }
+                    ]}
+                    onClick={() => openDialog("dispatch")} />
+                  <MiniStatCard icon={AlertTriangle} label="Damages (Qty)" value={stats.totalDamageQty} badge="Critical" badgeColor="#f43f5e" cardBg="oklch(0.99 0.04 25 / 0.4)" borderColor="oklch(0.88 0.08 25)" iconColor="#f43f5e" onClick={() => openDialog("damages")} />
+                  <MiniStatCard icon={FileText} label="Total Payment" value={fmtCurrency(stats.totalPaymentAmount)} badge="Payment" badgeColor="#8b5cf6" cardBg="oklch(0.98 0.03 295 / 0.4)" borderColor="oklch(0.88 0.06 295)" iconColor="#8b5cf6" onClick={() => openDialog("invoices")} />
+                </>
+              )}
             </div>
             <div className="lg:col-span-4 rounded-xl border overflow-hidden flex flex-col" style={{ borderColor: "oklch(0.90 0.025 245)" }}>
               <div className="px-4 py-2.5 border-b" style={{ background: "oklch(0.95 0.02 248)", borderColor: "oklch(0.90 0.025 245)" }}>
@@ -267,17 +293,27 @@ export default function Dashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {stats.stageCounts.map((s: any, i: number) => (
-                      <TableRow key={i} className="hover:bg-slate-50/60 transition-colors" style={{ borderColor: "oklch(0.93 0.015 245)" }}>
-                        <TableCell className="py-2 pl-4 text-[12px] font-semibold text-slate-700">{s.label}</TableCell>
-                        <TableCell className="py-2 text-center">
-                          <span className="inline-flex items-center justify-center min-w-8 px-2 py-0.5 rounded-md text-[11px] font-black" style={{ background: "#fef3c7", color: "#92400e" }}>{s.pending}</span>
-                        </TableCell>
-                        <TableCell className="py-2 text-right pr-4">
-                          <span className="inline-flex items-center justify-center min-w-8 px-2 py-0.5 rounded-md text-[11px] font-black" style={{ background: "#d1fae5", color: "#065f46" }}>{s.completed}</span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {isLoading ? (
+                      Array(8).fill(0).map((_, i) => (
+                        <TableRow key={i} className="border-none">
+                          <TableCell className="pl-4"><Skeleton className="h-4 w-28" /></TableCell>
+                          <TableCell className="text-center"><Skeleton className="h-6 w-10 mx-auto rounded-md" /></TableCell>
+                          <TableCell className="text-right pr-4"><Skeleton className="h-6 w-10 ml-auto rounded-md" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      stats.stageCounts.map((s: any, i: number) => (
+                        <TableRow key={i} className="hover:bg-slate-50/60 transition-colors" style={{ borderColor: "oklch(0.93 0.015 245)" }}>
+                          <TableCell className="py-2 pl-4 text-[12px] font-semibold text-slate-700">{s.label}</TableCell>
+                          <TableCell className="py-2 text-center">
+                            <span className="inline-flex items-center justify-center min-w-8 px-2 py-0.5 rounded-md text-[11px] font-black" style={{ background: "#fef3c7", color: "#92400e" }}>{s.pending}</span>
+                          </TableCell>
+                          <TableCell className="py-2 text-right pr-4">
+                            <span className="inline-flex items-center justify-center min-w-8 px-2 py-0.5 rounded-md text-[11px] font-black" style={{ background: "#d1fae5", color: "#065f46" }}>{s.completed}</span>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </ScrollArea>
@@ -343,25 +379,39 @@ export default function Dashboard() {
           {/* ── ORDER GROUPS LIST — fixed height with scroll ── */}
           <ScrollArea className="h-[520px]">
             <div className="divide-y" style={{ borderColor: "oklch(0.93 0.015 245)" }}>
-              {visibleGroups.map(group => (
-                <OrderGroupRow
-                  key={group.baseNo}
-                  group={group}
-                  stages={STAGES}
-                  isExpanded={expandedGroupId === group.baseNo}
-                  onToggle={() => setExpandedGroupId(expandedGroupId === group.baseNo ? null : group.baseNo)}
-                />
-              ))}
-              {visibleGroups.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 gap-3 opacity-30">
-                  <Package className="h-10 w-10 text-slate-300" />
-                  <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">No orders found</p>
-                </div>
+              {isLoading ? (
+                Array(6).fill(0).map((_, i) => (
+                  <div key={i} className="w-full px-5 py-4 flex items-center gap-3">
+                    <Skeleton className="h-6 w-6 rounded-full" />
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-5 w-48 flex-1" />
+                    <Skeleton className="h-6 w-24 rounded-full" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                ))
+              ) : (
+                <>
+                  {visibleGroups.map(group => (
+                    <OrderGroupRow
+                      key={group.baseNo}
+                      group={group}
+                      stages={STAGES}
+                      isExpanded={expandedGroupId === group.baseNo}
+                      onToggle={() => setExpandedGroupId(expandedGroupId === group.baseNo ? null : group.baseNo)}
+                    />
+                  ))}
+                  {visibleGroups.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-20 gap-3 opacity-30">
+                      <Package className="h-10 w-10 text-slate-300" />
+                      <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">No orders found</p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
             {/* Infinite scroll trigger */}
-            {visibleGroups.length < filteredGroups.length && (
+            {visibleGroups.length < filteredGroups.length && !isLoading && (
               <div ref={loaderRef} className="flex items-center justify-center gap-2 py-5 text-[12px] font-bold text-slate-400">
                 <div className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
                 Loading more…
@@ -625,7 +675,7 @@ function OrderGroupRow({ group, stages, isExpanded, onToggle }: {
                             <span className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded"
                               style={isDone ? { background: `${stage.color}20`, color: stage.color }
                                 : isStuck ? { background: "#fef3c7", color: "#92400e" }
-                                : { background: "#f1f5f9", color: "#94a3b8" }}>
+                                  : { background: "#f1f5f9", color: "#94a3b8" }}>
                               {isDone ? "✓" : isStuck ? "!" : "—"}
                             </span>
                           </div>
@@ -655,7 +705,7 @@ function OrderGroupRow({ group, stages, isExpanded, onToggle }: {
                         width: `${pct}%`,
                         background: pct >= 80 ? "linear-gradient(90deg,#10b981,#34d399)"
                           : pct >= 40 ? "linear-gradient(90deg,#6366f1,#8b5cf6)"
-                          : "linear-gradient(90deg,#f59e0b,#fbbf24)"
+                            : "linear-gradient(90deg,#f59e0b,#fbbf24)"
                       }} />
                   </div>
                   <span className="text-[10px] font-black text-slate-400">{pct}% complete</span>
@@ -813,3 +863,37 @@ function OrderListPopup({ title, icon, orders, colorClass, onClose, showStage = 
 }
 
 
+//  KPI CARD SKELETON
+// ═══════════════════════════════════════════════════════════════════════════
+function KPICardSkeleton() {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border bg-white border-slate-100 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <Skeleton className="h-10 w-10 rounded-xl" />
+        <Skeleton className="h-5 w-16 rounded-md" />
+      </div>
+      <div>
+        <Skeleton className="h-9 w-24 mb-2" />
+        <Skeleton className="h-3 w-32" />
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MINI STAT CARD SKELETON
+// ═══════════════════════════════════════════════════════════════════════════
+function MiniStatCardSkeleton() {
+  return (
+    <div className="flex flex-col justify-between p-5 rounded-xl border bg-slate-50/30 border-slate-100 min-h-[150px]">
+      <div className="flex items-start justify-between">
+        <Skeleton className="h-9 w-9 rounded-xl" />
+        <Skeleton className="h-5 w-14 rounded-md" />
+      </div>
+      <div>
+        <Skeleton className="h-10 w-16 mb-2" />
+        <Skeleton className="h-3 w-28" />
+      </div>
+    </div>
+  )
+}

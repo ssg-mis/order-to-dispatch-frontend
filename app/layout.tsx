@@ -14,6 +14,8 @@ const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" })
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" })
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans", weight: ["400", "500", "600", "700", "800", "900"] })
 
+import { QueryProvider } from "@/components/query-provider"
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -102,27 +104,29 @@ export default function RootLayout({
         <meta name="description" content="Professional multi-stage order tracking system" />
       </head>
       <body className={`${inter.variable} ${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
-        {isLoginPage ? (
-          // Login page without sidebar
-          <>
-            {children}
-            <Toaster />
-          </>
-        ) : (
-          // All other pages with sidebar
-          <SidebarProvider defaultOpen={true}>
-            <div className="flex min-h-screen w-full">
-              <AppSidebar />
-              <main
-                className="flex-1 overflow-y-auto overflow-x-hidden"
-                style={{ background: "oklch(0.97 0.012 245)" }}
-              >
-                {children}
-              </main>
-            </div>
-            <Toaster />
-          </SidebarProvider>
-        )}
+        <QueryProvider>
+          {isLoginPage ? (
+            // Login page without sidebar
+            <>
+              {children}
+              <Toaster />
+            </>
+          ) : (
+            // All other pages with sidebar
+            <SidebarProvider defaultOpen={true}>
+              <div className="flex min-h-screen w-full">
+                <AppSidebar />
+                <main
+                  className="flex-1 overflow-y-auto overflow-x-hidden"
+                  style={{ background: "oklch(0.97 0.012 245)" }}
+                >
+                  {children}
+                </main>
+              </div>
+              <Toaster />
+            </SidebarProvider>
+          )}
+        </QueryProvider>
         <Analytics />
       </body>
     </html>

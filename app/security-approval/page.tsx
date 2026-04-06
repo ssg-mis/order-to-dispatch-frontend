@@ -27,6 +27,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { securityGuardApprovalApi, orderApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { useInView } from "react-intersection-observer"
+import { Loader2 } from "lucide-react"
 
 export default function SecurityApprovalPage() {
   const router = useRouter()
@@ -34,8 +37,17 @@ export default function SecurityApprovalPage() {
   const { isReadOnly, user } = useAuth()
   const [confirmDetails, setConfirmDetails] = useState<Record<string, { qty: string }>>({})
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
-  const [pendingOrders, setPendingOrders] = useState<any[]>([])
-  const [historyOrders, setHistoryOrders] = useState<any[]>([])
+  const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
+  const { ref: pendingEndRef, inView: pendingInView } = useInView()
+  const { ref: historyEndRef, inView: historyInView } = useInView()
+
+  const [filterValues, setFilterValues] = useState({
+    status: "",
+    startDate: "",
+    endDate: "",
+    partyName: "",
+    search: ""
+  })
   const [isProcessing, setIsProcessing] = useState(false)
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "—";
@@ -80,54 +92,90 @@ export default function SecurityApprovalPage() {
     remarks: "", // Added state to track revert remarks
   })
 
-  // Fetch pending security approvals from backend
-  const fetchPendingApprovals = async () => {
-    try {
-      console.log('[SECURITY] Fetching pending approvals from API...');
-      const response = await securityGuardApprovalApi.getPending({ limit: 1000 });
-      console.log('[SECURITY] API Response:', response);
-
-      if (response.success && response.data.approvals) {
-        setPendingOrders(response.data.approvals);
-        console.log('[SECURITY] Loaded', response.data.approvals.length, 'pending approvals');
-      }
-    } catch (error: any) {
-      console.error("[SECURITY] Failed to fetch pending approvals:", error);
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to load pending approvals",
-        variant: "destructive",
+  // Pending query with infinite pagination
+  const {
+    data: pendingData,
+    fetchNextPage: fetchNextPending,
+    hasNextPage: hasNextPending,
+    isFetchingNextPage: isFetchingNextPending,
+    isLoading: isPendingLoading,
+    refetch: refetchPending,
+  } = useInfiniteQuery({
+    queryKey: ["security-approval-pending", filterValues],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await securityGuardApprovalApi.getPending({
+        page: pageParam,
+        limit: 20,
+        so_no: filterValues.search,
+        party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
       });
-      setPendingOrders([]);
-    }
-  };
+      return response.success ? response.data : { approvals: [], pagination: { total: 0 } };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.approvals?.length || 0), 0);
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
+    },
+  });
 
-  // Fetch security approval history from backend
-  const fetchApprovalHistory = async () => {
-    try {
-      const response = await securityGuardApprovalApi.getHistory({ limit: 1000 });
+  // History query with infinite pagination (lazy loaded)
+  const {
+    data: historyData,
+    fetchNextPage: fetchNextHistory,
+    hasNextPage: hasNextHistory,
+    isFetchingNextPage: isFetchingNextHistory,
+    isLoading: isHistoryLoading,
+    refetch: refetchHistory,
+  } = useInfiniteQuery({
+    queryKey: ["security-approval-history", filterValues],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await securityGuardApprovalApi.getHistory({
+        page: pageParam,
+        limit: 20,
+        so_no: filterValues.search,
+        party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
+      });
+      return response.success ? response.data : { approvals: [], pagination: { total: 0 } };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const currentCount = allPages.reduce((sum, page) => sum + (page.approvals?.length || 0), 0);
+      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
+    },
+    enabled: activeTab === "history",
+  });
 
-      if (response.success && response.data.approvals) {
-        const mappedHistory = response.data.approvals.map((record: any) => ({
-          ...record,
-          orderNo: record.so_no,
-          doNumber: record.d_sr_number,
-          customerName: (record.transfer === 'yes' && record.bill_company_name) ? record.bill_company_name : record.party_name,
-          stage: "Security Approval",
-          status: "Completed" as const,
-          processedBy: "System",
-          timestamp: record.actual_4,
-          date: record.actual_4 ? new Date(record.actual_4).toLocaleDateString("en-GB") : "-",
-          remarks: record.bilty_no || "-",
-          rawData: record,
-        }));
-        setHistoryOrders(mappedHistory);
-      }
-    } catch (error: any) {
-      console.error("[SECURITY] Failed to fetch history:", error);
-      setHistoryOrders([]);
+  const pendingOrders = useMemo(() => {
+    return pendingData?.pages.flatMap((page) => page.approvals) || [];
+  }, [pendingData]);
+
+  const historyOrders = useMemo(() => {
+    return historyData?.pages.flatMap((page) => page.approvals).map((record: any) => ({
+      ...record,
+      orderNo: record.so_no,
+      doNumber: record.d_sr_number,
+      customerName: (record.transfer === 'yes' && record.bill_company_name) ? record.bill_company_name : record.party_name,
+      stage: "Security Approval",
+      status: "Completed" as const,
+      processedBy: "System",
+      timestamp: record.actual_4,
+      date: record.actual_4 ? new Date(record.actual_4).toLocaleDateString("en-GB") : "-",
+      remarks: record.bilty_no || "-",
+      rawData: record,
+    })) || [];
+  }, [historyData]);
+
+  useEffect(() => {
+    if (pendingInView && hasNextPending) {
+      fetchNextPending();
     }
-  };
+  }, [pendingInView, hasNextPending, fetchNextPending]);
+
+  useEffect(() => {
+    if (historyInView && hasNextHistory) {
+      fetchNextHistory();
+    }
+  }, [historyInView, hasNextHistory, fetchNextHistory]);
 
   const handleFileUpload = async (file: File, type: 'bilty' | 'vehicle') => {
     if (!file) return;
@@ -169,9 +217,8 @@ export default function SecurityApprovalPage() {
   };
 
   useEffect(() => {
-    fetchPendingApprovals();
-    fetchApprovalHistory();
-  }, []);
+    // refetchPending and refetchHistory are already initiated by the queryKey dependency on filterValues
+  }, [])
 
   const handleBulkSubmit = async () => {
     if (selectedGroups.length === 0) return
@@ -275,8 +322,8 @@ export default function SecurityApprovalPage() {
         });
 
         // Refresh data from backend
-        await fetchPendingApprovals();
-        await fetchApprovalHistory();
+        await refetchPending();
+        await refetchHistory();
 
         // Navigate to next stage after delay
         setTimeout(() => {
@@ -307,12 +354,6 @@ export default function SecurityApprovalPage() {
   /* Extract unique customer names */
   const customerNames = Array.from(new Set(pendingOrders.map(order => order.party_name || "Unknown")))
 
-  const [filterValues, setFilterValues] = useState({
-    status: "",
-    startDate: "",
-    endDate: "",
-    partyName: ""
-  })
 
   const filteredPendingOrders = pendingOrders.filter(order => {
     let matches = true
@@ -501,10 +542,26 @@ export default function SecurityApprovalPage() {
       description="Upload bilty and vehicle images for security verification."
       pendingCount={displayRows.length}
       historyData={historyOrders}
-      partyNames={customerNames}
       onFilterChange={setFilterValues}
-      remarksColName="Attachments"
+      showStatusFilter={true}
       stageLevel={5}
+      onTabChange={setActiveTab}
+      isHistoryLoading={isHistoryLoading}
+      historyFooter={
+        <div ref={historyEndRef} className="py-4 flex justify-center">
+          {isFetchingNextHistory && (
+            <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-xs tracking-widest ">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>LOADING MORE SECURITY HISTORY...</span>
+            </div>
+          )}
+          {!hasNextHistory && historyOrders.length > 0 && (
+            <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest bg-slate-50 px-4 py-1.5 rounded-full border border-slate-100 italic">
+              END OF HISTORY
+            </span>
+          )}
+        </div>
+      }
     >
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
@@ -559,7 +616,21 @@ export default function SecurityApprovalPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayRows.length > 0 ? (
+              {isPendingLoading && pendingOrders.length === 0 ? (
+                [...Array(5)].map((_, i) => (
+                  <TableRow key={i} className="opacity-40 border-b border-slate-50">
+                    <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
+                    <TableCell className="p-4 text-center"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="p-4"><div className="h-3 w-32 bg-slate-200 animate-pulse rounded-full" /></TableCell>
+                    <TableCell className="p-4"><div className="h-3 w-16 bg-slate-200 animate-pulse rounded-full" /></TableCell>
+                    <TableCell className="p-4"><div className="h-3 w-40 bg-slate-200 animate-pulse rounded-full" /></TableCell>
+                    <TableCell className="text-center p-4"><div className="h-6 w-8 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
+                    <TableCell className="text-center p-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center p-4"><div className="h-3 w-32 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center p-4"><div className="h-5 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                  </TableRow>
+                ))
+              ) : displayRows.length > 0 ? (
                 displayRows.map((group) => (
                   <TableRow key={group._rowKey} className={cn("hover:bg-purple-50/30 transition-colors", selectedItems.includes(group._rowKey) ? "bg-purple-50/50" : "")}>
                     <TableCell className="text-center p-4">
@@ -610,6 +681,14 @@ export default function SecurityApprovalPage() {
               )}
             </TableBody>
           </Table>
+          <div ref={pendingEndRef} className="py-2 flex justify-center">
+            {isFetchingNextPending && (
+              <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-[10px]">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>LOADING MORE...</span>
+              </div>
+            )}
+          </div>
         </Card>
       </div>
 
