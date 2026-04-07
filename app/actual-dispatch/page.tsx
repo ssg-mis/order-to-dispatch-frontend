@@ -271,14 +271,14 @@ export default function ActualDispatchPage() {
     isLoading: isPendingLoading,
     refetch: refetchPending,
   } = useInfiniteQuery({
-    queryKey: ["actual-dispatch-pending", filterValues],
+    queryKey: ["actual-dispatch-pending", filterValues, user?.depo_access?.['Actual Dispatch']],
     queryFn: async ({ pageParam = 1 }) => {
       const response = await (actualDispatchApi.getPending as any)({
         page: pageParam,
         limit: 20,
         so_no: filterValues.search,
         party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
-        depo_names: user?.depo_access?.['Actual Dispatch']
+        depo_names: user?.depo_access?.['Actual Dispatch'] || []
       });
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
     },
@@ -298,14 +298,14 @@ export default function ActualDispatchPage() {
     isLoading: isHistoryLoading,
     refetch: refetchHistory,
   } = useInfiniteQuery({
-    queryKey: ["actual-dispatch-history", filterValues],
+    queryKey: ["actual-dispatch-history", filterValues, user?.depo_access?.['Actual Dispatch']],
     queryFn: async ({ pageParam = 1 }) => {
       const response = await (actualDispatchApi.getHistory as any)({
         page: pageParam,
         limit: 20,
         so_no: filterValues.search,
         party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
-        depo_names: user?.depo_access?.['Actual Dispatch']
+        depo_names: user?.depo_access ? (user.depo_access['Actual Dispatch'] || []) : undefined
       });
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
     },
@@ -364,11 +364,11 @@ export default function ActualDispatchPage() {
       if (response.success && response.data?.depots) {
         let depots = response.data.depots;
 
-        // Filter by user permissions
-        const allowedDepos = user?.depo_access?.['Actual Dispatch'];
-        if (allowedDepos) {
-          depots = depots.filter((d: any) => allowedDepos.includes(d.depot_name));
-        }
+        // Filter by user permissions: strict deny-by-default even for admins.
+        const allowedDepos = user?.depo_access?.['Actual Dispatch'] || [];
+        depots = depots.filter((d: any) => 
+          allowedDepos.some(ad => ad.toLowerCase() === d.depot_name.toLowerCase())
+        );
 
         setActiveDepots(depots);
         // Set first active depot as default if nothing is selected or current selected is not in active list
@@ -382,9 +382,9 @@ export default function ActualDispatchPage() {
   };
 
   useEffect(() => {
-    fetchSkus()
-    fetchDepots()
-  }, [])
+    fetchSkus();
+    fetchDepots();
+  }, [user?.depo_access])
 
   const availableDepos = useMemo(() => {
     return activeDepots.map(d => d.depot_name);

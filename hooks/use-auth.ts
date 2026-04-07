@@ -51,6 +51,9 @@ export function useAuth() {
 
       if (authStatus && userStr) {
         const userData = JSON.parse(userStr)
+        if (userData) {
+          userData.depo_access = normalizeDepoAccess(userData.depo_access)
+        }
         setUser(userData)
         setIsAuthenticated(true)
       } else {
@@ -87,6 +90,7 @@ export function useAuth() {
         const response = await userApi.getById(currentUser.id)
         if (response.success && response.data) {
           const freshUser = response.data
+          freshUser.depo_access = normalizeDepoAccess(freshUser.depo_access)
           // Update localStorage with fresh data from server
           localStorage.setItem("user", JSON.stringify(freshUser))
           setUser(freshUser)
@@ -99,6 +103,44 @@ export function useAuth() {
 
     refreshUser()
   }, [pathname])
+
+  /**
+   * Normalizes depo_access from DB (potentially string/JSON) to Record<string, string[]>
+   */
+  function normalizeDepoAccess(raw: any): Record<string, string[]> {
+    if (!raw) return {}
+    let parsed: any = raw
+    if (typeof raw === 'string') {
+      try {
+        parsed = JSON.parse(raw)
+      } catch {
+        // Fallback for Postgres text array format "{Value1,Value2}"
+        const clean = raw.replace(/^\{/, '').replace(/\}$/, '')
+        if (clean === "") return {}
+        // This is a simple fallback; real Postgres arrays can be more complex, 
+        // but for this app's depot names it should work.
+        return { 'Default': clean.split(',').map(s => s.trim()) }
+      }
+    }
+
+    if (!parsed || typeof parsed !== 'object') return {}
+
+    const result: Record<string, string[]> = {}
+    Object.entries(parsed).forEach(([page, val]) => {
+      if (Array.isArray(val)) {
+        result[page] = val.map(String)
+      } else if (typeof val === 'string') {
+        result[page] = val
+          .replace(/^\{/, '').replace(/\}$/, '')
+          .split(',')
+          .map((s: string) => s.replace(/^"/, '').replace(/"$/, '').trim())
+          .filter(Boolean)
+      } else {
+        result[page] = []
+      }
+    })
+    return result
+  }
 
   /**
    * Returns 'modify' | 'view_only' | 'none' for a given page name.

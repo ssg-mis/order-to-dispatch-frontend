@@ -131,7 +131,7 @@ export default function DispatchMaterialPage() {
     isLoading: isPendingLoading,
     refetch: refetchPending,
   } = useInfiniteQuery({
-    queryKey: ["dispatch-pending", filterValues],
+    queryKey: ["dispatch-pending", filterValues, user?.depo_access?.['Dispatch Planning']],
     queryFn: async ({ pageParam = 1 }) => {
       const response = await (dispatchPlanningApi.getPending as any)({
         page: pageParam,
@@ -139,7 +139,7 @@ export default function DispatchMaterialPage() {
         order_no: filterValues.search,
         start_date: filterValues.startDate,
         end_date: filterValues.endDate,
-        depo_names: user?.depo_access?.['Dispatch Planning']
+        depo_names: user?.depo_access?.['Dispatch Planning'] || []
       });
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
     },
@@ -159,7 +159,7 @@ export default function DispatchMaterialPage() {
     isLoading: isHistoryLoading,
     refetch: refetchHistory,
   } = useInfiniteQuery({
-    queryKey: ["dispatch-history", filterValues],
+    queryKey: ["dispatch-history", filterValues, user?.depo_access?.['Dispatch Planning']],
     queryFn: async ({ pageParam = 1 }) => {
       const response = await (dispatchPlanningApi.getHistory as any)({
         page: pageParam,
@@ -167,7 +167,7 @@ export default function DispatchMaterialPage() {
         order_no: filterValues.search,
         start_date: filterValues.startDate,
         end_date: filterValues.endDate,
-        depo_names: user?.depo_access?.['Dispatch Planning']
+        depo_names: user?.depo_access ? (user.depo_access['Dispatch Planning'] || []) : undefined
       });
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
     },
@@ -218,10 +218,13 @@ export default function DispatchMaterialPage() {
         let depots = response.data.depots;
 
         // Filter by user permissions
-        const allowedDepos = user?.depo_access?.['Dispatch Planning'];
-        if (allowedDepos) {
-          depots = depots.filter((d: any) => allowedDepos.includes(d.depot_name));
-        }
+        // Filter by user permissions: if missing from depo_access object, we allow all for backward compatibility/admins.
+        // If the key exists but is empty [], we show NOTHING.
+        // Filter by user permissions: strict deny-by-default even for admins.
+        const allowedDepos = user?.depo_access?.['Dispatch Planning'] || [];
+        depots = depots.filter((d: any) => 
+          allowedDepos.some(ad => ad.toLowerCase() === d.depot_name.toLowerCase())
+        );
 
         setActiveDepots(depots);
         // Set first active depot as default if nothing is selected or current selected is not in active list
@@ -237,7 +240,7 @@ export default function DispatchMaterialPage() {
   useEffect(() => {
     fetchCustomers();
     fetchDepots();
-  }, [])
+  }, [user?.depo_access])
 
   const availableDepos = useMemo(() => {
     return activeDepots.map(d => d.depot_name);

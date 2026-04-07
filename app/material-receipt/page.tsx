@@ -98,14 +98,14 @@ export default function MaterialReceiptPage() {
     isLoading: isPendingLoading,
     refetch: refetchPending,
   } = useQuery({
-    queryKey: ["pending-material-receipt", filterValues.search, filterValues.partyName, user?.depo_access, pendingPage],
+    queryKey: ["pending-material-receipt", filterValues.search, filterValues.partyName, user?.depo_access?.['Confirm Material Receipt'], pendingPage],
     queryFn: async () => {
       const response = await confirmMaterialReceiptApi.getPending({
         page: pendingPage,
         limit: limit,
         so_no: filterValues.search,
         party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
-        depo_names: user?.depo_access?.['Material Receipt'] || [],
+        depo_names: user?.depo_access?.['Confirm Material Receipt'] || []
       });
       return response.success ? response.data : { orders: [], pagination: { total: 0 } };
     },
@@ -119,14 +119,14 @@ export default function MaterialReceiptPage() {
     isLoading: isHistoryLoading,
     refetch: refetchHistory,
   } = useQuery({
-    queryKey: ["material-receipt-history", filterValues.search, filterValues.partyName, user?.depo_access, historyPage],
+    queryKey: ["material-receipt-history", filterValues.search, filterValues.partyName, user?.depo_access?.['Confirm Material Receipt'], historyPage],
     queryFn: async () => {
       const response = await confirmMaterialReceiptApi.getHistory({
         page: historyPage,
         limit: limit,
         so_no: filterValues.search,
         party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
-        depo_names: user?.depo_access?.['Material Receipt'] || [],
+        depo_names: user?.depo_access ? (user.depo_access['Material Receipt'] || []) : undefined
       });
       return response.success ? response.data : { orders: [], pagination: { total: 0 } };
     },
