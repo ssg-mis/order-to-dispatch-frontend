@@ -20,23 +20,22 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Upload, CheckCircle, Settings2, AlertTriangle } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { confirmMaterialReceiptApi, orderApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
-import { useInfiniteQuery } from "@tanstack/react-query"
-import { useInView } from "react-intersection-observer"
-import { Loader2 } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import { Loader2, RotateCcw, ChevronLeft, ChevronRight, Settings2, Search, CheckCircle, Upload, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function MaterialReceiptPage() {
   const router = useRouter()
+  const { user, isReadOnly } = useAuth()
   const { toast } = useToast()
-  const { isReadOnly, user } = useAuth()
   const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
-  const { ref: pendingEndRef, inView: pendingInView } = useInView()
-  const { ref: historyEndRef, inView: historyInView } = useInView()
+  const [pendingPage, setPendingPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
+  const limit = 25;
 
   const [filterValues, setFilterValues] = useState({
     status: "",
@@ -46,6 +45,7 @@ export default function MaterialReceiptPage() {
     search: ""
   })
   const [isProcessing, setIsProcessing] = useState(false)
+  
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "—";
     try {
@@ -92,78 +92,54 @@ export default function MaterialReceiptPage() {
     damageImageName: string
   }>>({})
 
-  // Pending query with infinite pagination
+  // Pending Receipts Query
   const {
     data: pendingData,
-    fetchNextPage: fetchNextPending,
-    hasNextPage: hasNextPending,
-    isFetchingNextPage: isFetchingNextPending,
     isLoading: isPendingLoading,
     refetch: refetchPending,
-  } = useInfiniteQuery({
-    queryKey: ["material-receipt-pending", filterValues],
-    queryFn: async ({ pageParam = 1 }) => {
+  } = useQuery({
+    queryKey: ["pending-material-receipt", filterValues.search, filterValues.partyName, user?.depo_access, pendingPage],
+    queryFn: async () => {
       const response = await confirmMaterialReceiptApi.getPending({
-        page: pageParam,
-        limit: 20,
+        page: pendingPage,
+        limit: limit,
         so_no: filterValues.search,
         party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
+        depo_names: user?.depo_access?.['Material Receipt'] || [],
       });
       return response.success ? response.data : { orders: [], pagination: { total: 0 } };
-    },
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) => {
-      const currentCount = allPages.reduce((sum, page) => sum + (page.orders?.length || 0), 0);
-      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
     },
   });
 
-  // History query with infinite pagination (lazy loaded)
+  const pendingOrders = pendingData?.orders || [];
+
+  // History Query
   const {
     data: historyData,
-    fetchNextPage: fetchNextHistory,
-    hasNextPage: hasNextHistory,
-    isFetchingNextPage: isFetchingNextHistory,
     isLoading: isHistoryLoading,
     refetch: refetchHistory,
-  } = useInfiniteQuery({
-    queryKey: ["material-receipt-history", filterValues],
-    queryFn: async ({ pageParam = 1 }) => {
+  } = useQuery({
+    queryKey: ["material-receipt-history", filterValues.search, filterValues.partyName, user?.depo_access, historyPage],
+    queryFn: async () => {
       const response = await confirmMaterialReceiptApi.getHistory({
-        page: pageParam,
-        limit: 20,
+        page: historyPage,
+        limit: limit,
         so_no: filterValues.search,
         party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
+        depo_names: user?.depo_access?.['Material Receipt'] || [],
       });
       return response.success ? response.data : { orders: [], pagination: { total: 0 } };
-    },
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) => {
-      const currentCount = allPages.reduce((sum, page) => sum + (page.orders?.length || 0), 0);
-      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
     },
     enabled: activeTab === "history",
   });
 
-  const pendingOrders = useMemo(() => {
-    return pendingData?.pages.flatMap((page) => page.orders) || [];
-  }, [pendingData]);
+  const historyOrders = historyData?.orders || [];
 
-  const historyOrders = useMemo(() => {
-    return historyData?.pages.flatMap((page) => page.orders) || [];
-  }, [historyData]);
-
+  // Reset to page 1 on filter change
   useEffect(() => {
-    if (pendingInView && hasNextPending) {
-      fetchNextPending();
-    }
-  }, [pendingInView, hasNextPending, fetchNextPending]);
-
-  useEffect(() => {
-    if (historyInView && hasNextHistory) {
-      fetchNextHistory();
-    }
-  }, [historyInView, hasNextHistory, fetchNextHistory]);
+    setPendingPage(1);
+    setHistoryPage(1);
+  }, [filterValues.search, filterValues.partyName]);
 
   const handleFileUpload = async (file: File, type: 'damage' | 'proof', rowKey?: string) => {
     if (!file) return;
@@ -205,56 +181,24 @@ export default function MaterialReceiptPage() {
     }
   };
 
-
-  /* Filter Logic */
-
-  const filteredPendingOrders = pendingOrders.filter(order => {
-    let matches = true
-
-    // Filter by Party Name
-    if (filterValues.partyName && filterValues.partyName !== "all" && order.party_name !== filterValues.partyName) {
-      matches = false
-    }
-
-    // Filter by Date Range
-    const orderDateStr = order.timestamp || order.planned_8
-    if (orderDateStr) {
-      const orderDate = new Date(orderDateStr)
-      if (filterValues.startDate) {
-        const start = new Date(filterValues.startDate)
-        start.setHours(0, 0, 0, 0)
-        if (orderDate < start) matches = false
-      }
-      if (filterValues.endDate) {
-        const end = new Date(filterValues.endDate)
-        end.setHours(23, 59, 59, 999)
-        if (orderDate > end) matches = false
-      }
-    }
-
-    return matches
-  })
+  /* Filter Logic for UI */
+  const filteredPendingOrders = pendingOrders; // Backend already filtered them
 
   /* Grouping Logic */
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order: any) => {
-      // Group by Invoice Number
       const invoiceNo = order.invoice_no || "No Invoice"
       const doNumber = order.so_no || order.d_sr_number || "DO/26-27/0001"
-      // Group by Base DO (e.g. DO/26-27/0001 from DO/26-27/0001A)
-      const baseDoMatch = doNumber.match(/^(DO[-\/](?:\d{2}-\d{2}\/)?\d+)/i)
-      const baseDo = baseDoMatch ? baseDoMatch[1].toUpperCase() : doNumber
+      const groupKey = invoiceNo !== "No Invoice" ? invoiceNo : doNumber;
 
-      if (!grouped[invoiceNo]) {
-        grouped[invoiceNo] = {
-          _rowKey: invoiceNo,
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = {
+          _rowKey: groupKey,
           doNumber: doNumber,
           invoiceNo: invoiceNo,
           customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "—"),
-
-          // Order Details from JOIN
           deliveryPurpose: order.order_type_delivery_purpose || "—",
           orderType: order.order_type || "—",
           startDate: order.start_date ? new Date(order.start_date).toLocaleDateString("en-IN") : "—",
@@ -265,14 +209,11 @@ export default function MaterialReceiptPage() {
           contactWhatsapp: order.customer_contact_person_whatsapp_no || "—",
           customerAddress: order.customer_address || "—",
           totalAmount: order.total_amount_with_gst || "—",
-
           isBroker: order.is_order_through_broker || false,
           brokerName: order.broker_name || "—",
           advanceAmount: order.advance_amount || 0,
           paymentTerms: order.payment_terms || "—",
           partySoDate: order.party_so_date ? new Date(order.party_so_date).toLocaleDateString("en-IN") : "—",
-
-          // Additional Details for Header (as requested)
           invoiceDate: order.invoice_date ? new Date(order.invoice_date).toLocaleDateString("en-IN") : "—",
           biltyNo: order.bilty_no || "—",
           rstNo: order.rst_no || "—",
@@ -285,7 +226,6 @@ export default function MaterialReceiptPage() {
           transporterName: order.transporter_name || "—",
           truckNo: order.truck_no || "—",
           diffReason: order.reason_of_difference_in_weight_if_any_speacefic || "—",
-
           _allProducts: [],
           _productCount: 0
         }
@@ -298,9 +238,9 @@ export default function MaterialReceiptPage() {
         ? (rate * nosPerMainUom * actualQty).toFixed(2)
         : null;
 
-      grouped[invoiceNo]._allProducts.push({
+      grouped[groupKey]._allProducts.push({
         ...order,
-        _rowKey: `${invoiceNo}-${order.id}`,
+        _rowKey: `${groupKey}-${order.id}`,
         id: order.id,
         specificOrderNo: order.so_no,
         productName: order.product_name,
@@ -312,10 +252,10 @@ export default function MaterialReceiptPage() {
         processid: order.processid || null
       })
 
-      grouped[invoiceNo]._productCount = grouped[invoiceNo]._allProducts.length
+      grouped[groupKey]._productCount = grouped[groupKey]._allProducts.length
     })
 
-    return Object.values(grouped).map(g => ({
+    return Object.values(grouped).map((g: any) => ({
       ...g,
       partySoDate: formatDate(g._allProducts[0]?.party_so_date),
       processId: g._allProducts[0]?.processid || "—",
@@ -333,7 +273,7 @@ export default function MaterialReceiptPage() {
   }
 
   const toggleSelectAll = () => {
-    if (selectedItems.length === displayRows.length) {
+    if (selectedItems.length === displayRows.length && displayRows.length > 0) {
       setSelectedItems([])
     } else {
       setSelectedItems(displayRows.map(r => r._rowKey))
@@ -342,14 +282,10 @@ export default function MaterialReceiptPage() {
 
   const handleOpenDialog = () => {
     if (selectedItems.length === 0) return
-
-    // Open for the first selected group
     const targetGroup = displayRows.find(r => r._rowKey === selectedItems[0])
     if (targetGroup) {
       setSelectedGroup(targetGroup)
-      setSelectedProducts(targetGroup._allProducts.map((p: any) => p._rowKey)) // Select all by default
-
-      // Reset form
+      setSelectedProducts(targetGroup._allProducts.map((p: any) => p._rowKey))
       setReceiptData({
         receivedDate: "",
         hasDamage: "no",
@@ -358,15 +294,12 @@ export default function MaterialReceiptPage() {
         remarks: "",
       })
       setProductDamageData({})
-
       setIsDialogOpen(true)
     }
   }
 
   const handleSubmit = async () => {
     if (!selectedGroup) return
-
-    // Validation
     if (!receiptData.receivedDate) {
       toast({ title: "Validation Error", description: "Received Date is required.", variant: "destructive" })
       return
@@ -376,19 +309,8 @@ export default function MaterialReceiptPage() {
       selectedProducts.includes(p._rowKey)
     )
 
-    if (receiptData.hasDamage === "yes") {
-      const hasMissingDetails = productsToSubmit.some((p: any) => {
-        const d = productDamageData[p._rowKey];
-        return false;
-      });
-    }
-
     if (productsToSubmit.length === 0) {
-      toast({
-        title: "Error",
-        description: "Please select at least one product",
-        variant: "destructive"
-      })
+      toast({ title: "Error", description: "Please select at least one product", variant: "destructive" })
       return
     }
 
@@ -399,7 +321,7 @@ export default function MaterialReceiptPage() {
 
       for (const product of productsToSubmit) {
         const pDamage = productDamageData[product._rowKey] || {};
-        const isItemDamaged = receiptData.hasDamage === "yes" && (pDamage.damageQty || pDamage.damageImage); // Simple heuristic
+        const isItemDamaged = receiptData.hasDamage === "yes" && (pDamage.damageQty || pDamage.damageImage);
 
         const submitData = {
           material_received_date: receiptData.receivedDate,
@@ -410,69 +332,44 @@ export default function MaterialReceiptPage() {
           damage_image: isItemDamaged ? pDamage.damageImage : null,
           remarks_3: receiptData.remarks || null,
           bill_amount: product.billAmount ? parseFloat(product.billAmount) : null,
-          username: user?.username || null // Add username for tracking
+          username: user?.username || null
         };
 
-        try {
-          console.log(`[Material-Receipt] Submitting for ID ${product.id}`, submitData);
-          const response = await confirmMaterialReceiptApi.submit(product.id, submitData);
-
-          if (response.success) {
-            successfulSubmissions.push(product);
-          } else {
-            failedSubmissions.push({ product, error: response.message });
-          }
-        } catch (err: any) {
-          console.error(`[Material-Receipt] Failed for ID ${product.id}`, err);
-          failedSubmissions.push({ product, error: err.message });
+        const response = await confirmMaterialReceiptApi.submit(product.id, submitData);
+        if (response.success) {
+          successfulSubmissions.push(product);
+        } else {
+          failedSubmissions.push({ product, error: response.message });
         }
       }
 
       if (successfulSubmissions.length > 0) {
         toast({
           title: "Receipt Confirmed",
-          description: `Successfully processed ${successfulSubmissions.length} items.`,
-          variant: receiptData.hasDamage === "yes" ? "destructive" : "default" // Show destructive style if damage reported
+          description: `Processed ${successfulSubmissions.length} items.`,
+          variant: receiptData.hasDamage === "yes" ? "destructive" : "default"
         })
-
         await refetchPending();
         await refetchHistory();
-
         setIsDialogOpen(false)
         setSelectedItems([])
       }
-
-      if (failedSubmissions.length > 0) {
-        toast({
-          title: "Partial Failure",
-          description: `Failed to process ${failedSubmissions.length} items.`,
-          variant: "destructive"
-        })
-      }
-
     } catch (error: any) {
-      console.error("Batch submit error:", error);
-      toast({
-        title: "Error",
-        description: error.message || "An unexpected error occurred",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: error.message || "Submit failed", variant: "destructive" })
     } finally {
       setIsProcessing(false)
     }
   }
 
-
-
-  const customerNames = Array.from(new Set(pendingOrders.map(order => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "Unknown Customer"))))
+  const customerNames = Array.from(new Set(pendingOrders.map((order: any) => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "Unknown Customer")))) as string[]
 
   return (
     <WorkflowStageShell
       partyNames={customerNames}
       title="Stage 12: Confirm Material Receipt"
       description="Confirm material receipt and report any damages."
-      pendingCount={displayRows.length}
-      historyData={historyOrders.map((order) => ({
+      pendingCount={pendingData?.pagination?.total || 0}
+      historyData={historyOrders.map((order: any) => ({
         ...order,
         date: order.actual_8 ? new Date(order.actual_8).toLocaleDateString("en-GB") : "-",
         orderNo: order.so_no,
@@ -488,18 +385,33 @@ export default function MaterialReceiptPage() {
       onTabChange={setActiveTab}
       isHistoryLoading={isHistoryLoading}
       historyFooter={
-        <div ref={historyEndRef} className="py-4 flex justify-center">
-          {isFetchingNextHistory && (
-            <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-xs tracking-widest ">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>LOADING MORE RECEIPT HISTORY...</span>
-            </div>
-          )}
-          {!hasNextHistory && historyOrders.length > 0 && (
-            <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest bg-slate-50 px-4 py-1.5 rounded-full border border-slate-100 italic">
-              END OF HISTORY
-            </span>
-          )}
+        <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            Showing Page <span className="text-slate-900 mx-1">{historyPage}</span>
+            {historyData?.pagination?.total && (
+              <> of <span className="text-slate-900 mx-1">{Math.ceil(historyData.pagination.total / limit)}</span></>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+              disabled={historyPage === 1 || isHistoryLoading}
+              className="h-8 rounded-lg gap-1 px-3"
+            >
+              <ChevronLeft className="h-4 w-4" /> Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setHistoryPage(p => p + 1)}
+              disabled={isHistoryLoading || (historyPage * limit >= (historyData?.pagination?.total || 0))}
+              className="h-8 rounded-lg gap-1 px-3"
+            >
+              Next <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       }
     >
@@ -508,8 +420,8 @@ export default function MaterialReceiptPage() {
         <div className="flex justify-end gap-2">
           <Button
             onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0}
-            className="bg-blue-600 hover:bg-blue-700"
+            disabled={selectedItems.length === 0 || isReadOnly}
+            className="bg-blue-600 hover:bg-blue-700 font-bold"
           >
             <CheckCircle className="mr-2 h-4 w-4" />
             Confirm Receipt ({selectedItems.length})
@@ -547,7 +459,10 @@ export default function MaterialReceiptPage() {
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>
                 <TableHead className="w-12 text-center">
-                  <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
+                  <Checkbox 
+                    checked={displayRows.length > 0 && selectedItems.length === displayRows.length} 
+                    onCheckedChange={toggleSelectAll} 
+                  />
                 </TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Date</TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
@@ -561,18 +476,18 @@ export default function MaterialReceiptPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isPendingLoading && pendingOrders.length === 0 ? (
+              {isPendingLoading ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i} className="opacity-40 border-b border-slate-50">
                     <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
                     <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                     <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
                     <TableCell className="text-center py-4"><div className="h-3 w-40 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                     <TableCell className="text-center py-4"><div className="h-3 w-16 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    {visibleColumns.includes("invoiceNo") && <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>}
                     <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-32 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center py-4"><div className="h-3 w-40 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                     <TableCell className="text-center py-4"><div className="h-5 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                   </TableRow>
                 ))
@@ -589,200 +504,104 @@ export default function MaterialReceiptPage() {
                     <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
                     <TableCell className="text-center text-xs">{group.customerName}</TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="secondary">{group._productCount} items</Badge>
+                      <Badge variant="secondary" className="font-bold">{group._productCount} items</Badge>
                     </TableCell>
                     {visibleColumns.includes("invoiceNo") && <TableCell className="text-center text-xs font-medium">{group.invoiceNo}</TableCell>}
                     <TableCell className="text-center">
                       <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
                     </TableCell>
                     <TableCell className="text-center">
-                      <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
+                      <span className="text-xs text-slate-600 font-medium truncate max-w-[150px] block" title={group.orderPunchRemarks}>
+                        {group.orderPunchRemarks}
+                      </span>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge className="bg-sky-100 text-sky-700">In Transit</Badge>
+                      <Badge className="bg-sky-100 text-sky-700 font-black text-[10px] uppercase">In Transit</Badge>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground font-medium uppercase text-xs tracking-widest">
                     No orders pending for receipt confirmation
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
-          <div ref={pendingEndRef} className="py-2 flex justify-center">
-            {isFetchingNextPending && (
-              <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-[10px]">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>LOADING MORE...</span>
-              </div>
-            )}
+
+          {/* Pagination Footer - Pending */}
+          <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              Showing Page <span className="text-slate-900 mx-1">{pendingPage}</span>
+              {pendingData?.pagination?.total && (
+                <> of <span className="text-slate-900 mx-1">{Math.ceil(pendingData.pagination.total / limit)}</span></>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPendingPage(p => Math.max(1, p - 1))}
+                disabled={pendingPage === 1 || isPendingLoading}
+                className="h-8 rounded-lg gap-1 px-3 font-bold"
+              >
+                <ChevronLeft className="h-4 w-4" /> Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPendingPage(p => p + 1)}
+                disabled={isPendingLoading || (pendingPage * limit >= (pendingData?.pagination?.total || 0))}
+                className="h-8 rounded-lg gap-1 px-3 font-bold"
+              >
+                Next <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </Card>
-      </div>
 
-      {/* Split-View Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-[95vw]! w-full max-h-[95vh] overflow-y-auto p-0">
-          <div className="p-6">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-slate-900">
-                Confirm Receipt - Invoice: {selectedGroup?.invoiceNo} <span className="text-sm font-medium text-slate-500">({selectedGroup?.customerName})</span>
-              </DialogTitle>
-            </DialogHeader>
+        {/* Receipt Confirmation Dialog */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="max-w-[95vw] w-full max-h-[95vh] overflow-y-auto p-0">
+            <div className="p-6">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold text-slate-900">
+                  Confirm Receipt - Invoice: {selectedGroup?.invoiceNo} <span className="text-sm font-medium text-slate-500">({selectedGroup?.customerName})</span>
+                </DialogTitle>
+              </DialogHeader>
 
-            {selectedGroup && (
-              <div className="space-y-6 mt-4">
-                {/* Order Details Top Section */}
-                <div className="border rounded-lg p-4 bg-muted/30">
-                  <h3 className="text-sm font-semibold mb-3 text-primary">Order & Logistics Details</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4 text-xs">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Delivery Purpose</Label>
-                      <p className="font-medium">{selectedGroup.deliveryPurpose}</p>
+              {selectedGroup && (
+                <div className="space-y-6 mt-4">
+                  {/* Summary & Logistics */}
+                  <div className="border rounded-lg p-4 bg-muted/30">
+                    <h3 className="text-sm font-semibold mb-3 text-primary uppercase tracking-wider">Logistics Details</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-xs font-medium">
+                      <div><Label className="text-[10px] text-muted-foreground uppercase">DO Date</Label><div>{selectedGroup.partySoDate}</div></div>
+                      <div><Label className="text-[10px] text-muted-foreground uppercase">Vehicle</Label><div className="font-bold text-blue-600">{selectedGroup.vehicleNo}</div></div>
+                      <div><Label className="text-[10px] text-muted-foreground uppercase">Bilty No</Label><div>{selectedGroup.biltyNo}</div></div>
+                      <div><Label className="text-[10px] text-muted-foreground uppercase">Transporter</Label><div className="truncate">{selectedGroup.transporterName}</div></div>
                     </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Order Type</Label>
-                      <p className="font-medium">{selectedGroup.orderType}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Start Date</Label>
-                      <p className="font-medium">{selectedGroup.startDate}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">End Date</Label>
-                      <p className="font-medium">{selectedGroup.endDate}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Delivery Date</Label>
-                      <p className="font-medium">{selectedGroup.deliveryDate}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Transport Type</Label>
-                      <p className="font-medium">{selectedGroup.transportType}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Contact Person</Label>
-                      <p className="font-medium">{selectedGroup.contactPerson}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Customer Address</Label>
-                      <p className="font-medium truncate" title={selectedGroup.customerAddress}>{selectedGroup.customerAddress}</p>
-                    </div>
-
-                    {/* Additional invoice/weight details */}
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Delivery Purpose</Label>
-                      <p className="font-medium">{selectedGroup.deliveryPurpose}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Start / End Date</Label>
-                      <p className="font-medium">{selectedGroup.startDate} / {selectedGroup.endDate}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">DO Date</Label>
-                      <p className="font-medium">{selectedGroup.partySoDate}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Transport Type</Label>
-                      <p className="font-medium text-purple-600">{selectedGroup.transportType}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Contact Person</Label>
-                      <p className="font-medium">{selectedGroup.contactPerson} ({selectedGroup.contactWhatsapp})</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Broker / Advance</Label>
-                      <p className="font-medium text-blue-600">{selectedGroup.brokerName} / ₹{selectedGroup.advanceAmount}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Address</Label>
-                      <p className="font-medium truncate" title={selectedGroup.customerAddress}>{selectedGroup.customerAddress}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Invoice No / Date</Label>
-                      <p className="font-medium text-blue-600">{selectedGroup.invoiceNo} / {selectedGroup.invoiceDate}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Bilty No</Label>
-                      <p className="font-medium">{selectedGroup.biltyNo}</p>
-                    </div>
-
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Truck No</Label>
-                      <p className="font-medium">{selectedGroup.truckNo}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Transporter</Label>
-                      <p className="font-medium truncate" title={selectedGroup.transporterName}>{selectedGroup.transporterName}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">RST No</Label>
-                      {selectedGroup.weightmentSlip ? (
-                        <a href={selectedGroup.weightmentSlip} target="_blank" rel="noopener noreferrer" className="block text-blue-600 hover:text-blue-800 underline font-black">
-                          #{selectedGroup.rstNo || "—"}
-                        </a>
-                      ) : (
-                        <p className="font-medium">#{selectedGroup.rstNo || "—"}</p>
-                      )}
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Gross / Tare / Net</Label>
-                      <p className="font-medium text-slate-900 leading-tight">
-                        {selectedGroup.grossWeight || "0"} / {selectedGroup.tareWeight || "0"} / <span className="text-blue-600 font-black">{((Number(selectedGroup.grossWeight || 0) - Number(selectedGroup.tareWeight || 0)) || "0").toString()}</span>
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Weight Diff</Label>
-                      <p className="font-black text-amber-600">{selectedGroup.weightDiff || "0"}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Extra Weight</Label>
-                      <p className="font-black text-purple-600">{selectedGroup.extraWeight || "0"}</p>
-                    </div>
-                    {selectedGroup.diffReason && selectedGroup.diffReason !== "—" && (
-                      <div className="col-span-1">
-                        <Label className="text-xs text-muted-foreground">Diff Reason</Label>
-                        <p className="font-medium text-red-500 italic">{selectedGroup.diffReason}</p>
-                      </div>
-                    )}
                   </div>
-                </div>
 
-                {/* Product List Table (Middle) */}
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="bg-muted/50 px-4 py-2 border-b">
-                    <h3 className="text-sm font-semibold text-primary">Products ({selectedProducts.length}/{selectedGroup._productCount} selected)</h3>
-                  </div>
-                  <div className="overflow-x-auto">
+                  {/* Product List */}
+                  <div className="border rounded-lg overflow-hidden">
                     <Table>
-                      <TableHeader>
+                      <TableHeader className="bg-slate-50">
                         <TableRow>
                           <TableHead className="w-12">
                             <Checkbox
-                              checked={selectedProducts.length === selectedGroup._allProducts.length && selectedGroup._allProducts.length > 0}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  setSelectedProducts(selectedGroup._allProducts.map((p: any) => p._rowKey))
-                                } else {
-                                  setSelectedProducts([])
-                                }
-                              }}
+                              checked={selectedProducts.length === selectedGroup._allProducts.length}
+                              onCheckedChange={(checked) => setSelectedProducts(checked ? selectedGroup._allProducts.map((p: any) => p._rowKey) : [])}
                             />
                           </TableHead>
-                          <TableHead>Order No</TableHead>
-                          <TableHead>Product Name</TableHead>
-                          <TableHead>Invoice No</TableHead>
-                          <TableHead>Bill Amt</TableHead>
-                          <TableHead>Actual Qty</TableHead>
-                          <TableHead>Truck No</TableHead>
-                          <TableHead>Net Wt</TableHead>
+                          <TableHead>Product</TableHead>
+                          <TableHead className="text-center">Actual Qty</TableHead>
+                          <TableHead className="text-center">Net Wt</TableHead>
                           {receiptData.hasDamage === "yes" && (
                             <>
-                              <TableHead className="w-[100px]">Damage Qty</TableHead>
-                              <TableHead className="w-[150px]">Damage Image</TableHead>
+                              <TableHead className="w-[120px]">Damage Qty</TableHead>
+                              <TableHead>Image</TableHead>
                             </>
                           )}
                         </TableRow>
@@ -791,192 +610,90 @@ export default function MaterialReceiptPage() {
                         {selectedGroup._allProducts.map((product: any) => (
                           <TableRow key={product._rowKey} className={selectedProducts.includes(product._rowKey) ? "bg-blue-50/30" : ""}>
                             <TableCell>
-                              <Checkbox
-                                checked={selectedProducts.includes(product._rowKey)}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    setSelectedProducts(prev => [...prev, product._rowKey])
-                                  } else {
-                                    setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
-                                  }
-                                }}
+                              <Checkbox 
+                                checked={selectedProducts.includes(product._rowKey)} 
+                                onCheckedChange={(checked) => setSelectedProducts(p => checked ? [...p, product._rowKey] : p.filter(k => k !== product._rowKey))} 
                               />
                             </TableCell>
-                            <TableCell className="font-medium text-xs">{product.specificOrderNo || "—"}</TableCell>
-                            <TableCell className="font-medium">{product.productName}</TableCell>
-                            <TableCell className="font-medium text-blue-700">{product.invoiceNo || "—"}</TableCell>
-                            <TableCell>{product.billAmount || "0.00"}</TableCell>
-                            <TableCell>{product.actualQty || "0"}</TableCell>
-                            <TableCell>{(product.truckNo || "—").toUpperCase()}</TableCell>
-                            <TableCell className="font-semibold">{product.netWeight || "0"}</TableCell>
+                            <TableCell className="font-bold text-xs">{product.productName}</TableCell>
+                            <TableCell className="text-center font-bold">{product.actualQty}</TableCell>
+                            <TableCell className="text-center font-bold">{product.netWeight}</TableCell>
                             {receiptData.hasDamage === "yes" && (
                               <>
                                 <TableCell>
-                                  <Input
-                                    className="h-8 text-xs w-full"
-                                    type="number"
-                                    placeholder="Qty"
-                                    value={productDamageData[product._rowKey]?.damageQty || ""}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      setProductDamageData(prev => ({
-                                        ...prev,
-                                        [product._rowKey]: { ...prev[product._rowKey], damageQty: val }
-                                      }))
-                                    }}
+                                  <Input 
+                                    className="h-8 text-xs font-bold" 
+                                    type="number" 
+                                    value={productDamageData[product._rowKey]?.damageQty || ""} 
+                                    onChange={(e) => setProductDamageData(prev => ({ ...prev, [product._rowKey]: { ...prev[product._rowKey], damageQty: e.target.value } }))} 
                                   />
                                 </TableCell>
                                 <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <Input
-                                      type="file"
-                                      accept="image/*"
-                                      id={`damage-upload-${product._rowKey}`}
-                                      onChange={(e) => {
-                                        if (e.target.files?.[0]) {
-                                          handleFileUpload(e.target.files[0], 'damage', product._rowKey)
-                                        }
-                                      }}
-                                      className="hidden"
+                                  <label className="cursor-pointer">
+                                    <Input 
+                                      type="file" 
+                                      className="hidden" 
+                                      onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'damage', product._rowKey)} 
                                     />
-                                    <label htmlFor={`damage-upload-${product._rowKey}`} className="cursor-pointer">
-                                      {isUploading === `damage-${product._rowKey}` ? (
-                                        <span className="text-[10px] text-blue-500 font-bold animate-pulse">UPLOADING...</span>
-                                      ) : productDamageData[product._rowKey]?.damageImage ? (
-                                        <div className="flex items-center gap-1">
-                                          <CheckCircle className="h-4 w-4 text-green-500" />
-                                          <span className="text-[10px] text-green-700 font-bold max-w-[80px] truncate" title={productDamageData[product._rowKey]?.damageImageName}>
-                                            {productDamageData[product._rowKey]?.damageImageName}
-                                          </span>
-                                        </div>
-                                      ) : (
-                                        <Upload className="h-4 w-4 text-red-400 hover:text-red-600" />
-                                      )}
-                                    </label>
-                                  </div>
+                                    {isUploading === `damage-${product._rowKey}` ? <Loader2 className="h-4 w-4 animate-spin" /> : (productDamageData[product._rowKey]?.damageImage ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Upload className="h-4 w-4 text-slate-400" />)}
+                                  </label>
                                 </TableCell>
                               </>
                             )}
                           </TableRow>
                         ))}
-
-                        {/* Summary Footer Row */}
-                        <TableRow className="bg-slate-50 font-black h-12 border-t-2 border-slate-200">
-                          <TableCell />
-                          <TableCell colSpan={2} className="text-[10px] uppercase font-black text-slate-900">Total</TableCell>
-                          <TableCell />
-                          <TableCell className="text-xs text-blue-700 font-black">
-                            ₹{selectedGroup._allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.billAmount) || 0), 0).toFixed(2)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge className="bg-blue-600 text-white font-black text-xs px-3">
-                              {selectedGroup._allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.actualQty) || 0), 0)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell />
-                          <TableCell className="text-xs font-black">
-                            {selectedGroup._allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.netWeight) || 0), 0)}
-                          </TableCell>
-                          {receiptData.hasDamage === "yes" && <TableCell colSpan={2} />}
-                        </TableRow>
                       </TableBody>
                     </Table>
                   </div>
-                </div>
 
-                {/* Receipt Form (Bottom) */}
-                <div className="space-y-6 border rounded-lg p-6 bg-white shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
-                    <CheckCircle className="h-4 w-4 text-blue-600" />
-                    Receipt Details
-                  </h3>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Form */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border rounded-lg bg-white shadow-sm">
                     <div className="space-y-2">
-                      <Label>Material Received Date <span className="text-red-500">*</span></Label>
-                      <Input
-                        type="date"
-                        value={receiptData.receivedDate}
-                        onChange={(e) => setReceiptData({ ...receiptData, receivedDate: e.target.value })}
-                      />
+                      <Label className="font-bold">Received Date <span className="text-red-500">*</span></Label>
+                      <Input type="date" value={receiptData.receivedDate} onChange={(e) => setReceiptData({ ...receiptData, receivedDate: e.target.value })} />
                     </div>
-
                     <div className="space-y-2">
-                      <Label>Damage Status</Label>
-                      <RadioGroup
-                        value={receiptData.hasDamage}
-                        onValueChange={(value) => setReceiptData({ ...receiptData, hasDamage: value })}
-                        className="flex gap-4"
-                      >
-                        <div className="flex items-center space-x-2 border rounded p-2 hover:bg-slate-50">
-                          <RadioGroupItem value="no" id="no-damage" />
-                          <Label htmlFor="no-damage" className="text-green-600 cursor-pointer text-sm font-medium">No Damage</Label>
+                        <Label className="font-bold">Status</Label>
+                        <RadioGroup value={receiptData.hasDamage} onValueChange={(val) => setReceiptData({ ...receiptData, hasDamage: val })} className="flex gap-4 h-10 items-center">
+                          <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="d-no" /><Label htmlFor="d-no" className="text-green-600 font-bold">No Damage</Label></div>
+                          <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="d-yes" /><Label htmlFor="d-yes" className="text-red-600 font-bold">Has Damage</Label></div>
+                        </RadioGroup>
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="font-bold">Proof of Receipt</Label>
+                        <div className="border-2 border-dashed rounded-lg p-4 text-center bg-slate-50">
+                          <label className="cursor-pointer block">
+                            <Input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'proof')} />
+                            <Upload className="mx-auto h-6 w-6 text-slate-400 mb-2" />
+                            <span className="text-xs font-bold text-slate-600 capitalize">
+                              {isUploading === 'proof' ? "UPLOADING..." : (receiptData.receivedProof ? `REPLACE: ${receiptData.receivedProofName}` : "Click to Upload Proof")}
+                            </span>
+                          </label>
                         </div>
-                        <div className="flex items-center space-x-2 border rounded p-2 hover:bg-slate-50">
-                          <RadioGroupItem value="yes" id="yes-damage" />
-                          <Label htmlFor="yes-damage" className="text-red-600 cursor-pointer text-sm font-medium flex items-center gap-1">
-                            <AlertTriangle className="h-3 w-3" />
-                            Has Damage
-                          </Label>
-                        </div>
-                      </RadioGroup>
                     </div>
-
-                    {/* Row-level damage inputs displayed in table above when "Has Damage" is Yes */}
-
                     <div className="space-y-2">
-                      <Label>Received Image (Proof)</Label>
-                      <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-slate-50 transition-colors bg-blue-50/20">
-                        <Input
-                          type="file"
-                          accept="image/*,.pdf"
-                          onChange={(e) => {
-                            if (e.target.files?.[0]) {
-                              handleFileUpload(e.target.files[0], 'proof')
-                            }
-                          }}
-                          className="hidden"
-                          id="proof-upload"
-                        />
-                        <label htmlFor="proof-upload" className="cursor-pointer block">
-                          <Upload className="h-6 w-6 mx-auto mb-1 text-blue-600" />
-                          <span className="text-xs font-bold text-slate-700 uppercase tracking-tight block">
-                            {isUploading === 'proof' ? "UPLOADING..." : (receiptData.receivedProof ? `REPLACE: ${receiptData.receivedProofName}` : "Click to upload Proof")}
-                          </span>
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Remarks</Label>
-                      <Textarea
-                        value={receiptData.remarks}
-                        onChange={(e) => setReceiptData({ ...receiptData, remarks: e.target.value })}
-                        placeholder="Enter remarks..."
-                        className="h-[80px]"
-                      />
+                      <Label className="font-bold">Remarks</Label>
+                      <Textarea value={receiptData.remarks} onChange={(e) => setReceiptData({ ...receiptData, remarks: e.target.value })} placeholder="Internal remarks..." className="h-20" />
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <DialogFooter className="mt-8 border-t pt-4 bg-gray-50 -mx-6 -mb-6 px-6 py-4">
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isProcessing}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSubmit}
-                disabled={isProcessing || isReadOnly}
-                className={`min-w-37.5 ${receiptData.hasDamage === "yes" ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"}`}
-                title={isReadOnly ? "View Only Access" : "Confirm Receipt"}
-              >
-                {isProcessing ? "Processing..." : "Confirm Receipt"}
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
+              <DialogFooter className="mt-8 border-t pt-4">
+                <Button variant="ghost" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                <Button 
+                  onClick={handleSubmit} 
+                  disabled={isProcessing || isReadOnly} 
+                  className={`min-w-[150px] font-bold ${receiptData.hasDamage === 'yes' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                >
+                  {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                  Confirm Receipt
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </WorkflowStageShell>
   )
 }

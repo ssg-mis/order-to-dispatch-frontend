@@ -714,6 +714,7 @@ export const confirmMaterialReceiptApi = {
     d_sr_number?: string;
     so_no?: string;
     party_name?: string;
+    depo_names?: string[];
   }): Promise<ApiResponse> => {
     const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
@@ -727,6 +728,7 @@ export const confirmMaterialReceiptApi = {
     d_sr_number?: string;
     so_no?: string;
     party_name?: string;
+    depo_names?: string[];
   }): Promise<ApiResponse> => {
     const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()

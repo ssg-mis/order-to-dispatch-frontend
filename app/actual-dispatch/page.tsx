@@ -278,7 +278,7 @@ export default function ActualDispatchPage() {
         limit: 20,
         so_no: filterValues.search,
         party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
-        depo_names: user?.role !== 'admin' ? user?.depo_access?.['Actual Dispatch'] : undefined
+        depo_names: user?.depo_access?.['Actual Dispatch']
       });
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
     },
@@ -305,7 +305,7 @@ export default function ActualDispatchPage() {
         limit: 20,
         so_no: filterValues.search,
         party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
-        depo_names: user?.role !== 'admin' ? user?.depo_access?.['Actual Dispatch'] : undefined
+        depo_names: user?.depo_access?.['Actual Dispatch']
       });
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
     },
@@ -364,9 +364,9 @@ export default function ActualDispatchPage() {
       if (response.success && response.data?.depots) {
         let depots = response.data.depots;
 
-        // Filter by user permissions if not admin
-        if (user && user.role !== 'admin' && user.depo_access?.['Actual Dispatch']) {
-          const allowedDepos = user.depo_access['Actual Dispatch'];
+        // Filter by user permissions
+        const allowedDepos = user?.depo_access?.['Actual Dispatch'];
+        if (allowedDepos) {
           depots = depots.filter((d: any) => allowedDepos.includes(d.depot_name));
         }
 

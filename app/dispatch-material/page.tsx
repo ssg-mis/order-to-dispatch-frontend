@@ -139,7 +139,7 @@ export default function DispatchMaterialPage() {
         order_no: filterValues.search,
         start_date: filterValues.startDate,
         end_date: filterValues.endDate,
-        depo_names: user?.role !== 'admin' ? user?.depo_access?.['Dispatch Planning'] : undefined
+        depo_names: user?.depo_access?.['Dispatch Planning']
       });
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
     },
@@ -167,7 +167,7 @@ export default function DispatchMaterialPage() {
         order_no: filterValues.search,
         start_date: filterValues.startDate,
         end_date: filterValues.endDate,
-        depo_names: user?.role !== 'admin' ? user?.depo_access?.['Dispatch Planning'] : undefined
+        depo_names: user?.depo_access?.['Dispatch Planning']
       });
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
     },
@@ -216,10 +216,10 @@ export default function DispatchMaterialPage() {
       const response = await depotApi.getAll({ all: 'false' });
       if (response.success && response.data?.depots) {
         let depots = response.data.depots;
-        
-        // Filter by user permissions if not admin
-        if (user && user.role !== 'admin' && user.depo_access?.['Dispatch Planning']) {
-          const allowedDepos = user.depo_access['Dispatch Planning'];
+
+        // Filter by user permissions
+        const allowedDepos = user?.depo_access?.['Dispatch Planning'];
+        if (allowedDepos) {
           depots = depots.filter((d: any) => allowedDepos.includes(d.depot_name));
         }
 
