@@ -445,6 +445,7 @@ export default function OrderPunchPage() {
         advance_payment_to_be_taken: advancePaymentTaken === "YES",
         advance_amount: advanceAmount ? parseFloat(advanceAmount) : null,
         is_order_through_broker: isBrokerOrder === "Broker" || isBrokerOrder === "Salesperson",
+        is_order_through: isBrokerOrder,
         broker_name: brokerName || null,
         type_of_transporting: transportType || null,
         order_punch_remarks: orderPunchRemarks || null,

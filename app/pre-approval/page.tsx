@@ -1427,6 +1427,7 @@ export default function PreApprovalPage() {
           advancePaymentTaken: order.advancePaymentTaken,
           advanceAmount: order.advanceAmount,
           isBrokerOrder: order.isBrokerOrder,
+          isOrderThrough: order.is_order_through || "Broker",
           brokerName: order.brokerName,
           depoName: order.depoName,
           orderPunchRemarks: order.orderPunchRemarks,
@@ -1760,7 +1761,9 @@ export default function PreApprovalPage() {
                                       <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.advancePaymentTaken ? "YES" : "NO"}</p>
                                     </div>
                                     <div>
-                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Through Broker</p>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">
+                                        {orderDetails.isOrderThrough === "Salesperson" ? "Salesperson Name" : "Through Broker"}
+                                      </p>
                                       <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.isBrokerOrder ? orderDetails.brokerName || "Yes" : "No"}</p>
                                     </div>
                                     <div className="col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">

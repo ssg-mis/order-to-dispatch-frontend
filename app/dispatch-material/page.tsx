@@ -577,6 +577,7 @@ export default function DispatchMaterialPage() {
           advanceTaken: internalOrder.advance_payment_to_be_taken || internalOrder.advancePaymentTaken || false,
           advanceAmount: internalOrder.advance_amount || internalOrder.advanceAmount || "—",
           isBroker: internalOrder.is_order_through_broker || internalOrder.isBrokerOrder || false,
+          isOrderThrough: internalOrder.is_order_through || "Broker",
           brokerName: internalOrder.broker_name || internalOrder.brokerName || "—",
           depoName: internalOrder.depo_name || internalOrder.depoName || "—",
           orderPunchRemarks: internalOrder.order_punch_remarks || internalOrder.orderPunchRemarks || "—",

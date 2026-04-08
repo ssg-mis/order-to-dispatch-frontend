@@ -143,6 +143,7 @@ export default function CommitmentReviewPage() {
       advancePaymentTaken: backendOrder.advance_payment_to_be_taken,
       advanceAmount: backendOrder.advance_amount,
       isBrokerOrder: backendOrder.is_order_through_broker,
+      isOrderThrough: backendOrder.is_order_through,
       brokerName: backendOrder.broker_name,
       transportType: backendOrder.type_of_transporting,
       depoName: backendOrder.depo_name,
@@ -583,6 +584,7 @@ export default function CommitmentReviewPage() {
           advancePaymentTaken: order.advancePaymentTaken,
           advanceAmount: order.advanceAmount,
           isBrokerOrder: order.isBrokerOrder,
+          isOrderThrough: order.isOrderThrough,
           brokerName: order.brokerName,
           depoName: order.depoName,
           orderCategory: order.orderCategory,
@@ -788,8 +790,12 @@ export default function CommitmentReviewPage() {
                                     <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.advancePaymentTaken ? "YES" : "NO"}</p>
                                   </div>
                                   <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Through Broker</p>
-                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.isBrokerOrder ? orderDetails.brokerName || "Yes" : "No"}</p>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">
+                                      {orderDetails.isOrderThrough === "Salesperson" ? "Salesperson Name" : "Through Broker"}
+                                    </p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight">
+                                      {orderDetails.isBrokerOrder ? orderDetails.brokerName || "Yes" : "No"}
+                                    </p>
                                   </div>
                                   <div className="col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
                                     <div className="bg-amber-100 p-2 rounded-lg">
