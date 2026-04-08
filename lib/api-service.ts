@@ -929,8 +929,16 @@ export const skuApi = {
   /**
    * Get all SKUs
    */
-  getAll: async (): Promise<ApiResponse> => {
-    return request('/skus');
+  getAll: async (params?: {
+    all?: string;
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<ApiResponse> => {
+    const queryString = params
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`/skus${queryString}`);
   },
 
   /**

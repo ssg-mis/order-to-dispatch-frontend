@@ -186,7 +186,12 @@ export default function ActualDispatchPage() {
         const normalizedSkuName = normalizeSkuName(sku.sku_name || '')
         return normalizedSkuName.includes(normalizedProductName) || normalizedProductName.includes(normalizedSkuName)
       })
-    return matchedSku?.gross_weight ? parseFloat(matchedSku.gross_weight) : 0
+    
+    // Use gross_weight if available and non-zero, otherwise fallback to sku_weight
+    const grossWeight = matchedSku?.gross_weight ? parseFloat(matchedSku.gross_weight) : 0
+    const skuWeight = matchedSku?.sku_weight ? parseFloat(matchedSku.sku_weight) : 0
+    
+    return grossWeight > 0 ? grossWeight : skuWeight
   }
 
   const calculateWeight = (productName: string, qty: string | number): number => {
@@ -341,14 +346,22 @@ export default function ActualDispatchPage() {
   const fetchSkus = async () => {
     try {
       console.log('[ACTUAL DISPATCH] Fetching SKUs for weight calculation...')
-      const response = await skuApi.getAll()
+      const response = await skuApi.getAll({ limit: 1000 })
       console.log('[ACTUAL DISPATCH] SKU API Response:', response)
 
       if (response.success && response.data) {
-        // Backend returns array directly in response.data, not response.data.skus
-        const skuArray = Array.isArray(response.data) ? response.data : []
+        // Backend returns either an array (old) or an object with skuDetails (new)
+        let skuArray = []
+        if (Array.isArray(response.data)) {
+          skuArray = response.data
+        } else if (response.data.skuDetails && Array.isArray(response.data.skuDetails)) {
+          skuArray = response.data.skuDetails
+        } else if (typeof response.data === 'object') {
+          // Robust fallback
+          skuArray = response.data.skus || response.data.items || []
+        }
+        
         console.log(`[ACTUAL DISPATCH] Loaded ${skuArray.length} SKUs`)
-        console.log('[ACTUAL DISPATCH] First 3 SKUs:', skuArray.slice(0, 3))
         setSkus(skuArray)
       } else {
         console.error('[ACTUAL DISPATCH] SKU API returned no data:', response)
