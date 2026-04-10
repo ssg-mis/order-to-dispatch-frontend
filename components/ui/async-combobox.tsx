@@ -23,6 +23,7 @@ import {
 export interface AsyncComboboxOption {
   value: string
   label: string
+  dropdownLabel?: string
   original?: any
 }
 
@@ -186,7 +187,7 @@ export function AsyncCombobox({
                       value === option.value ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  {option.label}
+                  {option.dropdownLabel || option.label}
                 </CommandItem>
               ))}
             </CommandGroup>

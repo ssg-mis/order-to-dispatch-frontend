@@ -966,7 +966,12 @@ export default function OrderPunchPage() {
                       const res = await customerApi.getAll({ search, page, limit: 20 });
                       const list = res.data.customers || [];
                       return {
-                        options: list.map((c: any) => ({ value: c.customer_name, label: c.customer_name, original: c })),
+                        options: list.map((c: any) => ({ 
+                          value: c.customer_name, 
+                          label: c.customer_name, 
+                          dropdownLabel: `${c.customer_name}${c.gstin ? ' - ' + c.gstin : ''}`,
+                          original: c 
+                        })),
                         hasMore: (list.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
                       };
                     }}

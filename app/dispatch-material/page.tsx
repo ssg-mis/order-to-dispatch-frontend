@@ -20,17 +20,17 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { dispatchPlanningApi, customerApi, depotApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
-import { useInfiniteQuery } from "@tanstack/react-query"
-import { useInView } from "react-intersection-observer"
-import { Loader2 } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import { Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 
 export default function DispatchMaterialPage() {
   const router = useRouter()
   const { toast } = useToast()
   const { isReadOnly, user } = useAuth()
   const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
-  const { ref: pendingEndRef, inView: pendingInView } = useInView()
-  const { ref: historyEndRef, inView: historyInView } = useInView()
+  const [pendingPage, setPendingPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
+  const limit = 25;
 
   const [filterValues, setFilterValues] = useState({
     search: "",
@@ -122,20 +122,17 @@ export default function DispatchMaterialPage() {
   ])
 
 
-  // Pending query with infinite pagination
+  // Pending query with numeric pagination
   const {
     data: pendingData,
-    fetchNextPage: fetchNextPending,
-    hasNextPage: hasNextPending,
-    isFetchingNextPage: isFetchingNextPending,
     isLoading: isPendingLoading,
     refetch: refetchPending,
-  } = useInfiniteQuery({
-    queryKey: ["dispatch-pending", filterValues, user?.depo_access?.['Dispatch Planning']],
-    queryFn: async ({ pageParam = 1 }) => {
+  } = useQuery({
+    queryKey: ["dispatch-pending", filterValues, user?.depo_access?.['Dispatch Planning'], pendingPage],
+    queryFn: async () => {
       const response = await (dispatchPlanningApi.getPending as any)({
-        page: pageParam,
-        limit: 20,
+        page: pendingPage,
+        limit: limit,
         order_no: filterValues.search,
         start_date: filterValues.startDate,
         end_date: filterValues.endDate,
@@ -143,27 +140,19 @@ export default function DispatchMaterialPage() {
       });
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
     },
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) => {
-      const currentCount = allPages.reduce((sum, page) => sum + (page.dispatches?.length || 0), 0);
-      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
-    },
   });
 
-  // History query with infinite pagination (lazy loaded)
+  // History query with numeric pagination
   const {
     data: historyData,
-    fetchNextPage: fetchNextHistory,
-    hasNextPage: hasNextHistory,
-    isFetchingNextPage: isFetchingNextHistory,
     isLoading: isHistoryLoading,
     refetch: refetchHistory,
-  } = useInfiniteQuery({
-    queryKey: ["dispatch-history", filterValues, user?.depo_access?.['Dispatch Planning']],
-    queryFn: async ({ pageParam = 1 }) => {
+  } = useQuery({
+    queryKey: ["dispatch-history", filterValues, user?.depo_access?.['Dispatch Planning'], historyPage],
+    queryFn: async () => {
       const response = await (dispatchPlanningApi.getHistory as any)({
-        page: pageParam,
-        limit: 20,
+        page: historyPage,
+        limit: limit,
         order_no: filterValues.search,
         start_date: filterValues.startDate,
         end_date: filterValues.endDate,
@@ -171,33 +160,17 @@ export default function DispatchMaterialPage() {
       });
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
     },
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) => {
-      const currentCount = allPages.reduce((sum, page) => sum + (page.dispatches?.length || 0), 0);
-      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
-    },
     enabled: activeTab === "history",
   });
 
-  const pendingOrders = useMemo(() => {
-    return pendingData?.pages.flatMap((page) => page.dispatches) || [];
-  }, [pendingData]);
+  const pendingOrders = pendingData?.dispatches || [];
+  const historyOrders = historyData?.dispatches || [];
 
-  const historyOrders = useMemo(() => {
-    return historyData?.pages.flatMap((page) => page.dispatches) || [];
-  }, [historyData]);
-
+  // Reset to page 1 on filter change
   useEffect(() => {
-    if (pendingInView && hasNextPending) {
-      fetchNextPending();
-    }
-  }, [pendingInView, hasNextPending, fetchNextPending]);
-
-  useEffect(() => {
-    if (historyInView && hasNextHistory) {
-      fetchNextHistory();
-    }
-  }, [historyInView, hasNextHistory, fetchNextHistory]);
+    setPendingPage(1);
+    setHistoryPage(1);
+  }, [filterValues]);
 
   const fetchCustomers = async () => {
     try {
@@ -627,7 +600,7 @@ export default function DispatchMaterialPage() {
     })
   }, [filteredPendingOrders, selectedDepoTab])
 
-  const customerNames = Array.from(new Set(pendingOrders.map(order => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "Unknown Customer"))))
+  const customerNames = Array.from(new Set((pendingOrders as any[]).map(order => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "Unknown Customer")))) as string[]
 
   return (
     <WorkflowStageShell
@@ -642,18 +615,33 @@ export default function DispatchMaterialPage() {
       onTabChange={setActiveTab}
       isHistoryLoading={isHistoryLoading}
       historyFooter={
-        <div ref={historyEndRef} className="py-4 flex justify-center">
-          {isFetchingNextHistory && (
-            <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-xs tracking-widest ">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>LOADING MORE DISPATCH HISTORY...</span>
-            </div>
-          )}
-          {!hasNextHistory && historyOrders.length > 0 && (
-            <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest bg-slate-50 px-4 py-1.5 rounded-full border border-slate-100 italic">
-              END OF HISTORY
-            </span>
-          )}
+        <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            Showing Page <span className="text-slate-900 mx-1">{historyPage}</span>
+            {historyData?.pagination?.total && (
+              <> of <span className="text-slate-900 mx-1">{Math.ceil(historyData.pagination.total / limit)}</span></>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+              disabled={historyPage === 1 || isHistoryLoading}
+              className="h-8 rounded-lg gap-1 px-3 font-bold"
+            >
+              <ChevronLeft className="h-4 w-4" /> Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setHistoryPage(p => p + 1)}
+              disabled={isHistoryLoading || (historyPage * limit >= (historyData?.pagination?.total || 0))}
+              className="h-8 rounded-lg gap-1 px-3 font-bold"
+            >
+              Next <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       }
     >
@@ -789,13 +777,33 @@ export default function DispatchMaterialPage() {
             )}
           </TableBody>
         </Table>
-        <div ref={pendingEndRef} className="py-2 flex justify-center">
-          {isFetchingNextPending && (
-            <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-[10px]">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              <span>LOADING MORE...</span>
-            </div>
-          )}
+        <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            Showing Page <span className="text-slate-900 mx-1">{pendingPage}</span>
+            {pendingData?.pagination?.total && (
+              <> of <span className="text-slate-900 mx-1">{Math.ceil(pendingData.pagination.total / limit)}</span></>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPendingPage(p => Math.max(1, p - 1))}
+              disabled={pendingPage === 1 || isPendingLoading}
+              className="h-8 rounded-lg gap-1 px-3 font-bold shadow-sm"
+            >
+              <ChevronLeft className="h-4 w-4" /> Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPendingPage(p => p + 1)}
+              disabled={isPendingLoading || (pendingPage * limit >= (pendingData?.pagination?.total || 0))}
+              className="h-8 rounded-lg gap-1 px-3 font-bold shadow-sm"
+            >
+              Next <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </Card>
 

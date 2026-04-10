@@ -28,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus, Check, Search, Package, Calculator, Save, Calendar } from "lucide-react"
+import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus, Check, Search, Package, Calculator, Save, Calendar, ChevronLeft, ChevronRight } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { skuApi, preApprovalApi, skuSellingPriceApi, varCalcApi, orderApi, skuDetailsApi, customerApi } from "@/lib/api-service"
@@ -44,8 +44,7 @@ import {
 import { AsyncCombobox } from "@/components/ui/async-combobox"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
-import { useInfiniteQuery } from "@tanstack/react-query"
-import { useInView } from "react-intersection-observer"
+import { useQuery } from "@tanstack/react-query"
 
 
 
@@ -112,6 +111,9 @@ export default function PreApprovalPage() {
   })
 
   const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
+  const [pendingPage, setPendingPage] = useState(1)
+  const [historyPage, setHistoryPage] = useState(1)
+  const limit = 25
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
   const [dialogNewProducts, setDialogNewProducts] = useState<{ [key: string]: any[] }>({})
 
@@ -524,98 +526,74 @@ export default function PreApprovalPage() {
     };
   };
 
-  // Infinite Query for Pending Orders
+  // Query for Pending Orders with numeric pagination
   const {
     data: pendingData,
-    fetchNextPage: fetchNextPending,
-    hasNextPage: hasNextPending,
-    isFetchingNextPage: isFetchingNextPending,
     isLoading: isPendingLoading,
     refetch: refetchPending,
-  } = useInfiniteQuery({
-    queryKey: ["pendingOrders", filterValues],
-    queryFn: async ({ pageParam = 1 }) => {
+  } = useQuery({
+    queryKey: ["pendingOrders", filterValues, pendingPage],
+    queryFn: async () => {
       const response = await preApprovalApi.getPending({
-        page: pageParam,
-        limit: 20,
+        page: pendingPage,
+        limit: limit,
         order_no: filterValues.search,
         customer_name: filterValues.partyName !== "all" ? filterValues.partyName : undefined,
         start_date: filterValues.startDate,
         end_date: filterValues.endDate,
       });
       return response.success ? response.data : { orders: [], pagination: { total: 0 } };
-    },
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) => {
-      const currentCount = allPages.reduce((sum, page) => sum + (page.orders?.length || 0), 0);
-      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
     },
   });
 
   const pendingOrders = useMemo(() => {
-    return pendingData?.pages.flatMap((page) => page.orders.map(mapBackendOrderToFrontend)) || [];
+    return pendingData?.orders.map(mapBackendOrderToFrontend) || [];
   }, [pendingData]);
 
-  // Infinite Query for History
+
+  // Query for History with numeric pagination
   const {
     data: historyData,
-    fetchNextPage: fetchNextHistory,
-    hasNextPage: hasNextHistory,
-    isFetchingNextPage: isFetchingNextHistory,
     isLoading: isHistoryLoading,
     refetch: refetchHistory,
-  } = useInfiniteQuery({
-    queryKey: ["approvalHistory", filterValues],
-    queryFn: async ({ pageParam = 1 }) => {
+  } = useQuery({
+    queryKey: ["approvalHistory", filterValues, historyPage],
+    queryFn: async () => {
       const response = await preApprovalApi.getHistory({
-        page: pageParam,
-        limit: 20,
+        page: historyPage,
+        limit: limit,
         order_no: filterValues.search,
         customer_name: filterValues.partyName !== "all" ? filterValues.partyName : undefined,
         start_date: filterValues.startDate,
         end_date: filterValues.endDate,
       });
       return response.success ? response.data : { orders: [], pagination: { total: 0 } };
-    },
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) => {
-      const currentCount = allPages.reduce((sum, page) => sum + (page.orders?.length || 0), 0);
-      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
     },
     enabled: activeTab === "history",
   });
 
   const history = useMemo(() => {
-    return historyData?.pages.flatMap((page) => 
-      page.orders.map((order: any) => ({
-        ...order,
-        rawData: order,
-        orderNo: order.order_no,
-        customerName: order.customer_name,
-        stage: "Pre-Approval",
-        status: "Completed" as const,
-        processedBy: "System",
-        timestamp: order.actual_1,
-        date: order.actual_1 ? new Date(order.actual_1).toLocaleDateString("en-GB") : "-",
-        remarks: order.remark || "-",
-      }))
-    ) || [];
+    return historyData?.orders.map((order: any) => ({
+      ...order,
+      rawData: order,
+      orderNo: order.order_no,
+      customerName: order.customer_name,
+      stage: "Pre-Approval",
+      status: "Completed" as const,
+      processedBy: "System",
+      timestamp: order.actual_1,
+      date: order.actual_1 ? new Date(order.actual_1).toLocaleDateString("en-GB") : "-",
+      remarks: order.remark || "-",
+    })) || [];
   }, [historyData]);
 
-  const { ref: pendingEndRef, inView: pendingEndInView } = useInView();
-  const { ref: historyEndRef, inView: historyEndInView } = useInView();
 
+  // Reset pages when filters change
   useEffect(() => {
-    if (pendingEndInView && hasNextPending && !isFetchingNextPending) {
-      fetchNextPending();
-    }
-  }, [pendingEndInView, hasNextPending, isFetchingNextPending, fetchNextPending]);
+    setPendingPage(1);
+    setHistoryPage(1);
+  }, [filterValues]);
 
-  useEffect(() => {
-    if (historyEndInView && hasNextHistory && !isFetchingNextHistory) {
-      fetchNextHistory();
-    }
-  }, [historyEndInView, hasNextHistory, isFetchingNextHistory, fetchNextHistory]);
 
   useEffect(() => {
     // Initial fetch - Latest Var Calc
@@ -1344,7 +1322,7 @@ export default function PreApprovalPage() {
 
 
 
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map((order: any) => order.customerName || "Unknown"))) as string[]
 
   const destinationColumnsCount = visibleColumns.length + 1
 
@@ -1354,7 +1332,7 @@ export default function PreApprovalPage() {
   }, [history])
 
   const filteredPendingOrders = useMemo(() => {
-    return pendingOrders.filter(order => {
+    return pendingOrders.filter((order: any) => {
       // API handles search, party name and date range.
       // We only need to handle the "Status" (On Time / Expire) filter if present
       if (!filterValues.status || filterValues.status === "all") return true
@@ -1380,7 +1358,7 @@ export default function PreApprovalPage() {
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
 
-    filteredPendingOrders.forEach((order) => {
+    filteredPendingOrders.forEach((order: any) => {
       const originalOrderId = order.doNumber || order.orderNo || "DO/26-27/0001"
 
       // Strip suffix (A, B, C...) from DO number for grouping/display
@@ -1612,16 +1590,30 @@ export default function PreApprovalPage() {
       onTabChange={setActiveTab}
       isHistoryLoading={isHistoryLoading}
       historyFooter={
-        <div ref={historyEndRef} className="py-4 flex justify-center">
-          {isFetchingNextHistory && (
-            <div className="flex items-center gap-2 text-muted-foreground text-xs italic font-bold uppercase tracking-tighter">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Loading more history...
-            </div>
-          )}
-          {!hasNextHistory && history.length > 0 && (
-            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest opacity-40">End of history</span>
-          )}
+        <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
+          <div className="text-sm text-slate-500 font-bold uppercase tracking-tighter">
+            Showing Page {historyPage} of {historyData?.pagination?.totalPages || 1} ({historyData?.pagination?.total || 0} Groups)
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={historyPage === 1}
+              className="font-bold uppercase tracking-widest text-[10px]"
+              onClick={() => setHistoryPage(p => p - 1)}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="font-bold uppercase tracking-widest text-[10px]"
+              disabled={historyPage >= (historyData?.pagination?.totalPages || 1)}
+              onClick={() => setHistoryPage(p => p + 1)}
+            >
+              Next <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
         </div>
       }
     >
@@ -2605,16 +2597,30 @@ export default function PreApprovalPage() {
                   })}
                 </TableBody>
               </Table>
-              <div ref={pendingEndRef} className="py-4 flex justify-center border-t border-slate-50 bg-slate-50/30">
-                {isFetchingNextPending && (
-                  <div className="flex items-center gap-2 text-muted-foreground text-xs italic font-bold uppercase tracking-tighter">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Loading more orders...
-                  </div>
-                )}
-                {!hasNextPending && displayRows.length > 0 && (
-                  <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest opacity-40">All orders loaded</span>
-                )}
+              <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
+                <div className="text-sm text-slate-500 font-bold uppercase tracking-tighter">
+                  Showing Page {pendingPage} of {pendingData?.pagination?.totalPages || 1} ({pendingData?.pagination?.total || 0} Groups)
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={pendingPage === 1}
+                    className="font-bold uppercase tracking-widest text-[10px]"
+                    onClick={() => setPendingPage(p => p - 1)}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="font-bold uppercase tracking-widest text-[10px]"
+                    disabled={pendingPage >= (pendingData?.pagination?.totalPages || 1)}
+                    onClick={() => setPendingPage(p => p + 1)}
+                  >
+                    Next <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
               </div>
             </Card>
           </div>
