@@ -15,13 +15,13 @@ import { useState, useEffect, useMemo } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Settings2, CheckCircle2, Loader2, ChevronDown, ChevronUp, ChevronsUpDown, Check } from "lucide-react"
+import { useInView } from "react-intersection-observer"
+import { ChevronLeft, ChevronRight, Settings2, CheckCircle2, Loader2, ChevronDown, ChevronUp, ChevronsUpDown, Check, CheckCircle } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { approvalApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
-import { useInfiniteQuery } from "@tanstack/react-query"
-import { useInView } from "react-intersection-observer"
 
 
 export default function CommitmentReviewPage() {
@@ -108,8 +108,11 @@ export default function CommitmentReviewPage() {
   const [processId, setProcessId] = useState<string>("")
 
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
-  const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
+  const [pendingPage, setPendingPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
+  const limit = 20;
 
+  const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
   const { ref: pendingEndRef, inView: pendingInView } = useInView()
   const { ref: historyEndRef, inView: historyInView } = useInView()
 
@@ -120,6 +123,29 @@ export default function CommitmentReviewPage() {
     endDate: "",
     partyName: ""
   })
+
+  // Dynamic filter options
+  const [filterOptions, setFilterOptions] = useState<{ customerNames: string[] }>({ customerNames: [] });
+
+  useEffect(() => {
+    const fetchFilters = async () => {
+      try {
+        const response = await approvalApi.getFilters();
+        if (response.success && response.data) {
+          setFilterOptions(response.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch filter options:", error);
+      }
+    };
+    fetchFilters();
+  }, []);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPendingPage(1);
+    setHistoryPage(1);
+  }, [filterValues]);
 
   // Map backend data (snake_case) to frontend format (camelCase)
   const mapBackendOrderToFrontend = (backendOrder: any) => {
@@ -176,69 +202,53 @@ export default function CommitmentReviewPage() {
     };
   };
 
-  // Pending query with infinite pagination
+  // Pending query with numeric pagination
   const {
-    data: pendingData,
-    fetchNextPage: fetchNextPending,
-    hasNextPage: hasNextPending,
-    isFetchingNextPage: isFetchingNextPending,
+    data: pendingResult,
     isLoading: isPendingLoading,
     refetch: refetchPending,
-  } = useInfiniteQuery({
-    queryKey: ["approval-pending", filterValues],
-    queryFn: async ({ pageParam = 1 }) => {
+  } = useQuery({
+    queryKey: ["approval-pending", filterValues, pendingPage],
+    queryFn: async () => {
       const response = await approvalApi.getPending({
-        page: pageParam,
-        limit: 20,
-        order_no: filterValues.search,
+        page: pendingPage,
+        limit,
+        search: filterValues.search,
         customer_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
         start_date: filterValues.startDate,
         end_date: filterValues.endDate,
       });
       return response.success ? response.data : { orders: [], pagination: { total: 0 } };
-    },
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) => {
-      const currentCount = allPages.reduce((sum, page) => sum + (page.orders?.length || 0), 0);
-      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
     },
   });
 
-  // History query with infinite pagination (lazy loaded)
+  // History query with numeric pagination
   const {
-    data: historyData,
-    fetchNextPage: fetchNextHistory,
-    hasNextPage: hasNextHistory,
-    isFetchingNextPage: isFetchingNextHistory,
+    data: historyResult,
     isLoading: isHistoryLoading,
     refetch: refetchHistory,
-  } = useInfiniteQuery({
-    queryKey: ["approval-history", filterValues],
-    queryFn: async ({ pageParam = 1 }) => {
+  } = useQuery({
+    queryKey: ["approval-history", filterValues, historyPage],
+    queryFn: async () => {
       const response = await approvalApi.getHistory({
-        page: pageParam,
-        limit: 20,
-        order_no: filterValues.search,
+        page: historyPage,
+        limit,
+        search: filterValues.search,
         customer_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
         start_date: filterValues.startDate,
         end_date: filterValues.endDate,
       });
       return response.success ? response.data : { orders: [], pagination: { total: 0 } };
-    },
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) => {
-      const currentCount = allPages.reduce((sum, page) => sum + (page.orders?.length || 0), 0);
-      return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined;
     },
     enabled: activeTab === "history",
   });
 
   const pendingOrders = useMemo(() => {
-    return pendingData?.pages.flatMap((page) => page.orders.map(mapBackendOrderToFrontend)) || [];
-  }, [pendingData]);
+    return pendingResult?.orders.map(mapBackendOrderToFrontend) || [];
+  }, [pendingResult]);
 
   const historyItems = useMemo(() => {
-    return historyData?.pages.flatMap((page) => page.orders.map((order: any) => ({
+    return historyResult?.orders.map((order: any) => ({
       ...order,
       rawData: order,
       orderNo: order.order_no,
@@ -250,20 +260,10 @@ export default function CommitmentReviewPage() {
       timestamp: order.actual_2,
       date: order.actual_2 ? new Date(order.actual_2).toLocaleDateString("en-GB") : "-",
       remarks: order.remark || "-",
-    }))) || [];
-  }, [historyData]);
+    })) || [];
+  }, [historyResult]);
 
-  useEffect(() => {
-    if (pendingInView && hasNextPending) {
-      fetchNextPending();
-    }
-  }, [pendingInView, hasNextPending, fetchNextPending]);
 
-  useEffect(() => {
-    if (historyInView && hasNextHistory) {
-      fetchNextHistory();
-    }
-  }, [historyInView, hasNextHistory, fetchNextHistory]);
 
   const checkItems = [
     { id: "rate", label: "Rate Right?" },
@@ -514,9 +514,9 @@ export default function CommitmentReviewPage() {
   }
 
   /* Extract unique customer names */
-  const customerNames = Array.from(new Set(pendingOrders.map(order => order.customerName || "Unknown")))
+  const customerNames = Array.from(new Set(pendingOrders.map((order: any) => order.customerName || "Unknown")))
 
-  const filteredPendingOrders = pendingOrders.filter(order => {
+  const filteredPendingOrders = pendingOrders.filter((order: any) => {
     // API handles search, party name and date range.
     // We only need to handle the "Status" (On Time / Expire) filter if present
     if (!filterValues.status || filterValues.status === "all") return true
@@ -543,7 +543,7 @@ export default function CommitmentReviewPage() {
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
 
-    filteredPendingOrders.forEach((order) => {
+    filteredPendingOrders.forEach((order: any) => {
       const originalOrderId = order.doNumber || order.orderNo || "DO/26-27/0001"
       // Group by Base DO (e.g. DO/26-27/0001 from DO/26-27/0001A)
       const baseDoMatch = originalOrderId.match(/^(DO[-\/](?:\d{2}-\d{2}\/)?\d+)/i)
@@ -633,25 +633,39 @@ export default function CommitmentReviewPage() {
     <WorkflowStageShell
       title="Stage 3: Approval Of Order"
       description="Six-point verification check before commitment entry."
-      pendingCount={displayRows.length}
-      historyData={filteredHistory}
-      partyNames={customerNames}
+      pendingCount={pendingResult?.pagination?.total || 0}
+      historyData={historyItems}
+      partyNames={filterOptions.customerNames}
       onFilterChange={setFilterValues}
       onTabChange={setActiveTab}
       isHistoryLoading={isHistoryLoading}
       historyFooter={
-        <div ref={historyEndRef} className="py-4 flex justify-center">
-          {isFetchingNextHistory && (
-            <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>LOADING MORE...</span>
-            </div>
-          )}
-          {!hasNextHistory && historyItems.length > 0 && (
-            <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest bg-slate-50 px-4 py-1 rounded-full border border-slate-100 italic">
-              END OF HISTORY
-            </span>
-          )}
+        <div className="flex items-center justify-between w-full mt-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+          <div className="text-xs font-bold text-slate-500 bg-white px-4 py-2 rounded-full border border-slate-200/50">
+            Page <span className="text-blue-600 px-1">{historyPage}</span> of <span className="text-blue-600 px-1">{historyResult?.pagination?.totalPages || 1}</span>
+            <span className="mx-2 text-slate-300">|</span>
+            Total <span className="text-blue-600 px-1">{historyResult?.pagination?.total || 0}</span> Groups
+          </div>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+              disabled={historyPage === 1 || isHistoryLoading}
+              className="h-9 rounded-xl border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all active:scale-95 disabled:opacity-30"
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setHistoryPage(p => p + 1)}
+              disabled={historyPage >= (historyResult?.pagination?.totalPages || 1) || isHistoryLoading}
+              className="h-9 rounded-xl border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all active:scale-95 disabled:opacity-30 text-xs font-bold"
+            >
+              Next <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
         </div>
       }
     >
@@ -1088,15 +1102,37 @@ export default function CommitmentReviewPage() {
               )}
             </TableBody>
           </Table>
-          <div ref={pendingEndRef} className="py-2 flex justify-center">
-            {isFetchingNextPending && (
-              <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-[10px]">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>LOADING MORE...</span>
-              </div>
-            )}
-          </div>
         </Card>
+
+        {activeTab === "pending" && (
+          <div className="flex items-center justify-between w-full mt-4 bg-white/50 backdrop-blur-sm p-4 rounded-2xl border border-blue-50">
+            <div className="text-xs font-bold text-slate-500 bg-slate-100/50 px-4 py-2 rounded-full border border-slate-200/50">
+              Page <span className="text-blue-600 px-1">{pendingPage}</span> of <span className="text-blue-600 px-1">{pendingResult?.pagination?.totalPages || 1}</span>
+              <span className="mx-2 text-slate-300">|</span>
+              Total <span className="text-blue-600 px-1">{pendingResult?.pagination?.total || 0}</span> Groups
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPendingPage(p => Math.max(1, p - 1))}
+                disabled={pendingPage === 1 || isPendingLoading}
+                className="h-9 rounded-xl border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all active:scale-95 disabled:opacity-30"
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPendingPage(p => p + 1)}
+                disabled={pendingPage >= (pendingResult?.pagination?.totalPages || 1) || isPendingLoading}
+                className="h-9 rounded-xl border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all active:scale-95 disabled:opacity-30 text-xs font-bold"
+              >
+                Next <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </WorkflowStageShell>
   )

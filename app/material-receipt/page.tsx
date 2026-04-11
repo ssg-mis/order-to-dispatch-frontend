@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { WorkflowStageShell } from "@/components/workflow/workflow-stage-shell"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
@@ -15,17 +15,17 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { confirmMaterialReceiptApi, orderApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
 import { useQuery } from "@tanstack/react-query"
-import { Loader2, RotateCcw, ChevronLeft, ChevronRight, Settings2, Search, CheckCircle, Upload, AlertTriangle } from "lucide-react"
+import { Loader2, ChevronLeft, ChevronRight, Settings2, CheckCircle, Upload, FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function MaterialReceiptPage() {
@@ -119,14 +119,14 @@ export default function MaterialReceiptPage() {
     isLoading: isHistoryLoading,
     refetch: refetchHistory,
   } = useQuery({
-    queryKey: ["material-receipt-history", filterValues.search, filterValues.partyName, user?.depo_access?.['Confirm Material Receipt'], historyPage],
+    queryKey: ["material-receipt-history", filterValues.search, filterValues.partyName, user?.depo_access?.[activeTab === "pending" ? 'Confirm Material Receipt' : 'Confirm Material Receipt'], historyPage],
     queryFn: async () => {
       const response = await confirmMaterialReceiptApi.getHistory({
         page: historyPage,
         limit: limit,
         so_no: filterValues.search,
         party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
-        depo_names: user?.depo_access ? (user.depo_access['Material Receipt'] || []) : undefined
+        depo_names: user?.depo_access ? (user.depo_access['Confirm Material Receipt'] || []) : undefined
       });
       return response.success ? response.data : { orders: [], pagination: { total: 0 } };
     },
@@ -181,14 +181,11 @@ export default function MaterialReceiptPage() {
     }
   };
 
-  /* Filter Logic for UI */
-  const filteredPendingOrders = pendingOrders; // Backend already filtered them
-
   /* Grouping Logic */
   const displayRows = useMemo(() => {
     const grouped: { [key: string]: any } = {}
 
-    filteredPendingOrders.forEach((order: any) => {
+    pendingOrders.forEach((order: any) => {
       const invoiceNo = order.invoice_no || "No Invoice"
       const doNumber = order.so_no || order.d_sr_number || "DO/26-27/0001"
       const groupKey = invoiceNo !== "No Invoice" ? invoiceNo : doNumber;
@@ -198,12 +195,12 @@ export default function MaterialReceiptPage() {
           _rowKey: groupKey,
           doNumber: doNumber,
           invoiceNo: invoiceNo,
-          customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "—"),
+          customerName: order.party_name || "—",
           deliveryPurpose: order.order_type_delivery_purpose || "—",
           orderType: order.order_type || "—",
-          startDate: order.start_date ? new Date(order.start_date).toLocaleDateString("en-IN") : "—",
-          endDate: order.end_date ? new Date(order.end_date).toLocaleDateString("en-IN") : "—",
-          deliveryDate: order.delivery_date ? new Date(order.delivery_date).toLocaleDateString("en-IN") : "—",
+          startDate: order.start_date,
+          endDate: order.end_date,
+          deliveryDate: order.delivery_date,
           transportType: order.type_of_transporting || "—",
           contactPerson: order.customer_contact_person_name || "—",
           contactWhatsapp: order.customer_contact_person_whatsapp_no || "—",
@@ -213,8 +210,8 @@ export default function MaterialReceiptPage() {
           brokerName: order.broker_name || "—",
           advanceAmount: order.advance_amount || 0,
           paymentTerms: order.payment_terms || "—",
-          partySoDate: order.party_so_date ? new Date(order.party_so_date).toLocaleDateString("en-IN") : "—",
-          invoiceDate: order.invoice_date ? new Date(order.invoice_date).toLocaleDateString("en-IN") : "—",
+          partySoDate: order.party_so_date,
+          invoiceDate: order.invoice_date,
           biltyNo: order.bilty_no || "—",
           rstNo: order.rst_no || "—",
           weightmentSlip: order.weightment_slip_copy || null,
@@ -234,9 +231,8 @@ export default function MaterialReceiptPage() {
       const rate = parseFloat(order.rate_of_material) || 0;
       const nosPerMainUom = parseFloat(order.nos_per_main_uom) || 1;
       const actualQty = parseFloat(order.actual_qty_dispatch) || 0;
-      const computedBillAmount = rate && nosPerMainUom && actualQty
-        ? (rate * nosPerMainUom * actualQty).toFixed(2)
-        : null;
+      const freightRate = parseFloat(order.freight_rate) || 0;
+      const computedBillAmount = (rate * nosPerMainUom + freightRate) * actualQty;
 
       grouped[groupKey]._allProducts.push({
         ...order,
@@ -245,7 +241,7 @@ export default function MaterialReceiptPage() {
         specificOrderNo: order.so_no,
         productName: order.product_name,
         invoiceNo: order.invoice_no,
-        billAmount: computedBillAmount,
+        billAmount: computedBillAmount.toFixed(2),
         actualQty: order.actual_qty_dispatch,
         truckNo: order.truck_no,
         netWeight: order.net_weight,
@@ -257,12 +253,12 @@ export default function MaterialReceiptPage() {
 
     return Object.values(grouped).map((g: any) => ({
       ...g,
-      partySoDate: formatDate(g._allProducts[0]?.party_so_date),
+      formattedPartySoDate: formatDate(g._allProducts[0]?.party_so_date),
       processId: g._allProducts[0]?.processid || "—",
       vehicleNo: (g._allProducts[0]?.truckNo || "—").toUpperCase(),
       orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—"
     }))
-  }, [filteredPendingOrders])
+  }, [pendingOrders])
 
   const toggleSelectItem = (itemKey: string) => {
     setSelectedItems(prev =>
@@ -317,8 +313,6 @@ export default function MaterialReceiptPage() {
     setIsProcessing(true)
     try {
       const successfulSubmissions: any[] = []
-      const failedSubmissions: any[] = []
-
       for (const product of productsToSubmit) {
         const pDamage = productDamageData[product._rowKey] || {};
         const isItemDamaged = receiptData.hasDamage === "yes" && (pDamage.damageQty || pDamage.damageImage);
@@ -336,19 +330,11 @@ export default function MaterialReceiptPage() {
         };
 
         const response = await confirmMaterialReceiptApi.submit(product.id, submitData);
-        if (response.success) {
-          successfulSubmissions.push(product);
-        } else {
-          failedSubmissions.push({ product, error: response.message });
-        }
+        if (response.success) successfulSubmissions.push(product);
       }
 
       if (successfulSubmissions.length > 0) {
-        toast({
-          title: "Receipt Confirmed",
-          description: `Processed ${successfulSubmissions.length} items.`,
-          variant: receiptData.hasDamage === "yes" ? "destructive" : "default"
-        })
+        toast({ title: "Receipt Confirmed", description: `Processed ${successfulSubmissions.length} items.` })
         await refetchPending();
         await refetchHistory();
         setIsDialogOpen(false)
@@ -361,7 +347,18 @@ export default function MaterialReceiptPage() {
     }
   }
 
-  const customerNames = Array.from(new Set(pendingOrders.map((order: any) => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "Unknown Customer")))) as string[]
+  const customerNames = Array.from(new Set(pendingOrders.map((order: any) => order.party_name || "Unknown Customer"))) as string[]
+
+  const totals = useMemo(() => {
+    if (!selectedGroup) return { billAmt: 0, actualQty: 0, netWt: 0 }
+    return selectedGroup._allProducts
+      .filter((p: any) => selectedProducts.includes(p._rowKey))
+      .reduce((acc: any, p: any) => ({
+        billAmt: acc.billAmt + (parseFloat(p.billAmount) || 0),
+        actualQty: acc.actualQty + (parseFloat(p.actualQty) || 0),
+        netWt: acc.netWt + (parseFloat(p.netWeight) || 0)
+      }), { billAmt: 0, actualQty: 0, netWt: 0 })
+  }, [selectedGroup, selectedProducts])
 
   return (
     <WorkflowStageShell
@@ -371,10 +368,10 @@ export default function MaterialReceiptPage() {
       pendingCount={pendingData?.pagination?.total || 0}
       historyData={historyOrders.map((order: any) => ({
         ...order,
-        date: order.actual_8 ? new Date(order.actual_8).toLocaleDateString("en-GB") : "-",
+        date: order.actual_8 ? formatDate(order.actual_8) : "-",
         orderNo: order.so_no,
         stage: "Material Receipt",
-        customerName: (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : order.party_name,
+        customerName: order.party_name || "—",
         status: order.damage_status || "Completed",
         remarks: order.damage_status === "Damaged" ? `Damaged: ${order.damage_qty}` : "Received OK",
         rawData: order,
@@ -385,30 +382,18 @@ export default function MaterialReceiptPage() {
       onTabChange={setActiveTab}
       isHistoryLoading={isHistoryLoading}
       historyFooter={
-        <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
-          <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+        <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between font-bold">
+          <div className="text-xs text-slate-400 uppercase tracking-widest leading-none">
             Showing Page <span className="text-slate-900 mx-1">{historyPage}</span>
             {historyData?.pagination?.total && (
               <> of <span className="text-slate-900 mx-1">{Math.ceil(historyData.pagination.total / limit)}</span></>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
-              disabled={historyPage === 1 || isHistoryLoading}
-              className="h-8 rounded-lg gap-1 px-3"
-            >
+            <Button variant="outline" size="sm" onClick={() => setHistoryPage(p => Math.max(1, p - 1))} disabled={historyPage === 1 || isHistoryLoading} className="h-8 rounded-lg gap-1 px-3">
               <ChevronLeft className="h-4 w-4" /> Previous
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setHistoryPage(p => p + 1)}
-              disabled={isHistoryLoading || (historyPage * limit >= (historyData?.pagination?.total || 0))}
-              className="h-8 rounded-lg gap-1 px-3"
-            >
+            <Button variant="outline" size="sm" onClick={() => setHistoryPage(p => p + 1)} disabled={isHistoryLoading || (historyPage * limit >= (historyData?.pagination?.total || 0))} className="h-8 rounded-lg gap-1 px-3">
               Next <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -416,20 +401,17 @@ export default function MaterialReceiptPage() {
       }
     >
       <div className="space-y-4">
-        {/* Action Bar */}
         <div className="flex justify-end gap-2">
-          <Button
-            onClick={handleOpenDialog}
-            disabled={selectedItems.length === 0 || isReadOnly}
-            className="bg-blue-600 hover:bg-blue-700 font-bold"
-          >
-            <CheckCircle className="mr-2 h-4 w-4" />
-            Confirm Receipt ({selectedItems.length})
-          </Button>
+          {selectedItems.length > 0 && (
+            <Button onClick={handleOpenDialog} disabled={isReadOnly} className="bg-blue-600 hover:bg-blue-700 font-bold shadow-lg shadow-blue-200">
+              <CheckCircle className="mr-2 h-4 w-4" />
+              Confirm Receipt ({selectedItems.length})
+            </Button>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="bg-transparent">
+              <Button variant="outline" size="sm" className="bg-transparent border-slate-200 text-slate-600">
                 <Settings2 className="mr-2 h-4 w-4" />
                 Columns
               </Button>
@@ -438,14 +420,7 @@ export default function MaterialReceiptPage() {
               <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {ALL_COLUMNS.map((col) => (
-                <DropdownMenuCheckboxItem
-                  key={col.id}
-                  className="capitalize"
-                  checked={visibleColumns.includes(col.id)}
-                  onCheckedChange={(checked) => {
-                    setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
-                  }}
-                >
+                <DropdownMenuCheckboxItem key={col.id} className="capitalize" checked={visibleColumns.includes(col.id)} onCheckedChange={(checked) => setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))}>
                   {col.label}
                 </DropdownMenuCheckboxItem>
               ))}
@@ -453,26 +428,22 @@ export default function MaterialReceiptPage() {
           </DropdownMenu>
         </div>
 
-        {/* Main Table (Grouped) */}
-        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
+        <Card className="border-none shadow-xl rounded-[2rem] overflow-hidden bg-white/50 backdrop-blur-sm">
           <Table>
-            <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
+            <TableHeader className="bg-slate-50 sticky top-0 z-10">
               <TableRow>
                 <TableHead className="w-12 text-center">
-                  <Checkbox 
-                    checked={displayRows.length > 0 && selectedItems.length === displayRows.length} 
-                    onCheckedChange={toggleSelectAll} 
-                  />
+                  <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
-                <TableHead className="whitespace-nowrap text-center">DO Date</TableHead>
-                <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Products</TableHead>
-                {visibleColumns.includes("invoiceNo") && <TableHead className="whitespace-nowrap text-center">Invoice No.</TableHead>}
-                <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Status</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">DO Date</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">DO Number</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Process ID</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Customer Name</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Products</TableHead>
+                {visibleColumns.includes("invoiceNo") && <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Invoice No.</TableHead>}
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Vehicle No.</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Order Punch Remarks</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -480,49 +451,41 @@ export default function MaterialReceiptPage() {
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i} className="opacity-40 border-b border-slate-50">
                     <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-40 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-16 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-40 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-5 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center p-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center p-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center p-4"><div className="h-3 w-16 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center p-4"><div className="h-3 w-40 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center p-4"><div className="h-3 w-16 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center p-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center p-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center p-4"><div className="h-3 w-40 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    <TableCell className="text-center p-4"><div className="h-5 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                   </TableRow>
                 ))
               ) : displayRows.length > 0 ? (
                 displayRows.map((group) => (
-                  <TableRow key={group._rowKey} className={selectedItems.includes(group._rowKey) ? "bg-blue-50/50" : ""}>
-                    <TableCell className="text-center">
+                  <TableRow key={group._rowKey} className={cn("hover:bg-blue-50/30 transition-colors", selectedItems.includes(group._rowKey) ? "bg-blue-50/50" : "")}>
+                    <TableCell className="text-center p-4">
                       <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                     </TableCell>
-                    <TableCell className="text-center text-xs font-medium">{group.partySoDate}</TableCell>
-                    <TableCell className="text-center text-xs font-medium">
-                      {group.doNumber.replace(/[A-Za-z]+$/, '')}
-                    </TableCell>
-                    <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
-                    <TableCell className="text-center text-xs">{group.customerName}</TableCell>
+                    <TableCell className="text-center text-xs font-bold text-slate-600">{group.formattedPartySoDate}</TableCell>
+                    <TableCell className="text-center text-xs font-black text-slate-900 leading-none">{group.doNumber.replace(/[A-Za-z]+$/, '')}</TableCell>
+                    <TableCell className="text-center text-xs font-black text-blue-600 leading-none">{group.processId}</TableCell>
+                    <TableCell className="text-center text-xs font-black text-slate-800 uppercase italic tracking-tighter">{group.customerName}</TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="secondary" className="font-bold">{group._productCount} items</Badge>
+                      <Badge className="bg-slate-100 text-slate-600 font-black text-[10px] uppercase border-none ring-1 ring-inset ring-slate-200">{group._productCount} items</Badge>
                     </TableCell>
-                    {visibleColumns.includes("invoiceNo") && <TableCell className="text-center text-xs font-medium">{group.invoiceNo}</TableCell>}
+                    {visibleColumns.includes("invoiceNo") && <TableCell className="text-center text-xs font-black text-blue-800">{group.invoiceNo}</TableCell>}
+                    <TableCell className="text-center"><span className="text-xs font-black text-slate-700 tracking-tighter">{group.vehicleNo}</span></TableCell>
+                    <TableCell className="text-center"><span className="text-xs text-slate-500 font-bold truncate max-w-[150px] block mx-auto">{group.orderPunchRemarks}</span></TableCell>
                     <TableCell className="text-center">
-                      <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="text-xs text-slate-600 font-medium truncate max-w-[150px] block" title={group.orderPunchRemarks}>
-                        {group.orderPunchRemarks}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge className="bg-sky-100 text-sky-700 font-black text-[10px] uppercase">In Transit</Badge>
+                      <Badge className="bg-cyan-100 text-cyan-700 font-black text-[9px] uppercase tracking-widest px-3 py-1 ring-1 ring-inset ring-cyan-200">In Transit</Badge>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground font-medium uppercase text-xs tracking-widest">
+                  <TableCell colSpan={10} className="text-center py-20 text-slate-400 font-black uppercase text-[10px] tracking-[0.3em] bg-slate-50/50">
                     No orders pending for receipt confirmation
                   </TableCell>
                 </TableRow>
@@ -530,165 +493,258 @@ export default function MaterialReceiptPage() {
             </TableBody>
           </Table>
 
-          {/* Pagination Footer - Pending */}
-          <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-              Showing Page <span className="text-slate-900 mx-1">{pendingPage}</span>
-              {pendingData?.pagination?.total && (
-                <> of <span className="text-slate-900 mx-1">{Math.ceil(pendingData.pagination.total / limit)}</span></>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPendingPage(p => Math.max(1, p - 1))}
-                disabled={pendingPage === 1 || isPendingLoading}
-                className="h-8 rounded-lg gap-1 px-3 font-bold"
-              >
-                <ChevronLeft className="h-4 w-4" /> Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPendingPage(p => p + 1)}
-                disabled={isPendingLoading || (pendingPage * limit >= (pendingData?.pagination?.total || 0))}
-                className="h-8 rounded-lg gap-1 px-3 font-bold"
-              >
-                Next <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+          <TableFooter className="bg-slate-50/80 border-t border-slate-100">
+            <TableRow>
+              <TableCell colSpan={10} className="p-0">
+                <div className="px-6 py-4 flex items-center justify-between font-bold">
+                  <div className="text-xs text-slate-400 uppercase tracking-widest leading-none">
+                    Showing Page <span className="text-slate-900 mx-1">{pendingPage}</span>
+                    {pendingData?.pagination?.total && (
+                      <> of <span className="text-slate-900 mx-1">{Math.ceil(pendingData.pagination.total / limit)}</span></>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setPendingPage(p => Math.max(1, p - 1))} disabled={pendingPage === 1 || isPendingLoading} className="h-8 rounded-lg gap-1 px-3 border-slate-200 font-black uppercase text-[10px]">
+                      <ChevronLeft className="h-4 w-4" /> Previous
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setPendingPage(p => p + 1)} disabled={isPendingLoading || (pendingPage * limit >= (pendingData?.pagination?.total || 0))} className="h-8 rounded-lg gap-1 px-3 border-slate-200 font-black uppercase text-[10px]">
+                      Next <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </TableCell>
+            </TableRow>
+          </TableFooter>
         </Card>
 
-        {/* Receipt Confirmation Dialog */}
+        {/* Restore Previous Design Dialog */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-[95vw] w-full max-h-[95vh] overflow-y-auto p-0">
-            <div className="p-6">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-bold text-slate-900">
-                  Confirm Receipt - Invoice: {selectedGroup?.invoiceNo} <span className="text-sm font-medium text-slate-500">({selectedGroup?.customerName})</span>
+          <DialogContent className="max-w-[95vw] sm:max-w-[95vw] w-full max-h-[95vh] overflow-y-auto p-0 border-none rounded-[2.5rem] shadow-2xl bg-slate-50">
+            <div className="p-8 space-y-8">
+              <DialogHeader className="border-b-2 border-slate-100 pb-6 -mx-8 px-8 bg-white rounded-t-[2.5rem]">
+                <DialogTitle className="text-2xl font-black text-slate-900 tracking-tight flex items-center justify-between">
+                  <span>Confirm Receipt - Invoice: <span className="text-blue-600 italic uppercase">{selectedGroup?.invoiceNo}</span></span>
+                  <span className="text-sm font-black text-slate-300 uppercase tracking-widest ml-4 ring-2 ring-slate-100 px-4 py-1.5 rounded-full italic">[{selectedGroup?.customerName}]</span>
                 </DialogTitle>
+                <DialogDescription className="hidden" />
               </DialogHeader>
 
               {selectedGroup && (
-                <div className="space-y-6 mt-4">
-                  {/* Summary & Logistics */}
-                  <div className="border rounded-lg p-4 bg-muted/30">
-                    <h3 className="text-sm font-semibold mb-3 text-primary uppercase tracking-wider">Logistics Details</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-xs font-medium">
-                      <div><Label className="text-[10px] text-muted-foreground uppercase">DO Date</Label><div>{selectedGroup.partySoDate}</div></div>
-                      <div><Label className="text-[10px] text-muted-foreground uppercase">Vehicle</Label><div className="font-bold text-blue-600">{selectedGroup.vehicleNo}</div></div>
-                      <div><Label className="text-[10px] text-muted-foreground uppercase">Bilty No</Label><div>{selectedGroup.biltyNo}</div></div>
-                      <div><Label className="text-[10px] text-muted-foreground uppercase">Transporter</Label><div className="truncate">{selectedGroup.transporterName}</div></div>
+                <div className="space-y-10 animate-in fade-in zoom-in-95 duration-500">
+                  {/* Section 1: Order & Logistics Details */}
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="h-6 w-1.5 bg-blue-600 rounded-full shadow-sm" />
+                      <h3 className="text-sm font-black uppercase tracking-[0.2em] text-blue-900">Order & Logistics Details</h3>
                     </div>
+                    
+                    <Card className="p-8 border-none shadow-xl rounded-[2rem] bg-white grid grid-cols-2 md:grid-cols-4 gap-x-12 gap-y-8">
+                       {[
+                         { label: "Delivery Purpose", value: selectedGroup.deliveryPurpose },
+                         { label: "Order Type", value: selectedGroup.orderType },
+                         { label: "Start Date", value: formatDate(selectedGroup.startDate) },
+                         { label: "End Date", value: formatDate(selectedGroup.endDate) },
+                         { label: "Delivery Date", value: formatDate(selectedGroup.deliveryDate) },
+                         { label: "Transport Type", value: selectedGroup.transportType, color: "text-magenta-600" },
+                         { label: "Contact Person", value: `${selectedGroup.contactPerson} — (${selectedGroup.contactWhatsapp})` },
+                         { label: "Customer Address", value: selectedGroup.customerAddress },
+                         { label: "Start / End Date", value: `${formatDate(selectedGroup.startDate)} / ${formatDate(selectedGroup.endDate)}`, color: "text-blue-600" },
+                         { label: "DO Date", value: formatDate(selectedGroup.partySoDate), color: "text-blue-600" },
+                         { label: "Broker / Advance", value: `${selectedGroup.brokerName} / ₹${selectedGroup.advanceAmount}`, color: "text-blue-600" },
+                         { label: "Invoice No / Date", value: `${selectedGroup.invoiceNo} / ${formatDate(selectedGroup.invoiceDate)}`, color: "text-blue-600" },
+                         { label: "Bilty No", value: selectedGroup.biltyNo },
+                         { label: "Truck No", value: selectedGroup.truckNo, color: "text-blue-600" },
+                         { label: "Transporter", value: selectedGroup.transporterName },
+                         { label: "RST No", value: `#${selectedGroup.rstNo}`, color: "text-blue-600" },
+                         { label: "Gross / Tare / Net", value: `${selectedGroup.grossWeight} / ${selectedGroup.tareWeight} / ${selectedGroup.netWeight}`, color: "text-[#3b82f6]" },
+                         { label: "Weight Diff", value: selectedGroup.weightDiff, color: "text-orange-500" },
+                         { label: "Extra Weight", value: selectedGroup.extraWeight, color: "text-[#d946ef]" },
+                       ].map((item, idx) => (
+                         <div key={idx} className="space-y-1.5">
+                           <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.1em] block leading-none">{item.label}</Label>
+                           <p className={cn("text-xs font-black tracking-tight leading-none", item.color || "text-slate-800")}>{item.value || "—"}</p>
+                         </div>
+                       ))}
+                    </Card>
                   </div>
 
-                  {/* Product List */}
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader className="bg-slate-50">
-                        <TableRow>
-                          <TableHead className="w-12">
-                            <Checkbox
-                              checked={selectedProducts.length === selectedGroup._allProducts.length}
-                              onCheckedChange={(checked) => setSelectedProducts(checked ? selectedGroup._allProducts.map((p: any) => p._rowKey) : [])}
-                            />
-                          </TableHead>
-                          <TableHead>Product</TableHead>
-                          <TableHead className="text-center">Actual Qty</TableHead>
-                          <TableHead className="text-center">Net Wt</TableHead>
-                          {receiptData.hasDamage === "yes" && (
-                            <>
-                              <TableHead className="w-[120px]">Damage Qty</TableHead>
-                              <TableHead>Image</TableHead>
-                            </>
-                          )}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedGroup._allProducts.map((product: any) => (
-                          <TableRow key={product._rowKey} className={selectedProducts.includes(product._rowKey) ? "bg-blue-50/30" : ""}>
-                            <TableCell>
-                              <Checkbox 
-                                checked={selectedProducts.includes(product._rowKey)} 
-                                onCheckedChange={(checked) => setSelectedProducts(p => checked ? [...p, product._rowKey] : p.filter(k => k !== product._rowKey))} 
+                  {/* Section 2: Products */}
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="h-6 w-1.5 bg-blue-600 rounded-full shadow-sm" />
+                      <h3 className="text-sm font-black uppercase tracking-[0.2em] text-blue-900">Products ({selectedProducts.length}/{selectedGroup._allProducts.length} selected)</h3>
+                    </div>
+
+                    <Card className="border-none shadow-xl rounded-[2rem] overflow-hidden bg-white">
+                      <Table>
+                        <TableHeader className="bg-blue-600">
+                          <TableRow className="hover:bg-blue-600 border-none">
+                            <TableHead className="w-12 text-center h-12">
+                              <Checkbox
+                                className="border-white/50 data-[state=checked]:bg-white data-[state=checked]:text-blue-600"
+                                checked={selectedProducts.length === selectedGroup._allProducts.length}
+                                onCheckedChange={(checked) => setSelectedProducts(checked ? selectedGroup._allProducts.map((p: any) => p._rowKey) : [])}
                               />
-                            </TableCell>
-                            <TableCell className="font-bold text-xs">{product.productName}</TableCell>
-                            <TableCell className="text-center font-bold">{product.actualQty}</TableCell>
-                            <TableCell className="text-center font-bold">{product.netWeight}</TableCell>
+                            </TableHead>
+                            <TableHead className="text-[10px] font-black uppercase text-blue-50 tracking-widest h-12">Order No</TableHead>
+                            <TableHead className="text-[10px] font-black uppercase text-blue-50 tracking-widest h-12">Product Name</TableHead>
+                            <TableHead className="text-[10px] font-black uppercase text-blue-50 tracking-widest h-12">Invoice No</TableHead>
+                            <TableHead className="text-[10px] font-black uppercase text-blue-50 tracking-widest h-12 text-center">Bill Amt</TableHead>
+                            <TableHead className="text-[10px] font-black uppercase text-blue-50 tracking-widest h-12 text-center">Actual Qty</TableHead>
+                            <TableHead className="text-[10px] font-black uppercase text-blue-50 tracking-widest h-12 text-center">Truck No</TableHead>
+                            <TableHead className="text-[10px] font-black uppercase text-blue-50 tracking-widest h-12 text-center">Net Wt</TableHead>
                             {receiptData.hasDamage === "yes" && (
                               <>
-                                <TableCell>
-                                  <Input 
-                                    className="h-8 text-xs font-bold" 
-                                    type="number" 
-                                    value={productDamageData[product._rowKey]?.damageQty || ""} 
-                                    onChange={(e) => setProductDamageData(prev => ({ ...prev, [product._rowKey]: { ...prev[product._rowKey], damageQty: e.target.value } }))} 
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <label className="cursor-pointer">
-                                    <Input 
-                                      type="file" 
-                                      className="hidden" 
-                                      onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'damage', product._rowKey)} 
-                                    />
-                                    {isUploading === `damage-${product._rowKey}` ? <Loader2 className="h-4 w-4 animate-spin" /> : (productDamageData[product._rowKey]?.damageImage ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Upload className="h-4 w-4 text-slate-400" />)}
-                                  </label>
-                                </TableCell>
+                                <TableHead className="text-[10px] font-black uppercase text-blue-50 tracking-widest h-12 text-center">Damage Qty</TableHead>
+                                <TableHead className="text-[10px] font-black uppercase text-blue-50 tracking-widest h-12 text-center">Image</TableHead>
                               </>
                             )}
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedGroup._allProducts.map((product: any) => (
+                            <TableRow key={product._rowKey} className={cn("h-14 transition-colors", selectedProducts.includes(product._rowKey) ? "bg-blue-50/40" : "")}>
+                              <TableCell className="text-center">
+                                <Checkbox 
+                                  className="data-[state=checked]:bg-blue-600"
+                                  checked={selectedProducts.includes(product._rowKey)} 
+                                  onCheckedChange={(checked) => setSelectedProducts(p => checked ? [...p, product._rowKey] : p.filter(k => k !== product._rowKey))} 
+                                />
+                              </TableCell>
+                              <TableCell className="text-xs font-black text-slate-500 uppercase tracking-tighter">{product.specificOrderNo}</TableCell>
+                              <TableCell className="text-xs font-black text-slate-800 uppercase tracking-tighter">{product.productName}</TableCell>
+                              <TableCell className="text-xs font-black text-blue-600 italic tracking-tighter">{product.invoiceNo}</TableCell>
+                              <TableCell className="text-center font-black text-xs text-slate-700">₹{product.billAmount}</TableCell>
+                              <TableCell className="text-center font-black text-xs text-slate-700">{product.actualQty}</TableCell>
+                              <TableCell className="text-center font-black text-xs text-slate-500">{product.truckNo}</TableCell>
+                              <TableCell className="text-center font-black text-xs text-slate-700">{product.netWeight}</TableCell>
+                              {receiptData.hasDamage === "yes" && (
+                                <>
+                                  <TableCell className="px-2">
+                                    <Input 
+                                      className="h-8 text-[11px] font-black border-2 border-slate-100 rounded-lg focus:border-blue-300 w-20 mx-auto transition-all" 
+                                      type="number" 
+                                      placeholder="0"
+                                      value={productDamageData[product._rowKey]?.damageQty || ""} 
+                                      onChange={(e) => setProductDamageData(prev => ({ ...prev, [product._rowKey]: { ...prev[product._rowKey], damageQty: e.target.value } }))} 
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <label className="cursor-pointer inline-flex items-center justify-center p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors ring-1 ring-inset ring-slate-100">
+                                      <Input 
+                                        type="file" 
+                                        className="hidden" 
+                                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'damage', product._rowKey)} 
+                                      />
+                                      {isUploading === `damage-${product._rowKey}` ? <Loader2 className="h-4 w-4 animate-spin text-blue-600" /> : (productDamageData[product._rowKey]?.damageImage ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Upload className="h-4 w-4 text-slate-400" />)}
+                                    </label>
+                                  </TableCell>
+                                </>
+                              )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                        <TableFooter className="bg-slate-50/50">
+                          <TableRow className="h-14 font-black text-xs border-none">
+                            <TableCell colSpan={4} className="text-right uppercase tracking-[0.2em] text-slate-400 px-8">Total</TableCell>
+                            <TableCell className="text-center text-blue-700 underline underline-offset-4 decoration-2">₹{totals.billAmt.toFixed(2)}</TableCell>
+                            <TableCell className="text-center"><Badge className="bg-blue-600 text-white font-black px-4 py-1.5 rounded-full shadow-lg shadow-blue-100">{totals.actualQty}</Badge></TableCell>
+                            <TableCell />
+                            <TableCell className="text-center text-slate-600">{totals.netWt.toFixed(2)}</TableCell>
+                            {receiptData.hasDamage === "yes" && <TableCell colSpan={2} />}
+                          </TableRow>
+                        </TableFooter>
+                      </Table>
+                    </Card>
                   </div>
 
-                  {/* Form */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border rounded-lg bg-white shadow-sm">
-                    <div className="space-y-2">
-                      <Label className="font-bold">Received Date <span className="text-red-500">*</span></Label>
-                      <Input type="date" value={receiptData.receivedDate} onChange={(e) => setReceiptData({ ...receiptData, receivedDate: e.target.value })} />
+                  {/* Section 3: Receipt Details */}
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="h-6 w-1.5 bg-blue-600 rounded-full shadow-sm" />
+                      <h3 className="text-sm font-black uppercase tracking-[0.2em] text-blue-900">Receipt Details</h3>
                     </div>
-                    <div className="space-y-2">
-                        <Label className="font-bold">Status</Label>
-                        <RadioGroup value={receiptData.hasDamage} onValueChange={(val) => setReceiptData({ ...receiptData, hasDamage: val })} className="flex gap-4 h-10 items-center">
-                          <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="d-no" /><Label htmlFor="d-no" className="text-green-600 font-bold">No Damage</Label></div>
-                          <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="d-yes" /><Label htmlFor="d-yes" className="text-red-600 font-bold">Has Damage</Label></div>
-                        </RadioGroup>
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="font-bold">Proof of Receipt</Label>
-                        <div className="border-2 border-dashed rounded-lg p-4 text-center bg-slate-50">
-                          <label className="cursor-pointer block">
-                            <Input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'proof')} />
-                            <Upload className="mx-auto h-6 w-6 text-slate-400 mb-2" />
-                            <span className="text-xs font-bold text-slate-600 capitalize">
-                              {isUploading === 'proof' ? "UPLOADING..." : (receiptData.receivedProof ? `REPLACE: ${receiptData.receivedProofName}` : "Click to Upload Proof")}
-                            </span>
-                          </label>
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="font-bold">Remarks</Label>
-                      <Textarea value={receiptData.remarks} onChange={(e) => setReceiptData({ ...receiptData, remarks: e.target.value })} placeholder="Internal remarks..." className="h-20" />
-                    </div>
+
+                    <Card className="p-10 border-none shadow-xl rounded-[2rem] bg-white grid grid-cols-1 md:grid-cols-2 gap-x-20 gap-y-12 relative overflow-hidden">
+                       <div className="space-y-4">
+                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Material Received Date <span className="text-red-500">*</span></Label>
+                         <Input 
+                           type="date" 
+                           className="h-16 border-2 border-slate-50 bg-slate-50/30 rounded-2xl px-8 font-black text-slate-700 text-lg focus:bg-white focus:border-blue-100 transition-all shadow-inner" 
+                           value={receiptData.receivedDate} 
+                           onChange={(e) => setReceiptData({ ...receiptData, receivedDate: e.target.value })} 
+                         />
+                       </div>
+
+                       <div className="space-y-4">
+                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Damage Status</Label>
+                         <div className="grid grid-cols-2 gap-4 h-16">
+                           <Button 
+                             onClick={() => setReceiptData({ ...receiptData, hasDamage: 'no' })}
+                             className={cn("h-full border-2 rounded-2xl font-black uppercase italic tracking-tighter transition-all duration-300", 
+                               receiptData.hasDamage === 'no' ? "bg-white border-green-500 text-green-500 shadow-xl shadow-green-50" : "bg-slate-50 border-slate-50 text-slate-400 hover:bg-white hover:border-slate-100"
+                             )}
+                             variant="outline"
+                           >
+                             <CheckCircle className="mr-2 h-4 w-4" /> No Damage
+                           </Button>
+                           <Button 
+                             onClick={() => setReceiptData({ ...receiptData, hasDamage: 'yes' })}
+                             className={cn("h-full border-2 rounded-2xl font-black uppercase italic tracking-tighter transition-all duration-300", 
+                               receiptData.hasDamage === 'yes' ? "bg-white border-red-500 text-red-500 shadow-xl shadow-red-50" : "bg-slate-50 border-slate-50 text-slate-400 hover:bg-white hover:border-slate-100"
+                             )}
+                             variant="outline"
+                           >
+                             <FileText className="mr-2 h-4 w-4" /> Has Damage
+                           </Button>
+                         </div>
+                       </div>
+
+                       <div className="space-y-4">
+                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Received Image (Proof)</Label>
+                         <Card className={cn("border-2 border-dashed rounded-3xl p-8 bg-slate-50/50 hover:bg-slate-50 transition-all cursor-pointer group flex flex-col items-center justify-center min-h-[160px]", 
+                           receiptData.receivedProof ? "border-green-200" : "border-slate-200"
+                         )}>
+                            <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
+                              <Input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'proof')} />
+                              <div className="bg-white p-4 rounded-2xl shadow-lg ring-1 ring-slate-100 mb-4 group-hover:scale-110 transition-transform">
+                                <Upload className="h-6 w-6 text-blue-600" />
+                              </div>
+                              <span className="text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-blue-600 transition-colors">
+                                {isUploading === 'proof' ? "UPLOADING MATERIAL PROOF..." : (receiptData.receivedProof ? `REPLACE: ${receiptData.receivedProofName}` : "Click to Upload Proof")}
+                              </span>
+                            </label>
+                         </Card>
+                       </div>
+
+                       <div className="space-y-4">
+                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Remarks</Label>
+                         <Textarea 
+                            className="bg-slate-50/30 border-2 border-slate-50 rounded-3xl p-6 font-bold text-slate-700 placeholder:text-slate-200 focus:bg-white focus:border-blue-100 transition-all h-[160px] resize-none shadow-inner shadow-slate-100"
+                            placeholder="Enter remarks..."
+                            value={receiptData.remarks} 
+                            onChange={(e) => setReceiptData({ ...receiptData, remarks: e.target.value })} 
+                         />
+                       </div>
+                    </Card>
                   </div>
                 </div>
               )}
 
-              <DialogFooter className="mt-8 border-t pt-4">
-                <Button variant="ghost" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button 
-                  onClick={handleSubmit} 
-                  disabled={isProcessing || isReadOnly} 
-                  className={`min-w-[150px] font-bold ${receiptData.hasDamage === 'yes' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
-                >
-                  {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
-                  Confirm Receipt
-                </Button>
+              <DialogFooter className="mt-12 pt-8 border-t-2 border-slate-100 -mx-8 px-12 bg-white rounded-b-[2.5rem]">
+                <div className="flex items-center justify-between w-full">
+                  <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="h-14 px-10 font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-2xl">Cancel</Button>
+                  <Button 
+                    onClick={handleSubmit} 
+                    disabled={isProcessing || isReadOnly || !receiptData.receivedDate} 
+                    className={cn("h-16 px-16 rounded-2xl shadow-2xl text-xl font-black italic tracking-tighter uppercase transition-all duration-500", 
+                      receiptData.hasDamage === 'yes' ? "bg-red-600 hover:bg-red-700 shadow-red-100" : "bg-blue-600 hover:bg-blue-700 shadow-blue-100"
+                    )}
+                  >
+                    {isProcessing ? <Loader2 className="mr-3 h-6 w-6 animate-spin" /> : <CheckCircle className="mr-3 h-6 w-6" />}
+                    Confirm Receipt
+                  </Button>
+                </div>
               </DialogFooter>
             </div>
           </DialogContent>

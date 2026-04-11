@@ -95,9 +95,6 @@ export function AppSidebar() {
         }
 
         const filtered = modules.filter(module => {
-          // Dashboard is always allowed if authenticated
-          if (module.title === "Dashboard") return true
-
           const permissionName = permissionMapping[module.title] || module.title
           return hasAccess(permissionName)
         })

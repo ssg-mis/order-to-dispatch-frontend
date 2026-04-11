@@ -244,6 +244,7 @@ export const approvalApi = {
     customer_name?: string;
     start_date?: string;
     end_date?: string;
+    search?: string;
   }): Promise<ApiResponse> => {
     const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
@@ -262,12 +263,20 @@ export const approvalApi = {
     customer_name?: string;
     start_date?: string;
     end_date?: string;
+    search?: string;
   }): Promise<ApiResponse> => {
     const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
 
     return request(`/approval/history${queryString}`);
+  },
+
+  /**
+   * Get dynamic filter options for Approval stage
+   */
+  getFilters: async (): Promise<ApiResponse> => {
+    return request('/approval/filters');
   },
 
   /**
@@ -369,9 +378,9 @@ export const actualDispatchApi = {
   getPending: async (params?: {
     page?: number;
     limit?: number;
-    d_sr_number?: string;
-    so_no?: string;
+    search?: string;
     party_name?: string;
+    depo_names?: string[];
   }): Promise<ApiResponse> => {
     const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
@@ -386,9 +395,9 @@ export const actualDispatchApi = {
   getHistory: async (params?: {
     page?: number;
     limit?: number;
-    d_sr_number?: string;
-    so_no?: string;
+    search?: string;
     party_name?: string;
+    depo_names?: string[];
   }): Promise<ApiResponse> => {
     const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
@@ -415,6 +424,13 @@ export const actualDispatchApi = {
       method: 'POST',
       body: JSON.stringify({ username, remarks }),
     });
+  },
+
+  /**
+   * Get unique filter options for Actual Dispatch
+   */
+  getFilters: async (): Promise<ApiResponse> => {
+    return request('/actual-dispatch/filters');
   },
 };
 
@@ -540,15 +556,22 @@ export const securityGuardApprovalApi = {
   getPending: async (params?: {
     page?: number;
     limit?: number;
-    d_sr_number?: string;
-    so_no?: string;
-    party_name?: string;
+    search?: string;
+    customer_name?: string;
+    depo_names?: string[];
   }): Promise<ApiResponse> => {
-    const queryString = params
-      ? '?' + new URLSearchParams(params as any).toString()
-      : '';
-
-    return request(`/security-approval/pending${queryString}`);
+    let url = '/security-approval/pending?';
+    if (params) {
+      const { page, limit, search, customer_name, depo_names } = params;
+      if (page) url += `page=${page}&`;
+      if (limit) url += `limit=${limit}&`;
+      if (search) url += `search=${encodeURIComponent(search)}&`;
+      if (customer_name) url += `customer_name=${encodeURIComponent(customer_name)}&`;
+      if (depo_names && depo_names.length > 0) {
+        depo_names.forEach(d => url += `depo_names=${encodeURIComponent(d)}&`);
+      }
+    }
+    return request(url.endsWith('&') || url.endsWith('?') ? url.slice(0, -1) : url);
   },
 
   /**
@@ -557,15 +580,33 @@ export const securityGuardApprovalApi = {
   getHistory: async (params?: {
     page?: number;
     limit?: number;
-    d_sr_number?: string;
-    so_no?: string;
-    party_name?: string;
+    search?: string;
+    customer_name?: string;
+    depo_names?: string[];
+    start_date?: string;
+    end_date?: string;
   }): Promise<ApiResponse> => {
-    const queryString = params
-      ? '?' + new URLSearchParams(params as any).toString()
-      : '';
+    let url = '/security-approval/history?';
+    if (params) {
+      const { page, limit, search, customer_name, depo_names, start_date, end_date } = params;
+      if (page) url += `page=${page}&`;
+      if (limit) url += `limit=${limit}&`;
+      if (search) url += `search=${encodeURIComponent(search)}&`;
+      if (customer_name) url += `customer_name=${encodeURIComponent(customer_name)}&`;
+      if (depo_names && depo_names.length > 0) {
+        depo_names.forEach(d => url += `depo_names=${encodeURIComponent(d)}&`);
+      }
+      if (start_date) url += `start_date=${start_date}&`;
+      if (end_date) url += `end_date=${end_date}&`;
+    }
+    return request(url.endsWith('&') || url.endsWith('?') ? url.slice(0, -1) : url);
+  },
 
-    return request(`/security-approval/history${queryString}`);
+  /**
+   * Get security guard filter options
+   */
+  getFilters: async (): Promise<ApiResponse> => {
+    return request('/security-approval/filters');
   },
 
   /**

@@ -69,9 +69,17 @@ export default function RootLayout({
         }
 
         const requiredPermission = urlToPermission[pathname]
-        if (requiredPermission && requiredPermission !== "Dashboard" && !hasAccess(requiredPermission)) {
+        if (requiredPermission && !hasAccess(requiredPermission)) {
           console.warn(`Unauthorized access attempt to ${pathname}`)
-          router.push("/")
+          
+          // Redirect to the first available authorized module
+          const firstAvailable = Object.entries(urlToPermission).find(([url, perm]) => hasAccess(perm))
+          if (firstAvailable) {
+            router.push(firstAvailable[0])
+          } else {
+            // No access to any modules? Log them out or show an error.
+            setIsReady(true)
+          }
         } else {
           setIsReady(true)
         }

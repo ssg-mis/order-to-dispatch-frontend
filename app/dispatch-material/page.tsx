@@ -1176,21 +1176,24 @@ export default function DispatchMaterialPage() {
                         hasMore: (customers.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
                       };
                     }}
-                    onValueChange={(val) => {
+                    onValueChange={async (val) => {
                       if (!currentTransferRowKey) return;
 
-                      // For auto address population, we still try to find in current loaded allCustomers
-                      // or we could fetch it. For now, since user already has allCustomers, let's stick to it.
-                      // Wait, we should probably fetch it if not found.
-                      const selectedCust = allCustomers.find(c => c.customer_name === val);
+                      // Fetch full customer details to get the address accurately
                       let autoAddress = "";
-                      if (selectedCust) {
-                        autoAddress = [
-                          selectedCust.address_line_1,
-                          selectedCust.address_line_2,
-                          selectedCust.state,
-                          selectedCust.pincode
-                        ].filter(Boolean).join(", ");
+                      try {
+                        const res = await customerApi.getByName(val);
+                        if (res.success && res.data) {
+                          const c = res.data;
+                          autoAddress = [
+                            c.address_line_1,
+                            c.address_line_2,
+                            c.state,
+                            c.pincode
+                          ].filter(Boolean).join(", ");
+                        }
+                      } catch (error) {
+                        console.error("[DISPATCH] Failed to fetch bill-to address:", error);
                       }
 
                       const prevData = dispatchDetails[currentTransferRowKey]?.transferData || {
@@ -1274,17 +1277,24 @@ export default function DispatchMaterialPage() {
                         hasMore: (customers.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
                       };
                     }}
-                    onValueChange={(val) => {
+                    onValueChange={async (val) => {
                       if (!currentTransferRowKey) return;
-                      const selectedCust = allCustomers.find(c => c.customer_name === val);
+
+                      // Fetch full customer details to get the address accurately
                       let autoAddress = "";
-                      if (selectedCust) {
-                        autoAddress = [
-                          selectedCust.address_line_1,
-                          selectedCust.address_line_2,
-                          selectedCust.state,
-                          selectedCust.pincode
-                        ].filter(Boolean).join(", ");
+                      try {
+                        const res = await customerApi.getByName(val);
+                        if (res.success && res.data) {
+                          const c = res.data;
+                          autoAddress = [
+                            c.address_line_1,
+                            c.address_line_2,
+                            c.state,
+                            c.pincode
+                          ].filter(Boolean).join(", ");
+                        }
+                      } catch (error) {
+                        console.error("[DISPATCH] Failed to fetch ship-to address:", error);
                       }
 
                       const prevData = dispatchDetails[currentTransferRowKey]?.transferData || {
@@ -1293,10 +1303,11 @@ export default function DispatchMaterialPage() {
                         freightRate: ""
                       };
                       setDispatchDetails(prev => {
-                        const rowDetail = prev[currentTransferRowKey || ""] || {};
+                        const rowKey = currentTransferRowKey!;
+                        const rowDetail = prev[rowKey] || { qty: "0" };
                         return {
                           ...prev,
-                          [currentTransferRowKey || ""]: {
+                          [rowKey]: {
                             ...rowDetail,
                             transferData: {
                               ...prevData,
