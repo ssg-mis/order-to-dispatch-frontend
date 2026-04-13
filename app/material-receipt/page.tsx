@@ -491,30 +491,29 @@ export default function MaterialReceiptPage() {
                 </TableRow>
               )}
             </TableBody>
+            <TableFooter className="bg-slate-50/80 border-t border-slate-100">
+              <TableRow>
+                <TableCell colSpan={10} className="p-0">
+                  <div className="px-6 py-4 flex items-center justify-between font-bold">
+                    <div className="text-xs text-slate-400 uppercase tracking-widest leading-none">
+                      Showing Page <span className="text-slate-900 mx-1">{pendingPage}</span>
+                      {pendingData?.pagination?.total && (
+                        <> of <span className="text-slate-900 mx-1">{Math.ceil(pendingData.pagination.total / limit)}</span></>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setPendingPage(p => Math.max(1, p - 1))} disabled={pendingPage === 1 || isPendingLoading} className="h-8 rounded-lg gap-1 px-3 border-slate-200 font-black uppercase text-[10px]">
+                        <ChevronLeft className="h-4 w-4" /> Previous
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setPendingPage(p => p + 1)} disabled={isPendingLoading || (pendingPage * limit >= (pendingData?.pagination?.total || 0))} className="h-8 rounded-lg gap-1 px-3 border-slate-200 font-black uppercase text-[10px]">
+                        Next <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </TableCell>
+              </TableRow>
+            </TableFooter>
           </Table>
-
-          <TableFooter className="bg-slate-50/80 border-t border-slate-100">
-            <TableRow>
-              <TableCell colSpan={10} className="p-0">
-                <div className="px-6 py-4 flex items-center justify-between font-bold">
-                  <div className="text-xs text-slate-400 uppercase tracking-widest leading-none">
-                    Showing Page <span className="text-slate-900 mx-1">{pendingPage}</span>
-                    {pendingData?.pagination?.total && (
-                      <> of <span className="text-slate-900 mx-1">{Math.ceil(pendingData.pagination.total / limit)}</span></>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setPendingPage(p => Math.max(1, p - 1))} disabled={pendingPage === 1 || isPendingLoading} className="h-8 rounded-lg gap-1 px-3 border-slate-200 font-black uppercase text-[10px]">
-                      <ChevronLeft className="h-4 w-4" /> Previous
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setPendingPage(p => p + 1)} disabled={isPendingLoading || (pendingPage * limit >= (pendingData?.pagination?.total || 0))} className="h-8 rounded-lg gap-1 px-3 border-slate-200 font-black uppercase text-[10px]">
-                      Next <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </TableCell>
-            </TableRow>
-          </TableFooter>
         </Card>
 
         {/* Restore Previous Design Dialog */}

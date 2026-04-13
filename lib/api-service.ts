@@ -1295,6 +1295,37 @@ export const reportsApi = {
   },
 };
 
+// ============================================================
+// COMMITMENT PUNCH API
+// ============================================================
+export const commitmentPunchApi = {
+  create: async (data: any): Promise<ApiResponse> =>
+    request('/commitment-punch', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getAll: async (params?: { page?: number; limit?: number; party_name?: string; search?: string }): Promise<ApiResponse> => {
+    const queryString = params
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`/commitment-punch${queryString}`);
+  },
+
+  getPending: async (params?: { page?: number; limit?: number; search?: string }): Promise<ApiResponse> => {
+    const queryString = params
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`/commitment-punch/pending${queryString}`);
+  },
+
+  processCommitment: async (id: number, data: any): Promise<ApiResponse> =>
+    request(`/commitment-punch/${id}/process`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
 export default {
   dashboard: dashboardApi,
   reports: reportsApi,
@@ -1315,5 +1346,7 @@ export default {
   common: commonApi,
   varCalc: varCalcApi,
   salesperson: salespersonApi,
+  commitmentPunch: commitmentPunchApi,
 };
+
 

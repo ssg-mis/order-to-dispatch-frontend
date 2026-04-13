@@ -220,6 +220,8 @@ export default function CommitmentReviewPage() {
       });
       return response.success ? response.data : { orders: [], pagination: { total: 0 } };
     },
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   // History query with numeric pagination
@@ -241,7 +243,18 @@ export default function CommitmentReviewPage() {
       return response.success ? response.data : { orders: [], pagination: { total: 0 } };
     },
     enabled: activeTab === "history",
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
+
+  // ── Refetch fresh data from DB whenever stage tab changes ──
+  useEffect(() => {
+    if (activeTab === "pending") {
+      refetchPending();
+    } else if (activeTab === "history") {
+      refetchHistory();
+    }
+  }, [activeTab]);
 
   const pendingOrders = useMemo(() => {
     return pendingResult?.orders.map(mapBackendOrderToFrontend) || [];

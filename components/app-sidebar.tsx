@@ -25,6 +25,7 @@ import {
   Calculator,
   Save,
   Calendar,
+  Handshake,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { useEffect, useState, useMemo } from "react"
@@ -46,6 +47,7 @@ import {
 
 const modules = [
   { title: "Dashboard", icon: LayoutDashboard, url: "/" },
+  { title: "Commitment Punch", icon: Handshake, url: "/commitment-punch" },
   { title: "Order Punch", icon: ClipboardPen, url: "/order-punch" },
   { title: "Pre Approval", icon: BadgeCheck, url: "/pre-approval" },
   { title: "Approval of Order", icon: FileSearch, url: "/approval-of-order" },

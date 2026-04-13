@@ -49,6 +49,7 @@ interface User {
 
 const PAGE_ACCESS_OPTIONS = [
   "Dashboard",
+  "Commitment Punch",
   "Order Punch",
   "Pre Approval",
   "Approval of Order",
@@ -67,6 +68,7 @@ const PAGE_ACCESS_OPTIONS = [
   "Master",
   "Reports"
 ]
+
 
 const ROLES = ["admin", "user", "guard", "pc"]
 const STATUSES = ["active", "inactive"]

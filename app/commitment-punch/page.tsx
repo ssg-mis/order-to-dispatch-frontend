@@ -1,0 +1,762 @@
+"use client"
+
+import { useState, useCallback, useEffect } from "react"
+import type React from "react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Save, Plus, Trash2, CheckCircle2, RefreshCw, ChevronRight } from "lucide-react"
+import { SidebarTrigger } from "@/components/ui/sidebar"
+import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/hooks/use-auth"
+import { customerApi, commitmentPunchApi, brokerApi, salespersonApi, skuDetailsApi } from "@/lib/api-service"
+import { AsyncCombobox } from "@/components/ui/async-combobox"
+
+// ─── Types ────────────────────────────────────────────────────
+
+type ProductRow = {
+  id: string
+  oil_type: string
+  quantity: string
+  unit: string
+  rate: string
+}
+
+type PendingCommitment = {
+  id: number
+  commitment_no: string
+  commitment_date: string
+  party_name: string
+  oil_type: string
+  quantity: number
+  unit: string
+  rate: number
+  order_type: string
+  transport_type: string
+  planned1: string
+  processed_qty: number
+  remaining_qty: number
+}
+
+type SkuRow = {
+  id: string
+  sku: string
+  qty: string
+  rate: string
+}
+
+// ─── Constants ────────────────────────────────────────────────
+
+const OIL_TYPES = ["Palm Oil", "Soya Oil", "Mustard Oil"]
+const TRANSPORT_TYPES = ["Self", "Party", "Company", "Ex-Depot"]
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN PAGE
+// ═══════════════════════════════════════════════════════════════
+
+export default function CommitmentPunchPage() {
+  const { toast } = useToast()
+  const { user } = useAuth()
+
+  // ── Pending table state ─────────────────────────────────────
+  const [pendingList, setPendingList] = useState<PendingCommitment[]>([])
+  const [isLoadingPending, setIsLoadingPending] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+
+  // ── Add Commitment dialog ───────────────────────────────────
+  const [isAddOpen, setIsAddOpen] = useState(false)
+
+  // ── Process dialog ──────────────────────────────────────────
+  const [isProcessOpen, setIsProcessOpen] = useState(false)
+  const [processPoNo, setProcessPoNo] = useState("")
+  const [processPoDate, setProcessPoDate] = useState("")
+  const [skuRows, setSkuRows] = useState<SkuRow[]>([
+    { id: "1", sku: "", qty: "", rate: "" },
+  ])
+  const [isProcessing, setIsProcessing] = useState(false)
+
+  // ── Add Commitment form state ───────────────────────────────
+  const [commitmentDate, setCommitmentDate] = useState(new Date().toISOString().split("T")[0])
+  const [partyName, setPartyName] = useState("")
+  const [orderType, setOrderType] = useState("")
+  const [transportType, setTransportType] = useState("")
+  const [brokerName, setBrokerName] = useState("")
+  const [salespersonName, setSalespersonName] = useState("")
+  const [rows, setRows] = useState<ProductRow[]>([
+    { id: "1", oil_type: "", quantity: "", unit: "", rate: "" },
+  ])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // ── Load pending commitments ────────────────────────────────
+  const loadPending = useCallback(async () => {
+    setIsLoadingPending(true)
+    try {
+      const res = await commitmentPunchApi.getPending()
+      if (res.success) {
+        setPendingList(res.data?.commitments || [])
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to load pending commitments.", variant: "destructive" })
+    } finally {
+      setIsLoadingPending(false)
+    }
+  }, [toast])
+
+  useEffect(() => { loadPending() }, [loadPending])
+
+  // ── Customer / Broker / Salesperson fetch callbacks ─────────
+  const fetchCustomerOptions = useCallback(async (search: string, page: number) => {
+    try {
+      // Only show Reliance company in commitment punch
+      const res = await customerApi.getAll({ search: search || "Reliance", page, limit: 30 })
+      const items = res.success ? (res.data.customers || (Array.isArray(res.data) ? res.data : [])) : []
+      const seen = new Map<string, boolean>()
+      const options = items
+        .filter((c: any) => (c.customer_name || "").toLowerCase().includes("reliance"))
+        .map((c: any) => ({ value: c.customer_name, label: c.customer_name }))
+        .filter((o: any) => {
+          if (!o.value || seen.has(o.value)) return false
+          seen.set(o.value, true)
+          return true
+        })
+      return { options, hasMore: false }
+    } catch { return { options: [], hasMore: false } }
+  }, [])
+
+
+  const fetchBrokerOptions = useCallback(async (search: string, page: number) => {
+    try {
+      const res = await brokerApi.getAll({ search, page, limit: 30 })
+      const items = res.success ? (res.data.brokers || (Array.isArray(res.data) ? res.data : [])) : []
+      const options = items
+        .map((b: any) => { const n = b.salesman_name || b.broker_name || b.name || ""; return { value: n, label: n } })
+        .filter((o: any) => o.value)
+      return { options, hasMore: options.length === 30 }
+    } catch { return { options: [], hasMore: false } }
+  }, [])
+
+  const fetchSalespersonOptions = useCallback(async (search: string, page: number) => {
+    try {
+      const res = await salespersonApi.getAll({ search, page, limit: 30 })
+      const items = res.success ? (res.data.salespersons || res.data.brokers || (Array.isArray(res.data) ? res.data : [])) : []
+      const options = items
+        .map((s: any) => { const n = s.salesman_name || s.salesperson_name || s.name || ""; return { value: n, label: n } })
+        .filter((o: any) => o.value)
+      return { options, hasMore: options.length === 30 }
+    } catch { return { options: [], hasMore: false } }
+  }, [])
+
+  // Fetch SKU options — only show "Good Life" SKUs (client-side filtered)
+  const fetchSkuOptions = useCallback(async (search: string, _page: number) => {
+    try {
+      // Pass search="Good Life" when no user search, so initial load shows Good Life SKUs
+      const res = await skuDetailsApi.getAll({ search: search || "Good Life", limit: 100 })
+      const items = res.success
+        ? (res.data.skuDetails || res.data.skus || res.data.sku_details || (Array.isArray(res.data) ? res.data : []))
+        : []
+      // Client-side filter: only keep items whose sku_name contains "Good Life"
+      const goodLifeItems = items.filter((s: any) =>
+        (s.sku_name || s.name || "").toLowerCase().includes("good life")
+      )
+      const seen = new Set<string>()
+      const options = goodLifeItems
+        .map((s: any) => {
+          const n = s.sku_name || s.name || ""
+          return { value: n, label: n }
+        })
+        .filter((o: any) => { if (!o.value || seen.has(o.value)) return false; seen.add(o.value); return true })
+      return { options, hasMore: false }
+    } catch { return { options: [], hasMore: false } }
+  }, [])
+
+  // ── Checkbox selection ──────────────────────────────────────
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === pendingList.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(pendingList.map(r => r.id)))
+    }
+  }
+
+  // ── Add Commitment helpers ──────────────────────────────────
+  const resetAddForm = () => {
+    setCommitmentDate(new Date().toISOString().split("T")[0])
+    setPartyName("")
+    setOrderType("")
+    setTransportType("")
+    setBrokerName("")
+    setSalespersonName("")
+    setRows([{ id: "1", oil_type: "", quantity: "", unit: "", rate: "" }])
+  }
+
+  const addRow = () =>
+    setRows(prev => [...prev, { id: Math.random().toString(36).substr(2, 9), oil_type: "", quantity: "", unit: "", rate: "" }])
+
+  const removeRow = (id: string) => {
+    if (rows.length > 1) setRows(prev => prev.filter(r => r.id !== id))
+  }
+
+  const updateRow = (id: string, field: keyof ProductRow, value: string) =>
+    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
+
+  const handleOrderTypeChange = (val: string) => {
+    setOrderType(val)
+    setBrokerName("")
+    setSalespersonName("")
+  }
+
+  // ── Submit Add Commitment ───────────────────────────────────
+  const handleAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!partyName) { toast({ title: "Validation Error", description: "Customer name is required.", variant: "destructive" }); return }
+    if (!commitmentDate) { toast({ title: "Validation Error", description: "Commitment date is required.", variant: "destructive" }); return }
+    if (orderType === "broker" && !brokerName) { toast({ title: "Validation Error", description: "Broker name is required.", variant: "destructive" }); return }
+    if (orderType === "salesperson" && !salespersonName) { toast({ title: "Validation Error", description: "Salesperson is required.", variant: "destructive" }); return }
+    if (rows.some(r => !r.oil_type || !r.quantity || !r.rate)) {
+      toast({ title: "Validation Error", description: "Fill Oil Type, Quantity and Rate for all rows.", variant: "destructive" }); return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const payload = {
+        commitment_date: commitmentDate,
+        party_name: partyName,
+        order_type: orderType || null,
+        transport_type: transportType || null,
+        broker_name: orderType === "broker" ? brokerName : null,
+        salesperson_name: orderType === "salesperson" ? salespersonName : null,
+        rows: rows.map(r => ({
+          oil_type: r.oil_type,
+          quantity: parseFloat(r.quantity),
+          unit: r.unit || null,
+          rate: parseFloat(r.rate),
+        })),
+      }
+      const res = await commitmentPunchApi.create(payload)
+      if (res.success) {
+        toast({ title: "✅ Commitment Created!", description: `Commitment No: ${res.data?.commitment_no}`, duration: 6000 })
+        resetAddForm()
+        setIsAddOpen(false)
+        loadPending()
+      } else {
+        throw new Error(res.message || "Failed to create commitment")
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Could not save commitment.", variant: "destructive" })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // ── SKU row helpers ─────────────────────────────────────────
+  const addSkuRow = () =>
+    setSkuRows(prev => [...prev, { id: Math.random().toString(36).substr(2, 9), sku: "", qty: "", rate: "" }])
+
+  const removeSkuRow = (id: string) => {
+    if (skuRows.length > 1) setSkuRows(prev => prev.filter(r => r.id !== id))
+  }
+
+  const updateSkuRow = (id: string, field: keyof SkuRow, value: string) =>
+    setSkuRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
+
+  const resetProcess = () => {
+    setProcessPoNo("")
+    setProcessPoDate("")
+    setSkuRows([{ id: "1", sku: "", qty: "", rate: "" }])
+  }
+
+  // ── Submit Process ──────────────────────────────────────────
+  const handleProcessSubmit = async () => {
+    if (!processPoNo) { toast({ title: "Validation Error", description: "PO No. is required.", variant: "destructive" }); return }
+    if (!processPoDate) { toast({ title: "Validation Error", description: "PO Date is required.", variant: "destructive" }); return }
+    if (skuRows.some(r => !r.sku || !r.qty || !r.rate)) {
+      toast({ title: "Validation Error", description: "Fill SKU, Qty and Rate for all rows.", variant: "destructive" }); return
+    }
+
+    setIsProcessing(true)
+    try {
+      const ids = Array.from(selectedIds)
+      let successCount = 0
+      let errorMsgs: string[] = []
+      let generatedOrderNos: string[] = []
+
+      for (const id of ids) {
+        // For each selected commitment, submit each SKU row as a separate detail record
+        for (const skuRow of skuRows) {
+          const payload = {
+            po_no: processPoNo,
+            po_date: processPoDate,
+            sku: skuRow.sku,
+            sku_quantity: parseFloat(skuRow.qty),
+            sku_rate: parseFloat(skuRow.rate),
+          }
+          const res = await commitmentPunchApi.processCommitment(id, payload)
+          if (res.success) {
+            successCount++
+            if (res.data?.order_no) generatedOrderNos.push(res.data.order_no)
+          } else {
+            errorMsgs.push(res.message || `Failed for commitment ID ${id}`)
+          }
+        }
+      }
+
+      if (errorMsgs.length > 0) {
+        toast({ title: "Partial Error", description: errorMsgs[0], variant: "destructive" })
+      } else {
+        const orderList = generatedOrderNos.length > 0 ? ` Orders: ${generatedOrderNos.join(", ")}` : ""
+        toast({ title: "✅ Processed!", description: `${successCount} order(s) created.${orderList}`, duration: 7000 })
+      }
+      setIsProcessOpen(false)
+      setSelectedIds(new Set())
+      resetProcess()
+      loadPending()
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Could not process commitments.", variant: "destructive" })
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════
+
+  return (
+    <div className="p-6 max-w-full space-y-6" suppressHydrationWarning>
+
+      {/* ── Page Header ── */}
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <SidebarTrigger className="-ml-1" />
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Commitment Punch</h1>
+            <p className="text-muted-foreground">Manage and process customer oil commitments.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={loadPending} disabled={isLoadingPending}>
+            <RefreshCw className={`h-4 w-4 mr-1 ${isLoadingPending ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+          <Button
+            className="gap-2 bg-blue-600 hover:bg-blue-700"
+            onClick={() => { resetAddForm(); setIsAddOpen(true) }}
+          >
+            <Plus className="h-4 w-4" />
+            Add Commitment
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Pending Commitments Table ── */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between py-4">
+          <div>
+            <CardTitle>Commitment Name</CardTitle>
+            <CardDescription>
+              Showing pending commitments ({pendingList.length} record{pendingList.length !== 1 ? "s" : ""})
+            </CardDescription>
+          </div>
+          {selectedIds.size > 0 && (
+            <Button
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => setIsProcessOpen(true)}
+            >
+              <ChevronRight className="h-4 w-4" />
+              Process ({selectedIds.size} selected)
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto rounded-b-xl">
+            <Table>
+              <TableHeader className="bg-slate-50">
+                <TableRow>
+                  <TableHead className="w-[48px] text-center">
+                    <Checkbox
+                      checked={pendingList.length > 0 && selectedIds.size === pendingList.length}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </TableHead>
+                  <TableHead>Commitment No.</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Customer Name</TableHead>
+                  <TableHead>Oil Type</TableHead>
+                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead className="text-right">Rate</TableHead>
+                  <TableHead>Order Type</TableHead>
+                  <TableHead>Transport</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoadingPending ? (
+                  [...Array(4)].map((_, i) => (
+                    <TableRow key={i} className="opacity-40">
+                      {[...Array(10)].map((__, j) => (
+                        <TableCell key={j}><div className="h-4 w-full bg-slate-200 animate-pulse rounded" /></TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : pendingList.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-16 text-muted-foreground">
+                      <div className="flex flex-col items-center gap-2">
+                        <CheckCircle2 className="h-10 w-10 text-slate-300" />
+                        <p className="font-medium">No pending commitments</p>
+                        <p className="text-sm text-slate-400">Click "Add Commitment" to create one.</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  pendingList.map(row => (
+                    <TableRow
+                      key={row.id}
+                      className={`hover:bg-slate-50 cursor-pointer transition-colors ${selectedIds.has(row.id) ? "bg-blue-50 hover:bg-blue-50" : ""}`}
+                      onClick={() => toggleSelect(row.id)}
+                    >
+                      <TableCell className="text-center" onClick={e => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(row.id)}
+                          onCheckedChange={() => toggleSelect(row.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-mono font-semibold text-blue-700">{row.commitment_no}</TableCell>
+                      <TableCell>{row.commitment_date ? new Date(row.commitment_date).toLocaleDateString("en-IN") : "—"}</TableCell>
+                      <TableCell className="font-medium">{row.party_name}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">{row.oil_type || "—"}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{row.quantity ?? "—"}</TableCell>
+                      <TableCell>{row.unit || "—"}</TableCell>
+                      <TableCell className="text-right font-mono">₹{row.rate ?? "—"}</TableCell>
+                      <TableCell className="capitalize">{row.order_type || "—"}</TableCell>
+                      <TableCell className="capitalize">{row.transport_type || "—"}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ═══════════════════════════════════════════════════════
+          ADD COMMITMENT DIALOG
+      ═══════════════════════════════════════════════════════ */}
+      <Dialog open={isAddOpen} onOpenChange={open => { setIsAddOpen(open); if (!open) resetAddForm() }}>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Commitment</DialogTitle>
+            <DialogDescription>Enter commitment details. A unique Commitment No. will be auto-generated.</DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleAddSubmit} className="space-y-5" suppressHydrationWarning>
+            {/* Row 1 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="d-commitmentDate">Commitment Date <span className="text-red-500">*</span></Label>
+                <Input id="d-commitmentDate" type="date" value={commitmentDate} onChange={e => setCommitmentDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Customer Name <span className="text-red-500">*</span></Label>
+                <AsyncCombobox
+                  fetchOptions={fetchCustomerOptions}
+                  value={partyName}
+                  onValueChange={setPartyName}
+                  placeholder="Select customer"
+                  searchPlaceholder="Search customer..."
+                />
+              </div>
+            </div>
+
+            {/* Row 2 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="d-orderType">Order Type</Label>
+                <Select value={orderType} onValueChange={handleOrderTypeChange}>
+                  <SelectTrigger id="d-orderType"><SelectValue placeholder="Select order type" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="direct">Direct</SelectItem>
+                    <SelectItem value="broker">Broker</SelectItem>
+                    <SelectItem value="salesperson">Salesperson</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="d-transportType">Transport Type</Label>
+                <Select value={transportType} onValueChange={setTransportType}>
+                  <SelectTrigger id="d-transportType"><SelectValue placeholder="Select transport type" /></SelectTrigger>
+                  <SelectContent>
+                    {TRANSPORT_TYPES.map(t => (
+                      <SelectItem key={t} value={t.toLowerCase().replace(/ /g, "-")}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Conditional Broker / Salesperson */}
+            {orderType === "broker" && (
+              <div className="space-y-2">
+                <Label>Broker Name <span className="text-red-500">*</span></Label>
+                <AsyncCombobox fetchOptions={fetchBrokerOptions} value={brokerName} onValueChange={setBrokerName} placeholder="Select broker" searchPlaceholder="Search broker..." />
+              </div>
+            )}
+            {orderType === "salesperson" && (
+              <div className="space-y-2">
+                <Label>Salesperson <span className="text-red-500">*</span></Label>
+                <AsyncCombobox fetchOptions={fetchSalespersonOptions} value={salespersonName} onValueChange={setSalespersonName} placeholder="Select salesperson" searchPlaceholder="Search salesperson..." />
+              </div>
+            )}
+
+            {/* Product rows */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-semibold">Oil / Product Details</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addRow} className="gap-1">
+                  <Plus className="h-3 w-3" /> Add Row
+                </Button>
+              </div>
+
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 border-b">
+                    <tr>
+                      <th className="w-8 text-center py-2 px-2 font-medium text-slate-600">#</th>
+                      <th className="py-2 px-3 text-left font-medium text-slate-600">Oil Type *</th>
+                      <th className="py-2 px-3 text-left font-medium text-slate-600">Quantity *</th>
+                      <th className="py-2 px-3 text-left font-medium text-slate-600">Unit</th>
+                      <th className="py-2 px-3 text-left font-medium text-slate-600">Rate *</th>
+                      <th className="w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, idx) => (
+                      <tr key={row.id} className="border-b last:border-0">
+                        <td className="text-center py-2 px-2 text-xs font-bold text-slate-400">{String.fromCharCode(65 + idx)}</td>
+                        <td className="py-1.5 px-2">
+                          <Select value={row.oil_type} onValueChange={v => updateRow(row.id, "oil_type", v)}>
+                            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select oil" /></SelectTrigger>
+                            <SelectContent>
+                              {OIL_TYPES.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="py-1.5 px-2">
+                          <Input type="number" min="0" step="0.01" value={row.quantity} onChange={e => updateRow(row.id, "quantity", e.target.value)} placeholder="0.00" className="h-8 text-sm" />
+                        </td>
+                        <td className="py-1.5 px-2">
+                          <Input type="text" value={row.unit} onChange={e => updateRow(row.id, "unit", e.target.value)} placeholder="e.g. Ltr" className="h-8 text-sm" />
+                        </td>
+                        <td className="py-1.5 px-2">
+                          <Input type="number" min="0" step="0.01" value={row.rate} onChange={e => updateRow(row.id, "rate", e.target.value)} placeholder="₹ 0.00" className="h-8 text-sm" />
+                        </td>
+                        <td className="py-1.5 px-2 text-center">
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => removeRow(row.id)} disabled={rows.length === 1}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)} disabled={isSubmitting}>Cancel</Button>
+              <Button type="submit" disabled={isSubmitting} className="gap-2 bg-blue-600 hover:bg-blue-700 min-w-[140px]">
+                <Save className="h-4 w-4" />
+                {isSubmitting ? "Saving..." : "Save Commitment"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════
+          PROCESS DIALOG
+      ═══════════════════════════════════════════════════════ */}
+      <Dialog open={isProcessOpen} onOpenChange={open => { setIsProcessOpen(open); if (!open) resetProcess() }}>
+        <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Process Commitment</DialogTitle>
+            <DialogDescription>
+              Processing {selectedIds.size} commitment{selectedIds.size !== 1 ? "s" : ""}. Fill PO details and SKU allocation.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-1">
+
+            {/* ── Selected Commitment Info ── */}
+            {Array.from(selectedIds).map(id => {
+              const c = pendingList.find(p => p.id === id)
+              if (!c) return null
+              return (
+                <div key={id} className="rounded-lg border border-blue-100 bg-blue-50/60 px-4 py-3 flex flex-wrap gap-6 text-sm">
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Company Name</p>
+                    <p className="font-semibold text-slate-800 mt-0.5">{c.party_name || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Oil Type</p>
+                    <p className="font-semibold text-slate-800 mt-0.5">{c.oil_type || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Total Qty</p>
+                    <p className="font-semibold text-slate-800 mt-0.5">{c.quantity ?? "—"} {c.unit || ""}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Remaining Qty</p>
+                    <p className="font-semibold text-emerald-700 mt-0.5">{Number(c.remaining_qty ?? c.quantity).toFixed(2)} {c.unit || ""}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Commitment No.</p>
+                    <p className="font-mono text-blue-700 font-semibold mt-0.5">{c.commitment_no}</p>
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* ── PO Details ── */}
+            <div className="space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b pb-1">PO Details</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="po_no">PO No. <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="po_no"
+                    value={processPoNo}
+                    onChange={e => setProcessPoNo(e.target.value)}
+                    placeholder="Enter PO number"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="po_date">PO Date <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="po_date"
+                    type="date"
+                    value={processPoDate}
+                    onChange={e => setProcessPoDate(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ── SKU Rows ── */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b pb-1">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">SKU Details <span className="text-slate-400 font-normal normal-case">(Good Life only)</span></p>
+                <Button type="button" variant="outline" size="sm" onClick={addSkuRow} className="gap-1 h-7 text-xs">
+                  <Plus className="h-3 w-3" /> Add Row
+                </Button>
+              </div>
+
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 border-b">
+                    <tr>
+                      <th className="w-7 text-center py-2 px-1 font-medium text-slate-500 text-xs">#</th>
+                      <th className="py-2 px-2 text-left font-medium text-slate-600 text-xs">SKU Name *</th>
+                      <th className="py-2 px-2 text-left font-medium text-slate-600 text-xs w-[100px]">Qty *</th>
+                      <th className="py-2 px-2 text-left font-medium text-slate-600 text-xs w-[100px]">Rate *</th>
+                      <th className="w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {skuRows.map((row, idx) => (
+                      <tr key={row.id} className="border-b last:border-0">
+                        <td className="text-center py-1.5 px-1 text-xs font-bold text-slate-400">{idx + 1}</td>
+                        <td className="py-1 px-2 min-w-[200px]">
+                          <AsyncCombobox
+                            fetchOptions={fetchSkuOptions}
+                            value={row.sku}
+                            onValueChange={v => updateSkuRow(row.id, "sku", v)}
+                            placeholder="Select Good Life SKU"
+                            searchPlaceholder="Search SKU..."
+                            className="h-8 text-sm"
+                          />
+                        </td>
+                        <td className="py-1 px-2">
+                          <Input
+                            type="number" min="0" step="0.01"
+                            value={row.qty}
+                            onChange={e => updateSkuRow(row.id, "qty", e.target.value)}
+                            placeholder="0.00"
+                            className="h-8 text-sm w-full"
+                          />
+                        </td>
+                        <td className="py-1 px-2">
+                          <Input
+                            type="number" min="0" step="0.01"
+                            value={row.rate}
+                            onChange={e => updateSkuRow(row.id, "rate", e.target.value)}
+                            placeholder="₹ 0.00"
+                            className="h-8 text-sm w-full"
+                          />
+                        </td>
+                        <td className="py-1 px-1 text-center">
+                          <Button
+                            type="button" variant="ghost" size="icon"
+                            className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => removeSkuRow(row.id)}
+                            disabled={skuRows.length === 1}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsProcessOpen(false)} disabled={isProcessing}>Cancel</Button>
+            <Button
+              onClick={handleProcessSubmit}
+              disabled={isProcessing}
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700 min-w-[130px]"
+            >
+              <ChevronRight className="h-4 w-4" />
+              {isProcessing ? "Processing..." : "Confirm Process"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+    </div>
+  )
+}

@@ -128,7 +128,7 @@ export default function DispatchMaterialPage() {
     isLoading: isPendingLoading,
     refetch: refetchPending,
   } = useQuery({
-    queryKey: ["dispatch-pending", filterValues, user?.depo_access?.['Dispatch Planning'], pendingPage],
+    queryKey: ["dispatch-pending", filterValues, user?.depo_access?.['Dispatch Planning'], pendingPage, selectedDepoTab],
     queryFn: async () => {
       const response = await (dispatchPlanningApi.getPending as any)({
         page: pendingPage,
@@ -136,10 +136,13 @@ export default function DispatchMaterialPage() {
         order_no: filterValues.search,
         start_date: filterValues.startDate,
         end_date: filterValues.endDate,
-        depo_names: user?.depo_access?.['Dispatch Planning'] || []
+        depo_names: selectedDepoTab ? [selectedDepoTab] : (user?.depo_access?.['Dispatch Planning'] || [])
       });
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
     },
+    enabled: !!selectedDepoTab, // wait until depot is selected
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   // History query with numeric pagination
@@ -166,11 +169,11 @@ export default function DispatchMaterialPage() {
   const pendingOrders = pendingData?.dispatches || [];
   const historyOrders = historyData?.dispatches || [];
 
-  // Reset to page 1 on filter change
+  // Reset to page 1 on filter or depot change
   useEffect(() => {
     setPendingPage(1);
     setHistoryPage(1);
-  }, [filterValues]);
+  }, [filterValues, selectedDepoTab]);
 
   const fetchCustomers = async () => {
     try {
@@ -780,9 +783,11 @@ export default function DispatchMaterialPage() {
         <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
           <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
             Showing Page <span className="text-slate-900 mx-1">{pendingPage}</span>
-            {pendingData?.pagination?.total && (
-              <> of <span className="text-slate-900 mx-1">{Math.ceil(pendingData.pagination.total / limit)}</span></>
+            {pendingData?.pagination?.totalPages && (
+              <> of <span className="text-slate-900 mx-1">{pendingData.pagination.totalPages}</span></>
             )}
+            <span className="ml-2 text-slate-300">|</span>
+            <span className="ml-2">{pendingData?.pagination?.total || 0} item{(pendingData?.pagination?.total || 0) !== 1 ? 's' : ''} in this depot</span>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -798,13 +803,15 @@ export default function DispatchMaterialPage() {
               variant="outline"
               size="sm"
               onClick={() => setPendingPage(p => p + 1)}
-              disabled={isPendingLoading || (pendingPage * limit >= (pendingData?.pagination?.total || 0))}
+              disabled={isPendingLoading || pendingPage >= (pendingData?.pagination?.totalPages || 1)}
               className="h-8 rounded-lg gap-1 px-3 font-bold shadow-sm"
             >
               Next <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
+
+
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

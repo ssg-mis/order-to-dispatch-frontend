@@ -544,6 +544,8 @@ export default function PreApprovalPage() {
       });
       return response.success ? response.data : { orders: [], pagination: { total: 0 } };
     },
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const pendingOrders = useMemo(() => {
@@ -570,6 +572,8 @@ export default function PreApprovalPage() {
       return response.success ? response.data : { orders: [], pagination: { total: 0 } };
     },
     enabled: activeTab === "history",
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const history = useMemo(() => {
@@ -593,6 +597,15 @@ export default function PreApprovalPage() {
     setPendingPage(1);
     setHistoryPage(1);
   }, [filterValues]);
+
+  // ── Refetch fresh data from DB whenever stage tab changes ──
+  useEffect(() => {
+    if (activeTab === "pending") {
+      refetchPending();
+    } else if (activeTab === "history") {
+      refetchHistory();
+    }
+  }, [activeTab]);
 
 
   useEffect(() => {

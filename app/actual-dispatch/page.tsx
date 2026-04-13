@@ -285,6 +285,8 @@ export default function ActualDispatchPage() {
       });
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
     },
+    staleTime: 0,               // always consider data stale → refetch when navigating back
+    refetchOnWindowFocus: true, // refetch when user switches browser tab back
   });
 
   // History query with numeric pagination
@@ -305,6 +307,8 @@ export default function ActualDispatchPage() {
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
     },
     enabled: activeTab === "history",
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const pendingOrders = useMemo(() => {
@@ -402,6 +406,15 @@ export default function ActualDispatchPage() {
     setPendingPage(1);
     setHistoryPage(1);
   }, [filterValues, selectedDepoTab]);
+
+  // ── Refetch fresh data from DB whenever stage tab or depot tab changes ──
+  useEffect(() => {
+    if (activeTab === "pending") {
+      refetchPending();
+    } else if (activeTab === "history") {
+      refetchHistory();
+    }
+  }, [activeTab, selectedDepoTab]);
 
   // Auto-calculate Net Weight (Gross - Tare)
   useEffect(() => {
@@ -1195,18 +1208,22 @@ export default function ActualDispatchPage() {
           </Table>
           <div className="flex items-center justify-between px-6 py-4 border-t bg-slate-50/50 rounded-b-2xl">
             <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-              Showing Page <span className="text-slate-900 mx-1">{pendingPage}</span>
-              {pendingResult?.pagination?.totalPages && (
-                <> of <span className="text-slate-900 mx-1">{pendingResult.pagination.totalPages}</span></>
+              Showing Page <span className="text-slate-900 mx-1">{displayRows.length > 0 ? pendingPage : 0}</span>
+              {displayRows.length > 0 && (
+                <> of <span className="text-slate-900 mx-1">
+                  {/* Use raw backend row count to detect last page, not grouped displayRows */}
+                  {pendingOrders.length < limit ? pendingPage : (pendingResult?.pagination?.totalPages || 1)}
+                </span></>
               )}
-              <span className="ml-2 text-[10px] lowercase italic font-normal text-slate-400">({pendingResult?.pagination?.total || 0} items)</span>
+              <span className="ml-2 text-slate-300">|</span>
+              <span className="ml-2 text-[10px] lowercase italic font-normal text-slate-400">{displayRows.length} item{displayRows.length !== 1 ? 's' : ''} in this depot</span>
             </div>
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setPendingPage(p => Math.max(1, p - 1))}
-                disabled={pendingPage === 1}
+                disabled={pendingPage === 1 || displayRows.length === 0}
                 className="h-8 rounded-lg font-bold shadow-sm bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
               >
                 <ChevronLeft className="h-4 w-4 mr-1" /> Previous
@@ -1215,13 +1232,20 @@ export default function ActualDispatchPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setPendingPage(p => p + 1)}
-                disabled={pendingPage >= (pendingResult?.pagination?.totalPages || 1)}
+                disabled={
+                  displayRows.length === 0 ||
+                  pendingOrders.length < limit || // backend returned less than a full page = last page
+                  pendingPage >= (pendingResult?.pagination?.totalPages || 1)
+                }
                 className="h-8 rounded-lg font-bold shadow-sm bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
               >
                 Next <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
           </div>
+
+
+
         </Card>
       </div>
 
