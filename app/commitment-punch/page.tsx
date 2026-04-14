@@ -67,7 +67,7 @@ type SkuRow = {
 
 // ─── Constants ────────────────────────────────────────────────
 
-const OIL_TYPES = ["Palm Oil", "Soya Oil", "Mustard Oil"]
+const OIL_TYPES = ["Palm Oil", "Soya Oil", "Rice Oil"]
 const TRANSPORT_TYPES = ["Self", "Party", "Company", "Ex-Depot"]
 
 // ═══════════════════════════════════════════════════════════════
@@ -210,10 +210,10 @@ export default function CommitmentPunchPage() {
   const resetAddForm = () => {
     setCommitmentDate(new Date().toISOString().split("T")[0])
     setPartyName("")
-    setOrderType("")
-    setTransportType("")
     setBrokerName("")
     setSalespersonName("")
+    setOrderType("")
+    setTransportType("")
     setRows([{ id: "1", oil_type: "", quantity: "", unit: "", rate: "" }])
   }
 
@@ -224,8 +224,19 @@ export default function CommitmentPunchPage() {
     if (rows.length > 1) setRows(prev => prev.filter(r => r.id !== id))
   }
 
-  const updateRow = (id: string, field: keyof ProductRow, value: string) =>
-    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
+  const updateRow = (id: string, field: keyof ProductRow, value: string) => {
+    setRows(prev => prev.map(r => {
+      if (r.id === id) {
+        const updated = { ...r, [field]: value };
+        // Auto-select unit to Metric Ton when oil type is selected
+        if (field === "oil_type" && value) {
+          updated.unit = "Metric Ton";
+        }
+        return updated;
+      }
+      return r;
+    }))
+  }
 
   const handleOrderTypeChange = (val: string) => {
     setOrderType(val)
@@ -249,10 +260,6 @@ export default function CommitmentPunchPage() {
       const payload = {
         commitment_date: commitmentDate,
         party_name: partyName,
-        order_type: orderType || null,
-        transport_type: transportType || null,
-        broker_name: orderType === "broker" ? brokerName : null,
-        salesperson_name: orderType === "salesperson" ? salespersonName : null,
         rows: rows.map(r => ({
           oil_type: r.oil_type,
           quantity: parseFloat(r.quantity),
@@ -317,6 +324,10 @@ export default function CommitmentPunchPage() {
             sku: skuRow.sku,
             sku_quantity: parseFloat(skuRow.qty),
             sku_rate: parseFloat(skuRow.rate),
+            order_type: orderType || null,
+            transport_type: transportType || null,
+            broker_name: orderType === "broker" ? brokerName : null,
+            salesperson_name: orderType === "salesperson" ? salespersonName : null,
           }
           const res = await commitmentPunchApi.processCommitment(id, payload)
           if (res.success) {
@@ -412,7 +423,7 @@ export default function CommitmentPunchPage() {
                   <TableHead>Oil Type</TableHead>
                   <TableHead className="text-right">Qty</TableHead>
                   <TableHead>Unit</TableHead>
-                  <TableHead className="text-right">Rate</TableHead>
+                  <TableHead className="text-right">Rate (Per Metric Ton)</TableHead>
                   <TableHead>Order Type</TableHead>
                   <TableHead>Transport</TableHead>
                 </TableRow>
@@ -498,46 +509,6 @@ export default function CommitmentPunchPage() {
               </div>
             </div>
 
-            {/* Row 2 */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="d-orderType">Order Type</Label>
-                <Select value={orderType} onValueChange={handleOrderTypeChange}>
-                  <SelectTrigger id="d-orderType"><SelectValue placeholder="Select order type" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="direct">Direct</SelectItem>
-                    <SelectItem value="broker">Broker</SelectItem>
-                    <SelectItem value="salesperson">Salesperson</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="d-transportType">Transport Type</Label>
-                <Select value={transportType} onValueChange={setTransportType}>
-                  <SelectTrigger id="d-transportType"><SelectValue placeholder="Select transport type" /></SelectTrigger>
-                  <SelectContent>
-                    {TRANSPORT_TYPES.map(t => (
-                      <SelectItem key={t} value={t.toLowerCase().replace(/ /g, "-")}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Conditional Broker / Salesperson */}
-            {orderType === "broker" && (
-              <div className="space-y-2">
-                <Label>Broker Name <span className="text-red-500">*</span></Label>
-                <AsyncCombobox fetchOptions={fetchBrokerOptions} value={brokerName} onValueChange={setBrokerName} placeholder="Select broker" searchPlaceholder="Search broker..." />
-              </div>
-            )}
-            {orderType === "salesperson" && (
-              <div className="space-y-2">
-                <Label>Salesperson <span className="text-red-500">*</span></Label>
-                <AsyncCombobox fetchOptions={fetchSalespersonOptions} value={salespersonName} onValueChange={setSalespersonName} placeholder="Select salesperson" searchPlaceholder="Search salesperson..." />
-              </div>
-            )}
-
             {/* Product rows */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -555,7 +526,7 @@ export default function CommitmentPunchPage() {
                       <th className="py-2 px-3 text-left font-medium text-slate-600">Oil Type *</th>
                       <th className="py-2 px-3 text-left font-medium text-slate-600">Quantity *</th>
                       <th className="py-2 px-3 text-left font-medium text-slate-600">Unit</th>
-                      <th className="py-2 px-3 text-left font-medium text-slate-600">Rate *</th>
+                      <th className="py-2 px-3 text-left font-medium text-slate-600">Rate (PMT) *</th>
                       <th className="w-10"></th>
                     </tr>
                   </thead>
@@ -647,6 +618,46 @@ export default function CommitmentPunchPage() {
               )
             })}
 
+            {/* ── Order Submission Details ── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b pb-4">
+              <div className="space-y-2">
+                <Label htmlFor="p-orderType">Order Type <span className="text-red-500">*</span></Label>
+                <Select value={orderType} onValueChange={handleOrderTypeChange}>
+                  <SelectTrigger id="p-orderType"><SelectValue placeholder="Select order type" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="direct">Direct</SelectItem>
+                    <SelectItem value="broker">Broker</SelectItem>
+                    <SelectItem value="salesperson">Salesperson</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="p-transportType">Transport Type <span className="text-red-500">*</span></Label>
+                <Select value={transportType} onValueChange={setTransportType}>
+                  <SelectTrigger id="p-transportType"><SelectValue placeholder="Select transport type" /></SelectTrigger>
+                  <SelectContent>
+                    {TRANSPORT_TYPES.map(t => (
+                      <SelectItem key={t} value={t.toLowerCase().replace(/ /g, "-")}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Conditional Broker / Salesperson */}
+              {orderType === "broker" && (
+                <div className="space-y-2 col-span-full">
+                  <Label>Broker Name <span className="text-red-500">*</span></Label>
+                  <AsyncCombobox fetchOptions={fetchBrokerOptions} value={brokerName} onValueChange={setBrokerName} placeholder="Select broker" searchPlaceholder="Search broker..." />
+                </div>
+              )}
+              {orderType === "salesperson" && (
+                <div className="space-y-2 col-span-full">
+                  <Label>Salesperson <span className="text-red-500">*</span></Label>
+                  <AsyncCombobox fetchOptions={fetchSalespersonOptions} value={salespersonName} onValueChange={setSalespersonName} placeholder="Select salesperson" searchPlaceholder="Search salesperson..." />
+                </div>
+              )}
+            </div>
+
             {/* ── PO Details ── */}
             <div className="space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b pb-1">PO Details</p>
@@ -688,7 +699,7 @@ export default function CommitmentPunchPage() {
                       <th className="w-7 text-center py-2 px-1 font-medium text-slate-500 text-xs">#</th>
                       <th className="py-2 px-2 text-left font-medium text-slate-600 text-xs">SKU Name *</th>
                       <th className="py-2 px-2 text-left font-medium text-slate-600 text-xs w-[100px]">Qty *</th>
-                      <th className="py-2 px-2 text-left font-medium text-slate-600 text-xs w-[100px]">Rate *</th>
+                      <th className="py-2 px-2 text-left font-medium text-slate-600 text-xs w-[100px]">Rate (PMT) *</th>
                       <th className="w-8"></th>
                     </tr>
                   </thead>
