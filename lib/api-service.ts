@@ -1324,6 +1324,9 @@ export const commitmentPunchApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+
+  getDetails: async (id: number): Promise<ApiResponse> =>
+    request(`/commitment-punch/${id}/details`),
 };
 
 export default {

@@ -115,6 +115,12 @@ export default function CommitmentPunchPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [skuRegistry, setSkuRegistry] = useState<Record<string, any>>({})
 
+  // ── PO Raised Details popup ────────────────────────────────────────
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+  const [detailsRow, setDetailsRow] = useState<PendingCommitment | null>(null)
+  const [detailsData, setDetailsData] = useState<any>(null)
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false)
+
   // ── Add Commitment form state ───────────────────────────────
   const [commitmentDate, setCommitmentDate] = useState(new Date().toISOString().split("T")[0])
   const [partyName, setPartyName] = useState("")
@@ -147,6 +153,23 @@ export default function CommitmentPunchPage() {
   }, [toast])
 
   useEffect(() => { loadPending() }, [loadPending])
+
+  // ── Fetch commitment details for popup ─────────────────────────────────────
+  const openDetails = async (row: PendingCommitment, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setDetailsRow(row)
+    setDetailsData(null)
+    setIsDetailsOpen(true)
+    setIsLoadingDetails(true)
+    try {
+      const res = await commitmentPunchApi.getDetails(row.id)
+      if (res.success) setDetailsData(res.data)
+    } catch {
+      toast({ title: "Error", description: "Failed to load commitment details.", variant: "destructive" })
+    } finally {
+      setIsLoadingDetails(false)
+    }
+  }
 
   // Auto-fill Start Date to today and End Date to +7 when Process dialog opens
   useEffect(() => {
@@ -627,7 +650,18 @@ export default function CommitmentPunchPage() {
                       <TableCell className="text-right font-mono">{row.quantity ?? "—"}</TableCell>
                       <TableCell>{row.unit || "—"}</TableCell>
                       <TableCell className="text-right font-mono">₹{row.rate ?? "—"}</TableCell>
-                      <TableCell className="text-right font-mono text-blue-600 font-semibold">{Number(row.processed_qty || 0).toFixed(4)}</TableCell>
+                      <TableCell className="text-right font-mono text-blue-600 font-semibold">
+                        {Number(row.processed_qty || 0) > 0 ? (
+                          <button
+                            onClick={(e) => openDetails(row, e)}
+                            className="text-blue-600 underline hover:text-blue-800 font-semibold font-mono cursor-pointer bg-transparent border-none p-0"
+                          >
+                            {Number(row.processed_qty || 0).toFixed(4)}
+                          </button>
+                        ) : (
+                          <span className="text-slate-400">0.0000</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right font-mono text-emerald-600 font-bold">{Number(row.remaining_qty ?? row.quantity).toFixed(4)}</TableCell>
                     </TableRow>
                   ))
@@ -1163,6 +1197,121 @@ export default function CommitmentPunchPage() {
               <ChevronRight className="h-4 w-4" />
               {isProcessing ? "Processing..." : "Confirm Process"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════
+          PO RAISED DETAILS POPUP
+      ═══════════════════════════════════════════════════════ */}
+      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>PO Raised Details — {detailsRow?.commitment_no}</DialogTitle>
+            <DialogDescription>
+              Commitment: <span className="font-semibold">{detailsRow?.party_name}</span>
+              {" | "}
+              Oil Type: <span className="font-semibold">{detailsRow?.oil_type}</span>
+              {" | "}
+              Total Qty: <span className="font-semibold">{detailsRow?.quantity} {detailsRow?.unit}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {isLoadingDetails ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <RefreshCw className="h-5 w-5 animate-spin mr-2" /> Loading details...
+            </div>
+          ) : detailsData ? (
+            <div className="space-y-4">
+              {/* Summary row */}
+              <div className="flex flex-wrap gap-6 rounded-lg border border-blue-100 bg-blue-50/60 px-4 py-3 text-sm">
+                <div>
+                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Commitment No.</p>
+                  <p className="font-mono font-semibold text-blue-700 mt-0.5">{detailsRow?.commitment_no}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Total PO Raised (MT)</p>
+                  <p className="font-semibold text-slate-800 mt-0.5">{Number(detailsData.total_processed_mt).toFixed(4)} MT</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">No. of Times Raised</p>
+                  <p className="font-semibold text-slate-800 mt-0.5">{detailsData.raise_count} time{detailsData.raise_count !== 1 ? "s" : ""}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Commitment Date</p>
+                  <p className="font-semibold text-slate-800 mt-0.5">
+                    {detailsRow?.commitment_date ? new Date(detailsRow.commitment_date).toLocaleDateString("en-IN") : "—"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Details table */}
+              {detailsData.details?.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No PO raised yet for this commitment.</p>
+              ) : (
+                <div className="rounded-lg border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 border-b">
+                      <tr>
+                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">#</th>
+                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Raised On</th>
+                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">PO No.</th>
+                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">PO Date</th>
+                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">SKU</th>
+                        <th className="py-2 px-3 text-right font-medium text-slate-600 text-xs">Qty (Box)</th>
+                        <th className="py-2 px-3 text-right font-medium text-slate-600 text-xs">Weight (MT)</th>
+                        <th className="py-2 px-3 text-right font-medium text-slate-600 text-xs">Rate</th>
+                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Order Type</th>
+                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Depo</th>
+                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Payment Terms</th>
+                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailsData.details.map((d: any, idx: number) => (
+                        <tr key={d.id} className="border-b last:border-0 hover:bg-slate-50">
+                          <td className="py-2 px-3 text-xs font-bold text-slate-400">{idx + 1}</td>
+                          <td className="py-2 px-3 text-xs">
+                            {d.actual1 ? new Date(d.actual1).toLocaleDateString("en-IN") : "—"}
+                          </td>
+                          <td className="py-2 px-3 font-mono text-xs font-semibold text-blue-700">{d.po_no || "—"}</td>
+                          <td className="py-2 px-3 text-xs">
+                            {d.po_date ? new Date(d.po_date).toLocaleDateString("en-IN") : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-xs max-w-[160px] truncate" title={d.sku}>{d.sku || "—"}</td>
+                          <td className="py-2 px-3 text-right font-mono text-xs">{d.sku_quantity ?? "—"}</td>
+                          <td className="py-2 px-3 text-right font-mono text-xs font-semibold text-emerald-700">
+                            {d.sku_weight_mt ? Number(d.sku_weight_mt).toFixed(4) : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono text-xs">
+                            {d.sku_rate ? `₹${d.sku_rate}` : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-xs">{d.order_type || "—"}</td>
+                          <td className="py-2 px-3 text-xs">{d.depo_name || "—"}</td>
+                          <td className="py-2 px-3 text-xs">{d.payment_terms || "—"}</td>
+                          <td className="py-2 px-3 text-xs max-w-[140px] truncate" title={d.remarks}>{d.remarks || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-slate-50 border-t">
+                      <tr>
+                        <td colSpan={6} className="py-2 px-3 text-xs font-semibold text-slate-600 text-right">Total Weight:</td>
+                        <td className="py-2 px-3 text-right font-mono text-xs font-bold text-emerald-700">
+                          {Number(detailsData.total_processed_mt).toFixed(4)} MT
+                        </td>
+                        <td colSpan={5} />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-8">No data available.</p>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDetailsOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
