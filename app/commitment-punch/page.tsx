@@ -391,7 +391,10 @@ export default function CommitmentPunchPage() {
           const qty = parseFloat(field === "qty" ? value : updated.qty) || 0
           const filling = parseFloat(skuData.oil_filling_per_unit || 0)
           const units = parseFloat(skuData.nos_per_main_uom || 0)
-          updated.mt = (filling * units * qty) / 1000000
+          // GMS: divide by 1,000,000 (÷1000 twice); LTR: divide by 1,000,000,000 (÷1000 three times)
+          const fillingUnit = (skuData.filling_units || "").toString().toLowerCase().trim()
+          const divisor = fillingUnit === "ltr" ? 1000000000 : 1000000
+          updated.mt = (filling * units * qty) / divisor
         }
         return updated
       }
