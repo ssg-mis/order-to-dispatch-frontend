@@ -25,12 +25,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Save, Plus, Trash2, CheckCircle2, RefreshCw, ChevronRight } from "lucide-react"
+import { Save, Plus, Trash2, CheckCircle2, RefreshCw, ChevronRight, CalendarIcon } from "lucide-react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
 import { customerApi, commitmentPunchApi, brokerApi, salespersonApi, skuDetailsApi, depotApi } from "@/lib/api-service"
 import { AsyncCombobox } from "@/components/ui/async-combobox"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { format } from "date-fns"
+import { cn } from "@/lib/utils"
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -96,6 +100,15 @@ export default function CommitmentPunchPage() {
   const [processAdvancePaymentTaken, setProcessAdvancePaymentTaken] = useState("NO")
   const [processAdvancePayment, setProcessAdvancePayment] = useState("")
   const [processPaymentTerms, setProcessPaymentTerms] = useState("7days")
+  const [processOrderTypeThrough, setProcessOrderTypeThrough] = useState("")
+  const [processOrderType, setProcessOrderType] = useState("regular")
+  const [processStartDate, setProcessStartDate] = useState("")
+  const [processEndDate, setProcessEndDate] = useState("")
+  const [processActualDeliveryDate, setProcessActualDeliveryDate] = useState("")
+  const [processUploadCopy, setProcessUploadCopy] = useState<File | null>(null)
+  const [processRemarks, setProcessRemarks] = useState("")
+  const [processDeliveryDateError, setProcessDeliveryDateError] = useState("")
+  const [isActualDeliveryPickerOpen, setIsActualDeliveryPickerOpen] = useState(false)
   const [skuRows, setSkuRows] = useState<SkuRow[]>([
     { id: "1", sku: "", qty: "", rate: "" },
   ])
@@ -105,12 +118,16 @@ export default function CommitmentPunchPage() {
   // ── Add Commitment form state ───────────────────────────────
   const [commitmentDate, setCommitmentDate] = useState(new Date().toISOString().split("T")[0])
   const [partyName, setPartyName] = useState("")
+  const [contactPerson, setContactPerson] = useState("")
+  const [whatsappNo, setWhatsappNo] = useState("")
+  const [customerAddress, setCustomerAddress] = useState("")
+  const [customerList, setCustomerList] = useState<any[]>([])
   const [orderType, setOrderType] = useState("")
   const [transportType, setTransportType] = useState("")
   const [brokerName, setBrokerName] = useState("")
   const [salespersonName, setSalespersonName] = useState("")
   const [rows, setRows] = useState<ProductRow[]>([
-    { id: "1", oil_type: "", quantity: "", unit: "", rate: "" },
+    { id: "1", oil_type: "Rice Oil", quantity: "", unit: "Metric Ton", rate: "" },
   ])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -131,21 +148,65 @@ export default function CommitmentPunchPage() {
 
   useEffect(() => { loadPending() }, [loadPending])
 
+  // Auto-fill Start Date to today and End Date to +7 when Process dialog opens
+  useEffect(() => {
+    if (isProcessOpen && !processStartDate) {
+      const today = new Date().toISOString().split("T")[0]
+      const end = new Date()
+      end.setDate(end.getDate() + 7)
+      const endDate = end.toISOString().split("T")[0]
+      setProcessStartDate(today)
+      setProcessEndDate(endDate)
+    }
+  }, [isProcessOpen])
+
+  // Auto-select Reliance customer when Add Commitment dialog opens
+  useEffect(() => {
+    if (isAddOpen && !partyName) {
+      const relianceName = "Reliance Consumer Products Limited"
+      setPartyName(relianceName)
+      // Fetch customer details from API to auto-fill contact info
+      customerApi.getAll({ search: "Reliance", limit: 30 }).then((res: any) => {
+        const items = res.success ? (res.data.customers || (Array.isArray(res.data) ? res.data : [])) : []
+        const found = items.find((c: any) =>
+          (c.customer_name || "").toLowerCase().includes("reliance consumer products")
+        ) || items.find((c: any) =>
+          (c.customer_name || "").toLowerCase().includes("reliance")
+        )
+        if (found) {
+          setContactPerson(found.contact_person || "")
+          setWhatsappNo(found.contact || "")
+          const parts = [found.address_line_1, found.address_line_2, found.state, found.pincode].filter(Boolean)
+          setCustomerAddress(parts.join(", "))
+          // Cache it too
+          setCustomerList((prev: any[]) => {
+            const exists = prev.find((c: any) => c.id === found.id)
+            return exists ? prev : [...prev, found]
+          })
+        }
+      }).catch(() => {})
+    }
+  }, [isAddOpen])
+
   // ── Customer / Broker / Salesperson fetch callbacks ─────────
   const fetchCustomerOptions = useCallback(async (search: string, page: number) => {
     try {
-      // Only show Reliance company in commitment punch
       const res = await customerApi.getAll({ search: search || "Reliance", page, limit: 30 })
       const items = res.success ? (res.data.customers || (Array.isArray(res.data) ? res.data : [])) : []
       const seen = new Map<string, boolean>()
       const options = items
         .filter((c: any) => (c.customer_name || "").toLowerCase().includes("reliance"))
-        .map((c: any) => ({ value: c.customer_name, label: c.customer_name }))
+        .map((c: any) => ({ value: c.customer_name, label: c.customer_name, original: c }))
         .filter((o: any) => {
           if (!o.value || seen.has(o.value)) return false
           seen.set(o.value, true)
           return true
         })
+      // Update customer list for auto-fill
+      setCustomerList((prev: any[]) => {
+        const newItems = items.filter((c: any) => !prev.find((p: any) => p.id === c.id))
+        return newItems.length ? [...prev, ...newItems] : prev
+      })
       return { options, hasMore: false }
     } catch { return { options: [], hasMore: false } }
   }, [])
@@ -232,15 +293,18 @@ export default function CommitmentPunchPage() {
   const resetAddForm = () => {
     setCommitmentDate(new Date().toISOString().split("T")[0])
     setPartyName("")
+    setContactPerson("")
+    setWhatsappNo("")
+    setCustomerAddress("")
     setBrokerName("")
     setSalespersonName("")
     setOrderType("")
     setTransportType("")
-    setRows([{ id: "1", oil_type: "", quantity: "", unit: "", rate: "" }])
+    setRows([{ id: "1", oil_type: "Rice Oil", quantity: "", unit: "Metric Ton", rate: "" }])
   }
 
   const addRow = () =>
-    setRows(prev => [...prev, { id: Math.random().toString(36).substr(2, 9), oil_type: "", quantity: "", unit: "", rate: "" }])
+    setRows(prev => [...prev, { id: Math.random().toString(36).substr(2, 9), oil_type: "Rice Oil", quantity: "", unit: "Metric Ton", rate: "" }])
 
   const removeRow = (id: string) => {
     if (rows.length > 1) setRows(prev => prev.filter(r => r.id !== id))
@@ -282,6 +346,9 @@ export default function CommitmentPunchPage() {
       const payload = {
         commitment_date: commitmentDate,
         party_name: partyName,
+        customer_contact_person_name: contactPerson || null,
+        whatsapp_no: whatsappNo || null,
+        address: customerAddress || null,
         rows: rows.map(r => ({
           oil_type: r.oil_type,
           quantity: parseFloat(r.quantity),
@@ -340,6 +407,15 @@ export default function CommitmentPunchPage() {
     setProcessAdvancePaymentTaken("NO")
     setProcessAdvancePayment("")
     setProcessPaymentTerms("7days")
+    setProcessOrderTypeThrough("")
+    setProcessOrderType("regular")
+    setProcessStartDate("")
+    setProcessEndDate("")
+    setProcessActualDeliveryDate("")
+    setProcessUploadCopy(null)
+    setProcessRemarks("")
+    setProcessDeliveryDateError("")
+    setIsActualDeliveryPickerOpen(false)
     setSkuRows([{ id: "1", sku: "", qty: "", rate: "", mt: 0 }])
   }
 
@@ -372,6 +448,16 @@ export default function CommitmentPunchPage() {
       let errorMsgs: string[] = []
       let generatedOrderNos: string[] = []
 
+      // Handle SO copy upload if selected
+      let uploadedCopyUrl: string | null = null
+      if (processUploadCopy) {
+        try {
+          // @ts-ignore
+          const uploadRes = await (await import("@/lib/api-service")).orderApi.uploadFile(processUploadCopy)
+          if (uploadRes.success) uploadedCopyUrl = uploadRes.data.url
+        } catch { /* ignore upload error */ }
+      }
+
       for (const id of ids) {
         // For each selected commitment, submit each SKU row as a separate detail record
         for (const skuRow of skuRows) {
@@ -390,6 +476,13 @@ export default function CommitmentPunchPage() {
             advance_payment: processAdvancePayment,
             advance_payment_taken: processAdvancePaymentTaken,
             payment_terms: processPaymentTerms,
+            is_order_through: processOrderTypeThrough || null,
+            order_type_regular_preapproval: processOrderType || null,
+            start_date: processStartDate || null,
+            end_date: processEndDate || null,
+            actual_delivery_date: processActualDeliveryDate || null,
+            upload_copy: uploadedCopyUrl,
+            remarks: processRemarks || null,
           }
           const res = await commitmentPunchApi.processCommitment(id, payload)
           if (res.success) {
@@ -565,9 +658,34 @@ export default function CommitmentPunchPage() {
                   fetchOptions={fetchCustomerOptions}
                   value={partyName}
                   onValueChange={setPartyName}
+                  onSelectOption={(opt: any) => {
+                    if (opt.original) {
+                      setCustomerList((prev: any[]) => {
+                        const exists = prev.find((c: any) => c.id === opt.original.id)
+                        return exists ? prev : [...prev, opt.original]
+                      })
+                      const c = opt.original
+                      setContactPerson(c.contact_person || "")
+                      setWhatsappNo(c.contact || "")
+                      const parts = [c.address_line_1, c.address_line_2, c.state, c.pincode].filter(Boolean)
+                      setCustomerAddress(parts.join(", "))
+                    }
+                  }}
                   placeholder="Select customer"
                   searchPlaceholder="Search customer..."
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="d-contactPerson">Contact Person Name</Label>
+                <Input id="d-contactPerson" placeholder="Enter contact person" value={contactPerson} onChange={e => setContactPerson(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="d-whatsapp">WhatsApp No.</Label>
+                <Input id="d-whatsapp" placeholder="Enter WhatsApp number" value={whatsappNo} onChange={e => setWhatsappNo(e.target.value)} />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="d-address">Customer Address</Label>
+                <Input id="d-address" placeholder="Enter full address" value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} />
               </div>
             </div>
 
@@ -689,14 +807,30 @@ export default function CommitmentPunchPage() {
 
             {/* ── Order Submission Details ── */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b pb-4">
+              {/* Order Type is Through (is_order_through) */}
               <div className="space-y-2">
-                <Label htmlFor="p-orderType">Order Type <span className="text-red-500">*</span></Label>
-                <Select value={orderType} onValueChange={handleOrderTypeChange}>
-                  <SelectTrigger id="p-orderType"><SelectValue placeholder="Select order type" /></SelectTrigger>
+                <Label htmlFor="p-orderTypeThrough">Order Type is Through <span className="text-red-500">*</span></Label>
+                <Select value={processOrderTypeThrough} onValueChange={(val) => {
+                  setProcessOrderTypeThrough(val)
+                  setBrokerName("")
+                  setSalespersonName("")
+                }}>
+                  <SelectTrigger id="p-orderTypeThrough"><SelectValue placeholder="Select order type" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="direct">Direct</SelectItem>
                     <SelectItem value="broker">Broker</SelectItem>
                     <SelectItem value="salesperson">Salesperson</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Order Type: Regular / Pre-Approval */}
+              <div className="space-y-2">
+                <Label htmlFor="p-orderType">Order Type</Label>
+                <Select value={processOrderType} onValueChange={setProcessOrderType}>
+                  <SelectTrigger id="p-orderType"><SelectValue placeholder="Select type" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="regular">Regular</SelectItem>
+                    <SelectItem value="pre-approval">Pre-Approval</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -705,21 +839,20 @@ export default function CommitmentPunchPage() {
                 <Select value={transportType} onValueChange={setTransportType}>
                   <SelectTrigger id="p-transportType"><SelectValue placeholder="Select transport type" /></SelectTrigger>
                   <SelectContent>
-                    {TRANSPORT_TYPES.map(t => (
-                      <SelectItem key={t} value={t.toLowerCase().replace(/ /g, "-")}>{t}</SelectItem>
-                    ))}
+                    <SelectItem value="party">Party</SelectItem>
+                    <SelectItem value="ex-depot">Ex-Depot</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               
               {/* Conditional Broker / Salesperson */}
-              {orderType === "broker" && (
+              {processOrderTypeThrough === "broker" && (
                 <div className="space-y-2 col-span-full">
                   <Label>Broker Name <span className="text-red-500">*</span></Label>
                   <AsyncCombobox fetchOptions={fetchBrokerOptions} value={brokerName} onValueChange={setBrokerName} placeholder="Select broker" searchPlaceholder="Search broker..." />
                 </div>
               )}
-              {orderType === "salesperson" && (
+              {processOrderTypeThrough === "salesperson" && (
                 <div className="space-y-2 col-span-full">
                   <Label>Salesperson <span className="text-red-500">*</span></Label>
                   <AsyncCombobox fetchOptions={fetchSalespersonOptions} value={salespersonName} onValueChange={setSalespersonName} placeholder="Select salesperson" searchPlaceholder="Search salesperson..." />
@@ -740,6 +873,101 @@ export default function CommitmentPunchPage() {
               <div className="space-y-2">
                 <Label>Depo Name</Label>
                 <AsyncCombobox fetchOptions={fetchDepoOptions} value={processDepoName} onValueChange={setProcessDepoName} placeholder="Select Depo" searchPlaceholder="Search depots..." />
+              </div>
+
+              {/* Start Date / End Date */}
+              <div className="space-y-2">
+                <Label htmlFor="p-startDate">Start Date</Label>
+                <Input
+                  id="p-startDate"
+                  type="date"
+                  value={processStartDate}
+                  onChange={e => {
+                    const val = e.target.value
+                    setProcessStartDate(val)
+                    setProcessDeliveryDateError("")
+                    if (val) {
+                      const d = new Date(val)
+                      d.setDate(d.getDate() + 7)
+                      setProcessEndDate(d.toISOString().split("T")[0])
+                    } else {
+                      setProcessEndDate("")
+                    }
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="p-endDate">End Date</Label>
+                <Input
+                  id="p-endDate"
+                  type="date"
+                  value={processEndDate}
+                  readOnly
+                  className="bg-muted cursor-not-allowed"
+                />
+              </div>
+
+              {/* Actual Delivery Date - Calendar with in-range highlight */}
+              <div className="space-y-2">
+                <Label>Actual Delivery Date</Label>
+                <Popover open={isActualDeliveryPickerOpen} onOpenChange={setIsActualDeliveryPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !processActualDeliveryDate && "text-muted-foreground",
+                        processDeliveryDateError && "border-red-500"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {processActualDeliveryDate
+                        ? format(new Date(processActualDeliveryDate), "PPP")
+                        : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={processActualDeliveryDate ? new Date(processActualDeliveryDate) : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          const val = format(date, "yyyy-MM-dd")
+                          setProcessActualDeliveryDate(val)
+                          setIsActualDeliveryPickerOpen(false)
+                          // Validate within start-end range
+                          if (processStartDate && processEndDate) {
+                            const d = new Date(val)
+                            const start = new Date(processStartDate)
+                            const end = new Date(processEndDate)
+                            if (d < start || d > end) {
+                              setProcessDeliveryDateError(`Date must be between ${processStartDate} and ${processEndDate}`)
+                            } else {
+                              setProcessDeliveryDateError("")
+                            }
+                          } else {
+                            setProcessDeliveryDateError("")
+                          }
+                        }
+                      }}
+                      initialFocus
+                      modifiers={{
+                        inRange: (date) => {
+                          if (!processStartDate || !processEndDate) return false
+                          const start = new Date(processStartDate)
+                          const end = new Date(processEndDate)
+                          return date >= start && date <= end
+                        }
+                      }}
+                      modifiersClassNames={{
+                        inRange: "bg-blue-100 text-blue-900 hover:bg-blue-200"
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+                {processDeliveryDateError && (
+                  <p className="text-xs text-red-600 font-medium">{processDeliveryDateError}</p>
+                )}
               </div>
 
               {/* Advance Payment & Payment Terms */}
@@ -776,6 +1004,27 @@ export default function CommitmentPunchPage() {
                     <SelectItem value="delivery">On Delivery</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Upload SO Copy */}
+              <div className="space-y-2">
+                <Label htmlFor="p-uploadCopy">Upload SO Copy</Label>
+                <Input
+                  id="p-uploadCopy"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={e => setProcessUploadCopy(e.target.files?.[0] || null)}
+                  className="cursor-pointer"
+                />
+                {processUploadCopy && (
+                  <p className="text-xs text-emerald-600">✅ {processUploadCopy.name}</p>
+                )}
+              </div>
+
+              {/* Remarks */}
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="p-remarks">Remarks</Label>
+                <Input id="p-remarks" placeholder="Enter any remarks..." value={processRemarks} onChange={e => setProcessRemarks(e.target.value)} />
               </div>
             </div>
 
@@ -819,9 +1068,9 @@ export default function CommitmentPunchPage() {
                     <tr>
                       <th className="w-7 text-center py-2 px-1 font-medium text-slate-500 text-xs">#</th>
                       <th className="py-2 px-2 text-left font-medium text-slate-600 text-xs text-nowrap">SKU Name *</th>
-                      <th className="py-2 px-2 text-left font-medium text-slate-600 text-xs w-[110px]">Qty *</th>
+                      <th className="py-2 px-2 text-left font-medium text-slate-600 text-xs w-[110px]">Qty (Box) *</th>
                       <th className="py-2 px-2 text-left font-medium text-slate-600 text-xs w-[120px]">Weight (MT)</th>
-                      <th className="py-2 px-2 text-left font-medium text-slate-600 text-xs w-[150px]">Rate (PMT) *</th>
+                      <th className="py-2 px-2 text-left font-medium text-slate-600 text-xs w-[150px]">Rate *</th>
                       <th className="w-8"></th>
                     </tr>
                   </thead>
