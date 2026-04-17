@@ -108,6 +108,8 @@ export default function CommitmentPunchPage() {
   const [processUploadCopy, setProcessUploadCopy] = useState<File | null>(null)
   const [processRemarks, setProcessRemarks] = useState("")
   const [processDeliveryDateError, setProcessDeliveryDateError] = useState("")
+  const [processFuturePeriodDate, setProcessFuturePeriodDate] = useState("")
+  const [isFuturePeriodDatePickerOpen, setIsFuturePeriodDatePickerOpen] = useState(false)
   const [isActualDeliveryPickerOpen, setIsActualDeliveryPickerOpen] = useState(false)
   const [skuRows, setSkuRows] = useState<SkuRow[]>([
     { id: "1", sku: "", qty: "", rate: "" },
@@ -207,7 +209,7 @@ export default function CommitmentPunchPage() {
             return exists ? prev : [...prev, found]
           })
         }
-      }).catch(() => {})
+      }).catch(() => { })
     }
   }, [isAddOpen])
 
@@ -289,7 +291,7 @@ export default function CommitmentPunchPage() {
           return { value: n, label: n }
         })
         .filter((o: any) => { if (!o.value || seen.has(o.value)) return false; seen.add(o.value); return true })
-      
+
       setSkuRegistry(prev => ({ ...prev, ...newlyFetched }))
       return { options, hasMore: false }
     } catch { return { options: [], hasMore: false } }
@@ -407,17 +409,13 @@ export default function CommitmentPunchPage() {
     setSkuRows(prev => prev.map(r => {
       if (r.id === id) {
         const updated = { ...r, [field]: value }
-        
+
         // Recalculate MT
         const skuData = skuRegistry[field === "sku" ? value : updated.sku]
         if (skuData) {
           const qty = parseFloat(field === "qty" ? value : updated.qty) || 0
-          const filling = parseFloat(skuData.oil_filling_per_unit || 0)
-          const units = parseFloat(skuData.nos_per_main_uom || 0)
-          // GMS: divide by 1,000,000 (÷1000 twice); LTR: divide by 1,000,000,000 (÷1000 three times)
-          const fillingUnit = (skuData.filling_units || "").toString().toLowerCase().trim()
-          const divisor = fillingUnit === "ltr" ? 1000000000 : 1000000
-          updated.mt = (filling * units * qty) / divisor
+          const skuWeight = parseFloat(skuData.sku_weight || 0)
+          updated.mt = (skuWeight / 1000) * qty
         }
         return updated
       }
@@ -438,10 +436,12 @@ export default function CommitmentPunchPage() {
     setProcessStartDate("")
     setProcessEndDate("")
     setProcessActualDeliveryDate("")
+    setProcessFuturePeriodDate("")
     setProcessUploadCopy(null)
     setProcessRemarks("")
     setProcessDeliveryDateError("")
     setIsActualDeliveryPickerOpen(false)
+    setIsFuturePeriodDatePickerOpen(false)
     setSkuRows([{ id: "1", sku: "", qty: "", rate: "", mt: 0 }])
   }
 
@@ -459,12 +459,12 @@ export default function CommitmentPunchPage() {
     const remainingMt = selectedCm ? (selectedCm.remaining_qty ?? selectedCm.quantity) : 0
 
     if (totalReqMt > remainingMt + 0.0001) {
-      toast({ 
-        title: "Validation Error", 
-        description: `Total weight (${totalReqMt.toFixed(4)} MT) exceeds remaining balance (${remainingMt.toFixed(4)} MT).`, 
-        variant: "destructive" 
-      }); 
-      return 
+      toast({
+        title: "Validation Error",
+        description: `Total weight (${totalReqMt.toFixed(4)} MT) exceeds remaining balance (${remainingMt.toFixed(4)} MT).`,
+        variant: "destructive"
+      });
+      return
     }
 
     setIsProcessing(true)
@@ -507,6 +507,7 @@ export default function CommitmentPunchPage() {
             start_date: processStartDate || null,
             end_date: processEndDate || null,
             actual_delivery_date: processActualDeliveryDate || null,
+            future_period_date: processFuturePeriodDate || null,
             upload_copy: uploadedCopyUrl,
             remarks: processRemarks || null,
           }
@@ -876,12 +877,12 @@ export default function CommitmentPunchPage() {
                 <Select value={transportType} onValueChange={setTransportType}>
                   <SelectTrigger id="p-transportType"><SelectValue placeholder="Select transport type" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="party">Party</SelectItem>
-                    <SelectItem value="ex-depot">Ex-Depot</SelectItem>
+                    <SelectItem value="FOR">FOR</SelectItem>
+                    <SelectItem value="EX-Depot">EX-Depot</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              
+
               {/* Conditional Broker / Salesperson */}
               {processOrderTypeThrough === "broker" && (
                 <div className="space-y-2 col-span-full">
@@ -907,6 +908,42 @@ export default function CommitmentPunchPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {processDeliveryPurpose === "future-period" && (
+                <div className="space-y-2">
+                  <Label>Future Period Date</Label>
+                  <Popover open={isFuturePeriodDatePickerOpen} onOpenChange={setIsFuturePeriodDatePickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !processFuturePeriodDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {processFuturePeriodDate
+                          ? format(new Date(processFuturePeriodDate), "PPP")
+                          : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={processFuturePeriodDate ? new Date(processFuturePeriodDate) : undefined}
+                        onSelect={(date) => {
+                          if (date) {
+                            setProcessFuturePeriodDate(format(date, "yyyy-MM-dd"))
+                            setIsFuturePeriodDatePickerOpen(false)
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <p className="text-[10px] text-blue-600 font-medium">ℹ️ Date for future delivery scheduling</p>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Depo Name</Label>
                 <AsyncCombobox fetchOptions={fetchDepoOptions} value={processDepoName} onValueChange={setProcessDepoName} placeholder="Select Depo" searchPlaceholder="Search depots..." />
@@ -1025,10 +1062,10 @@ export default function CommitmentPunchPage() {
                     <Input type="number" value={processAdvancePayment} onChange={e => setProcessAdvancePayment(e.target.value)} placeholder="0.00" />
                   </>
                 ) : (
-                   <div className="opacity-50 pointer-events-none">
-                     <Label>Advance Amount (₹)</Label>
-                     <Input disabled placeholder="0.00" />
-                   </div>
+                  <div className="opacity-50 pointer-events-none">
+                    <Label>Advance Amount (₹)</Label>
+                    <Input disabled placeholder="0.00" />
+                  </div>
                 )}
               </div>
               <div className="space-y-2">
@@ -1095,7 +1132,7 @@ export default function CommitmentPunchPage() {
               <div className="flex items-center justify-between border-b pb-1">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500">SKU Details <span className="text-slate-400 font-normal normal-case">(Good Life only)</span></p>
                 <Button type="button" variant="outline" size="sm" onClick={addSkuRow} className="gap-1 h-7 text-xs">
-                  <Plus className="h-3 w-3" /> Add Row
+                  <Plus className="h-3 w-3" /> Add Sku
                 </Button>
               </div>
 
@@ -1147,9 +1184,9 @@ export default function CommitmentPunchPage() {
                             />
                           </td>
                           <td className="py-1 px-2">
-                             <div className="h-8 flex items-center px-2 bg-slate-50 border rounded text-xs font-mono text-slate-600">
-                               {row.mt ? row.mt.toFixed(4) : "0.0000"}
-                             </div>
+                            <div className="h-8 flex items-center px-2 bg-slate-50 border rounded text-xs font-mono text-slate-600">
+                              {row.mt ? row.mt.toFixed(4) : "0.0000"}
+                            </div>
                           </td>
                           <td className="py-1 px-2">
                             <div className="flex items-center gap-1.5">
@@ -1167,16 +1204,16 @@ export default function CommitmentPunchPage() {
                               )}
                             </div>
                           </td>
-                        <td className="py-1 px-1 text-center">
-                          <Button
-                            type="button" variant="ghost" size="icon"
-                            className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
-                            onClick={() => removeSkuRow(row.id)}
-                            disabled={skuRows.length === 1}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </td>
+                          <td className="py-1 px-1 text-center">
+                            <Button
+                              type="button" variant="ghost" size="icon"
+                              className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
+                              onClick={() => removeSkuRow(row.id)}
+                              disabled={skuRows.length === 1}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -1205,7 +1242,7 @@ export default function CommitmentPunchPage() {
           PO RAISED DETAILS POPUP
       ═══════════════════════════════════════════════════════ */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[1250px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>PO Raised Details — {detailsRow?.commitment_no}</DialogTitle>
             <DialogDescription>
@@ -1255,7 +1292,8 @@ export default function CommitmentPunchPage() {
                       <tr>
                         <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">#</th>
                         <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Raised On</th>
-                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">PO No.</th>
+                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">DO No.</th>
+                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs text-nowrap">PO No.</th>
                         <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">PO Date</th>
                         <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">SKU</th>
                         <th className="py-2 px-3 text-right font-medium text-slate-600 text-xs">Qty (Box)</th>
@@ -1274,6 +1312,7 @@ export default function CommitmentPunchPage() {
                           <td className="py-2 px-3 text-xs">
                             {d.actual1 ? new Date(d.actual1).toLocaleDateString("en-IN") : "—"}
                           </td>
+                          <td className="py-2 px-3 font-mono text-xs font-bold text-emerald-700">{d.order_no || "—"}</td>
                           <td className="py-2 px-3 font-mono text-xs font-semibold text-blue-700">{d.po_no || "—"}</td>
                           <td className="py-2 px-3 text-xs">
                             {d.po_date ? new Date(d.po_date).toLocaleDateString("en-IN") : "—"}
@@ -1295,7 +1334,7 @@ export default function CommitmentPunchPage() {
                     </tbody>
                     <tfoot className="bg-slate-50 border-t">
                       <tr>
-                        <td colSpan={6} className="py-2 px-3 text-xs font-semibold text-slate-600 text-right">Total Weight:</td>
+                        <td colSpan={7} className="py-2 px-3 text-xs font-semibold text-slate-600 text-right">Total Weight:</td>
                         <td className="py-2 px-3 text-right font-mono text-xs font-bold text-emerald-700">
                           {Number(detailsData.total_processed_mt).toFixed(4)} MT
                         </td>
