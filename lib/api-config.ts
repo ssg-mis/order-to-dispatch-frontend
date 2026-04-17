@@ -12,10 +12,10 @@ export const API_ENDPOINTS = {
   orders: {
     create: '/orders',
     getAll: '/orders',
-    getByOrderNumber: (orderNo: string) => `/orders/${orderNo}`,
+    getByOrderNumber: (orderNo: string) => `/orders/lookup/number?orderNo=${encodeURIComponent(orderNo)}`,
     update: (id: number) => `/orders/update/${id}`,
     delete: (id: number) => `/orders/delete/${id}`,
-    getSuffixes: (prefix: string) => `/orders/suffixes/${prefix}`,
+    getSuffixes: (prefix: string) => `/orders/suffixes?prefix=${encodeURIComponent(prefix)}`,
     upload: '/upload',
   },
   

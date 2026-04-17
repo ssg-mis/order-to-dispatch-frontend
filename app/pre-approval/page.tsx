@@ -780,8 +780,11 @@ export default function PreApprovalPage() {
     // 1. Check local state
     [...(orderData._products || []), ...(dialogNewProducts[baseDo] || [])].forEach(p => {
       const id = p.orderNo || p._originalOrderId || "";
-      const match = id.match(/([A-Z])$/i);
-      if (match) occupiedSuffixes.add(match[1].toUpperCase());
+      if (id.startsWith(baseDo)) {
+        const suffixPart = id.substring(baseDo.length);
+        const match = suffixPart.match(/([A-Z])/i);
+        if (match) occupiedSuffixes.add(match[1].toUpperCase());
+      }
     });
 
     // 2. Check Database via API

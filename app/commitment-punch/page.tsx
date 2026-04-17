@@ -109,6 +109,7 @@ export default function CommitmentPunchPage() {
   const [processRemarks, setProcessRemarks] = useState("")
   const [processDeliveryDateError, setProcessDeliveryDateError] = useState("")
   const [processFuturePeriodDate, setProcessFuturePeriodDate] = useState("")
+  const [processOrderCategory, setProcessOrderCategory] = useState("Sales")
   const [isFuturePeriodDatePickerOpen, setIsFuturePeriodDatePickerOpen] = useState(false)
   const [isActualDeliveryPickerOpen, setIsActualDeliveryPickerOpen] = useState(false)
   const [skuRows, setSkuRows] = useState<SkuRow[]>([
@@ -442,6 +443,7 @@ export default function CommitmentPunchPage() {
     setProcessDeliveryDateError("")
     setIsActualDeliveryPickerOpen(false)
     setIsFuturePeriodDatePickerOpen(false)
+    setProcessOrderCategory("Sales")
     setSkuRows([{ id: "1", sku: "", qty: "", rate: "", mt: 0 }])
   }
 
@@ -510,6 +512,7 @@ export default function CommitmentPunchPage() {
             future_period_date: processFuturePeriodDate || null,
             upload_copy: uploadedCopyUrl,
             remarks: processRemarks || null,
+            order_category: processOrderCategory,
           }
           const res = await commitmentPunchApi.processCommitment(id, payload)
           if (res.success) {
@@ -1080,6 +1083,17 @@ export default function CommitmentPunchPage() {
                 </Select>
               </div>
 
+              <div className="space-y-2">
+                <Label>Order Category</Label>
+                <Select value={processOrderCategory} onValueChange={setProcessOrderCategory}>
+                  <SelectTrigger><SelectValue placeholder="Select Category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Sales">Sales</SelectItem>
+                    <SelectItem value="Stock Transfer">Stock Transfer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Upload SO Copy */}
               <div className="space-y-2">
                 <Label htmlFor="p-uploadCopy">Upload SO Copy</Label>
@@ -1299,6 +1313,7 @@ export default function CommitmentPunchPage() {
                         <th className="py-2 px-3 text-right font-medium text-slate-600 text-xs">Qty (Box)</th>
                         <th className="py-2 px-3 text-right font-medium text-slate-600 text-xs">Weight (MT)</th>
                         <th className="py-2 px-3 text-right font-medium text-slate-600 text-xs">Rate</th>
+                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Category</th>
                         <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Order Type</th>
                         <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Depo</th>
                         <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Payment Terms</th>
@@ -1324,6 +1339,14 @@ export default function CommitmentPunchPage() {
                           </td>
                           <td className="py-2 px-3 text-right font-mono text-xs">
                             {d.sku_rate ? `₹${d.sku_rate}` : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-xs">
+                            <Badge variant="outline" className={cn(
+                              "text-[10px] px-1.5 py-0 h-4 uppercase font-bold border",
+                              d.order_category === "Stock Transfer" ? "border-purple-200 bg-purple-50 text-purple-700" : "border-blue-200 bg-blue-50 text-blue-700"
+                            )}>
+                              {d.order_category || "Sales"}
+                            </Badge>
                           </td>
                           <td className="py-2 px-3 text-xs">{d.order_type || "—"}</td>
                           <td className="py-2 px-3 text-xs">{d.depo_name || "—"}</td>
