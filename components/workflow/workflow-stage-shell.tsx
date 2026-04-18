@@ -54,6 +54,7 @@ interface WorkflowStageShellProps {
   onTabChange?: (tab: "pending" | "history") => void
   historyFooter?: React.ReactNode
   isHistoryLoading?: boolean
+  searchPlaceholder?: string
 }
 
 const FIELD_GROUPS: Record<string, number> = {
@@ -64,7 +65,7 @@ const FIELD_GROUPS: Record<string, number> = {
   bill_address: 0, ship_company_name: 0, ship_address: 0,
   sku_name: 0, approval_qty: 0, delivery_date: 0, order_type_delivery_purpose: 0,
   rate_per_ltr: 0, rate_per_15kg: 0, rate_of_material: 0, remark: 0, pre_approval_user: 1,
-  party_so_date: 0, start_date: 0, end_date: 0, depo_name: 0, futureperioddate: 0, 
+  party_so_date: 0, start_date: 0, end_date: 0, depo_name: 0, futureperioddate: 0,
   upload_so: 0, customer_contact_person_name: 0, customer_contact_person_whatsapp_no: 0,
   customer_name: 0,
 
@@ -78,13 +79,13 @@ const FIELD_GROUPS: Record<string, number> = {
   actual_approval_qty: 2, status_2: 2,
 
   // Level 3: Dispatch Planning
-  dispatch_from: 3, dispatch_planning_user: 3, revert_planning_remarks: 3, 
+  dispatch_from: 3, dispatch_planning_user: 3, revert_planning_remarks: 3,
   actual_3: 3, planned_3: 3, delay_3: 3,
 
   // Level 4: Material Load / Vehicle / Weightment (Stages 5, 6, 7)
   truck_no: 4, driver_name: 4, driver_mobile_no: 4, transporter_name: 4, rst_no: 4,
   gross_weight: 4, tare_weight: 4, net_weight: 4, actual_qty: 4,
-  material_load_user: 4, weightment_slip_copy: 4, vehicle_no_plate_image: 4, 
+  material_load_user: 4, weightment_slip_copy: 4, vehicle_no_plate_image: 4,
   check_status: 4, vehicle_number: 4,
   fitness: 4, insurance: 4, tax_copy: 4, polution: 4, permit1: 4, permit2_out_state: 4,
   fitness_end_date: 4, insurance_end_date: 4, tax_end_date: 4, pollution_end_date: 4,
@@ -97,7 +98,7 @@ const FIELD_GROUPS: Record<string, number> = {
   security_guard_user: 5, revert_security_remarks: 5, actual_4: 5, planned_4: 5,
 
   // Level 6: Make Invoice (Stage 9)
-  bill_type: 6, invoice_date: 6, invoice_no: 6, invoice_copy: 6, bill_amount: 6, 
+  bill_type: 6, invoice_date: 6, invoice_no: 6, invoice_copy: 6, bill_amount: 6,
   make_invoice_user: 6, actual_5: 6, planned_5: 6,
 
   // Level 7: Check Invoice (Stage 11)
@@ -129,6 +130,7 @@ export function WorkflowStageShell({
   historyFooter,
   isHistoryLoading = false,
   fetchPartyOptions,
+  searchPlaceholder = "Search DO Number, Customer...",
 }: WorkflowStageShellProps) {
   const [filters, setFilters] = React.useState({
     search: "",
@@ -187,8 +189,8 @@ export function WorkflowStageShell({
           </Badge>
         </div>
 
-        <Tabs 
-          defaultValue="pending" 
+        <Tabs
+          defaultValue="pending"
           className="w-full"
           onValueChange={(val) => onTabChange?.(val as "pending" | "history")}
         >
@@ -206,7 +208,7 @@ export function WorkflowStageShell({
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search DO Number, Customer..."
+                  placeholder={searchPlaceholder}
                   className="pl-9 bg-transparent h-9"
                   value={filters.search}
                   onChange={(e) => updateFilter("search", e.target.value)}
@@ -278,8 +280,8 @@ export function WorkflowStageShell({
                         className="w-full h-8 justify-between bg-background px-3 text-xs font-medium border-slate-200"
                       >
                         <span className="truncate">
-                          {filters.partyName === "all" || !filters.partyName 
-                            ? "All Parties" 
+                          {filters.partyName === "all" || !filters.partyName
+                            ? "All Parties"
                             : filters.partyName}
                         </span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -393,56 +395,56 @@ export function WorkflowStageShell({
                     </table>
                   </div>
                 ) : historyData && historyData.length > 0 ? (
-                    <div className="overflow-x-auto max-h-[600px] overflow-y-auto relative">
-                      <table className="w-full text-sm table-fixed">
-                        <thead className="bg-muted/30 border-b text-[10px] uppercase font-black text-slate-500 tracking-wider sticky top-0 z-10 shadow-sm">
-                          <tr>
-                            <th className="px-4 py-3 text-left w-[12%]">Date</th>
-                            <th className="px-4 py-3 text-left w-[18%]">Order No.</th>
-                            <th className="px-4 py-3 text-left w-[18%]">Party Name</th>
-                            <th className="px-4 py-3 text-left text-center w-[12%]">Status</th>
-                            <th className="px-4 py-3 text-left w-[25%]">{remarksColName || "Remarks"}</th>
-                            <th className="px-4 py-3 text-center w-[15%]">Action</th>
+                  <div className="overflow-x-auto max-h-[600px] overflow-y-auto relative">
+                    <table className="w-full text-sm table-fixed">
+                      <thead className="bg-muted/30 border-b text-[10px] uppercase font-black text-slate-500 tracking-wider sticky top-0 z-10 shadow-sm">
+                        <tr>
+                          <th className="px-4 py-3 text-left w-[12%]">Date</th>
+                          <th className="px-4 py-3 text-left w-[18%]">Order No.</th>
+                          <th className="px-4 py-3 text-left w-[18%]">Party Name</th>
+                          <th className="px-4 py-3 text-left text-center w-[12%]">Status</th>
+                          <th className="px-4 py-3 text-left w-[25%]">{remarksColName || "Remarks"}</th>
+                          <th className="px-4 py-3 text-center w-[15%]">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyData.map((item, i) => (
+                          <tr key={i} className="border-b hover:bg-muted/20 transition-colors">
+                            <td className="px-4 py-3 text-xs">{item.date || "-"}</td>
+                            <td className="px-4 py-3 font-bold text-blue-700 text-xs">{item.orderNo || "-"}</td>
+                            <td className="px-4 py-3 text-xs font-semibold capitalize">{item.customerName || "-"}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span
+                                className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tight ${item.status === "Approved" || item.status === "Completed" || item.status === "Verified"
+                                  ? "bg-green-100 text-green-700 border border-green-200"
+                                  : item.status === "Rejected"
+                                    ? "bg-red-100 text-red-700 border border-red-200"
+                                    : "bg-slate-100 text-slate-700 border border-slate-200"
+                                  }`}
+                              >
+                                {item.status || "Completed"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-[10px] text-muted-foreground font-medium italic">
+                              {item.remarks || "-"}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 text-[10px] font-black bg-white hover:bg-blue-50 hover:text-blue-700 border-2 transition-all uppercase italic tracking-tighter"
+                                onClick={() => setSelectedHistoryItem(item.rawData || item)}
+                              >
+                                <Eye className="mr-1 h-3 w-3" />
+                                View
+                              </Button>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {historyData.map((item, i) => (
-                            <tr key={i} className="border-b hover:bg-muted/20 transition-colors">
-                              <td className="px-4 py-3 text-xs">{item.date || "-"}</td>
-                              <td className="px-4 py-3 font-bold text-blue-700 text-xs">{item.orderNo || "-"}</td>
-                              <td className="px-4 py-3 text-xs font-semibold capitalize">{item.customerName || "-"}</td>
-                              <td className="px-4 py-3 text-center">
-                                <span
-                                  className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tight ${item.status === "Approved" || item.status === "Completed" || item.status === "Verified"
-                                      ? "bg-green-100 text-green-700 border border-green-200"
-                                      : item.status === "Rejected"
-                                        ? "bg-red-100 text-red-700 border border-red-200"
-                                        : "bg-slate-100 text-slate-700 border border-slate-200"
-                                    }`}
-                                >
-                                  {item.status || "Completed"}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-[10px] text-muted-foreground font-medium italic">
-                                {item.remarks || "-"}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-7 px-2 text-[10px] font-black bg-white hover:bg-blue-50 hover:text-blue-700 border-2 transition-all uppercase italic tracking-tighter"
-                                  onClick={() => setSelectedHistoryItem(item.rawData || item)}
-                                >
-                                  <Eye className="mr-1 h-3 w-3" />
-                                  View
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {historyFooter}
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
+                    {historyFooter}
+                  </div>
                 ) : (
                   <div className="p-8 text-center text-muted-foreground">No history records found.</div>
                 )}

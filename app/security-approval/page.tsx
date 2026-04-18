@@ -47,8 +47,8 @@ export default function SecurityApprovalPage() {
     partyName: "all",
     search: ""
   })
-  
-  const [filterOptions, setFilterOptions] = useState<{customerNames: string[], depots: string[]}>({
+
+  const [filterOptions, setFilterOptions] = useState<{ customerNames: string[], depots: string[] }>({
     customerNames: [],
     depots: []
   });
@@ -428,6 +428,8 @@ export default function SecurityApprovalPage() {
         grossWeight: order.gross_weight,
         tareWeight: order.tare_weight,
         netWeight: order.net_weight,
+        weightDiff: order.difference || 0,
+        reason_of_difference_in_weight_if_any_speacefic: order.reason_of_difference_in_weight_if_any_speacefic,
         transporterName: order.transporter_name,
         dsrNumber: order.d_sr_number,
         processid: order.processid || null
@@ -557,16 +559,6 @@ export default function SecurityApprovalPage() {
     >
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
-          {selectedItems.length > 0 && (
-            <Button 
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold tracking-tight shadow-md"
-              onClick={handleOpenDialog}
-            >
-              <ShieldCheck className="mr-2 h-4 w-4" />
-              PROCESS SELECTED ({selectedItems.length})
-            </Button>
-          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="bg-transparent border-slate-200 text-slate-600 hover:bg-slate-50">
@@ -605,9 +597,9 @@ export default function SecurityApprovalPage() {
             <TableHeader className="bg-slate-50 sticky top-0 z-10">
               <TableRow>
                 <TableHead className="w-12 text-center">
-                  <Checkbox 
-                    checked={displayRows.length > 0 && selectedItems.length === displayRows.filter(r => !r.isDisabled).length && displayRows.filter(r => !r.isDisabled).length > 0} 
-                    onCheckedChange={toggleSelectAll} 
+                  <Checkbox
+                    checked={displayRows.length > 0 && selectedItems.length === displayRows.filter(r => !r.isDisabled).length && displayRows.filter(r => !r.isDisabled).length > 0}
+                    onCheckedChange={toggleSelectAll}
                   />
                 </TableHead>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">DO DATE</TableHead>
@@ -686,7 +678,7 @@ export default function SecurityApprovalPage() {
               )}
             </TableBody>
           </Table>
-          
+
           {/* Pending Pagination Footer inside Children */}
           <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between rounded-b-3xl">
             <div className="text-xs text-slate-500 font-medium tracking-tight">

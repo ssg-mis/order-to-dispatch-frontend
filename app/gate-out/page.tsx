@@ -270,6 +270,7 @@ export default function GateOutPage() {
           paymentTerms: order.payment_terms || "—",
           advanceAmount: order.advance_amount || 0,
           isBroker: order.is_order_through_broker || false,
+          isOrderThrough: order.is_order_through || "—",
           brokerName: order.broker_name || "—",
           partyCredit: order.party_credit_status || "Good",
           totalAmount: order.total_amount_with_gst || "—",
@@ -295,6 +296,7 @@ export default function GateOutPage() {
         grossWeight: order.gross_weight,
         tareWeight: order.tare_weight,
         netWeight: order.net_weight,
+        weightDiff: order.difference || 0,
         transporterName: order.transporter_name,
         fitness: order.fitness,
         insurance: order.insurance,
@@ -306,6 +308,7 @@ export default function GateOutPage() {
         remarks: order.remarks,
         weightment_slip_copy: order.weightment_slip_copy,
         reasonForDiff: order.reason_of_difference_in_weight_if_any_speacefic,
+        reason_of_difference_in_weight_if_any_speacefic: order.reason_of_difference_in_weight_if_any_speacefic,
         bilty_no: order.bilty_no,
         processid: order.processid || null
       }
@@ -728,7 +731,9 @@ export default function GateOutPage() {
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Broker / Advance</p>
-                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.brokerName} / ₹{orderDetails.advanceAmount}</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">
+                                          {(orderDetails.isOrderThrough === "Direct" || (orderDetails.isOrderThrough === "—" && !orderDetails.isBroker)) ? "No" : orderDetails.brokerName} / ₹{orderDetails.advanceAmount}
+                                        </p>
                                       </div>
 
                                       <div className="md:col-span-4 h-px bg-slate-200 my-1" />

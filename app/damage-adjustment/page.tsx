@@ -257,7 +257,8 @@ export default function DamageAdjustmentPage() {
           grossWeight: order.gross_weight || "—",
           tareWeight: order.tare_weight || "—",
           netWeight: order.net_weight || "—",
-          weightDiff: order.weight_diff || "—",
+          difference: order.difference,
+          weightDiff: order.difference || order.weight_diff || "—",
           extraWeight: order.extra_weight || "—",
           transporterName: order.transporter_name || "—",
           truckNo: order.truck_no || "—",
@@ -285,6 +286,9 @@ export default function DamageAdjustmentPage() {
         damageStatus: order.damage_status,
         damageSku: order.sku,
         damageImage: order.damage_image,
+        difference: order.difference,
+        weightDiff: order.difference || 0,
+        reason_of_difference_in_weight_if_any_speacefic: order.reason_of_difference_in_weight_if_any_speacefic,
         processid: order.processid || null
       })
 

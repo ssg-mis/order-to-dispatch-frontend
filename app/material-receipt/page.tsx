@@ -45,7 +45,7 @@ export default function MaterialReceiptPage() {
     search: ""
   })
   const [isProcessing, setIsProcessing] = useState(false)
-  
+
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "—";
     try {
@@ -207,6 +207,7 @@ export default function MaterialReceiptPage() {
           customerAddress: order.customer_address || "—",
           totalAmount: order.total_amount_with_gst || "—",
           isBroker: order.is_order_through_broker || false,
+          isOrderThrough: order.is_order_through || "—",
           brokerName: order.broker_name || "—",
           advanceAmount: order.advance_amount || 0,
           paymentTerms: order.payment_terms || "—",
@@ -218,7 +219,7 @@ export default function MaterialReceiptPage() {
           grossWeight: order.gross_weight || "—",
           tareWeight: order.tare_weight || "—",
           netWeight: order.net_weight || "—",
-          weightDiff: order.weight_diff || "—",
+          weightDiff: order.difference || order.weight_diff || "—",
           extraWeight: order.extra_weight || "—",
           transporterName: order.transporter_name || "—",
           truckNo: order.truck_no || "—",
@@ -245,6 +246,8 @@ export default function MaterialReceiptPage() {
         actualQty: order.actual_qty_dispatch,
         truckNo: order.truck_no,
         netWeight: order.net_weight,
+        weightDiff: order.difference || 0,
+        reason_of_difference_in_weight_if_any_speacefic: order.reason_of_difference_in_weight_if_any_speacefic,
         processid: order.processid || null
       })
 
@@ -365,6 +368,7 @@ export default function MaterialReceiptPage() {
       partyNames={customerNames}
       title="Stage 12: Confirm Material Receipt"
       description="Confirm material receipt and report any damages."
+      searchPlaceholder="Search DO Number, Customer, Invoice No..."
       pendingCount={pendingData?.pagination?.total || 0}
       historyData={historyOrders.map((order: any) => ({
         ...order,
@@ -536,34 +540,34 @@ export default function MaterialReceiptPage() {
                       <div className="h-6 w-1.5 bg-blue-600 rounded-full shadow-sm" />
                       <h3 className="text-sm font-black uppercase tracking-[0.2em] text-blue-900">Order & Logistics Details</h3>
                     </div>
-                    
+
                     <Card className="p-8 border-none shadow-xl rounded-[2rem] bg-white grid grid-cols-2 md:grid-cols-4 gap-x-12 gap-y-8">
-                       {[
-                         { label: "Delivery Purpose", value: selectedGroup.deliveryPurpose },
-                         { label: "Order Type", value: selectedGroup.orderType },
-                         { label: "Start Date", value: formatDate(selectedGroup.startDate) },
-                         { label: "End Date", value: formatDate(selectedGroup.endDate) },
-                         { label: "Delivery Date", value: formatDate(selectedGroup.deliveryDate) },
-                         { label: "Transport Type", value: selectedGroup.transportType, color: "text-magenta-600" },
-                         { label: "Contact Person", value: `${selectedGroup.contactPerson} — (${selectedGroup.contactWhatsapp})` },
-                         { label: "Customer Address", value: selectedGroup.customerAddress },
-                         { label: "Start / End Date", value: `${formatDate(selectedGroup.startDate)} / ${formatDate(selectedGroup.endDate)}`, color: "text-blue-600" },
-                         { label: "DO Date", value: formatDate(selectedGroup.partySoDate), color: "text-blue-600" },
-                         { label: "Broker / Advance", value: `${selectedGroup.brokerName} / ₹${selectedGroup.advanceAmount}`, color: "text-blue-600" },
-                         { label: "Invoice No / Date", value: `${selectedGroup.invoiceNo} / ${formatDate(selectedGroup.invoiceDate)}`, color: "text-blue-600" },
-                         { label: "Bilty No", value: selectedGroup.biltyNo },
-                         { label: "Truck No", value: selectedGroup.truckNo, color: "text-blue-600" },
-                         { label: "Transporter", value: selectedGroup.transporterName },
-                         { label: "RST No", value: `#${selectedGroup.rstNo}`, color: "text-blue-600" },
-                         { label: "Gross / Tare / Net", value: `${selectedGroup.grossWeight} / ${selectedGroup.tareWeight} / ${selectedGroup.netWeight}`, color: "text-[#3b82f6]" },
-                         { label: "Weight Diff", value: selectedGroup.weightDiff, color: "text-orange-500" },
-                         { label: "Extra Weight", value: selectedGroup.extraWeight, color: "text-[#d946ef]" },
-                       ].map((item, idx) => (
-                         <div key={idx} className="space-y-1.5">
-                           <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.1em] block leading-none">{item.label}</Label>
-                           <p className={cn("text-xs font-black tracking-tight leading-none", item.color || "text-slate-800")}>{item.value || "—"}</p>
-                         </div>
-                       ))}
+                      {[
+                        { label: "Delivery Purpose", value: selectedGroup.deliveryPurpose },
+                        { label: "Order Type", value: selectedGroup.orderType },
+                        { label: "Start Date", value: formatDate(selectedGroup.startDate) },
+                        { label: "End Date", value: formatDate(selectedGroup.endDate) },
+                        { label: "Delivery Date", value: formatDate(selectedGroup.deliveryDate) },
+                        { label: "Transport Type", value: selectedGroup.transportType, color: "text-magenta-600" },
+                        { label: "Contact Person", value: `${selectedGroup.contactPerson} — (${selectedGroup.contactWhatsapp})` },
+                        { label: "Customer Address", value: selectedGroup.customerAddress },
+                        { label: "Start / End Date", value: `${formatDate(selectedGroup.startDate)} / ${formatDate(selectedGroup.endDate)}`, color: "text-blue-600" },
+                        { label: "DO Date", value: formatDate(selectedGroup.partySoDate), color: "text-blue-600" },
+                        { label: "Broker / Advance", value: `${(selectedGroup.isOrderThrough === "Direct" || (selectedGroup.isOrderThrough === "—" && !selectedGroup.isBroker)) ? "No" : selectedGroup.brokerName} / ₹${selectedGroup.advanceAmount}`, color: "text-blue-600" },
+                        { label: "Invoice No / Date", value: `${selectedGroup.invoiceNo} / ${formatDate(selectedGroup.invoiceDate)}`, color: "text-blue-600" },
+                        { label: "Bilty No", value: selectedGroup.biltyNo },
+                        { label: "Truck No", value: selectedGroup.truckNo, color: "text-blue-600" },
+                        { label: "Transporter", value: selectedGroup.transporterName },
+                        { label: "RST No", value: `#${selectedGroup.rstNo}`, color: "text-blue-600" },
+                        { label: "Gross / Tare / Net", value: `${selectedGroup.grossWeight} / ${selectedGroup.tareWeight} / ${selectedGroup.netWeight}`, color: "text-[#3b82f6]" },
+                        { label: "Weight Diff", value: selectedGroup.weightDiff, color: "text-orange-500" },
+                        { label: "Extra Weight", value: selectedGroup.extraWeight, color: "text-[#d946ef]" },
+                      ].map((item, idx) => (
+                        <div key={idx} className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.1em] block leading-none">{item.label}</Label>
+                          <p className={cn("text-xs font-black tracking-tight leading-none", item.color || "text-slate-800")}>{item.value || "—"}</p>
+                        </div>
+                      ))}
                     </Card>
                   </div>
 
@@ -604,10 +608,10 @@ export default function MaterialReceiptPage() {
                           {selectedGroup._allProducts.map((product: any) => (
                             <TableRow key={product._rowKey} className={cn("h-14 transition-colors", selectedProducts.includes(product._rowKey) ? "bg-blue-50/40" : "")}>
                               <TableCell className="text-center">
-                                <Checkbox 
+                                <Checkbox
                                   className="data-[state=checked]:bg-blue-600"
-                                  checked={selectedProducts.includes(product._rowKey)} 
-                                  onCheckedChange={(checked) => setSelectedProducts(p => checked ? [...p, product._rowKey] : p.filter(k => k !== product._rowKey))} 
+                                  checked={selectedProducts.includes(product._rowKey)}
+                                  onCheckedChange={(checked) => setSelectedProducts(p => checked ? [...p, product._rowKey] : p.filter(k => k !== product._rowKey))}
                                 />
                               </TableCell>
                               <TableCell className="text-xs font-black text-slate-500 uppercase tracking-tighter">{product.specificOrderNo}</TableCell>
@@ -620,20 +624,20 @@ export default function MaterialReceiptPage() {
                               {receiptData.hasDamage === "yes" && (
                                 <>
                                   <TableCell className="px-2">
-                                    <Input 
-                                      className="h-8 text-[11px] font-black border-2 border-slate-100 rounded-lg focus:border-blue-300 w-20 mx-auto transition-all" 
-                                      type="number" 
+                                    <Input
+                                      className="h-8 text-[11px] font-black border-2 border-slate-100 rounded-lg focus:border-blue-300 w-20 mx-auto transition-all"
+                                      type="number"
                                       placeholder="0"
-                                      value={productDamageData[product._rowKey]?.damageQty || ""} 
-                                      onChange={(e) => setProductDamageData(prev => ({ ...prev, [product._rowKey]: { ...prev[product._rowKey], damageQty: e.target.value } }))} 
+                                      value={productDamageData[product._rowKey]?.damageQty || ""}
+                                      onChange={(e) => setProductDamageData(prev => ({ ...prev, [product._rowKey]: { ...prev[product._rowKey], damageQty: e.target.value } }))}
                                     />
                                   </TableCell>
                                   <TableCell className="text-center">
                                     <label className="cursor-pointer inline-flex items-center justify-center p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors ring-1 ring-inset ring-slate-100">
-                                      <Input 
-                                        type="file" 
-                                        className="hidden" 
-                                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'damage', product._rowKey)} 
+                                      <Input
+                                        type="file"
+                                        className="hidden"
+                                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'damage', product._rowKey)}
                                       />
                                       {isUploading === `damage-${product._rowKey}` ? <Loader2 className="h-4 w-4 animate-spin text-blue-600" /> : (productDamageData[product._rowKey]?.damageImage ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Upload className="h-4 w-4 text-slate-400" />)}
                                     </label>
@@ -665,66 +669,66 @@ export default function MaterialReceiptPage() {
                     </div>
 
                     <Card className="p-10 border-none shadow-xl rounded-[2rem] bg-white grid grid-cols-1 md:grid-cols-2 gap-x-20 gap-y-12 relative overflow-hidden">
-                       <div className="space-y-4">
-                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Material Received Date <span className="text-red-500">*</span></Label>
-                         <Input 
-                           type="date" 
-                           className="h-16 border-2 border-slate-50 bg-slate-50/30 rounded-2xl px-8 font-black text-slate-700 text-lg focus:bg-white focus:border-blue-100 transition-all shadow-inner" 
-                           value={receiptData.receivedDate} 
-                           onChange={(e) => setReceiptData({ ...receiptData, receivedDate: e.target.value })} 
-                         />
-                       </div>
+                      <div className="space-y-4">
+                        <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Material Received Date <span className="text-red-500">*</span></Label>
+                        <Input
+                          type="date"
+                          className="h-16 border-2 border-slate-50 bg-slate-50/30 rounded-2xl px-8 font-black text-slate-700 text-lg focus:bg-white focus:border-blue-100 transition-all shadow-inner"
+                          value={receiptData.receivedDate}
+                          onChange={(e) => setReceiptData({ ...receiptData, receivedDate: e.target.value })}
+                        />
+                      </div>
 
-                       <div className="space-y-4">
-                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Damage Status</Label>
-                         <div className="grid grid-cols-2 gap-4 h-16">
-                           <Button 
-                             onClick={() => setReceiptData({ ...receiptData, hasDamage: 'no' })}
-                             className={cn("h-full border-2 rounded-2xl font-black uppercase italic tracking-tighter transition-all duration-300", 
-                               receiptData.hasDamage === 'no' ? "bg-white border-green-500 text-green-500 shadow-xl shadow-green-50" : "bg-slate-50 border-slate-50 text-slate-400 hover:bg-white hover:border-slate-100"
-                             )}
-                             variant="outline"
-                           >
-                             <CheckCircle className="mr-2 h-4 w-4" /> No Damage
-                           </Button>
-                           <Button 
-                             onClick={() => setReceiptData({ ...receiptData, hasDamage: 'yes' })}
-                             className={cn("h-full border-2 rounded-2xl font-black uppercase italic tracking-tighter transition-all duration-300", 
-                               receiptData.hasDamage === 'yes' ? "bg-white border-red-500 text-red-500 shadow-xl shadow-red-50" : "bg-slate-50 border-slate-50 text-slate-400 hover:bg-white hover:border-slate-100"
-                             )}
-                             variant="outline"
-                           >
-                             <FileText className="mr-2 h-4 w-4" /> Has Damage
-                           </Button>
-                         </div>
-                       </div>
+                      <div className="space-y-4">
+                        <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Damage Status</Label>
+                        <div className="grid grid-cols-2 gap-4 h-16">
+                          <Button
+                            onClick={() => setReceiptData({ ...receiptData, hasDamage: 'no' })}
+                            className={cn("h-full border-2 rounded-2xl font-black uppercase italic tracking-tighter transition-all duration-300",
+                              receiptData.hasDamage === 'no' ? "bg-white border-green-500 text-green-500 shadow-xl shadow-green-50" : "bg-slate-50 border-slate-50 text-slate-400 hover:bg-white hover:border-slate-100"
+                            )}
+                            variant="outline"
+                          >
+                            <CheckCircle className="mr-2 h-4 w-4" /> No Damage
+                          </Button>
+                          <Button
+                            onClick={() => setReceiptData({ ...receiptData, hasDamage: 'yes' })}
+                            className={cn("h-full border-2 rounded-2xl font-black uppercase italic tracking-tighter transition-all duration-300",
+                              receiptData.hasDamage === 'yes' ? "bg-white border-red-500 text-red-500 shadow-xl shadow-red-50" : "bg-slate-50 border-slate-50 text-slate-400 hover:bg-white hover:border-slate-100"
+                            )}
+                            variant="outline"
+                          >
+                            <FileText className="mr-2 h-4 w-4" /> Has Damage
+                          </Button>
+                        </div>
+                      </div>
 
-                       <div className="space-y-4">
-                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Received Image (Proof)</Label>
-                         <Card className={cn("border-2 border-dashed rounded-3xl p-8 bg-slate-50/50 hover:bg-slate-50 transition-all cursor-pointer group flex flex-col items-center justify-center min-h-[160px]", 
-                           receiptData.receivedProof ? "border-green-200" : "border-slate-200"
-                         )}>
-                            <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
-                              <Input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'proof')} />
-                              <div className="bg-white p-4 rounded-2xl shadow-lg ring-1 ring-slate-100 mb-4 group-hover:scale-110 transition-transform">
-                                <Upload className="h-6 w-6 text-blue-600" />
-                              </div>
-                              <span className="text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-blue-600 transition-colors">
-                                {isUploading === 'proof' ? "UPLOADING MATERIAL PROOF..." : (receiptData.receivedProof ? `REPLACE: ${receiptData.receivedProofName}` : "Click to Upload Proof")}
-                              </span>
-                            </label>
-                         </Card>
-                       </div>
+                      <div className="space-y-4">
+                        <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Received Image (Proof)</Label>
+                        <Card className={cn("border-2 border-dashed rounded-3xl p-8 bg-slate-50/50 hover:bg-slate-50 transition-all cursor-pointer group flex flex-col items-center justify-center min-h-[160px]",
+                          receiptData.receivedProof ? "border-green-200" : "border-slate-200"
+                        )}>
+                          <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
+                            <Input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'proof')} />
+                            <div className="bg-white p-4 rounded-2xl shadow-lg ring-1 ring-slate-100 mb-4 group-hover:scale-110 transition-transform">
+                              <Upload className="h-6 w-6 text-blue-600" />
+                            </div>
+                            <span className="text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-blue-600 transition-colors">
+                              {isUploading === 'proof' ? "UPLOADING MATERIAL PROOF..." : (receiptData.receivedProof ? `REPLACE: ${receiptData.receivedProofName}` : "Click to Upload Proof")}
+                            </span>
+                          </label>
+                        </Card>
+                      </div>
 
-                       <div className="space-y-4">
-                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Remarks</Label>
-                         <Textarea 
-                            className="bg-slate-50/30 border-2 border-slate-50 rounded-3xl p-6 font-bold text-slate-700 placeholder:text-slate-200 focus:bg-white focus:border-blue-100 transition-all h-[160px] resize-none shadow-inner shadow-slate-100"
-                            placeholder="Enter remarks..."
-                            value={receiptData.remarks} 
-                            onChange={(e) => setReceiptData({ ...receiptData, remarks: e.target.value })} 
-                         />
-                       </div>
+                      <div className="space-y-4">
+                        <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Remarks</Label>
+                        <Textarea
+                          className="bg-slate-50/30 border-2 border-slate-50 rounded-3xl p-6 font-bold text-slate-700 placeholder:text-slate-200 focus:bg-white focus:border-blue-100 transition-all h-[160px] resize-none shadow-inner shadow-slate-100"
+                          placeholder="Enter remarks..."
+                          value={receiptData.remarks}
+                          onChange={(e) => setReceiptData({ ...receiptData, remarks: e.target.value })}
+                        />
+                      </div>
                     </Card>
                   </div>
                 </div>
@@ -733,10 +737,10 @@ export default function MaterialReceiptPage() {
               <DialogFooter className="mt-12 pt-8 border-t-2 border-slate-100 -mx-8 px-12 bg-white rounded-b-[2.5rem]">
                 <div className="flex items-center justify-between w-full">
                   <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="h-14 px-10 font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-2xl">Cancel</Button>
-                  <Button 
-                    onClick={handleSubmit} 
-                    disabled={isProcessing || isReadOnly || !receiptData.receivedDate} 
-                    className={cn("h-16 px-16 rounded-2xl shadow-2xl text-xl font-black italic tracking-tighter uppercase transition-all duration-500", 
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={isProcessing || isReadOnly || !receiptData.receivedDate}
+                    className={cn("h-16 px-16 rounded-2xl shadow-2xl text-xl font-black italic tracking-tighter uppercase transition-all duration-500",
                       receiptData.hasDamage === 'yes' ? "bg-red-600 hover:bg-red-700 shadow-red-100" : "bg-blue-600 hover:bg-blue-700 shadow-blue-100"
                     )}
                   >

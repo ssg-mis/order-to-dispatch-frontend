@@ -285,6 +285,7 @@ export default function MakeInvoicePage() {
         grossWeight: order.gross_weight,
         tareWeight: order.tare_weight,
         netWeight: order.net_weight,
+        weightDiff: order.difference || 0,
         transporterName: order.transporter_name,
         driverName: order.driver_name,
         fitness: order.fitness,
@@ -297,6 +298,7 @@ export default function MakeInvoicePage() {
         remarks: order.remarks,
         weightment_slip_copy: order.weightment_slip_copy,
         reasonForDiff: order.reason_of_difference_in_weight_if_any_speacefic,
+        reason_of_difference_in_weight_if_any_speacefic: order.reason_of_difference_in_weight_if_any_speacefic,
         bilty_no: order.bilty_no,
         processid: order.processid || null
       }

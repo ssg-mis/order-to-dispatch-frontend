@@ -232,6 +232,7 @@ export default function CheckInvoicePage() {
           paymentTerms: order.payment_terms || "—",
           advanceAmount: order.advance_amount || 0,
           isBroker: order.is_order_through_broker || false,
+          isOrderThrough: order.is_order_through || "—",
           brokerName: order.broker_name || "—",
           partyCredit: order.party_credit_status || "Good",
           totalAmount: order.total_amount_with_gst || "—",
@@ -270,6 +271,7 @@ export default function CheckInvoicePage() {
         tareWeight: order.tare_weight,
         netWeight: order.net_weight,
         transporterName: order.transporter_name,
+        weightDiff: order.difference || 0,
         fitness: order.fitness,
         insurance: order.insurance,
         tax_copy: order.tax_copy,
@@ -742,7 +744,9 @@ export default function CheckInvoicePage() {
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Broker / Advance</p>
-                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.brokerName} / ₹{orderDetails.advanceAmount}</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">
+                                          {(orderDetails.isOrderThrough === "Direct" || (orderDetails.isOrderThrough === "—" && !orderDetails.isBroker)) ? "No" : orderDetails.brokerName} / ₹{orderDetails.advanceAmount}
+                                        </p>
                                       </div>
 
                                       <div className="md:col-span-4 h-px bg-slate-200 my-1" />
