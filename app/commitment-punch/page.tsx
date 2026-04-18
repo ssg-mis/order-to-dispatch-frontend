@@ -606,9 +606,8 @@ export default function CommitmentPunchPage() {
                   <TableHead>Date</TableHead>
                   <TableHead>Customer Name</TableHead>
                   <TableHead>Oil Type</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead>Unit</TableHead>
-                  <TableHead className="text-right">Rate (Per MT)</TableHead>
+                  <TableHead className="text-right">Rate</TableHead>
+                  <TableHead className="text-right">Qty (MT)</TableHead>
                   <TableHead className="text-right">PO Raised (MT)</TableHead>
                   <TableHead className="text-right">Remaining Balance (MT)</TableHead>
                 </TableRow>
@@ -617,14 +616,14 @@ export default function CommitmentPunchPage() {
                 {isLoadingPending ? (
                   [...Array(4)].map((_, i) => (
                     <TableRow key={i} className="opacity-40">
-                      {[...Array(10)].map((__, j) => (
+                      {[...Array(9)].map((__, j) => (
                         <TableCell key={j}><div className="h-4 w-full bg-slate-200 animate-pulse rounded" /></TableCell>
                       ))}
                     </TableRow>
                   ))
                 ) : pendingList.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-16 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-16 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <CheckCircle2 className="h-10 w-10 text-slate-300" />
                         <p className="font-medium">No pending commitments</p>
@@ -651,9 +650,8 @@ export default function CommitmentPunchPage() {
                       <TableCell>
                         <Badge variant="outline" className="text-xs">{row.oil_type || "—"}</Badge>
                       </TableCell>
-                      <TableCell className="text-right font-mono">{row.quantity ?? "—"}</TableCell>
-                      <TableCell>{row.unit || "—"}</TableCell>
                       <TableCell className="text-right font-mono">₹{row.rate ?? "—"}</TableCell>
+                      <TableCell className="text-right font-mono">{row.quantity ?? "—"}</TableCell>
                       <TableCell className="text-right font-mono text-blue-600 font-semibold">
                         {Number(row.processed_qty || 0) > 0 ? (
                           <button

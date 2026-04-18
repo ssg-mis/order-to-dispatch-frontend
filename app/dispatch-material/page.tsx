@@ -17,11 +17,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label"
 import { Settings2, ChevronDown, ChevronUp } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { dispatchPlanningApi, customerApi, depotApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { useQuery } from "@tanstack/react-query"
-import { Loader2, ChevronLeft, ChevronRight } from "lucide-react"
+import { Loader2, ChevronLeft, ChevronRight, XCircle } from "lucide-react"
 
 export default function DispatchMaterialPage() {
   const router = useRouter()
@@ -68,6 +69,8 @@ export default function DispatchMaterialPage() {
   const [allCustomers, setAllCustomers] = useState<any[]>([])
   const [isTransferPopupOpen, setIsTransferPopupOpen] = useState(false)
   const [currentTransferRowKey, setCurrentTransferRowKey] = useState<string | null>(null)
+  const [precloseInputs, setPrecloseInputs] = useState<Record<number, string>>({})
+  const [openPrecloseId, setOpenPrecloseId] = useState<number | null>(null)
   const isSavingTransferRef = useRef(false)
 
   const PAGE_COLUMNS = [
@@ -460,6 +463,38 @@ export default function DispatchMaterialPage() {
         description: error?.message || "An unexpected error occurred during revert",
         variant: "destructive",
       });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePreclose = async (id: number, qty: number) => {
+    setIsProcessing(true);
+    try {
+      const res = await dispatchPlanningApi.preclose(id, { 
+        preclose_qty: qty, 
+        username: user?.username || 'system' 
+      });
+      if (res.success) {
+        toast({ title: "Success", description: `Successfully preclosed ${qty} items.` });
+        setOpenPrecloseId(null);
+        
+        // Clear local details for this row if any
+        setDispatchDetails(prev => {
+          const next = { ...prev };
+          Object.keys(next).forEach(key => {
+            if (key.endsWith(`-${id}`)) delete next[key];
+          });
+          return next;
+        });
+
+        await refetchPending();
+        await refetchHistory();
+      } else {
+        toast({ title: "Error", description: res.message || "Failed to preclose", variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "An unexpected error occurred", variant: "destructive" });
     } finally {
       setIsProcessing(false);
     }
@@ -971,6 +1006,7 @@ export default function DispatchMaterialPage() {
                               <TableHead className="w-24 text-[10px] uppercase font-black text-slate-500 tracking-wider">Transfer</TableHead>
                               <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Remaining</TableHead>
                               <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Status</TableHead>
+                              <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1059,9 +1095,58 @@ export default function DispatchMaterialPage() {
                                   </TableCell>
                                   <TableCell className="text-[10px] font-bold text-slate-500 p-2 text-center">{maxLimit}</TableCell>
                                   <TableCell className="p-2 text-center">
-                                    <Badge variant="outline" className="text-[9px] bg-orange-50 text-orange-700 border-orange-200 uppercase font-black">Pending</Badge>
-                                  </TableCell>
-                                </TableRow>
+                                      <Popover 
+                                        open={openPrecloseId === prod.id} 
+                                        onOpenChange={(open) => setOpenPrecloseId(open ? prod.id : null)}
+                                      >
+                                        <PopoverTrigger asChild>
+                                          <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            className="h-7 text-[10px] font-bold text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                                          >
+                                            <XCircle className="h-3.5 w-3.5 mr-1" />
+                                            Preclose
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-48 p-3" align="end">
+                                          <div className="space-y-3">
+                                            <div className="space-y-1">
+                                              <Label className="text-[10px] uppercase font-black text-slate-500">Qty to Preclose</Label>
+                                              <Input 
+                                                type="number" 
+                                                placeholder="Enter quantity"
+                                                value={precloseInputs[prod.id] !== undefined ? precloseInputs[prod.id] : maxLimit.toString()}
+                                                onChange={(e) => setPrecloseInputs(prev => ({ ...prev, [prod.id]: e.target.value }))}
+                                                className="h-8 text-[11px] font-bold text-center"
+                                              />
+                                              <p className="text-[9px] text-slate-400 font-medium italic text-center">Remaining: {maxLimit}</p>
+                                            </div>
+                                            <div className="flex justify-center pt-1">
+                                               <Button 
+                                                 size="sm" 
+                                                 variant="destructive" 
+                                                 className="h-7 w-full text-[10px] font-black uppercase tracking-wider"
+                                                 onClick={() => {
+                                                    const qty = parseFloat(precloseInputs[prod.id] !== undefined ? precloseInputs[prod.id] : maxLimit.toString());
+                                                    if (isNaN(qty) || qty <= 0) {
+                                                       toast({ title: "Invalid Quantity", description: "Please enter a valid number greater than 0", variant: "destructive" });
+                                                    } else if (qty > maxLimit + 0.0001) {
+                                                       toast({ title: "Quantity Exceeded", description: `Cannot preclose more than ${maxLimit}`, variant: "destructive" });
+                                                    } else {
+                                                       handlePreclose(prod.id, qty);
+                                                    }
+                                                 }}
+                                                 disabled={isProcessing}
+                                               >
+                                                 {isProcessing ? "Processing..." : "Confirm Preclose"}
+                                               </Button>
+                                            </div>
+                                          </div>
+                                        </PopoverContent>
+                                      </Popover>
+                                   </TableCell>
+                                 </TableRow>
                               );
                             })}
                           </TableBody>
