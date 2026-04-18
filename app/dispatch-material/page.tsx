@@ -1094,7 +1094,8 @@ export default function DispatchMaterialPage() {
                                     </div>
                                   </TableCell>
                                   <TableCell className="text-[10px] font-bold text-slate-500 p-2 text-center">{maxLimit}</TableCell>
-                                  <TableCell className="p-2 text-center">
+                                  <TableCell className="p-2 text-center text-[10px] font-bold text-slate-500">
+                                    {custName.toLowerCase().includes("reliance") ? (
                                       <Popover 
                                         open={openPrecloseId === prod.id} 
                                         onOpenChange={(open) => setOpenPrecloseId(open ? prod.id : null)}
@@ -1123,29 +1124,32 @@ export default function DispatchMaterialPage() {
                                               <p className="text-[9px] text-slate-400 font-medium italic text-center">Remaining: {maxLimit}</p>
                                             </div>
                                             <div className="flex justify-center pt-1">
-                                               <Button 
-                                                 size="sm" 
-                                                 variant="destructive" 
-                                                 className="h-7 w-full text-[10px] font-black uppercase tracking-wider"
-                                                 onClick={() => {
-                                                    const qty = parseFloat(precloseInputs[prod.id] !== undefined ? precloseInputs[prod.id] : maxLimit.toString());
-                                                    if (isNaN(qty) || qty <= 0) {
-                                                       toast({ title: "Invalid Quantity", description: "Please enter a valid number greater than 0", variant: "destructive" });
-                                                    } else if (qty > maxLimit + 0.0001) {
-                                                       toast({ title: "Quantity Exceeded", description: `Cannot preclose more than ${maxLimit}`, variant: "destructive" });
-                                                    } else {
-                                                       handlePreclose(prod.id, qty);
-                                                    }
-                                                 }}
-                                                 disabled={isProcessing}
-                                               >
-                                                 {isProcessing ? "Processing..." : "Confirm Preclose"}
-                                               </Button>
+                                              <Button 
+                                                size="sm" 
+                                                variant="destructive" 
+                                                className="h-7 w-full text-[10px] font-black uppercase tracking-wider"
+                                                onClick={() => {
+                                                  const qty = parseFloat(precloseInputs[prod.id] !== undefined ? precloseInputs[prod.id] : maxLimit.toString());
+                                                  if (isNaN(qty) || qty <= 0) {
+                                                    toast({ title: "Invalid Quantity", description: "Please enter a valid number greater than 0", variant: "destructive" });
+                                                  } else if (qty > maxLimit + 0.0001) {
+                                                    toast({ title: "Quantity Exceeded", description: `Cannot preclose more than ${maxLimit}`, variant: "destructive" });
+                                                  } else {
+                                                    handlePreclose(prod.id, qty);
+                                                  }
+                                                }}
+                                                disabled={isProcessing}
+                                              >
+                                                {isProcessing ? "Processing..." : "Confirm Preclose"}
+                                              </Button>
                                             </div>
                                           </div>
                                         </PopoverContent>
                                       </Popover>
-                                   </TableCell>
+                                    ) : (
+                                      "—"
+                                    )}
+                                  </TableCell>
                                  </TableRow>
                               );
                             })}
