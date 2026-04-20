@@ -230,18 +230,20 @@ export default function GateOutPage() {
     filteredPendingOrders.forEach((order: any) => {
       const invoiceNo = order.invoice_no || "No Invoice"
       const partyName = (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName || "Unknown Customer")
-      const doNumber = order.so_no || order.soNo || "—"
-
-      // Extract date from actual_6 (Stage 10 completion date)
-      const actual6Date = order.actual_6 ? new Date(order.actual_6).toISOString().split('T')[0] : "No Date"
-      const groupKey = `${invoiceNo}-${actual6Date}`
+      const rawDoNumber = order.so_no || order.soNo || "—"
+      const doNumber = rawDoNumber.replace(/(?<=\d)[A-Z].*$/, "")
+      const actual1Str = order.actual_1 ? new Date(order.actual_1).toISOString().split('T')[0] : "no-date"
+      const vehicleNo = (order.truck_no || "—").toUpperCase()
+      
+      // Group by actual_1 date and Vehicle No.
+      const groupKey = `${actual1Str}-${vehicleNo}`
 
       if (!grouped[groupKey]) {
         grouped[groupKey] = {
           _rowKey: groupKey,
           customerName: partyName,
           invoiceNo: invoiceNo,
-          actual6Date: actual6Date,
+          actual1Date: actual1Str,
           doNumberList: new Set<string>(),
           _allProducts: [],
           _ordersMap: {}, // Group items by specific DO for interleaved view
@@ -319,15 +321,20 @@ export default function GateOutPage() {
     })
 
     // Finalize DO numbers string
-    const result = Object.values(grouped).map((g: any) => ({
-      ...g,
-      partySoDate: formatDate(g._allProducts[0]?.party_so_date),
-      doNumber: Array.from(new Set(Array.from(g.doNumberList).map((dn: any) => dn.replace(/[A-Z]+$/i, "").trim()))).join(", "),
-      processId: g._allProducts[0]?.processid || "—",
-      vehicleNo: (g._allProducts[0]?.truckNo || "—").toUpperCase(),
-      invoiceNo: g._allProducts[0]?.invoice_no || "—",
-      orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—"
-    }))
+    const result = Object.values(grouped).map((g: any) => {
+      const customers = Array.from(new Set(g._allProducts.map((p: any) => p.party_name || p.partyName))).filter(Boolean)
+      
+      return {
+        ...g,
+        customerName: customers.length > 1 ? `Multiple Parties (${customers.length})` : customers[0] || g.customerName,
+        partySoDate: formatDate(g._allProducts[0]?.party_so_date),
+        doNumber: Array.from(g.doNumberList as Set<string>).join(", "),
+        processId: g._allProducts[0]?.processid || "—",
+        vehicleNo: (g._allProducts[0]?.truckNo || "—").toUpperCase(),
+        invoiceNo: g._allProducts[0]?.invoice_no || "—",
+        orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—"
+      }
+    })
 
     return result
   }, [filteredPendingOrders])

@@ -225,10 +225,12 @@ export default function MakeInvoicePage() {
     filteredPendingOrders.forEach((order: any) => {
       const partyName = (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName || "Unknown Customer")
       const rawDoNumber = order.so_no || order.soNo || "—"
-      const doNumber = rawDoNumber.replace(/[A-Z]+$/, "")
+      const doNumber = rawDoNumber.replace(/(?<=\d)[A-Z].*$/, "")
+      const actual1Str = order.actual_1 ? new Date(order.actual_1).toISOString().split('T')[0] : "no-date"
+      const vehicleNo = (order.truck_no || "—").toUpperCase()
 
-      // Group by base DO number (stripping A, B, C suffixes)
-      const groupKey = doNumber;
+      // Group by Company Name, actual_1 date, and Vehicle No.
+      const groupKey = `${partyName}-${actual1Str}-${vehicleNo}`;
 
       if (!grouped[groupKey]) {
         grouped[groupKey] = {
