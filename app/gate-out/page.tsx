@@ -232,9 +232,15 @@ export default function GateOutPage() {
       const partyName = (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName || "Unknown Customer")
       const rawDoNumber = order.so_no || order.soNo || "—"
       const doNumber = rawDoNumber.replace(/(?<=\d)[A-Z].*$/, "")
-      const actual1Str = order.actual_1 ? new Date(order.actual_1).toISOString().split('T')[0] : "no-date"
-      const vehicleNo = (order.truck_no || "—").toUpperCase()
-      
+      // Extract only date part (YYYY-MM-DD) robustly from LRC actual_1, matched by so_no
+      const actualDateVal = order.lrc_actual_1 || order.actual_1
+      const actual1Str = actualDateVal ? (() => { 
+        const d = new Date(actualDateVal); 
+        if (isNaN(d.getTime())) return String(actualDateVal).split(/[T ]/)[0].trim(); 
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; 
+      })() : "no-date"
+      const vehicleNo = (order.truck_no || "—").trim().toUpperCase().replace(/\s+/g, "")
+
       // Group by actual_1 date and Vehicle No.
       const groupKey = `${actual1Str}-${vehicleNo}`
 
@@ -323,7 +329,7 @@ export default function GateOutPage() {
     // Finalize DO numbers string
     const result = Object.values(grouped).map((g: any) => {
       const customers = Array.from(new Set(g._allProducts.map((p: any) => p.party_name || p.partyName))).filter(Boolean)
-      
+
       return {
         ...g,
         customerName: customers.length > 1 ? `Multiple Parties (${customers.length})` : customers[0] || g.customerName,
@@ -331,6 +337,7 @@ export default function GateOutPage() {
         doNumber: Array.from(g.doNumberList as Set<string>).join(", "),
         processId: g._allProducts[0]?.processid || "—",
         vehicleNo: (g._allProducts[0]?.truckNo || "—").toUpperCase(),
+        actual1Date: formatDate(g._allProducts[0]?.lrc_actual_1 || g._allProducts[0]?.actual_1),
         invoiceNo: g._allProducts[0]?.invoice_no || "—",
         orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—"
       }
@@ -564,6 +571,7 @@ export default function GateOutPage() {
                   <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Date</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Actual 1</TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
@@ -579,6 +587,7 @@ export default function GateOutPage() {
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i} className="opacity-40 border-b border-slate-50">
                     <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
+                    <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                     <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                     <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                     <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
@@ -597,6 +606,7 @@ export default function GateOutPage() {
                       <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                     </TableCell>
                     <TableCell className="text-center text-xs font-medium">{group.partySoDate}</TableCell>
+                    <TableCell className="text-center text-xs font-medium text-blue-700">{group.actual1Date}</TableCell>
                     <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
                     <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
                     <TableCell className="text-center text-xs">{group.customerName}</TableCell>

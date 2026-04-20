@@ -60,6 +60,27 @@ export default function MakeInvoicePage() {
     }
   };
 
+  const renderDocumentLink = (value: string) => {
+    if (!value || value === "—") return <p className="text-xs font-bold text-slate-400 leading-none">NOT UPLOADED</p>;
+    
+    // Check if it's a URL
+    if (String(value).startsWith('http')) {
+      return (
+        <a 
+          href={value} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 px-3 py-1 bg-violet-50 text-violet-700 rounded-lg hover:bg-violet-100 transition-all border border-violet-200 w-fit group shadow-sm mt-0.5"
+        >
+          <FileText className="h-3 w-3 group-hover:scale-110 transition-transform" />
+          <span className="text-[10px] font-black uppercase tracking-tight">VIEW PHOTO</span>
+        </a>
+      );
+    }
+    
+    return <p className="text-xs font-bold text-slate-700 leading-none">{formatDate(value)}</p>;
+  };
+
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
     "partySoDate",
     "orderNo",
@@ -223,13 +244,25 @@ export default function MakeInvoicePage() {
     const grouped: { [key: string]: any } = {}
 
     filteredPendingOrders.forEach((order: any) => {
-      const partyName = (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName || "Unknown Customer")
+      // Normalize party name robustly: trim, uppercase, and collapse spaces
+      const partyEntry = (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName || "Unknown Customer")
+      const partyName = String(partyEntry).trim().toUpperCase().replace(/\s+/g, ' ')
+      
       const rawDoNumber = order.so_no || order.soNo || "—"
       const doNumber = rawDoNumber.replace(/(?<=\d)[A-Z].*$/, "")
-      const actual1Str = order.actual_1 ? new Date(order.actual_1).toISOString().split('T')[0] : "no-date"
-      const vehicleNo = (order.truck_no || "—").toUpperCase()
+      
+      // Extract only date part (YYYY-MM-DD) robustly from LRC actual_1
+      const actualDateVal = order.lrc_actual_1 || order.actual_1
+      const actual1Str = actualDateVal ? (() => {
+        const d = new Date(actualDateVal);
+        if (isNaN(d.getTime())) return String(actualDateVal).split(/[T ]/)[0].trim();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      })() : "no-date";
 
-      // Group by Company Name, actual_1 date, and Vehicle No.
+      // Normalize vehicle no: trim, uppercase, and remove ALL spaces for consistent grouping
+      const vehicleNo = (order.truck_no || "—").trim().toUpperCase().replace(/\s+/g, '')
+
+      // Group by normalized Company Name, date, and Vehicle No.
       const groupKey = `${partyName}-${actual1Str}-${vehicleNo}`;
 
       if (!grouped[groupKey]) {
@@ -317,6 +350,7 @@ export default function MakeInvoicePage() {
       doNumber: Array.from(group.doNumberList as Set<string>).join(", "),
       processId: group._allProducts[0]?.processid || "—",
       vehicleNo: (group._allProducts[0]?.truckNo || "—").toUpperCase(),
+      actual1Date: formatDate(group._allProducts[0]?.lrc_actual_1 || group._allProducts[0]?.actual_1),
       freightRate: group._allProducts[0]?.freight_rate || 0,
       orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—"
     }))
@@ -341,10 +375,43 @@ export default function MakeInvoicePage() {
   const handleOpenDialog = () => {
     if (selectedItems.length === 0) return
 
-    // Collect all selected party groups
+    // Collect and consolidate selected party groups BY COMPANY
     const targetGroups = displayRows.filter(r => selectedItems.includes(r._rowKey))
     if (targetGroups.length > 0) {
-      setSelectedGroups(targetGroups)
+      // Consolidate targetGroups by company
+      const consolidatedMap: { [key: string]: any } = {}
+      targetGroups.forEach(group => {
+        const company = group.customerName
+        if (!consolidatedMap[company]) {
+          consolidatedMap[company] = {
+            ...group,
+            _allProducts: [...group._allProducts],
+            _ordersMap: JSON.parse(JSON.stringify(group._ordersMap)), // Deep copy to avoid mutation
+            doNumber: group.doNumber,
+            _rowKey: `consolidated-${company}`
+          }
+        } else {
+          const existing = consolidatedMap[company]
+          existing._allProducts.push(...group._allProducts)
+          existing._productCount = existing._allProducts.length
+          // Merge unique DO numbers
+          const existingDos = existing.doNumber.split(", ").map((s: string) => s.trim())
+          const newDos = group.doNumber.split(", ").map((s: string) => s.trim())
+          existing.doNumber = Array.from(new Set([...existingDos, ...newDos])).join(", ")
+          
+          // Merge ordersMap content
+          Object.entries(group._ordersMap).forEach(([orderKey, orderData]: [string, any]) => {
+            if (!existing._ordersMap[orderKey]) {
+              existing._ordersMap[orderKey] = JSON.parse(JSON.stringify(orderData))
+            } else {
+              existing._ordersMap[orderKey]._products.push(...orderData._products)
+            }
+          })
+        }
+      })
+      
+      setSelectedGroups(Object.values(consolidatedMap))
+      
       // Select all products for all selected groups by default
       const allProdKeys = targetGroups.flatMap(g => g._allProducts.map((p: any) => p._rowKey))
       setSelectedProducts(allProdKeys)
@@ -571,6 +638,7 @@ export default function MakeInvoicePage() {
                   <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Date</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Actual 1</TableHead>
                 <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
@@ -603,6 +671,7 @@ export default function MakeInvoicePage() {
                       <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                     </TableCell>
                     <TableCell className="text-center text-xs font-medium">{group.partySoDate}</TableCell>
+                    <TableCell className="text-center text-xs font-medium text-blue-700">{formatDate(group._allProducts[0]?.lrc_actual_1 || group._allProducts[0]?.actual_1)}</TableCell>
                     <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
                     <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
                     <TableCell className="text-center text-xs">{group.customerName}</TableCell>
@@ -653,44 +722,33 @@ export default function MakeInvoicePage() {
             </DialogHeader>
 
             {selectedGroups.length > 0 && (
-              <div className="space-y-12 mt-6">
-                {selectedGroups.map((group, groupIdx) => {
-                  const allProducts = group._allProducts;
-                  const allSelected = allProducts.every((p: any) => selectedProducts.includes(p._rowKey));
-                  // Use the group's key for expansion state
-                  const isExpanded = expandedOrders.includes(group._rowKey);
-                  const toggleExpand = () => {
-                    setExpandedOrders(prev => isExpanded ? prev.filter(id => id !== group._rowKey) : [...prev, group._rowKey]);
-                  };
+              <div className="space-y-6 mt-6">
+                {/* 1. Stacked Company Information Bars */}
+                <div className="space-y-4">
+                  {selectedGroups.map((group, groupIdx) => {
+                    const isExpanded = expandedOrders.includes(group._rowKey);
+                    const toggleExpand = () => {
+                      setExpandedOrders(prev => isExpanded ? prev.filter(id => id !== group._rowKey) : [...prev, group._rowKey]);
+                    };
+                    const uniqueOrderDetails = Object.values(group._ordersMap);
 
-                  // Get unique DO details for the details bar
-                  const uniqueOrderDetails = Object.values(group._ordersMap);
-
-                  return (
-                    <div key={group._rowKey} className="space-y-6">
-                      <h2 className="text-xl font-black text-slate-800 border-b-4 border-slate-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
-                        {group.customerName}
-                        <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
-                          {group._productCount} PRODUCTS
-                        </Badge>
-                      </h2>
-
-                      <div className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm">
+                    return (
+                      <div key={group._rowKey} className="border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm">
                         <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
                           <div className="flex items-center gap-4">
                             <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-sm font-black tracking-tight rounded-full shadow-sm uppercase">
                               DETAILS FOR {group.customerName}
                             </Badge>
                             <div className="flex flex-col">
-                              <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">GROUP {groupIdx + 1} | {group.doNumber}</span>
+                              <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">PARTY {groupIdx + 1} | {group.doNumber}</span>
                               <span className="text-xs text-blue-100 font-bold leading-none">
-                                {allProducts.filter((p: any) => selectedProducts.includes(p._rowKey)).length} Items Selected
+                                {group._productCount} Items Selected
                               </span>
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
                             <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2 leading-none cursor-pointer">
-                              {isExpanded ? 'HIDE DISPATCH DETAILS ▲' : 'CLICK TO SHOW DETAILS ▼'}
+                              {isExpanded ? 'HIDE PARTY DETAILS ▲' : 'CLICK TO SHOW PARTY DETAILS ▼'}
                             </div>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20 rounded-full">
                               {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
@@ -698,48 +756,46 @@ export default function MakeInvoicePage() {
                           </div>
                         </div>
 
-                        <div className="px-5 pb-5 space-y-4">
-                          {/* Consolidated Collapsible Dispatch & Audit Details Bar */}
-                          {isExpanded && (
-                            <div className="space-y-6 animate-in slide-in-from-top-2 duration-300 mt-2">
-                              {uniqueOrderDetails.map((orderDetails: any, idx) => {
-                                const firstProd = orderDetails._products[0] || {};
-                                return (
-                                  <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-6 relative shadow-inner">
-                                    <div className="absolute -top-3 left-6">
-                                      <Badge className="bg-slate-200 text-slate-700 hover:bg-slate-200 text-[10px] font-black uppercase px-3 py-1">
-                                        ORDER: {firstProd.specificOrderNo}
-                                      </Badge>
-                                    </div>
+                        {isExpanded && (
+                          <div className="px-5 pb-5 pt-4 space-y-6 bg-slate-50 border-t border-slate-100 animate-in slide-in-from-top-2 duration-300">
+                            {uniqueOrderDetails.map((orderDetails: any, idx) => {
+                              const firstProd = orderDetails._products[0] || {};
+                              return (
+                                <div key={idx} className="bg-white border border-slate-100 rounded-2xl p-6 relative shadow-sm">
+                                  <div className="absolute -top-3 left-6">
+                                    <Badge className="bg-slate-200 text-slate-700 hover:bg-slate-200 text-[10px] font-black uppercase px-3 py-1">
+                                      ORDER: {firstProd.specificOrderNo}
+                                    </Badge>
+                                  </div>
+                                  <div className="space-y-6">
+                                    {/* Section 1: Order Information */}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                      {/* Order Info */}
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Delivery Purpose</p>
                                         <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.deliveryPurpose}</p>
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Start Date / End Date</p>
-                                        <p className="text-xs font-bold text-slate-900 leading-none">
-                                          {orderDetails.startDate ? new Date(orderDetails.startDate).toLocaleDateString("en-GB") : "—"} / {orderDetails.endDate ? new Date(orderDetails.endDate).toLocaleDateString("en-GB") : "—"}
+                                        <p className="text-xs font-bold text-slate-700 leading-none">
+                                          {formatDate(orderDetails.startDate)} / {formatDate(orderDetails.endDate)}
                                         </p>
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">DO Date</p>
-                                        <p className="text-xs font-bold text-slate-700">
-                                          {orderDetails.partySoDate || "—"}
-                                        </p>
+                                        <p className="text-xs font-bold text-slate-700 leading-none">{orderDetails.partySoDate || "—"}</p>
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transport Type</p>
                                         <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.transportType}</p>
                                       </div>
+
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Credit Status</p>
                                         <Badge className={cn("text-[10px] font-black px-2 py-0.5", orderDetails.partyCredit === 'Good' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
                                           {orderDetails.partyCredit}
                                         </Badge>
                                       </div>
-                                      <div>
+                                      <div className="md:col-span-1">
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Customer Address</p>
                                         <p className="text-[10px] font-medium text-slate-600 leading-tight truncate" title={orderDetails.address}>{orderDetails.address}</p>
                                       </div>
@@ -749,213 +805,193 @@ export default function MakeInvoicePage() {
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Broker / Advance</p>
-                                        <p className="text-xs font-bold text-slate-900 leading-none">
-                                          {(orderDetails.isOrderThrough === "Direct" || (orderDetails.isOrderThrough === "—" && !orderDetails.isBroker)) ? "No" : orderDetails.brokerName} / ₹{orderDetails.advanceAmount}
-                                        </p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.brokerName} / ₹{orderDetails.advanceAmount}</p>
                                       </div>
+                                    </div>
 
-                                      <div className="md:col-span-4 h-px bg-slate-200 my-1" />
+                                    <div className="h-px bg-slate-100" />
 
-                                      {/* Dispatch Info */}
+                                    {/* Section 2: Dispatch Details */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Truck No</p>
-                                        <p className="text-sm font-black text-blue-800">{(firstProd.truckNo || "—").toUpperCase()}</p>
+                                        <p className="text-xs font-bold text-blue-700 uppercase tracking-tight">{firstProd.truckNo || "—"}</p>
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transporter</p>
-                                        <p className="text-xs font-bold text-slate-900 leading-tight">{firstProd.transporterName || "—"}</p>
+                                        <p className="text-xs font-bold text-slate-700 leading-none">{firstProd.transporterName || "—"}</p>
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Fitness</p>
-                                        {firstProd.fitness ? (
-                                          <a href={firstProd.fitness} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
-                                            {firstProd.fitness_end_date ? new Date(firstProd.fitness_end_date).toLocaleDateString("en-GB") : "View Document"}
-                                          </a>
-                                        ) : <span className="text-[10px] text-slate-400">—</span>}
+                                        {renderDocumentLink(firstProd.fitness)}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Insurance</p>
-                                        {firstProd.insurance ? (
-                                          <a href={firstProd.insurance} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
-                                            {firstProd.insurance_end_date ? new Date(firstProd.insurance_end_date).toLocaleDateString("en-GB") : "View Document"}
-                                          </a>
-                                        ) : <span className="text-[10px] text-slate-400">—</span>}
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Pollution</p>
-                                        {firstProd.polution ? (
-                                          <a href={firstProd.polution} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
-                                            {firstProd.pollution_end_date ? new Date(firstProd.pollution_end_date).toLocaleDateString("en-GB") : "View Document"}
-                                          </a>
-                                        ) : <span className="text-[10px] text-slate-400">—</span>}
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Tax Copy</p>
-                                        {firstProd.tax_copy ? (
-                                          <a href={firstProd.tax_copy} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
-                                            {firstProd.tax_end_date ? new Date(firstProd.tax_end_date).toLocaleDateString("en-GB") : "View Document"}
-                                          </a>
-                                        ) : <span className="text-[10px] text-slate-400">—</span>}
+                                        {renderDocumentLink(firstProd.insurance)}
                                       </div>
 
                                       <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Pollution</p>
+                                        {renderDocumentLink(firstProd.polution)}
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Tax Copy</p>
+                                        {renderDocumentLink(firstProd.tax_copy)}
+                                      </div>
+                                      <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 1</p>
-                                        {firstProd.permit1 ? (
-                                          <a href={firstProd.permit1} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
-                                            {firstProd.permit1_end_date ? new Date(firstProd.permit1_end_date).toLocaleDateString("en-GB") : "View Document"}
-                                          </a>
-                                        ) : <span className="text-[10px] text-slate-400">—</span>}
+                                        {renderDocumentLink(firstProd.permit1)}
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 2 (Out State)</p>
-                                        {firstProd.permit2_out_state ? (
-                                          <a href={firstProd.permit2_out_state} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
-                                            {firstProd.permit2_end_date ? new Date(firstProd.permit2_end_date).toLocaleDateString("en-GB") : "View Document"}
-                                          </a>
-                                        ) : <span className="text-[10px] text-slate-400">—</span>}
+                                        {renderDocumentLink(firstProd.permit2_out_state)}
                                       </div>
+
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Audit Status</p>
-                                        <Badge variant="outline" className={cn("text-[9px] font-black", firstProd.check_status === 'OK' ? "text-green-600 border-green-200 bg-green-50" : "text-amber-600 border-amber-200 bg-amber-50")}>
-                                          {firstProd.check_status || "—"}
+                                        <Badge variant="outline" className={cn("text-[9px] font-black px-2 py-0.5 uppercase", firstProd.check_status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-orange-50 text-orange-700 border-orange-200')}>
+                                          {firstProd.check_status || "Pending"}
                                         </Badge>
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Bilty No</p>
-                                        <p className="text-xs font-black text-blue-600">{firstProd.bilty_no || "—"}</p>
+                                        <p className="text-xs font-bold text-slate-700 leading-none">{firstProd.bilty_no || "—"}</p>
                                       </div>
+                                    </div>
 
-                                      <div className="md:col-span-4 h-px bg-slate-200 my-1" />
+                                    <div className="h-px bg-slate-100" />
 
+                                    {/* Section 3: Weight Details */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">RST No</p>
-                                        {firstProd.weightment_slip_copy ? (
-                                          <a href={firstProd.weightment_slip_copy} target="_blank" rel="noopener noreferrer" className="text-sm font-black text-blue-600 hover:text-blue-800 underline">
-                                            #{firstProd.rstNo || "—"}
-                                          </a>
-                                        ) : (
-                                          <p className="text-sm font-black text-slate-900">#{firstProd.rstNo || "—"}</p>
-                                        )}
+                                        <p className="text-xs font-bold text-blue-700 leading-none">#{firstProd.rstNo || "—"}</p>
                                       </div>
-                                      <div>
+                                      <div className="md:col-span-1">
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
-                                        <p className="text-xs font-black text-slate-900 leading-tight">
-                                          {firstProd.grossWeight || "0"} / {firstProd.tareWeight || "0"} / <span className="text-blue-600 font-black">{((Number(firstProd.grossWeight || 0) - Number(firstProd.tareWeight || 0)) || "0").toString()}</span>
+                                        <p className="text-xs font-bold text-slate-700 leading-none">
+                                          {firstProd.grossWeight || 0} / {firstProd.tareWeight || 0} / {firstProd.netWeight || 0}
                                         </p>
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff</p>
-                                        <p className="text-xs font-black text-amber-600">{firstProd.weightDiff || "0"}</p>
+                                        <p className={cn("text-xs font-bold leading-none", (parseFloat(firstProd.weightDiff) || 0) < 0 ? "text-red-500" : "text-green-600")}>
+                                          {firstProd.weightDiff || 0}
+                                        </p>
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Extra Weight</p>
-                                        <p className="text-xs font-black text-purple-600">{firstProd.extraWeight || "0"}</p>
+                                        <p className="text-xs font-bold text-slate-700 leading-none">0</p>
                                       </div>
-                                      <div>
+                                      <div className="md:col-span-4">
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff Reason</p>
-                                        <p className="text-[10px] font-bold text-red-500 italic">{firstProd.reasonForDiff || firstProd.reason_of_difference_in_weight_if_any_speacefic || "—"}</p>
+                                        <p className="text-[10px] font-medium text-slate-500 italic mt-1 leading-tight border-l-2 border-slate-200 pl-3">
+                                          {firstProd.reasonForDiff || "—"}
+                                        </p>
                                       </div>
                                     </div>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          )}
-
-                          {/* Consolidated Product Table (Always Visible) */}
-                          <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
-                            <Table>
-                              <TableHeader className="bg-slate-50">
-                                <TableRow>
-                                  <TableHead className="w-12 text-center h-10">
-                                    <Checkbox
-                                      checked={allSelected}
-                                      onCheckedChange={(checked) => {
-                                        if (checked) {
-                                          setSelectedProducts(prev => Array.from(new Set([...prev, ...allProducts.map((p: any) => p._rowKey)])))
-                                        } else {
-                                          setSelectedProducts(prev => prev.filter(k => !allProducts.some((p: any) => p._rowKey === k)))
-                                        }
-                                      }}
-                                    />
-                                  </TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black h-10">PRODUCT INFO</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">ACTUAL QTY DISPATCH</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">AMOUNT</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">VEHICLE NUMBER</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">STATUS</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {allProducts.map((product: any) => (
-                                  <TableRow key={product._rowKey} className={cn(selectedProducts.includes(product._rowKey) ? "bg-blue-50/20" : "", "h-14")}>
-                                    <TableCell className="text-center p-2">
-                                      <Checkbox
-                                        checked={selectedProducts.includes(product._rowKey)}
-                                        onCheckedChange={() => {
-                                          if (selectedProducts.includes(product._rowKey)) {
-                                            setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
-                                          } else {
-                                            setSelectedProducts(prev => [...prev, product._rowKey])
-                                          }
-                                        }}
-                                      />
-                                    </TableCell>
-                                    <TableCell className="p-2">
-                                      <div className="flex flex-col">
-                                        <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{product.productName}</span>
-                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{product.specificOrderNo}</span>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell className="text-center p-2">
-                                      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">
-                                        {product.qtyToDispatch || "0"}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
-                                      {product.rate ? `₹${product.rate.toFixed(2)}` : "—"}
-                                    </TableCell>
-                                    <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
-                                      {product.amount ? `₹${product.amount.toFixed(2)}` : "—"}
-                                    </TableCell>
-                                    <TableCell className="text-center p-2">
-                                      <div className="flex items-center justify-center gap-1.5">
-                                        <Truck className="h-3 w-3 text-slate-400" />
-                                        <span className="text-xs font-bold text-slate-700">{(product.truckNo || "—").toUpperCase()}</span>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell className="text-center p-2">
-                                      <Badge className="bg-green-100 text-green-700 border-green-200 font-black text-[9px] uppercase">Ready for Invoice</Badge>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-
-                                {/* Summary Footer Row */}
-                                <TableRow className="bg-slate-50 font-black h-12 border-t-2 border-slate-200">
-                                  <TableCell />
-                                  <TableCell className="text-[10px] uppercase font-black text-slate-900">Total</TableCell>
-                                  <TableCell className="text-center">
-                                    <Badge className="bg-blue-600 text-white font-black text-xs px-3">
-                                      {allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.qtyToDispatch) || 0), 0)}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="text-center text-xs text-slate-700"></TableCell>
-                                  <TableCell className="text-center text-xs text-blue-700 font-black">
-                                    ₹{allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0).toFixed(2)}
-                                  </TableCell>
-                                  <TableCell colSpan={2} />
-                                </TableRow>
-                              </TableBody>
-                            </Table>
+                                </div>
+                              );
+                            })}
                           </div>
-                        </div>
+                        )}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
 
-                {/* Invoice Form (Bottom) */}
+                {/* 2. Unified Product Table (Shows ALL selected groups products) */}
+                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                  <Table>
+                    <TableHeader className="bg-slate-50">
+                      <TableRow>
+                        <TableHead className="w-12 text-center h-10">
+                          <Checkbox
+                            checked={selectedGroups.every(g => g._allProducts.every((p: any) => selectedProducts.includes(p._rowKey)))}
+                            onCheckedChange={(checked) => {
+                              const allKeys = selectedGroups.flatMap(g => g._allProducts.map((p: any) => p._rowKey));
+                              if (checked) {
+                                setSelectedProducts(prev => Array.from(new Set([...prev, ...allKeys])))
+                              } else {
+                                setSelectedProducts(prev => prev.filter(k => !allKeys.includes(k)))
+                              }
+                            }}
+                          />
+                        </TableHead>
+                        <TableHead className="text-[10px] uppercase font-black h-10">PRODUCT INFO</TableHead>
+                        <TableHead className="text-[10px] uppercase font-black text-center h-10">ACTUAL QTY DISPATCH</TableHead>
+                        <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE</TableHead>
+                        <TableHead className="text-[10px] uppercase font-black text-center h-10">BASE AMOUNT</TableHead>
+                        <TableHead className="text-[10px] uppercase font-black text-center h-10">VEHICLE NUMBER</TableHead>
+                        <TableHead className="text-[10px] uppercase font-black text-center h-10">STATUS</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedGroups.flatMap(g => g._allProducts).map((product: any) => (
+                        <TableRow key={product._rowKey} className={cn(selectedProducts.includes(product._rowKey) ? "bg-blue-50/20" : "", "h-14")}>
+                          <TableCell className="text-center p-2">
+                            <Checkbox
+                              checked={selectedProducts.includes(product._rowKey)}
+                              onCheckedChange={() => {
+                                if (selectedProducts.includes(product._rowKey)) {
+                                  setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
+                                } else {
+                                  setSelectedProducts(prev => [...prev, product._rowKey])
+                                }
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="p-2">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{product.productName}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{product.specificOrderNo}</span>
+                                <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest">{product.party_name || product.partyName}</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center p-2">
+                            <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">
+                              {product.qtyToDispatch || "0"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
+                            {product.rate ? `₹${Number(product.rate).toFixed(2)}` : "—"}
+                          </TableCell>
+                          <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
+                            {product.amount ? `₹${Number(product.amount).toFixed(2)}` : "—"}
+                          </TableCell>
+                          <TableCell className="text-center p-2">
+                            <div className="flex items-center justify-center gap-1.5 font-bold text-slate-700 text-xs">
+                              {(product.truckNo || "—").toUpperCase()}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center p-2">
+                            <Badge className="bg-green-100 text-green-700 border-green-200 font-black text-[9px] uppercase">Ready for Invoice</Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+
+                      {/* Summary Row */}
+                      <TableRow className="bg-slate-50 font-black h-12 border-t-2 border-slate-200">
+                        <TableCell />
+                        <TableCell className="text-[10px] uppercase font-black text-slate-900">Total Selection</TableCell>
+                        <TableCell className="text-center">
+                          <Badge className="bg-blue-600 text-white font-black text-xs px-3">
+                            {selectedGroups.flatMap(g => g._allProducts).filter(p => selectedProducts.includes(p._rowKey)).reduce((sum, p) => sum + (parseFloat(p.qtyToDispatch) || 0), 0)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell />
+                        <TableCell className="text-center text-xs text-blue-700 font-black">
+                          ₹{selectedGroups.flatMap(g => g._allProducts).filter(p => selectedProducts.includes(p._rowKey)).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0).toFixed(2)}
+                        </TableCell>
+                        <TableCell colSpan={2} />
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+                {/* 3. Invoice Form */}
                 <div className="space-y-6 border rounded-lg p-6 bg-white shadow-sm">
                   <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
                     <FileText className="h-4 w-4 text-blue-600" />
@@ -977,6 +1013,7 @@ export default function MakeInvoicePage() {
                       <div className="flex items-center gap-2">
                         <Input
                           type="file"
+                          id="invoice-file"
                           accept=".pdf,.jpg,.png"
                           onChange={(e) => {
                             if (e.target.files?.[0]) {
@@ -984,19 +1021,21 @@ export default function MakeInvoicePage() {
                             }
                           }}
                           className="hidden"
-                          id="invoice-upload"
                         />
-                        <Label
-                          htmlFor="invoice-upload"
-                          className="flex-1 cursor-pointer border-2 border-dashed border-slate-200 rounded-xl h-10 flex items-center justify-center bg-violet-50/50 hover:bg-violet-50 hover:border-violet-300 transition-all text-sm font-bold text-violet-700 uppercase tracking-tight"
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-start text-xs h-9"
+                          onClick={() => document.getElementById('invoice-file')?.click()}
                         >
-                          {isUploading ? "UPLOADING..." : (invoiceData.invoiceFile ? `REPLACE: ${invoiceData.invoiceFileName}` : "Select File")}
-                        </Label>
+                          <Upload className="h-4 w-4 mr-2" />
+                          {invoiceData.invoiceFileName || 'Choose File'}
+                        </Button>
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Invoice Date</Label>
+                      <Label>Invoice Date <span className="text-red-500">*</span></Label>
                       <Input
                         type="date"
                         value={invoiceData.invoiceDate}
