@@ -196,6 +196,7 @@ export default function OrderPunchPage() {
   // Set DO Date to today's date by default
   const [soDate, setSoDate] = useState<string>(new Date().toISOString().split("T")[0])
   const [customerName, setCustomerName] = useState<string>("")
+  const [gst, setGst] = useState<string>("") // New state for GST
   const [contactPerson, setContactPerson] = useState<string>("")
   const [whatsappNo, setWhatsappNo] = useState<string>("")
   const [customerAddress, setCustomerAddress] = useState<string>("")
@@ -246,10 +247,12 @@ export default function OrderPunchPage() {
   // Customer Auto-fill Effect
   useEffect(() => {
     if (customerType === "existing" && customerName) {
-      // Find customer in the fetched list
-      const selectedCustomer = customers.find(c => c.customer_name === customerName)
+      // Find customer in the fetched list using unique combination
+      const [name, gstin] = customerName.split('|')
+      const selectedCustomer = customers.find(c => c.customer_name === name && (c.gstin || '') === gstin)
 
       if (selectedCustomer) {
+        setGst(selectedCustomer.gstin || "")
         setContactPerson(selectedCustomer.contact_person || "")
         setWhatsappNo(selectedCustomer.contact || "") // Using 'contact' field for WhatsApp
 
@@ -263,12 +266,17 @@ export default function OrderPunchPage() {
 
         setCustomerAddress(parts.join(", "))
       }
+    } else if (customerType === "new") {
+        setGst("")
     }
   }, [customerName, customerType, customers])
 
   // Track which fields are auto-filled from the database
   const selectedCustomerRecord = customerType === "existing" && customerName 
-    ? customers.find(c => c.customer_name === customerName)
+    ? (() => {
+        const [name, gstin] = customerName.split('|')
+        return customers.find(c => c.customer_name === name && (c.gstin || '') === gstin)
+      })()
     : null;
 
   const isContactPersonAutoFilled = !!(selectedCustomerRecord && selectedCustomerRecord.contact_person);
@@ -454,6 +462,7 @@ export default function OrderPunchPage() {
         upload_so: uploadedSoUrl, // Add uploaded SO copy URL
         username: user?.username || null, // Add username for tracking
         order_category: orderCategory,
+        gst: gst || null, // Add GST number
       }
 
       // Add products array for backend (for regular and pre-approval order types)
@@ -705,6 +714,7 @@ export default function OrderPunchPage() {
     setAdvancePaymentTaken("NO")
     setSoDate(new Date().toISOString().split("T")[0])
     setCustomerName("")
+    setGst("")
     setContactPerson("")
     setWhatsappNo("")
     setCustomerAddress("")
@@ -967,7 +977,7 @@ export default function OrderPunchPage() {
                       const list = res.data.customers || [];
                       return {
                         options: list.map((c: any) => ({ 
-                          value: c.customer_name, 
+                          value: `${c.customer_name}|${c.gstin || ''}`, // Unique value
                           label: c.customer_name, 
                           dropdownLabel: `${c.customer_name}${c.gstin ? ' - ' + c.gstin : ''}`,
                           original: c 
@@ -985,6 +995,18 @@ export default function OrderPunchPage() {
                   />
                 )}
               </div>
+
+              {gst && (
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="gst">GST Number</Label>
+                  <Input
+                    id="gst"
+                    value={gst}
+                    readOnly
+                    className="bg-muted font-mono"
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="contactPerson">Customer Contact Person Name <span className="text-red-500">*</span></Label>
