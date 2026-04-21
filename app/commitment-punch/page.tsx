@@ -716,15 +716,15 @@ export default function CommitmentPunchPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="d-contactPerson">Contact Person Name</Label>
-                <Input id="d-contactPerson" placeholder="Enter contact person" value={contactPerson} onChange={e => setContactPerson(e.target.value)} />
+                <Input id="d-contactPerson" disabled placeholder="Enter contact person" value={contactPerson} onChange={e => setContactPerson(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="d-whatsapp">WhatsApp No.</Label>
-                <Input id="d-whatsapp" placeholder="Enter WhatsApp number" value={whatsappNo} onChange={e => setWhatsappNo(e.target.value)} />
+                <Input id="d-whatsapp" disabled placeholder="Enter WhatsApp number" value={whatsappNo} onChange={e => setWhatsappNo(e.target.value)} />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="d-address">Customer Address</Label>
-                <Input id="d-address" placeholder="Enter full address" value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} />
+                <Input id="d-address" disabled placeholder="Enter full address" value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} />
               </div>
             </div>
 
@@ -762,7 +762,7 @@ export default function CommitmentPunchPage() {
                           </Select>
                         </td>
                         <td className="py-1.5 px-2">
-                          <Input type="number" min="0" step="0.01" value={row.quantity} onChange={e => updateRow(row.id, "quantity", e.target.value)} placeholder="0.00" className="h-8 text-sm" />
+                          <Input type="number" min="0" step="0.0001" value={row.quantity} onChange={e => updateRow(row.id, "quantity", e.target.value)} placeholder="0.0000" className="h-8 text-sm" />
                         </td>
                         <td className="py-1.5 px-2">
                           <Input type="text" value={row.unit} onChange={e => updateRow(row.id, "unit", e.target.value)} placeholder="e.g. Ltr" className="h-8 text-sm" />
@@ -1188,10 +1188,10 @@ export default function CommitmentPunchPage() {
                           </td>
                           <td className="py-1 px-2">
                             <Input
-                              type="number" min="0" step="0.01"
+                              type="number" min="0" step="0.0001"
                               value={row.qty}
                               onChange={e => updateSkuRow(row.id, "qty", e.target.value)}
-                              placeholder="0.00"
+                              placeholder="0.0000"
                               className="h-8 text-sm w-full"
                             />
                           </td>
