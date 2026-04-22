@@ -1207,8 +1207,116 @@ export const skuSellingPriceApi = {
  * Common API
  */
 export const commonApi = {
-  getNextId: async (type: 'customer' | 'depot' | 'broker' | 'sku' | 'salesperson'): Promise<ApiResponse<{ nextId: string; type: string; prefix: string }>> => {
+  getNextId: async (type: 'customer' | 'depot' | 'broker' | 'sku' | 'salesperson' | 'vehicle' | 'driver' | 'transport'): Promise<ApiResponse<{ nextId: string; type: string; prefix: string }>> => {
     return request(`/common/next-id?type=${type}`);
+  },
+};
+
+/**
+ * Vehicle Master API
+ */
+export const vehicleMasterApi = {
+  getAll: async (params?: any): Promise<ApiResponse> => {
+    const queryString = params
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`/vehicle-master${queryString}`);
+  },
+
+  getById: async (id: string | number): Promise<ApiResponse> => {
+    return request(`/vehicle-master/${id}`);
+  },
+
+  create: async (data: any): Promise<ApiResponse> => {
+    return request('/vehicle-master', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (id: string | number, data: any): Promise<ApiResponse> => {
+    return request(`/vehicle-master/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: string | number): Promise<ApiResponse> => {
+    return request(`/vehicle-master/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+/**
+ * Driver Master API
+ */
+export const driverMasterApi = {
+  getAll: async (params?: any): Promise<ApiResponse> => {
+    const queryString = params
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`/driver-master${queryString}`);
+  },
+
+  getById: async (id: string | number): Promise<ApiResponse> => {
+    return request(`/driver-master/${id}`);
+  },
+
+  create: async (data: any): Promise<ApiResponse> => {
+    return request('/driver-master', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (id: string | number, data: any): Promise<ApiResponse> => {
+    return request(`/driver-master/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: string | number): Promise<ApiResponse> => {
+    return request(`/driver-master/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+/**
+ * Transport Master API
+ */
+export const transportMasterApi = {
+  getAll: async (params?: any): Promise<ApiResponse> => {
+    const queryString = params
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`/transport-master${queryString}`);
+  },
+
+  getById: async (id: string | number): Promise<ApiResponse> => {
+    return request(`/transport-master/${id}`);
+  },
+
+  create: async (data: any): Promise<ApiResponse> => {
+    return request('/transport-master', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (id: string | number, data: any): Promise<ApiResponse> => {
+    return request(`/transport-master/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: string | number): Promise<ApiResponse> => {
+    return request(`/transport-master/${id}`, {
+      method: 'DELETE',
+    });
   },
 };
 
@@ -1360,6 +1468,8 @@ export default {
   varCalc: varCalcApi,
   salesperson: salespersonApi,
   commitmentPunch: commitmentPunchApi,
+  vehicleMaster: vehicleMasterApi,
+  driverMaster: driverMasterApi,
 };
 
 

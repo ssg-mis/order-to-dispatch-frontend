@@ -433,7 +433,7 @@ export default function OrderPunchPage() {
       }
 
       // Prepare data for backend API
-      const customerNameValue = customerName
+      const customerNameValue = customerType === "existing" ? customerName.split('|')[0] : customerName
 
       // Prepare common order data
       const orderData: any = {
