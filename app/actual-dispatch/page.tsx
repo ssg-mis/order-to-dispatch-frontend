@@ -884,7 +884,14 @@ export default function ActualDispatchPage() {
   }
 
   const handleSaveDraft = async () => {
-    if (!user?.username || selectedGroups.length === 0) return;
+    if (!user?.username) {
+      toast({ title: "User Error", description: "You must be logged in with a username to save drafts.", variant: "destructive" });
+      return;
+    }
+    if (selectedGroups.length === 0) {
+      toast({ title: "No Items Selected", description: "Please select at least one order group to save a draft.", variant: "destructive" });
+      return;
+    }
     const orderKey = selectedGroups[0]._rowKey;
     const draftData = { 
       vehicleNumber, 
@@ -2209,7 +2216,7 @@ export default function ActualDispatchPage() {
                               min={minDate}
                               value={vehicleData.permit2_end_date}
                               onChange={(e) => setVehicleData(p => ({ ...p, permit2_end_date: e.target.value }))}
-                              disabled={!isInterState}
+                              disabled={!isInterState || isReadOnly}
                             />
                           </div>
                         </div>
@@ -2505,6 +2512,7 @@ export default function ActualDispatchPage() {
                   <Label className="text-[10px] font-black uppercase text-red-500 tracking-tighter ml-1">Revert Remarks <span className="text-red-500">*</span></Label>
                   <Input
                     className="h-10 border-2 border-red-200 rounded-lg font-medium bg-white focus:border-red-400 transition-colors"
+                    disabled={isReadOnly}
                     placeholder="Enter reason for reverting..."
                     value={revertRemarks}
                     onChange={(e) => setRevertRemarks(e.target.value)}
@@ -2521,12 +2529,12 @@ export default function ActualDispatchPage() {
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button
+                 <Button
                   variant="outline"
                   onClick={handleSaveDraft}
-                  disabled={isSavingDraft || isProcessing || isReadOnly}
+                  disabled={isSavingDraft || isProcessing || !vehicleNumber || !loadData.transporterName}
                   className="border-amber-300 text-amber-700 hover:bg-amber-50 font-semibold"
-                  title="Save current form data as a draft to resume later"
+                  title={(!vehicleNumber || !loadData.transporterName) ? "Vehicle and Transporter details required to save draft" : "Save current form data as a draft to resume later"}
                 >
                   {isSavingDraft ? "Saving..." : "Save as Draft"}
                 </Button>

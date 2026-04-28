@@ -49,6 +49,7 @@ interface User {
 
 const PAGE_ACCESS_OPTIONS = [
   "Dashboard",
+  "Owner Dashboard",
   "Commitment Punch",
   "Order Punch",
   "Pre Approval",

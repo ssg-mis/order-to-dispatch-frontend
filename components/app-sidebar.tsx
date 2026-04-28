@@ -2,6 +2,7 @@
 import Link from "next/link"
 import {
   LayoutDashboard,
+  PieChart,
   ClipboardPen,
   BadgeCheck,
   FileSearch,
@@ -47,6 +48,7 @@ import {
 
 const modules = [
   { title: "Dashboard", icon: LayoutDashboard, url: "/" },
+  { title: "Owner Dashboard", icon: PieChart, url: "/owner-dashboard" },
   { title: "Commitment Punch", icon: Handshake, url: "/commitment-punch" },
   { title: "Order Punch", icon: ClipboardPen, url: "/order-punch" },
   { title: "Pre Approval", icon: BadgeCheck, url: "/pre-approval" },
@@ -88,6 +90,7 @@ export function AppSidebar() {
           "Make Invoice (Proforma)": "Make Invoice",
           "Confirm Material Receipt": "Confirm Material Receipt",
           "Damage Adjustment": "Damage Adjustment",
+          "Owner Dashboard": "Owner Dashboard",
         }
 
         // Helper: check if a page is allowed, supporting both old (string[]) and new ({ page: level }) formats

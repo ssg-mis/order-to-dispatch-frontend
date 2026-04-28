@@ -1450,6 +1450,19 @@ export const dashboardApi = {
   },
 };
 
+export const ownerDashboardApi = {
+  getFull: async (params?: Record<string, any>): Promise<ApiResponse> => {
+    const queryString = params && Object.keys(params).length > 0
+      ? '?' + new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "")
+          ) as Record<string, string>
+        ).toString()
+      : '';
+    return request(`${API_ENDPOINTS.ownerDashboard.full}${queryString}`);
+  },
+};
+
 /**
  * Reports API
  */

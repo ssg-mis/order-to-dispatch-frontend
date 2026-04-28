@@ -53,7 +53,12 @@ export const API_ENDPOINTS = {
     stats: '/dashboard/stats',
     overview: '/dashboard/overview',
   },
-  
+
+  // Owner Dashboard
+  ownerDashboard: {
+    full: '/owner-dashboard',
+  },
+
   // Reports Endpoints
   reports: {
     get: '/reports',

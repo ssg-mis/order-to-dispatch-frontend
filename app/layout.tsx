@@ -42,6 +42,7 @@ export default function RootLayout({
         // Map URLs to permission names
         const urlToPermission: Record<string, string> = {
           "/": "Dashboard",
+          "/owner-dashboard": "Owner Dashboard",
           "/commitment-punch": "Commitment Punch",
           "/order-punch": "Order Punch",
           "/pre-approval": "Pre Approval",
