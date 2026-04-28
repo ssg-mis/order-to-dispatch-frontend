@@ -788,10 +788,12 @@ export default function MaterialLoadPage() {
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Weightment Slip Copy</Label>
                         <Input type="file" className="bg-white cursor-pointer" />
+                        <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
                       </div>
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Vehicle No. Plate Image</Label>
                         <Input type="file" className="bg-white cursor-pointer" />
+                        <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
                       </div>
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Check Status</Label>

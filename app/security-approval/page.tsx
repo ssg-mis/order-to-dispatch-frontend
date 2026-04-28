@@ -28,7 +28,7 @@ import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { securityGuardApprovalApi, orderApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
 import { useQuery } from "@tanstack/react-query"
-import { Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw } from "lucide-react"
+import { Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, ExternalLink } from "lucide-react"
 
 export default function SecurityApprovalPage() {
   const router = useRouter()
@@ -431,7 +431,8 @@ export default function SecurityApprovalPage() {
           brokerName: order.broker_name || "—",
           partyCredit: order.party_credit_status || "Good",
           orderPunchRemarks: order.order_punch_remarks || "—",
-          partySoDate: formatDate(order.party_so_date || order.partySoDate)
+          partySoDate: formatDate(order.party_so_date || order.partySoDate),
+          uploadSo: order.upload_so || null,
         }
       }
 
@@ -481,6 +482,7 @@ export default function SecurityApprovalPage() {
         processId: formatLabel(uniqueProcessIds),
         vehicleNo: group.truckNo !== 'NOTRUCK' ? group.truckNo : "—",
         orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—",
+        uploadSo: group._allProducts[0]?.upload_so || group._allProducts[0]?.uploadSo || null,
         isDisabled: group._allProducts.some((p: any) => p.actual_1 == null)
       }
     })
@@ -577,6 +579,7 @@ export default function SecurityApprovalPage() {
       stageLevel={5}
       onTabChange={setActiveTab}
       isHistoryLoading={isHistoryLoading}
+      showDateFilters={false}
     >
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
@@ -838,6 +841,28 @@ export default function SecurityApprovalPage() {
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Broker / Advance</p>
                                       <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.brokerName || "—"} / ₹{orderDetails.advanceAmount || 0}</p>
                                     </div>
+
+                                    <div className="md:col-span-2">
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Order Punch Remarks</p>
+                                      <p className="text-[10px] font-medium text-slate-600 leading-tight italic">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">PO Copy (SO Upload)</p>
+                                      {group.uploadSo ? (
+                                        <a 
+                                          href={group.uploadSo} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-all border border-blue-200 w-fit group shadow-sm mt-0.5"
+                                        >
+                                          <FileText className="h-3 w-3 group-hover:scale-110 transition-transform" />
+                                          <span className="text-[10px] font-black uppercase tracking-tight">VIEW PO COPY</span>
+                                          <ExternalLink className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </a>
+                                      ) : (
+                                        <p className="text-[10px] font-black text-slate-400 leading-none">NOT UPLOADED</p>
+                                      )}
+                                    </div>
                                   </div>
 
                                   <div className="h-px bg-slate-200" />
@@ -892,7 +917,66 @@ export default function SecurityApprovalPage() {
 
                                   <div className="h-px bg-slate-200" />
 
-                                  {/* Section 3: Weight Details */}
+                                  {/* Section 3: Vehicle & Driver Details */}
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-8">
+                                    {/* Vehicle Info */}
+                                    <div className="md:col-span-4 flex items-center gap-2 mb-[-8px]">
+                                      <div className="h-3 w-1 bg-blue-600 rounded-full" />
+                                      <p className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-900/60">Vehicle Specifications</p>
+                                    </div>
+                                    
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Vehicle Type</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.vehicle_type || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">RTO</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.rto || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Passing Weight</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.passing_weight || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Road Tax</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.road_tax || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">GVW</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.gvw || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">ULW</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.ulw || "—"}</p>
+                                    </div>
+
+                                    {/* Driver Info */}
+                                    <div className="md:col-span-4 flex items-center gap-2 mb-[-8px] mt-2">
+                                      <div className="h-3 w-1 bg-amber-600 rounded-full" />
+                                      <p className="text-[10px] font-black uppercase tracking-[0.15em] text-amber-900/60">Driver Information</p>
+                                    </div>
+
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Driver Name</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.driver_name || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact No</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.driver_contact_no || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">License No</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.driving_license_no || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Valid Upto</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{formatDate(firstProd.dl_valid_upto)}</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="h-px bg-slate-200" />
+
+                                  {/* Section 4: Weight Details */}
                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">RST No</p>
@@ -1015,6 +1099,7 @@ export default function SecurityApprovalPage() {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Bilty Image</Label>
+                      <p className="text-[10px] text-slate-400 ml-1">Max file size: 10 MB</p>
                       <div className="relative h-14">
                         <Input type="file" className="hidden" id="bilty-img" onChange={(e) => {
                           if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'bilty')
@@ -1080,6 +1165,7 @@ export default function SecurityApprovalPage() {
                           }} className="absolute inset-0 bg-red-600/80 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><X className="w-4 h-4" /></button>
                         </div>
                       ))}
+                      <p className="text-[10px] text-slate-400 mb-1">Max file size: 10 MB per image</p>
                       <label className="w-24 h-24 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center bg-white cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all">
                         {isUploading?.startsWith('vehicle') ? "..." : <Plus className="w-7 h-7 text-slate-200" />}
                         <input type="file" multiple className="hidden" onChange={(e) => {

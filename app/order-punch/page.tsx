@@ -448,6 +448,7 @@ export default function OrderPunchPage() {
         customer_contact_person_name: contactPerson || null,
         customer_contact_person_whatsapp_no: whatsappNo || null,
         customer_address: customerAddress || null,
+        customer_delivery_address: deliveryAddress || null,
         depo_name: depoName || null,
         payment_terms: paymentTerms || null,
         advance_payment_to_be_taken: advancePaymentTaken === "YES",
@@ -1462,6 +1463,7 @@ export default function OrderPunchPage() {
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="soFile">Upload SO Copy</Label>
                 <Input id="soFile" type="file" className="cursor-pointer" onChange={handleFileChange} />
+                <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
               </div>
 
               <div className="space-y-2 md:col-span-2">

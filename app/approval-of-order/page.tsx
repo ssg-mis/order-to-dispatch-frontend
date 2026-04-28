@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useInView } from "react-intersection-observer"
-import { ChevronLeft, ChevronRight, Settings2, CheckCircle2, Loader2, ChevronDown, ChevronUp, ChevronsUpDown, Check, CheckCircle } from "lucide-react"
+import { ChevronLeft, ChevronRight, Settings2, CheckCircle2, Loader2, ChevronDown, ChevronUp, ChevronsUpDown, Check, CheckCircle, FileText, ExternalLink } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { approvalApi } from "@/lib/api-service"
@@ -175,6 +175,7 @@ export default function CommitmentReviewPage() {
       depoName: backendOrder.depo_name,
       orderCategory: backendOrder.order_category,
       orderPunchRemarks: backendOrder.order_punch_remarks,
+      uploadSo: backendOrder.upload_so,
       remark: backendOrder.remark,
       totalWithGst: backendOrder.total_amount_with_gst,
       serial: backendOrder.serial,
@@ -652,6 +653,7 @@ export default function CommitmentReviewPage() {
       onFilterChange={setFilterValues}
       onTabChange={setActiveTab}
       isHistoryLoading={isHistoryLoading}
+      showDateFilters={false}
       historyFooter={
         <div className="flex items-center justify-between w-full mt-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
           <div className="text-xs font-bold text-slate-500 bg-white px-4 py-2 rounded-full border border-slate-200/50">
@@ -824,15 +826,47 @@ export default function CommitmentReviewPage() {
                                       {orderDetails.isBrokerOrder ? orderDetails.brokerName || "Yes" : "No"}
                                     </p>
                                   </div>
-                                  <div className="col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
-                                    <div className="bg-amber-100 p-2 rounded-lg">
-                                      <Settings2 className="h-5 w-5 text-amber-600" />
+                                    <div className="col-span-2 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
+                                      <div className="bg-amber-100 p-2 rounded-lg">
+                                        <Settings2 className="h-5 w-5 text-amber-600" />
+                                      </div>
+                                      <div>
+                                        <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
+                                        <p className="text-sm font-medium text-slate-700 italic leading-snug">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
+                                      </div>
                                     </div>
-                                    <div>
-                                      <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
-                                      <p className="text-sm font-medium text-slate-700 italic leading-snug">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
+                                    <div className={cn(
+                                      "col-span-2 p-4 rounded-xl border flex items-start gap-4 transition-all duration-300",
+                                      orderDetails.uploadSo 
+                                        ? "bg-blue-50 border-blue-100 hover:bg-blue-100 cursor-pointer group" 
+                                        : "bg-slate-50 border-slate-100 opacity-60"
+                                    )}
+                                    onClick={() => {
+                                      if (orderDetails.uploadSo) {
+                                        window.open(orderDetails.uploadSo, '_blank');
+                                      }
+                                    }}>
+                                      <div className={cn(
+                                        "p-2 rounded-lg",
+                                        orderDetails.uploadSo ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400"
+                                      )}>
+                                        <FileText className="h-5 w-5" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className={cn(
+                                          "text-[11px] font-black uppercase tracking-widest mb-1 leading-none",
+                                          orderDetails.uploadSo ? "text-blue-800" : "text-slate-500"
+                                        )}>PO Copy (SO Upload)</p>
+                                        {orderDetails.uploadSo ? (
+                                          <div className="flex items-center gap-1">
+                                            <p className="text-sm font-bold text-blue-700 truncate">View Attachment</p>
+                                            <ExternalLink className="h-3 w-3 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                          </div>
+                                        ) : (
+                                          <p className="text-sm font-medium text-slate-400 italic">No attachment</p>
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
                                 </div>
                               </div>
                             </div>

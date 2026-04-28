@@ -22,7 +22,7 @@ import { dispatchPlanningApi, customerApi, depotApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { useQuery } from "@tanstack/react-query"
-import { Loader2, ChevronLeft, ChevronRight, XCircle } from "lucide-react"
+import { Loader2, ChevronLeft, ChevronRight, XCircle, FileText, ExternalLink } from "lucide-react"
 
 export default function DispatchMaterialPage() {
   const router = useRouter()
@@ -38,6 +38,7 @@ export default function DispatchMaterialPage() {
     status: "",
     startDate: "",
     endDate: "",
+    partyName: ""
   })
   const [activeDepots, setActiveDepots] = useState<any[]>([])
   const [selectedDepoTab, setSelectedDepoTab] = useState("")
@@ -139,6 +140,7 @@ export default function DispatchMaterialPage() {
         order_no: filterValues.search,
         start_date: filterValues.startDate,
         end_date: filterValues.endDate,
+        customer_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
         depo_names: selectedDepoTab ? [selectedDepoTab] : (user?.depo_access?.['Dispatch Planning'] || [])
       });
       return response.success ? response.data : { dispatches: [], pagination: { total: 0 } };
@@ -599,6 +601,7 @@ export default function DispatchMaterialPage() {
           overallStatus: internalOrder.overall_status_of_order || internalOrder.overallStatus || "—",
           custConfirmation: internalOrder.order_confirmation_with_customer || false,
           revertDispatchRemarks: internalOrder.revert_dispatch_remarks || "—",
+          uploadSo: internalOrder.upload_so || internalOrder.uploadSo || null,
         }
       }
 
@@ -629,6 +632,7 @@ export default function DispatchMaterialPage() {
         processId: group.processid || group._allProducts[0]?.processid || "—",
         transportType: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.transportType))).filter(t => t && t !== "—").join(", ") || "—",
         orderPunchRemarks: Array.from(new Set(Object.values(group._ordersMap).map((o: any) => o.orderPunchRemarks))).filter(Boolean).join("; ") || "—",
+        uploadSo: Object.values(group._ordersMap).map((o: any) => o.uploadSo).find(Boolean) || null,
         _productCount: group._allProducts.length
       };
     }).filter(group => {
@@ -638,7 +642,11 @@ export default function DispatchMaterialPage() {
     })
   }, [filteredPendingOrders, selectedDepoTab])
 
-  const customerNames = Array.from(new Set((pendingOrders as any[]).map(order => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "Unknown Customer")))) as string[]
+  const customerNames = Array.from(new Set((pendingOrders as any[]).map(order => 
+    (order.transfer === 'yes' && order.bill_company_name) 
+      ? order.bill_company_name 
+      : (order.customer_name || order.customerName || "Unknown Customer")
+  ))) as string[]
 
   return (
     <WorkflowStageShell
@@ -652,6 +660,7 @@ export default function DispatchMaterialPage() {
       stageLevel={3}
       onTabChange={setActiveTab}
       isHistoryLoading={isHistoryLoading}
+      showDateFilters={false}
       historyFooter={
         <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
           <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
@@ -962,11 +971,45 @@ export default function DispatchMaterialPage() {
                                       {orderDetails.creditStatus}
                                     </Badge>
                                   </div>
-                                  <div className="col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4 mt-2">
-                                    <div className="bg-amber-100 p-2 rounded-lg"><Settings2 className="h-5 w-5 text-amber-600" /></div>
+                                  <div className="col-span-2 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
+                                    <div className="bg-amber-100 p-2 rounded-lg">
+                                      <Settings2 className="h-5 w-5 text-amber-600" />
+                                    </div>
                                     <div>
                                       <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
-                                      <p className="text-sm font-medium text-slate-700 italic leading-snug">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
+                                      <p className="text-sm font-medium text-slate-700 italic leading-snug">"{group.orderPunchRemarks || "No special instructions provided."}"</p>
+                                    </div>
+                                  </div>
+                                  <div className={cn(
+                                    "col-span-2 p-4 rounded-xl border flex items-start gap-4 transition-all duration-300",
+                                    group.uploadSo 
+                                      ? "bg-blue-50 border-blue-100 hover:bg-blue-100 cursor-pointer group" 
+                                      : "bg-slate-50 border-slate-100 opacity-60"
+                                  )}
+                                  onClick={() => {
+                                    if (group.uploadSo) {
+                                      window.open(group.uploadSo, '_blank');
+                                    }
+                                  }}>
+                                    <div className={cn(
+                                      "p-2 rounded-lg",
+                                      group.uploadSo ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400"
+                                    )}>
+                                      <FileText className="h-5 w-5" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className={cn(
+                                        "text-[11px] font-black uppercase tracking-widest mb-1 leading-none",
+                                        group.uploadSo ? "text-blue-800" : "text-slate-500"
+                                      )}>PO Copy (SO Upload)</p>
+                                      {group.uploadSo ? (
+                                        <div className="flex items-center gap-1">
+                                          <p className="text-sm font-bold text-blue-700 truncate">View Attachment</p>
+                                          <ExternalLink className="h-3 w-3 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </div>
+                                      ) : (
+                                        <p className="text-sm font-medium text-slate-400 italic">No attachment</p>
+                                      )}
                                     </div>
                                   </div>
                                 </div>

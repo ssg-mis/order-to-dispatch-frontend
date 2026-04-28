@@ -18,8 +18,9 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Upload, Settings2, FileText, ChevronUp, ChevronDown, Plus, X, Truck } from "lucide-react"
+import { Upload, Settings2, FileText, ChevronUp, ChevronDown, Plus, X, Truck, ExternalLink } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { makeInvoiceApi, orderApi } from "@/lib/api-service"
@@ -107,6 +108,9 @@ export default function MakeInvoicePage() {
     invoiceFileName: ""
   })
 
+  // CD Amount State for products
+  const [productCdData, setProductCdData] = useState<{[key: string]: {isCd: string, cdAmount: string}}>({})
+
   // Fetch pending invoices
   const handleFileUpload = async (file: File) => {
     if (!file) return;
@@ -151,7 +155,7 @@ export default function MakeInvoicePage() {
       const response = await makeInvoiceApi.getPending({
         page: pageParam,
         limit: 20,
-        so_no: filterValues.search,
+        search: filterValues.search,
         party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
       });
       return response.success ? response.data : { invoices: [], pagination: { total: 0 } };
@@ -177,7 +181,7 @@ export default function MakeInvoicePage() {
       const response = await makeInvoiceApi.getHistory({
         page: pageParam,
         limit: 20,
-        so_no: filterValues.search,
+        search: filterValues.search,
         party_name: filterValues.partyName === "all" ? undefined : filterValues.partyName,
       });
       return response.success ? response.data : { invoices: [], pagination: { total: 0 } };
@@ -234,6 +238,22 @@ export default function MakeInvoicePage() {
         end.setHours(23, 59, 59, 999)
         if (orderDate > end) matches = false
       }
+    }
+
+    // Search filter (Matches DO No, Customer Name, and Vehicle No)
+    if (filterValues.search) {
+      const search = filterValues.search.toLowerCase().trim()
+      const orderNo = String(order.so_no || "").toLowerCase()
+      const partyEntry = (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName || "");
+      const customerName = String(partyEntry).toLowerCase()
+      const vehicleNo = String(order.truck_no || "").toLowerCase()
+      
+      const searchMatches = 
+        orderNo.includes(search) || 
+        customerName.includes(search) || 
+        vehicleNo.includes(search);
+        
+      if (!searchMatches) matches = false
     }
 
     return matches
@@ -302,7 +322,8 @@ export default function MakeInvoicePage() {
           partyCredit: order.party_credit_status || "Good",
           totalAmount: order.total_amount_with_gst || "—",
           oilType: order.oil_type || "—",
-          partySoDate: formatDate(order.party_so_date || order.partySoDate)
+          partySoDate: formatDate(order.party_so_date || order.partySoDate),
+          uploadSo: order.upload_so || null,
         }
       }
 
@@ -320,15 +341,22 @@ export default function MakeInvoicePage() {
         grossWeight: order.gross_weight,
         tareWeight: order.tare_weight,
         netWeight: order.net_weight,
+        extraWeight: order.extra_weight,
         weightDiff: order.difference || 0,
         transporterName: order.transporter_name,
         driverName: order.driver_name,
         fitness: order.fitness,
+        fitness_end_date: order.fitness_end_date,
         insurance: order.insurance,
+        insurance_end_date: order.insurance_end_date,
         polution: order.polution,
+        pollution_end_date: order.pollution_end_date,
         tax_copy: order.tax_copy,
+        tax_end_date: order.tax_end_date,
         permit1: order.permit1,
+        permit1_end_date: order.permit1_end_date,
         permit2_out_state: order.permit2_out_state,
+        permit2_end_date: order.permit2_end_date,
         check_status: order.check_status,
         remarks: order.remarks,
         weightment_slip_copy: order.weightment_slip_copy,
@@ -351,6 +379,7 @@ export default function MakeInvoicePage() {
       processId: group._allProducts[0]?.processid || "—",
       vehicleNo: (group._allProducts[0]?.truckNo || "—").toUpperCase(),
       actual1Date: formatDate(group._allProducts[0]?.lrc_actual_1 || group._allProducts[0]?.actual_1),
+      uploadSo: group._allProducts[0]?.upload_so || group._allProducts[0]?.uploadSo || null,
       freightRate: group._allProducts[0]?.freight_rate || 0,
       orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—"
     }))
@@ -445,7 +474,11 @@ export default function MakeInvoicePage() {
           // Use final_rate if available, and ADD freight_rate
           const baseRate = parseFloat(product.final_rate || product.rate_per_ltr || product.rate_per_15kg || product.rate_of_material || 0);
           const freightRate = parseFloat(product.freight_rate || 0);
-          const rate = baseRate + freightRate;
+          
+          // CD Amount adjustment
+          const cdAmt = productCdData[product.id]?.isCd === 'yes' ? parseFloat(productCdData[product.id]?.cdAmount || '0') : 0;
+          
+          const rate = baseRate + freightRate - cdAmt;
           totalQty += qty;
           totalBillAmount += qty * rate;
         }
@@ -457,7 +490,7 @@ export default function MakeInvoicePage() {
       qty: totalQty.toString(),
       billAmount: totalBillAmount.toFixed(2)
     }));
-  }, [selectedProducts, isDialogOpen, selectedGroups]);
+  }, [selectedProducts, isDialogOpen, selectedGroups, productCdData]);
 
   const handleSubmit = async () => {
     if (selectedGroups.length === 0 || !invoiceData.invoiceNo || !invoiceData.invoiceFile) {
@@ -498,6 +531,7 @@ export default function MakeInvoicePage() {
           bill_amount: invoiceType === 'independent' ? invoiceData.billAmount : null,
           invoice_copy: invoiceData.invoiceFile || null,
           username: user?.username || null, // Add username for tracking
+          cd_amount: productCdData[product.id]?.isCd === 'yes' ? parseFloat(productCdData[product.id]?.cdAmount || '0') : 0
         };
 
         try {
@@ -575,6 +609,7 @@ export default function MakeInvoicePage() {
       stageLevel={6}
       onTabChange={setActiveTab}
       isHistoryLoading={isHistoryLoading}
+      showDateFilters={false}
       historyFooter={
         <div ref={historyEndRef} className="py-4 flex justify-center">
           {isFetchingNextHistory && (
@@ -767,128 +802,227 @@ export default function MakeInvoicePage() {
                                       ORDER: {firstProd.specificOrderNo}
                                     </Badge>
                                   </div>
-                                  <div className="space-y-6">
-                                    {/* Section 1: Order Information */}
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Delivery Purpose</p>
-                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.deliveryPurpose}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Start Date / End Date</p>
-                                        <p className="text-xs font-bold text-slate-700 leading-none">
-                                          {formatDate(orderDetails.startDate)} / {formatDate(orderDetails.endDate)}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">DO Date</p>
-                                        <p className="text-xs font-bold text-slate-700 leading-none">{orderDetails.partySoDate || "—"}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transport Type</p>
-                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.transportType}</p>
-                                      </div>
-
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Credit Status</p>
-                                        <Badge className={cn("text-[10px] font-black px-2 py-0.5", orderDetails.partyCredit === 'Good' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
-                                          {orderDetails.partyCredit}
-                                        </Badge>
-                                      </div>
-                                      <div className="md:col-span-1">
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Customer Address</p>
-                                        <p className="text-[10px] font-medium text-slate-600 leading-tight truncate" title={orderDetails.address}>{orderDetails.address}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact Person</p>
-                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.contactPerson} ({orderDetails.whatsapp})</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Broker / Advance</p>
-                                        <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.brokerName} / ₹{orderDetails.advanceAmount}</p>
-                                      </div>
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                    {/* Order Info */}
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Delivery Purpose</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.deliveryPurpose}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Start Date / End Date</p>
+                                      <p className="text-xs font-bold text-slate-700 leading-none">
+                                        {formatDate(orderDetails.startDate)} / {formatDate(orderDetails.endDate)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">DO Date</p>
+                                      <p className="text-xs font-bold text-slate-700">{orderDetails.partySoDate || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transport Type</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.transportType}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Credit Status</p>
+                                      <Badge className={cn("text-[10px] font-black px-2 py-0.5", orderDetails.partyCredit === 'Good' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
+                                        {orderDetails.partyCredit}
+                                      </Badge>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Customer Address</p>
+                                      <p className="text-[10px] font-medium text-slate-600 leading-tight truncate" title={orderDetails.address}>{orderDetails.address}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact Person</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.contactPerson} ({orderDetails.whatsapp})</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Broker / Advance</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.brokerName} / ₹{orderDetails.advanceAmount}</p>
                                     </div>
 
-                                    <div className="h-px bg-slate-100" />
-
-                                    {/* Section 2: Dispatch Details */}
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Truck No</p>
-                                        <p className="text-xs font-bold text-blue-700 uppercase tracking-tight">{firstProd.truckNo || "—"}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transporter</p>
-                                        <p className="text-xs font-bold text-slate-700 leading-none">{firstProd.transporterName || "—"}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Fitness</p>
-                                        {renderDocumentLink(firstProd.fitness)}
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Insurance</p>
-                                        {renderDocumentLink(firstProd.insurance)}
-                                      </div>
-
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Pollution</p>
-                                        {renderDocumentLink(firstProd.polution)}
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Tax Copy</p>
-                                        {renderDocumentLink(firstProd.tax_copy)}
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 1</p>
-                                        {renderDocumentLink(firstProd.permit1)}
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 2 (Out State)</p>
-                                        {renderDocumentLink(firstProd.permit2_out_state)}
-                                      </div>
-
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Audit Status</p>
-                                        <Badge variant="outline" className={cn("text-[9px] font-black px-2 py-0.5 uppercase", firstProd.check_status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-orange-50 text-orange-700 border-orange-200')}>
-                                          {firstProd.check_status || "Pending"}
-                                        </Badge>
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Bilty No</p>
-                                        <p className="text-xs font-bold text-slate-700 leading-none">{firstProd.bilty_no || "—"}</p>
-                                      </div>
+                                    <div className="md:col-span-2">
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Order Punch Remarks</p>
+                                      <p className="text-[10px] font-medium text-slate-600 leading-tight italic">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">PO Copy (SO Upload)</p>
+                                      {group.uploadSo ? (
+                                        <a 
+                                          href={group.uploadSo} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-all border border-blue-200 w-fit group shadow-sm mt-0.5"
+                                        >
+                                          <FileText className="h-3 w-3 group-hover:scale-110 transition-transform" />
+                                          <span className="text-[10px] font-black uppercase tracking-tight">VIEW PO COPY</span>
+                                          <ExternalLink className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </a>
+                                      ) : (
+                                        <p className="text-[10px] font-black text-slate-400 leading-none">NOT UPLOADED</p>
+                                      )}
                                     </div>
 
-                                    <div className="h-px bg-slate-100" />
+                                    <div className="md:col-span-4 h-px bg-slate-200 my-1" />
 
-                                    {/* Section 3: Weight Details */}
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">RST No</p>
-                                        <p className="text-xs font-bold text-blue-700 leading-none">#{firstProd.rstNo || "—"}</p>
-                                      </div>
-                                      <div className="md:col-span-1">
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
-                                        <p className="text-xs font-bold text-slate-700 leading-none">
-                                          {firstProd.grossWeight || 0} / {firstProd.tareWeight || 0} / {firstProd.netWeight || 0}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff</p>
-                                        <p className={cn("text-xs font-bold leading-none", (parseFloat(firstProd.weightDiff) || 0) < 0 ? "text-red-500" : "text-green-600")}>
-                                          {firstProd.weightDiff || 0}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Extra Weight</p>
-                                        <p className="text-xs font-bold text-slate-700 leading-none">0</p>
-                                      </div>
-                                      <div className="md:col-span-4">
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff Reason</p>
-                                        <p className="text-[10px] font-medium text-slate-500 italic mt-1 leading-tight border-l-2 border-slate-200 pl-3">
-                                          {firstProd.reasonForDiff || "—"}
-                                        </p>
-                                      </div>
+                                    {/* Dispatch Info */}
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Truck No</p>
+                                      <p className="text-sm font-black text-blue-800">{(firstProd.truckNo || "—").toUpperCase()}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Bilty No</p>
+                                      <p className="text-xs font-black text-blue-600">{firstProd.bilty_no || firstProd.biltyNo || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transporter</p>
+                                      <p className="text-xs font-bold text-slate-700 leading-none">{firstProd.transporterName || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Audit Status</p>
+                                      <Badge variant="outline" className={cn("text-[9px] font-black px-2 py-0.5 uppercase", firstProd.check_status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-orange-50 text-orange-700 border-orange-200')}>
+                                        {firstProd.check_status || "Pending"}
+                                      </Badge>
+                                    </div>
+
+                                    <div className="md:col-span-4 h-px bg-slate-200 my-1" />
+
+                                    {/* Vehicle Info */}
+                                    <div className="md:col-span-4 flex items-center gap-2 mb-[-8px]">
+                                      <div className="h-3 w-1 bg-blue-600 rounded-full" />
+                                      <p className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-900/60">Vehicle Specifications</p>
+                                    </div>
+
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Vehicle Type</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.vehicle_type || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">RTO</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.rto || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Passing Weight</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.passing_weight || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Road Tax</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.road_tax || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">GVW</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.gvw || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">ULW</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.ulw || "—"}</p>
+                                    </div>
+
+                                    {/* Driver Info */}
+                                    <div className="md:col-span-4 flex items-center gap-2 mb-[-8px] mt-2">
+                                      <div className="h-3 w-1 bg-amber-600 rounded-full" />
+                                      <p className="text-[10px] font-black uppercase tracking-[0.15em] text-amber-900/60">Driver Information</p>
+                                    </div>
+
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Driver Name</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.driver_name || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact No</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.driver_contact_no || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">License No</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.driving_license_no || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Valid Upto</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-none">{formatDate(firstProd.dl_valid_upto)}</p>
+                                    </div>
+
+                                    <div className="md:col-span-4 h-px bg-slate-200 my-1" />
+
+                                    {/* Security Audit Info */}
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Fitness</p>
+                                      {firstProd.fitness ? (
+                                        <a href={firstProd.fitness} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                          {firstProd.fitness_end_date ? new Date(firstProd.fitness_end_date).toLocaleDateString("en-GB") : "View Document"}
+                                        </a>
+                                      ) : <span className="text-[10px] text-slate-400">—</span>}
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Insurance</p>
+                                      {firstProd.insurance ? (
+                                        <a href={firstProd.insurance} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                          {firstProd.insurance_end_date ? new Date(firstProd.insurance_end_date).toLocaleDateString("en-GB") : "View Document"}
+                                        </a>
+                                      ) : <span className="text-[10px] text-slate-400">—</span>}
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Pollution</p>
+                                      {firstProd.polution ? (
+                                        <a href={firstProd.polution} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                          {firstProd.pollution_end_date ? new Date(firstProd.pollution_end_date).toLocaleDateString("en-GB") : "View Document"}
+                                        </a>
+                                      ) : <span className="text-[10px] text-slate-400">—</span>}
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Tax Copy</p>
+                                      {firstProd.tax_copy ? (
+                                        <a href={firstProd.tax_copy} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                          {firstProd.tax_end_date ? new Date(firstProd.tax_end_date).toLocaleDateString("en-GB") : "View Document"}
+                                        </a>
+                                      ) : <span className="text-[10px] text-slate-400">—</span>}
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 1</p>
+                                      {firstProd.permit1 ? (
+                                        <a href={firstProd.permit1} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                          {firstProd.permit1_end_date ? new Date(firstProd.permit1_end_date).toLocaleDateString("en-GB") : "View Document"}
+                                        </a>
+                                      ) : <span className="text-[10px] text-slate-400">—</span>}
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 2 (Out State)</p>
+                                      {firstProd.permit2_out_state ? (
+                                        <a href={firstProd.permit2_out_state} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
+                                          {firstProd.permit2_end_date ? new Date(firstProd.permit2_end_date).toLocaleDateString("en-GB") : "View Document"}
+                                        </a>
+                                      ) : <span className="text-[10px] text-slate-400">—</span>}
+                                    </div>
+
+                                    <div className="md:col-span-4 h-px bg-slate-200 my-1" />
+
+                                    {/* Weight Details */}
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">RST No</p>
+                                      {firstProd.weightment_slip_copy ? (
+                                        <a href={firstProd.weightment_slip_copy} target="_blank" rel="noopener noreferrer" className="text-sm font-black text-blue-600 hover:text-blue-800 underline">
+                                          #{firstProd.rst_no || firstProd.rstNo || "—"}
+                                        </a>
+                                      ) : (
+                                        <p className="text-sm font-black text-slate-900 tracking-tight">#{firstProd.rst_no || firstProd.rstNo || "—"}</p>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
+                                      <p className="text-xs font-black text-slate-900 leading-tight">
+                                        {firstProd.grossWeight || firstProd.gross_weight || "0"} / {firstProd.tareWeight || firstProd.tare_weight || "0"} / <span className="text-blue-600 font-black">{((Number(firstProd.grossWeight || firstProd.gross_weight || 0) - Number(firstProd.tareWeight || firstProd.tare_weight || 0)) || "0").toString()}</span>
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff</p>
+                                      <p className="text-xs font-black text-amber-600">{firstProd.weightDiff || firstProd.difference || "0"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Extra Weight</p>
+                                      <p className="text-xs font-black text-purple-600">{firstProd.extraWeight || firstProd.extra_weight || "0"}</p>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff Reason</p>
+                                      <p className="text-[10px] font-bold text-red-500 italic">{firstProd.reason_of_difference_in_weight_if_any_speacefic || firstProd.reasonForDiff || "—"}</p>
                                     </div>
                                   </div>
                                 </div>
@@ -925,6 +1059,8 @@ export default function MakeInvoicePage() {
                         <TableHead className="text-[10px] uppercase font-black text-center h-10">BASE AMOUNT</TableHead>
                         <TableHead className="text-[10px] uppercase font-black text-center h-10">VEHICLE NUMBER</TableHead>
                         <TableHead className="text-[10px] uppercase font-black text-center h-10">STATUS</TableHead>
+                        <TableHead className="text-[10px] uppercase font-black text-center h-10">IS CD</TableHead>
+                        <TableHead className="text-[10px] uppercase font-black text-center h-10">CD AMOUNT</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -957,10 +1093,36 @@ export default function MakeInvoicePage() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
-                            {product.rate ? `₹${Number(product.rate).toFixed(2)}` : "—"}
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <span className="cursor-pointer hover:text-blue-600 hover:underline transition-all">
+                                  {(() => {
+                                    const originalRate = Number(product.rate) || 0;
+                                    const cdAmt = productCdData[product.id]?.isCd === 'yes' ? parseFloat(productCdData[product.id]?.cdAmount || '0') : 0;
+                                    const adjustedRate = originalRate - cdAmt;
+                                    return adjustedRate ? `₹${adjustedRate.toFixed(2)}` : "—";
+                                  })()}
+                                </span>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-fit p-3 bg-white border-2 border-blue-100 shadow-xl rounded-xl animate-in zoom-in-95 duration-200">
+                                <div className="space-y-1.5">
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Freight Rate</p>
+                                  <p className="text-sm font-black text-blue-700 leading-none">
+                                    {product.freight_rate ? `₹${product.freight_rate}` : "No Freight Rate Available"}
+                                  </p>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           </TableCell>
                           <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
-                            {product.amount ? `₹${Number(product.amount).toFixed(2)}` : "—"}
+                            {(() => {
+                              const originalRate = Number(product.rate) || 0;
+                              const cdAmt = productCdData[product.id]?.isCd === 'yes' ? parseFloat(productCdData[product.id]?.cdAmount || '0') : 0;
+                              const adjustedRate = originalRate - cdAmt;
+                              const qty = parseFloat(product.qtyToDispatch) || 0;
+                              const adjustedAmount = adjustedRate * qty;
+                              return adjustedAmount ? `₹${adjustedAmount.toFixed(2)}` : "—";
+                            })()}
                           </TableCell>
                           <TableCell className="text-center p-2">
                             <div className="flex items-center justify-center gap-1.5 font-bold text-slate-700 text-xs">
@@ -969,6 +1131,37 @@ export default function MakeInvoicePage() {
                           </TableCell>
                           <TableCell className="text-center p-2">
                             <Badge className="bg-green-100 text-green-700 border-green-200 font-black text-[9px] uppercase">Ready for Invoice</Badge>
+                          </TableCell>
+                          <TableCell className="text-center p-2">
+                            <Select
+                              value={productCdData[product.id]?.isCd || "no"}
+                              onValueChange={(val) => setProductCdData(prev => ({
+                                ...prev,
+                                [product.id]: { ...(prev[product.id] || { cdAmount: "0" }), isCd: val }
+                              }))}
+                            >
+                              <SelectTrigger className="h-8 text-[10px] font-bold">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="no">No</SelectItem>
+                                <SelectItem value="yes">Yes</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell className="text-center p-2">
+                            {productCdData[product.id]?.isCd === 'yes' && (
+                              <Input
+                                type="number"
+                                className="h-8 text-[10px] font-bold w-20 mx-auto"
+                                value={productCdData[product.id]?.cdAmount || ""}
+                                onChange={(e) => setProductCdData(prev => ({
+                                  ...prev,
+                                  [product.id]: { ...(prev[product.id] || { isCd: "yes" }), cdAmount: e.target.value }
+                                }))}
+                                placeholder="Amount"
+                              />
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -984,9 +1177,17 @@ export default function MakeInvoicePage() {
                         </TableCell>
                         <TableCell />
                         <TableCell className="text-center text-xs text-blue-700 font-black">
-                          ₹{selectedGroups.flatMap(g => g._allProducts).filter(p => selectedProducts.includes(p._rowKey)).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0).toFixed(2)}
+                          ₹{selectedGroups.flatMap(g => g._allProducts)
+                            .filter(p => selectedProducts.includes(p._rowKey))
+                            .reduce((sum, p) => {
+                              const originalRate = Number(p.rate) || 0;
+                              const cdAmt = productCdData[p.id]?.isCd === 'yes' ? parseFloat(productCdData[p.id]?.cdAmount || '0') : 0;
+                              const adjustedRate = originalRate - cdAmt;
+                              const qty = parseFloat(p.qtyToDispatch) || 0;
+                              return sum + (adjustedRate * qty);
+                            }, 0).toFixed(2)}
                         </TableCell>
-                        <TableCell colSpan={2} />
+                        <TableCell colSpan={4} />
                       </TableRow>
                     </TableBody>
                   </Table>
@@ -1010,6 +1211,7 @@ export default function MakeInvoicePage() {
 
                     <div className="space-y-2">
                       <Label>Upload Invoice Copy <span className="text-red-500">*</span></Label>
+                      <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
                       <div className="flex items-center gap-2">
                         <Input
                           type="file"

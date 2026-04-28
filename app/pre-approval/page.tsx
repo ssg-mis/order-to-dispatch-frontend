@@ -28,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus, Check, Search, Package, Calculator, Save, Calendar, ChevronLeft, ChevronRight } from "lucide-react"
+import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus, Check, Search, Package, Calculator, Save, Calendar, ChevronLeft, ChevronRight, FileText, ExternalLink } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { skuApi, preApprovalApi, skuSellingPriceApi, varCalcApi, orderApi, skuDetailsApi, customerApi } from "@/lib/api-service"
@@ -501,6 +501,7 @@ export default function PreApprovalPage() {
       transportType: backendOrder.type_of_transporting,
       depoName: backendOrder.depo_name,
       orderPunchRemarks: backendOrder.order_punch_remarks,
+      uploadSo: backendOrder.upload_so,
       remark: backendOrder.remark,
       totalWithGst: backendOrder.total_with_gst,
       revertDispatchRemarks: backendOrder.revert_dispatch_remarks || "",
@@ -1605,6 +1606,7 @@ export default function PreApprovalPage() {
       onFilterChange={setFilterValues}
       onTabChange={setActiveTab}
       isHistoryLoading={isHistoryLoading}
+      showDateFilters={false}
       historyFooter={
         <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
           <div className="text-sm text-slate-500 font-bold uppercase tracking-tighter">
@@ -1773,6 +1775,23 @@ export default function PreApprovalPage() {
                                         {orderDetails.isOrderThrough === "Salesperson" ? "Salesperson Name" : "Through Broker"}
                                       </p>
                                       <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.isBrokerOrder ? orderDetails.brokerName || "Yes" : "No"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">PO Copy (SO Upload)</p>
+                                      {customerGrp.uploadSo ? (
+                                        <a 
+                                          href={customerGrp.uploadSo} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-all border border-blue-200 w-fit group shadow-sm mt-0.5"
+                                        >
+                                          <FileText className="h-3 w-3 group-hover:scale-110 transition-transform" />
+                                          <span className="text-[10px] font-black uppercase tracking-tight">VIEW PO COPY</span>
+                                          <ExternalLink className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </a>
+                                      ) : (
+                                        <p className="text-[10px] font-black text-slate-400 leading-none">NOT UPLOADED</p>
+                                      )}
                                     </div>
                                     <div className="col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
                                       <div className="bg-amber-100 p-2 rounded-lg">

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Upload, CheckCircle, Settings2, FileText, IndianRupee } from "lucide-react"
+import { Upload, CheckCircle, Settings2, FileText, IndianRupee, ExternalLink } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { damageAdjustmentApi, orderApi } from "@/lib/api-service"
@@ -262,7 +262,18 @@ export default function DamageAdjustmentPage() {
           extraWeight: order.extra_weight || "—",
           transporterName: order.transporter_name || "—",
           truckNo: order.truck_no || "—",
+          vehicleType: order.vehicle_type || "—",
+          rto: order.rto || "—",
+          passingWeight: order.passing_weight || "—",
+          roadTax: order.road_tax || "—",
+          gvw: order.gvw || "—",
+          ulw: order.ulw || "—",
+          driverName: order.driver_name || "—",
+          driverContact: order.driver_contact_no || "—",
+          driverLicense: order.driving_license_no || "—",
+          dlValidUpto: order.dl_valid_upto,
           diffReason: order.reason_of_difference_in_weight_if_any_speacefic || "—",
+          uploadSo: order.upload_so || null,
 
           _allProducts: [],
           _productCount: 0
@@ -300,7 +311,8 @@ export default function DamageAdjustmentPage() {
       partySoDate: formatDate(g._allProducts[0]?.party_so_date),
       processId: g._allProducts[0]?.processid || "—",
       vehicleNo: (g._allProducts[0]?.truckNo || "—").toUpperCase(),
-      orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—"
+      orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—",
+      uploadSo: g._allProducts[0]?.upload_so || g._allProducts[0]?.uploadSo || null,
     }))
   }, [filteredPendingOrders])
 
@@ -456,6 +468,7 @@ export default function DamageAdjustmentPage() {
       stageLevel={10}
       onTabChange={setActiveTab}
       isHistoryLoading={isHistoryLoading}
+      showDateFilters={false}
       historyFooter={
         <div ref={historyEndRef} className="py-4 flex justify-center">
           {isFetchingNextHistory && (
@@ -560,7 +573,17 @@ export default function DamageAdjustmentPage() {
                     <TableCell className="text-center">
                       <Badge variant="secondary">{group._productCount} items</Badge>
                     </TableCell>
-                    {visibleColumns.includes("invoiceNo") && <TableCell className="text-center text-xs font-medium">{group.invoiceNo}</TableCell>}
+                    {visibleColumns.includes("invoiceNo") && (
+                      <TableCell className="text-center text-xs font-medium">
+                        {group._allProducts?.[0]?.invoice_copy ? (
+                          <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-bold">
+                            {group.invoiceNo}
+                          </a>
+                        ) : (
+                          group.invoiceNo
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell className="text-center">
                       <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
                     </TableCell>
@@ -684,6 +707,27 @@ export default function DamageAdjustmentPage() {
                       <p className="font-medium text-blue-600">{selectedGroup.invoiceNo} / {selectedGroup.invoiceDate}</p>
                     </div>
                     <div>
+                      <Label className="text-xs text-muted-foreground">Order Punch Remarks</Label>
+                      <p className="font-medium text-amber-600 italic">"{selectedGroup.orderPunchRemarks || "No special instructions provided."}"</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">PO Copy (SO Upload)</Label>
+                      {selectedGroup.uploadSo ? (
+                        <a 
+                          href={selectedGroup.uploadSo} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-all border border-blue-200 w-fit group shadow-sm mt-0.5"
+                        >
+                          <FileText className="h-3 w-3 group-hover:scale-110 transition-transform" />
+                          <span className="text-[10px] font-black uppercase tracking-tight">VIEW PO COPY</span>
+                          <ExternalLink className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </a>
+                      ) : (
+                        <p className="text-[10px] font-black text-slate-400 leading-none mt-1 uppercase">NOT UPLOADED</p>
+                      )}
+                    </div>
+                    <div>
                       <Label className="text-xs text-muted-foreground">Bilty No</Label>
                       <p className="font-medium">{selectedGroup.biltyNo}</p>
                     </div>
@@ -695,6 +739,46 @@ export default function DamageAdjustmentPage() {
                     <div>
                       <Label className="text-xs text-muted-foreground">Transporter</Label>
                       <p className="font-medium truncate" title={selectedGroup.transporterName}>{selectedGroup.transporterName}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Vehicle Type</Label>
+                      <p className="font-medium">{selectedGroup.vehicleType}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">RTO</Label>
+                      <p className="font-medium">{selectedGroup.rto}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Passing Weight</Label>
+                      <p className="font-medium">{selectedGroup.passingWeight}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Road Tax</Label>
+                      <p className="font-medium">{selectedGroup.roadTax}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">GVW</Label>
+                      <p className="font-medium">{selectedGroup.gvw}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">ULW</Label>
+                      <p className="font-medium">{selectedGroup.ulw}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Driver Name</Label>
+                      <p className="font-medium">{selectedGroup.driverName}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Driver Contact</Label>
+                      <p className="font-medium">{selectedGroup.driverContact}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">License No</Label>
+                      <p className="font-medium">{selectedGroup.driverLicense}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">DL Valid Upto</Label>
+                      <p className="font-medium">{selectedGroup.dlValidUpto ? new Date(selectedGroup.dlValidUpto).toLocaleDateString("en-IN") : "—"}</p>
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">RST No</Label>
@@ -816,6 +900,7 @@ export default function DamageAdjustmentPage() {
 
                     <div className="space-y-2">
                       <Label>Upload CN Copy</Label>
+                      <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
                       <div className="border-2 border-dashed rounded-lg p-3 text-center hover:bg-slate-50 transition-colors bg-blue-50/20">
                         <Input
                           type="file"

@@ -1433,7 +1433,14 @@ export default function MasterPage() {
           </div>
           <div className="space-y-2">
             <Label>Transporter</Label>
-            <Input value={vehicleForm.transporter} onChange={e => setVehicleForm({...vehicleForm, transporter: e.target.value})} placeholder="Enter name" />
+            <Select value={vehicleForm.transporter} onValueChange={val => setVehicleForm({...vehicleForm, transporter: val})}>
+              <SelectTrigger><SelectValue placeholder="Select transporter" /></SelectTrigger>
+              <SelectContent>
+                {transporters.map((t: any) => (
+                  <SelectItem key={t.transporter_master_id || t.transporter_name} value={t.transporter_name}>{t.transporter_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -1466,6 +1473,7 @@ export default function MasterPage() {
               <Input type="file" onChange={e => handleFileUpload(e, 'road_tax_image')} className="flex-1" />
               {vehicleForm.road_tax_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
             </div>
+            <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
           </div>
         </div>
 
@@ -1480,6 +1488,7 @@ export default function MasterPage() {
               <Input type="file" onChange={e => handleFileUpload(e, 'pollution_image')} className="flex-1" />
               {vehicleForm.pollution_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
             </div>
+            <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
           </div>
         </div>
 
@@ -1494,6 +1503,7 @@ export default function MasterPage() {
               <Input type="file" onChange={e => handleFileUpload(e, 'insurance_image')} className="flex-1" />
               {vehicleForm.insurance_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
             </div>
+            <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
           </div>
         </div>
 
@@ -1508,6 +1518,7 @@ export default function MasterPage() {
               <Input type="file" onChange={e => handleFileUpload(e, 'fitness_image')} className="flex-1" />
               {vehicleForm.fitness_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
             </div>
+            <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
           </div>
         </div>
 
@@ -1522,22 +1533,33 @@ export default function MasterPage() {
               <Input type="file" onChange={e => handleFileUpload(e, 'state_permit_image')} className="flex-1" />
               {vehicleForm.state_permit_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
             </div>
+            <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
           </div>
         </div>
 
         <Separator className="my-2" />
         <div className="grid grid-cols-3 gap-4">
           <div className="space-y-2">
-            <Label>GVW (kg)</Label>
-            <Input type="number" value={vehicleForm.gvw} onChange={e => setVehicleForm({...vehicleForm, gvw: e.target.value})} />
+            <Label>GVW (KGS)</Label>
+            <Input type="number" value={vehicleForm.gvw} onChange={e => {
+              const gvw = e.target.value
+              const ulw = vehicleForm.ulw
+              const passing = gvw !== '' && ulw !== '' ? String(Number(gvw) - Number(ulw)) : ''
+              setVehicleForm({...vehicleForm, gvw, passing})
+            }} />
           </div>
           <div className="space-y-2">
-            <Label>ULW (kg)</Label>
-            <Input type="number" value={vehicleForm.ulw} onChange={e => setVehicleForm({...vehicleForm, ulw: e.target.value})} />
+            <Label>ULW (KGS)</Label>
+            <Input type="number" value={vehicleForm.ulw} onChange={e => {
+              const ulw = e.target.value
+              const gvw = vehicleForm.gvw
+              const passing = gvw !== '' && ulw !== '' ? String(Number(gvw) - Number(ulw)) : ''
+              setVehicleForm({...vehicleForm, ulw, passing})
+            }} />
           </div>
           <div className="space-y-2">
-            <Label>Passing (kg)</Label>
-            <Input type="number" value={vehicleForm.passing} onChange={e => setVehicleForm({...vehicleForm, passing: e.target.value})} />
+            <Label>Passing (KGS)</Label>
+            <Input type="number" value={vehicleForm.passing} readOnly className="bg-slate-100" />
           </div>
         </div>
       </div>
@@ -1621,6 +1643,7 @@ export default function MasterPage() {
             <Input type="file" onChange={e => handleFileUpload(e, 'aadhaar_upload')} className="flex-1" />
             {driverForm.aadhaar_upload && <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Uploaded</Badge>}
           </div>
+          <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
         </div>
       </div>
 

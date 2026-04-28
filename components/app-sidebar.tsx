@@ -59,6 +59,7 @@ const modules = [
   { title: "Gate Out", icon: Gate, url: "/gate-out" },
   { title: "Confirm Material Receipt", icon: FileSignature, url: "/material-receipt" },
   { title: "Damage Adjustment", icon: AlertCircle, url: "/damage-adjustment" },
+  { title: "Gate In", icon: Car, url: "/gate-in" },
   { title: "Variable Parameters", icon: Calculator, url: "/variable-parameters" },
   { title: "Settings", icon: Settings2, url: "/settings" },
   { title: "Master", icon: BookMarked, url: "/master" },

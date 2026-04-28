@@ -56,6 +56,7 @@ export default function RootLayout({
           "/gate-out": "Gate Out",
           "/material-receipt": "Confirm Material Receipt",
           "/damage-adjustment": "Damage Adjustment",
+          "/gate-in": "Gate In",
           "/variable-parameters": "Variable Parameters",
           "/settings": "Settings",
           "/master": "Master",

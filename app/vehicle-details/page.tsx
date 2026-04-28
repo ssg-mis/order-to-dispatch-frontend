@@ -606,10 +606,10 @@ export default function VehicleDetailsPage() {
                 <div>
                   <h4 className="text-sm font-medium mb-3 text-muted-foreground">Vehicle Documents</h4>
                   <div className="grid grid-cols-2 gap-4 text-xs">
-                    <div className="space-y-1"><Label>Fitness Copy</Label><Input type="file" className="h-8 text-[10px]" /></div>
-                    <div className="space-y-1"><Label>Insurance</Label><Input type="file" className="h-8 text-[10px]" /></div>
-                    <div className="space-y-1"><Label>Tax Copy</Label><Input type="file" className="h-8 text-[10px]" /></div>
-                    <div className="space-y-1"><Label>Pollution Check</Label><Input type="file" className="h-8 text-[10px]" /></div>
+                    <div className="space-y-1"><Label>Fitness Copy</Label><Input type="file" className="h-8 text-[10px]" /><p className="text-[10px] text-slate-400">Max 10 MB</p></div>
+                    <div className="space-y-1"><Label>Insurance</Label><Input type="file" className="h-8 text-[10px]" /><p className="text-[10px] text-slate-400">Max 10 MB</p></div>
+                    <div className="space-y-1"><Label>Tax Copy</Label><Input type="file" className="h-8 text-[10px]" /><p className="text-[10px] text-slate-400">Max 10 MB</p></div>
+                    <div className="space-y-1"><Label>Pollution Check</Label><Input type="file" className="h-8 text-[10px]" /><p className="text-[10px] text-slate-400">Max 10 MB</p></div>
                   </div>
                 </div>
 

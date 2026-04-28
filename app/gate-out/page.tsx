@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Upload, CheckCircle, Settings2, ChevronUp, ChevronDown, CheckSquare, Eye } from "lucide-react"
+import { Upload, CheckCircle, Settings2, ChevronUp, ChevronDown, CheckSquare, Eye, FileText, ExternalLink } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { gateOutApi, orderApi } from "@/lib/api-service"
@@ -283,7 +283,8 @@ export default function GateOutPage() {
           partyCredit: order.party_credit_status || "Good",
           totalAmount: order.total_amount_with_gst || "—",
           oilType: order.oil_type || "—",
-          partySoDate: formatDate(order.party_so_date || order.partySoDate)
+          partySoDate: formatDate(order.party_so_date || order.partySoDate),
+          uploadSo: order.upload_so || null,
         }
       }
 
@@ -339,7 +340,8 @@ export default function GateOutPage() {
         vehicleNo: (g._allProducts[0]?.truckNo || "—").toUpperCase(),
         actual1Date: formatDate(g._allProducts[0]?.lrc_actual_1 || g._allProducts[0]?.actual_1),
         invoiceNo: g._allProducts[0]?.invoice_no || "—",
-        orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—"
+        orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—",
+        uploadSo: g._allProducts[0]?.upload_so || g._allProducts[0]?.uploadSo || null,
       }
     })
 
@@ -508,6 +510,7 @@ export default function GateOutPage() {
       stageLevel={8}
       onTabChange={setActiveTab}
       isHistoryLoading={isHistoryLoading}
+      showDateFilters={false}
       historyFooter={
         <div ref={historyEndRef} className="py-4 flex justify-center">
           {isFetchingNextHistory && (
@@ -613,7 +616,17 @@ export default function GateOutPage() {
                     <TableCell className="text-center">
                       <Badge variant="secondary">{group._productCount} items</Badge>
                     </TableCell>
-                    {visibleColumns.includes("invoiceNo") && <TableCell className="text-center text-xs font-medium">{group.invoiceNo}</TableCell>}
+                    {visibleColumns.includes("invoiceNo") && (
+                      <TableCell className="text-center text-xs font-medium">
+                        {group._allProducts?.[0]?.invoice_copy ? (
+                          <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-bold">
+                            {group.invoiceNo}
+                          </a>
+                        ) : (
+                          group.invoiceNo
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell className="text-center">
                       <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
                     </TableCell>
@@ -752,6 +765,27 @@ export default function GateOutPage() {
                                           {(orderDetails.isOrderThrough === "Direct" || (orderDetails.isOrderThrough === "—" && !orderDetails.isBroker)) ? "No" : orderDetails.brokerName} / ₹{orderDetails.advanceAmount}
                                         </p>
                                       </div>
+                                      <div className="md:col-span-2">
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Order Punch Remarks</p>
+                                        <p className="text-[10px] font-medium text-slate-600 leading-tight italic">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
+                                      </div>
+                                      <div className="md:col-span-2">
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">PO Copy (SO Upload)</p>
+                                        {group.uploadSo ? (
+                                          <a 
+                                            href={group.uploadSo} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-all border border-blue-200 w-fit group shadow-sm mt-0.5"
+                                          >
+                                            <FileText className="h-3 w-3 group-hover:scale-110 transition-transform" />
+                                            <span className="text-[10px] font-black uppercase tracking-tight">VIEW PO COPY</span>
+                                            <ExternalLink className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                          </a>
+                                        ) : (
+                                          <p className="text-[10px] font-black text-slate-400 leading-none">NOT UPLOADED</p>
+                                        )}
+                                      </div>
 
                                       <div className="md:col-span-4 h-px bg-slate-200 my-1" />
 
@@ -773,6 +807,62 @@ export default function GateOutPage() {
                                         <p className="text-xs font-bold text-slate-700">
                                           {firstProd.invoiceDate ? new Date(firstProd.invoiceDate).toLocaleDateString("en-GB") : "—"}
                                         </p>
+                                      </div>
+
+                                      <div className="md:col-span-4 h-px bg-slate-200 my-1" />
+
+                                      {/* Vehicle Info */}
+                                      <div className="md:col-span-4 flex items-center gap-2 mb-[-8px]">
+                                        <div className="h-3 w-1 bg-blue-600 rounded-full" />
+                                        <p className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-900/60">Vehicle Specifications</p>
+                                      </div>
+
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Vehicle Type</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.vehicle_type || "—"}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">RTO</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.rto || "—"}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Passing Weight</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.passing_weight || "—"}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Road Tax</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.road_tax || "—"}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">GVW</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.gvw || "—"}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">ULW</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.ulw || "—"}</p>
+                                      </div>
+
+                                      {/* Driver Info */}
+                                      <div className="md:col-span-4 flex items-center gap-2 mb-[-8px] mt-2">
+                                        <div className="h-3 w-1 bg-amber-600 rounded-full" />
+                                        <p className="text-[10px] font-black uppercase tracking-[0.15em] text-amber-900/60">Driver Information</p>
+                                      </div>
+
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Driver Name</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.driver_name || "—"}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact No</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.driver_contact_no || "—"}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">License No</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.driving_license_no || "—"}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Valid Upto</p>
+                                        <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.dl_valid_upto ? new Date(firstProd.dl_valid_upto).toLocaleDateString("en-GB") : "—"}</p>
                                       </div>
 
                                       <div className="md:col-span-4 h-px bg-slate-200 my-1" />
@@ -991,6 +1081,7 @@ export default function GateOutPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label>Upload Gate Pass <span className="text-red-500">*</span></Label>
+                  <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
                   <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-slate-50 transition-colors bg-blue-50/20">
                     <Input
                       type="file"
@@ -1014,6 +1105,7 @@ export default function GateOutPage() {
 
                 <div className="space-y-2">
                   <Label>Upload Vehicle Loaded Image <span className="text-red-500">*</span></Label>
+                  <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
                   <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-slate-50 transition-colors bg-violet-50/20">
                     <Input
                       type="file"

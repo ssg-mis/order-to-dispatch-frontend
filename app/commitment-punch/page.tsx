@@ -60,6 +60,8 @@ type PendingCommitment = {
   planned1: string
   processed_qty: number
   remaining_qty: number
+  delivery_qty?: number
+  po_pending_qty?: number
 }
 
 type SkuRow = {
@@ -609,21 +611,23 @@ export default function CommitmentPunchPage() {
                   <TableHead className="text-right">Rate</TableHead>
                   <TableHead className="text-right">Qty (MT)</TableHead>
                   <TableHead className="text-right">PO Raised (MT)</TableHead>
-                  <TableHead className="text-right">Remaining Balance (MT)</TableHead>
+                  <TableHead className="text-right">Delivery Qty (MT)</TableHead>
+                  <TableHead className="text-right">PO Pending Qty (MT)</TableHead>
+                  <TableHead className="text-right">Commitment Pending (MT)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoadingPending ? (
                   [...Array(4)].map((_, i) => (
                     <TableRow key={i} className="opacity-40">
-                      {[...Array(9)].map((__, j) => (
+                      {[...Array(11)].map((__, j) => (
                         <TableCell key={j}><div className="h-4 w-full bg-slate-200 animate-pulse rounded" /></TableCell>
                       ))}
                     </TableRow>
                   ))
                 ) : pendingList.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-16 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-16 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <CheckCircle2 className="h-10 w-10 text-slate-300" />
                         <p className="font-medium">No pending commitments</p>
@@ -663,6 +667,12 @@ export default function CommitmentPunchPage() {
                         ) : (
                           <span className="text-slate-400">0.0000</span>
                         )}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-purple-600 font-semibold">
+                        {Number(row.delivery_qty || 0).toFixed(4)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-amber-600 font-semibold">
+                        {Number(row.po_pending_qty || 0).toFixed(4)}
                       </TableCell>
                       <TableCell className="text-right font-mono text-emerald-600 font-bold">{Number(row.remaining_qty ?? row.quantity).toFixed(4)}</TableCell>
                     </TableRow>
@@ -1102,6 +1112,7 @@ export default function CommitmentPunchPage() {
                   onChange={e => setProcessUploadCopy(e.target.files?.[0] || null)}
                   className="cursor-pointer"
                 />
+                <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
                 {processUploadCopy && (
                   <p className="text-xs text-emerald-600">✅ {processUploadCopy.name}</p>
                 )}

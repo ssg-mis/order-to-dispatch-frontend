@@ -445,6 +445,53 @@ export const actualDispatchApi = {
 };
 
 /**
+ * Gate In API
+ */
+export const gateInApi = {
+  getPending: (params?: { page?: number; limit?: number }): Promise<ApiResponse> => {
+    const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
+    return request(`/gate-in/pending${qs}`);
+  },
+
+  getHistory: (params?: { page?: number; limit?: number }): Promise<ApiResponse> => {
+    const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
+    return request(`/gate-in/history${qs}`);
+  },
+
+  submit: (data: {
+    orderKey: string;
+    username: string;
+    frontVehicleImage?: string;
+    backVehicleImage?: string;
+    driverPhoto?: string;
+    gatepassPhoto?: string;
+  }): Promise<ApiResponse> =>
+    request('/gate-in/submit', { method: 'POST', body: JSON.stringify(data) }),
+
+  check: (orderKey: string): Promise<ApiResponse> =>
+    request(`/gate-in/check?order_key=${encodeURIComponent(orderKey)}`),
+};
+
+/**
+ * Draft API – Save as Draft for Actual Dispatch stage
+ */
+export const draftApi = {
+  save: (username: string, orderKey: string, data: any): Promise<ApiResponse> =>
+    request('/drafts', {
+      method: 'POST',
+      body: JSON.stringify({ username, orderKey, data }),
+    }),
+
+  get: (username: string, orderKey: string): Promise<ApiResponse> =>
+    request(`/drafts?username=${encodeURIComponent(username)}&orderKey=${encodeURIComponent(orderKey)}`),
+
+  delete: (username: string, orderKey: string): Promise<ApiResponse> =>
+    request(`/drafts?username=${encodeURIComponent(username)}&orderKey=${encodeURIComponent(orderKey)}`, {
+      method: 'DELETE',
+    }),
+};
+
+/**
  * Vehicle Details API (Stage 6)
  */
 export const vehicleDetailsApi = {
@@ -647,6 +694,7 @@ export const makeInvoiceApi = {
     d_sr_number?: string;
     so_no?: string;
     party_name?: string;
+    search?: string;
   }): Promise<ApiResponse> => {
     const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
@@ -660,6 +708,7 @@ export const makeInvoiceApi = {
     d_sr_number?: string;
     so_no?: string;
     party_name?: string;
+    search?: string;
   }): Promise<ApiResponse> => {
     const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()

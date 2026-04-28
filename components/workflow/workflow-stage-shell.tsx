@@ -55,6 +55,7 @@ interface WorkflowStageShellProps {
   historyFooter?: React.ReactNode
   isHistoryLoading?: boolean
   searchPlaceholder?: string
+  showDateFilters?: boolean
 }
 
 const FIELD_GROUPS: Record<string, number> = {
@@ -131,6 +132,7 @@ export function WorkflowStageShell({
   isHistoryLoading = false,
   fetchPartyOptions,
   searchPlaceholder = "Search DO Number, Customer...",
+  showDateFilters = true,
 }: WorkflowStageShellProps) {
   const [filters, setFilters] = React.useState({
     search: "",
@@ -204,7 +206,8 @@ export function WorkflowStageShell({
           </TabsList>
 
           <div className="flex flex-col gap-2 bg-card p-3 rounded-xl border shadow-sm mb-4">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col md:flex-row md:items-end gap-3">
+              {/* Search Block */}
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -214,27 +217,14 @@ export function WorkflowStageShell({
                   onChange={(e) => updateFilter("search", e.target.value)}
                 />
               </div>
-              <Button variant="outline" size="icon" className="bg-transparent h-9 w-9">
-                <Filter className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon" className="bg-transparent h-9 w-9" onClick={() => {
-                const reset = { search: "", status: "", startDate: "", endDate: "", partyName: "" };
-                setFilters(reset);
-                if (onFilterChange) onFilterChange(reset);
-              }}>
-                <RotateCcw className="h-4 w-4" />
-              </Button>
-            </div>
 
-            {/* Extended Filters */}
-            <div className={`grid grid-cols-1 gap-2 ${showStatusFilter ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
               {/* Status Select */}
               {showStatusFilter && (
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground">Status</Label>
+                <div className="space-y-1 w-full md:w-36">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 ml-1">Status</Label>
                   <Select value={filters.status} onValueChange={(val) => updateFilter("status", val)}>
-                    <SelectTrigger className="w-full h-8 bg-background px-3 text-sm">
-                      <SelectValue placeholder="Select Status" />
+                    <SelectTrigger className="w-full h-9 bg-background px-3 text-sm">
+                      <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Status</SelectItem>
@@ -246,30 +236,34 @@ export function WorkflowStageShell({
               )}
 
               {/* Start Date */}
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground">Start Date</Label>
-                <Input
-                  type="date"
-                  className="w-full h-8 bg-background px-3 text-sm block"
-                  value={filters.startDate}
-                  onChange={(e) => updateFilter("startDate", e.target.value)}
-                />
-              </div>
+              {showDateFilters && (
+                <div className="space-y-1 w-full md:w-36">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 ml-1">Start Date</Label>
+                  <Input
+                    type="date"
+                    className="w-full h-9 bg-background px-3 text-sm block"
+                    value={filters.startDate}
+                    onChange={(e) => updateFilter("startDate", e.target.value)}
+                  />
+                </div>
+              )}
 
               {/* End Date */}
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground">End Date</Label>
-                <Input
-                  type="date"
-                  className="w-full h-8 bg-background px-3 text-sm block"
-                  value={filters.endDate}
-                  onChange={(e) => updateFilter("endDate", e.target.value)}
-                />
-              </div>
+              {showDateFilters && (
+                <div className="space-y-1 w-full md:w-36">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 ml-1">End Date</Label>
+                  <Input
+                    type="date"
+                    className="w-full h-9 bg-background px-3 text-sm block"
+                    value={filters.endDate}
+                    onChange={(e) => updateFilter("endDate", e.target.value)}
+                  />
+                </div>
+              )}
 
               {/* Party Name Select */}
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground">Party Name</Label>
+              <div className="space-y-1 w-full md:w-64">
+                <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 ml-1">Party Name</Label>
                 {partyNames && partyNames.length > 0 ? (
                   <Popover open={partySearchOpen} onOpenChange={setPartySearchOpen}>
                     <PopoverTrigger asChild>
@@ -277,7 +271,7 @@ export function WorkflowStageShell({
                         variant="outline"
                         role="combobox"
                         aria-expanded={partySearchOpen}
-                        className="w-full h-8 justify-between bg-background px-3 text-xs font-medium border-slate-200"
+                        className="w-full h-9 justify-between bg-background px-3 text-xs font-medium border-slate-200"
                       >
                         <span className="truncate">
                           {filters.partyName === "all" || !filters.partyName
@@ -351,9 +345,22 @@ export function WorkflowStageShell({
                         hasMore: (list.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
                       };
                     })}
-                    className="w-full h-8 bg-background text-xs font-medium"
+                    className="w-full h-9 bg-background text-xs font-medium"
                   />
                 )}
+              </div>
+
+              <div className="flex items-center gap-2 h-9">
+                <Button variant="outline" size="icon" className="bg-transparent h-9 w-9">
+                  <Filter className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="bg-transparent h-9 w-9" onClick={() => {
+                  const reset = { search: "", status: "", startDate: "", endDate: "", partyName: "" };
+                  setFilters(reset);
+                  if (onFilterChange) onFilterChange(reset);
+                }}>
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </div>
