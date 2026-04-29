@@ -56,7 +56,12 @@ export const API_ENDPOINTS = {
 
   // Owner Dashboard
   ownerDashboard: {
-    full: '/owner-dashboard',
+    full:           '/owner-dashboard',
+    userDetail:     '/owner-dashboard/user-detail',
+    customerOrders: '/owner-dashboard/customer-orders',
+    orderJourney:   '/owner-dashboard/order-journey',
+    stageOrders:    '/owner-dashboard/stage-orders',
+    oilTypeOrders:  '/owner-dashboard/oiltype-orders',
   },
 
   // Reports Endpoints

@@ -1796,7 +1796,10 @@ export default function ActualDispatchPage() {
                                 </div>
                               </TableCell>
                               <TableCell className="font-bold text-[11px] p-3 text-slate-900">{prod.productName || "—"}</TableCell>
-                              <TableCell className="text-[11px] font-black p-3 text-center text-blue-700">{prod.qtyToDispatch}</TableCell>
+                              <TableCell className="text-[11px] font-black p-3 text-center text-blue-700">
+                                {prod.qtyToDispatch}
+                                <span className="ml-1 text-[9px] text-slate-400 font-bold uppercase">{prod.uom}</span>
+                              </TableCell>
                               <TableCell className="text-[10px] font-black p-3 uppercase text-slate-400 tracking-tighter">{prod.deliveryFrom}</TableCell>
                               <TableCell className="p-3">
                                 <Input

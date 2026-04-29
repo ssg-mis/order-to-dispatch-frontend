@@ -1461,6 +1461,31 @@ export const ownerDashboardApi = {
       : '';
     return request(`${API_ENDPOINTS.ownerDashboard.full}${queryString}`);
   },
+  getUserDetail: async (userId: number, params?: Record<string, any>): Promise<ApiResponse> => {
+    const queryString = params && Object.keys(params).length > 0
+      ? '?' + new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "")
+          ) as Record<string, string>
+        ).toString()
+      : '';
+    return request(`${API_ENDPOINTS.ownerDashboard.userDetail}/${userId}${queryString}`);
+  },
+  getCustomerOrders: async (customer: string, params?: Record<string, any>): Promise<ApiResponse> => {
+    const qs = new URLSearchParams({ customer, ...Object.fromEntries(Object.entries(params || {}).filter(([,v]) => v)) }).toString();
+    return request(`${API_ENDPOINTS.ownerDashboard.customerOrders}?${qs}`);
+  },
+  getOrderJourney: async (orderNo: string): Promise<ApiResponse> => {
+    return request(`${API_ENDPOINTS.ownerDashboard.orderJourney}?orderNo=${encodeURIComponent(orderNo)}`);
+  },
+  getStageOrders: async (stage: string, params?: Record<string, any>): Promise<ApiResponse> => {
+    const qs = new URLSearchParams({ stage, ...Object.fromEntries(Object.entries(params || {}).filter(([,v]) => v)) }).toString();
+    return request(`${API_ENDPOINTS.ownerDashboard.stageOrders}?${qs}`);
+  },
+  getOilTypeOrders: async (oilType: string, params?: Record<string, any>): Promise<ApiResponse> => {
+    const qs = new URLSearchParams({ oilType, ...Object.fromEntries(Object.entries(params || {}).filter(([,v]) => v)) }).toString();
+    return request(`${API_ENDPOINTS.ownerDashboard.oilTypeOrders}?${qs}`);
+  },
 };
 
 /**
