@@ -617,6 +617,8 @@ export default function SecurityApprovalPage() {
         </div>
 
         <Card className="border-none shadow-xl rounded-3xl overflow-hidden bg-white/50 backdrop-blur-md">
+        {/* Desktop Table View */}
+        <Card className="hidden md:block border-none shadow-xl rounded-3xl overflow-hidden bg-white/50 backdrop-blur-md">
           <Table>
             <TableHeader className="bg-slate-50 sticky top-0 z-10">
               <TableRow>
@@ -703,7 +705,7 @@ export default function SecurityApprovalPage() {
             </TableBody>
           </Table>
 
-          {/* Pending Pagination Footer inside Children */}
+          {/* Pending Pagination Footer */}
           <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between rounded-b-3xl">
             <div className="text-xs text-slate-500 font-medium tracking-tight">
               Showing <span className="text-slate-900">{(pendingPage - 1) * 10 + 1}</span> to <span className="text-slate-900">{Math.min(pendingPage * 10, pendingResult?.pagination?.total || 0)}</span> of <span className="text-slate-900">{pendingResult?.pagination?.total || 0}</span> orders
@@ -735,17 +737,118 @@ export default function SecurityApprovalPage() {
             </div>
           </div>
         </Card>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-4">
+          {isPendingLoading && pendingOrders.length === 0 ? (
+            [...Array(3)].map((_, i) => (
+              <Card key={i} className="p-4 space-y-4 animate-pulse bg-white/50">
+                <div className="h-4 w-1/3 bg-slate-200 rounded" />
+                <div className="h-8 w-full bg-slate-100 rounded" />
+                <div className="h-4 w-1/2 bg-slate-200 rounded" />
+              </Card>
+            ))
+          ) : displayRows.length > 0 ? (
+            displayRows.map((group) => (
+              <Card key={group._rowKey} className={cn("p-4 border-2 transition-all relative overflow-hidden", selectedItems.includes(group._rowKey) ? "border-purple-500 bg-purple-50/30 shadow-lg" : "border-slate-100 bg-white shadow-sm")}>
+                <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{group.partySoDate}</span>
+                      <Checkbox 
+                        disabled={group.isDisabled} 
+                        checked={selectedItems.includes(group._rowKey)} 
+                        onCheckedChange={() => toggleSelectItem(group._rowKey)}
+                        className="h-5 w-5 border-2 border-purple-200 data-[state=checked]:bg-purple-600"
+                      />
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-black text-slate-800 uppercase leading-tight italic">{group.customerName}</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {group.doNumber.split(", ").map((doNum: string) => (
+                          <Badge key={doNum} variant="outline" className="bg-purple-50 text-purple-700 border-purple-100 font-bold text-[9px] px-1.5 py-0">#{doNum}</Badge>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 py-2 border-y border-slate-50">
+                      <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Vehicle No</p>
+                        <p className="text-xs font-bold text-slate-700">{group.vehicleNo}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Process ID</p>
+                        <p className="text-xs font-bold text-slate-700">{group.processId}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Truck className="h-3 w-3 text-slate-400" />
+                        <span className="text-xs font-black text-slate-600">{group._productCount} Products</span>
+                      </div>
+                      {group._allProducts.some((p: any) => p.security_guard_status === 'REJECT') ? (
+                        <Badge className="bg-red-100 text-red-700 font-black text-[9px]">REJECTED</Badge>
+                      ) : (
+                        <Badge className="bg-orange-100 text-orange-700 font-black text-[9px]">PENDING GUARD</Badge>
+                      )}
+                    </div>
+
+                    {group.orderPunchRemarks && group.orderPunchRemarks !== "—" && (
+                      <div className="mt-2 p-2 bg-slate-50 rounded-lg">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Remarks</p>
+                        <p className="text-[10px] font-medium text-slate-600 italic">"{group.orderPunchRemarks}"</p>
+                      </div>
+                    )}
+
+                    {/* Dynamic columns selected by user */}
+                    <div className="grid grid-cols-1 gap-y-3 pt-2">
+                      {visibleColumns.filter(colId => 
+                        !['partySoDate', 'doNumber', 'customerName', 'vehicleNo', 'processId', 'status', 'orderPunchRemarks'].includes(colId)
+                      ).map(colId => {
+                        const col = ALL_COLUMNS.find(c => c.id === colId);
+                        if (!col) return null;
+                        let val = group[colId as keyof typeof group] || "—";
+                        return (
+                          <div key={colId} className="space-y-0.5 border-l-2 border-slate-100 pl-3">
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{col.label}</p>
+                            <p className="text-xs font-bold text-slate-700 leading-relaxed">{String(val)}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))
+          ) : (
+            <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-100">
+              <ShieldAlert className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+              <p className="text-slate-400 font-black uppercase tracking-widest text-xs">No pending vehicles</p>
+            </div>
+          )}
+
+          {/* Mobile Pagination */}
+          <div className="flex items-center justify-between px-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => setPendingPage(p => Math.max(1, p - 1))} disabled={pendingPage === 1}>Prev</Button>
+            <span className="text-xs font-black text-slate-500 uppercase">Page {pendingPage} of {pendingResult?.pagination?.totalPages || 1}</span>
+            <Button variant="outline" size="sm" onClick={() => setPendingPage(p => p + 1)} disabled={pendingPage >= (pendingResult?.pagination?.totalPages || 1)}>Next</Button>
+          </div>
+        </div>
+        </Card>
       </div>
 
       {/* Split-View Dialog (Premium Refactor) */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-6xl! max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <DialogHeader className="border-b pb-4">
-            <DialogTitle className="text-xl font-bold text-slate-900 leading-none">
-              Security Verification: Batch Approval
+        <DialogContent className="sm:max-w-[95vw] max-w-[95vw]! max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] p-0">
+          <DialogHeader className="border-b p-6 md:p-8 bg-slate-50/50">
+            <DialogTitle className="text-xl md:text-2xl font-black text-slate-900 leading-none uppercase tracking-tighter italic">
+              Security Verification Audit
             </DialogTitle>
-            <DialogDescription className="text-slate-500 mt-1.5 font-medium">
-              Audit vehicle, load, and driver credentials for {selectedGroups.length} Selected Customer(s).
+            <DialogDescription className="text-slate-500 mt-2 font-bold uppercase text-[10px] tracking-widest">
+              Reviewing {selectedGroups.length} Batch(es) for final gatepass authorization
             </DialogDescription>
           </DialogHeader>
 
@@ -800,82 +903,75 @@ export default function SecurityApprovalPage() {
                         <div className="px-5 pb-5 space-y-4">
                           {/* Collapsible Dispatch Details Bar */}
                           {isExpanded && (
-                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 relative shadow-inner mt-2 animate-in slide-in-from-top-2 duration-300">
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:p-6 relative shadow-inner mt-2 animate-in slide-in-from-top-2 duration-300">
                                <div className="space-y-6">
                                   {/* Section 1: Order Information */}
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                    <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Delivery Purpose</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.deliveryPurpose || "—"}</p>
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                                    <div className="col-span-1">
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Purpose</p>
+                                      <p className="text-xs font-bold text-slate-900">{orderDetails.deliveryPurpose || "—"}</p>
                                     </div>
-                                    <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Start Date / End Date</p>
-                                      <p className="text-xs font-bold text-slate-700 leading-none">
-                                        {formatDate(orderDetails.startDate)} / {formatDate(orderDetails.endDate)}
+                                    <div className="col-span-1">
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Start/End Date</p>
+                                      <p className="text-[10px] md:text-xs font-bold text-slate-700">
+                                        {formatDate(orderDetails.startDate)} - {formatDate(orderDetails.endDate)}
                                       </p>
                                     </div>
-                                    <div>
+                                    <div className="col-span-1">
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">DO Date</p>
-                                      <p className="text-xs font-bold text-slate-700 leading-none">{orderDetails.partySoDate || "—"}</p>
+                                      <p className="text-xs font-bold text-slate-700">{orderDetails.partySoDate || "—"}</p>
                                     </div>
-                                    <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transport Type</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.transportType || "—"}</p>
+                                    <div className="col-span-1">
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transport</p>
+                                      <p className="text-xs font-bold text-slate-900">{orderDetails.transportType || "—"}</p>
                                     </div>
 
-                                    <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Credit Status</p>
+                                    <div className="col-span-1">
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Credit</p>
                                       <Badge className={cn("text-[10px] font-black px-2 py-0.5", orderDetails.partyCredit === 'Good' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
                                         {orderDetails.partyCredit || "Good"}
                                       </Badge>
                                     </div>
-                                    <div className="md:col-span-1">
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Customer Address</p>
+                                    <div className="col-span-2 md:col-span-1">
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Address</p>
                                       <p className="text-[10px] font-medium text-slate-600 leading-tight truncate" title={orderDetails.address}>{orderDetails.address || "—"}</p>
                                     </div>
-                                    <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact Person</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.contactPerson} ({orderDetails.whatsapp || "—"})</p>
+                                    <div className="col-span-1">
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact</p>
+                                      <p className="text-[10px] md:text-xs font-bold text-slate-900">{orderDetails.contactPerson} ({orderDetails.whatsapp || "—"})</p>
                                     </div>
-                                    <div>
+
+                                    <div className="col-span-2">
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Broker / Advance</p>
                                       <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.brokerName || "—"} / ₹{orderDetails.advanceAmount || 0}</p>
                                     </div>
 
-                                    <div className="md:col-span-2">
+                                    <div className="col-span-2">
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Order Punch Remarks</p>
-                                      <p className="text-[10px] font-medium text-slate-600 leading-tight italic">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
+                                      <p className="text-[10px] font-medium text-slate-600 leading-tight italic">"{orderDetails.orderPunchRemarks || "No special instructions."}"</p>
                                     </div>
-                                    <div className="md:col-span-2">
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">PO Copy (SO Upload)</p>
+                                    <div className="col-span-2">
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">PO Copy</p>
                                       {group.uploadSo ? (
-                                        <a 
-                                          href={group.uploadSo} 
-                                          target="_blank" 
-                                          rel="noopener noreferrer"
-                                          className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-all border border-blue-200 w-fit group shadow-sm mt-0.5"
-                                        >
-                                          <FileText className="h-3 w-3 group-hover:scale-110 transition-transform" />
-                                          <span className="text-[10px] font-black uppercase tracking-tight">VIEW PO COPY</span>
-                                          <ExternalLink className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        <a href={group.uploadSo} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-all border border-blue-200 w-fit group shadow-sm mt-0.5">
+                                          <FileText className="h-3 w-3" />
+                                          <span className="text-[10px] font-black uppercase tracking-tight">VIEW PO</span>
                                         </a>
-                                      ) : (
-                                        <p className="text-[10px] font-black text-slate-400 leading-none">NOT UPLOADED</p>
-                                      )}
+                                      ) : <p className="text-[10px] font-black text-slate-400 mt-1">NOT UPLOADED</p>}
                                     </div>
                                   </div>
 
                                   <div className="h-px bg-slate-200" />
 
                                   {/* Section 2: Dispatch Details (Documents) */}
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Truck No</p>
-                                      <p className="text-xs font-bold text-blue-700 uppercase tracking-tight">{firstProd.truck_no || firstProd.truckNo || "—"}</p>
+                                      <p className="text-xs font-black text-blue-700 uppercase">{firstProd.truck_no || firstProd.truckNo || "—"}</p>
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transporter</p>
-                                      <p className="text-xs font-bold text-slate-700 leading-none">{firstProd.transporter_name || "—"}</p>
+                                      <p className="text-xs font-bold text-slate-700 leading-none truncate">{firstProd.transporter_name || "—"}</p>
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Fitness</p>
@@ -885,7 +981,6 @@ export default function SecurityApprovalPage() {
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Insurance</p>
                                       {renderDocumentLink(firstProd.insurance)}
                                     </div>
-
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Pollution</p>
                                       {renderDocumentLink(firstProd.polution)}
@@ -899,110 +994,83 @@ export default function SecurityApprovalPage() {
                                       {renderDocumentLink(firstProd.permit1)}
                                     </div>
                                     <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 2 (Out State)</p>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 2</p>
                                       {renderDocumentLink(firstProd.permit2_out_state)}
-                                    </div>
-
-                                    <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Audit Status</p>
-                                      <Badge variant="outline" className={cn("text-[9px] font-black px-2 py-0.5 uppercase", firstProd.check_status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-orange-50 text-orange-700 border-orange-200')}>
-                                        {firstProd.check_status || "Pending"}
-                                      </Badge>
-                                    </div>
-                                    <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Audit Remarks</p>
-                                      <p className="text-[10px] font-medium text-slate-500 italic mt-1 leading-tight">{firstProd.remarks || "—"}</p>
                                     </div>
                                   </div>
 
                                   <div className="h-px bg-slate-200" />
 
                                   {/* Section 3: Vehicle & Driver Details */}
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-8">
-                                    {/* Vehicle Info */}
-                                    <div className="md:col-span-4 flex items-center gap-2 mb-[-8px]">
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-x-6 md:gap-y-8">
+                                    <div className="col-span-2 md:col-span-4 flex items-center gap-2 mb-[-8px]">
                                       <div className="h-3 w-1 bg-blue-600 rounded-full" />
-                                      <p className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-900/60">Vehicle Specifications</p>
+                                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-900/60 italic">Vehicle Specifications</p>
                                     </div>
                                     
                                     <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Vehicle Type</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.vehicle_type || "—"}</p>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Type</p>
+                                      <p className="text-xs font-bold text-slate-900">{firstProd.vehicle_type || "—"}</p>
                                     </div>
                                     <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">RTO</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.rto || "—"}</p>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Passing Wt</p>
+                                      <p className="text-xs font-bold text-slate-900">{firstProd.passing_weight || "—"}</p>
                                     </div>
                                     <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Passing Weight</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.passing_weight || "—"}</p>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">GVW / ULW</p>
+                                      <p className="text-xs font-bold text-slate-900">{firstProd.gvw || "0"} / {firstProd.ulw || "0"}</p>
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Road Tax</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.road_tax || "—"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">GVW</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.gvw || "—"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">ULW</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.ulw || "—"}</p>
+                                      <p className="text-xs font-bold text-slate-900">{firstProd.road_tax || "—"}</p>
                                     </div>
 
-                                    {/* Driver Info */}
-                                    <div className="md:col-span-4 flex items-center gap-2 mb-[-8px] mt-2">
+                                    <div className="col-span-2 md:col-span-4 flex items-center gap-2 mb-[-8px] mt-2">
                                       <div className="h-3 w-1 bg-amber-600 rounded-full" />
-                                      <p className="text-[10px] font-black uppercase tracking-[0.15em] text-amber-900/60">Driver Information</p>
+                                      <p className="text-[10px] font-black uppercase tracking-widest text-amber-900/60 italic">Driver Information</p>
                                     </div>
 
                                     <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Driver Name</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.driver_name || "—"}</p>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Name</p>
+                                      <p className="text-xs font-bold text-slate-900">{firstProd.driver_name || "—"}</p>
                                     </div>
                                     <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact No</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.driver_contact_no || "—"}</p>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact</p>
+                                      <p className="text-xs font-bold text-slate-900">{firstProd.driver_contact_no || "—"}</p>
                                     </div>
                                     <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">License No</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.driving_license_no || "—"}</p>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">License</p>
+                                      <p className="text-xs font-bold text-slate-900">{firstProd.driving_license_no || "—"}</p>
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Valid Upto</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{formatDate(firstProd.dl_valid_upto)}</p>
+                                      <p className="text-xs font-bold text-slate-900">{formatDate(firstProd.dl_valid_upto)}</p>
                                     </div>
                                   </div>
 
                                   <div className="h-px bg-slate-200" />
 
                                   {/* Section 4: Weight Details */}
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">RST No</p>
-                                      <p className="text-xs font-bold text-blue-700 leading-none">#{firstProd.rst_no || firstProd.rstNo || "—"}</p>
+                                      <p className="text-xs font-black text-blue-700 leading-none">#{firstProd.rst_no || firstProd.rstNo || "—"}</p>
                                     </div>
-                                    <div className="md:col-span-1">
+                                    <div className="col-span-1">
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
-                                      <p className="text-xs font-bold text-slate-700 leading-none">
-                                        {firstProd.gross_weight || firstProd.grossWeight || 0} / {firstProd.tare_weight || firstProd.tareWeight || 0} / <span className="text-blue-600 font-black">{((Number(firstProd.gross_weight || firstProd.grossWeight || 0) - Number(firstProd.tare_weight || firstProd.tareWeight || 0)) || "0").toString()}</span>
+                                      <p className="text-[10px] font-black text-slate-700 leading-none">
+                                        {firstProd.gross_weight || 0}/{firstProd.tare_weight || 0}/<span className="text-blue-600">{(Number(firstProd.gross_weight || 0) - Number(firstProd.tare_weight || 0))}</span>
                                       </p>
                                     </div>
                                     <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff</p>
-                                      <p className={cn("text-xs font-bold leading-none", (parseFloat(firstProd.weight_diff || firstProd.weightDiff) || 0) < 0 ? "text-red-500" : "text-green-600")}>
-                                        {firstProd.weight_diff || firstProd.weightDiff || 0}
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Diff / Extra</p>
+                                      <p className="text-xs font-black text-slate-700 leading-none">
+                                        <span className={(parseFloat(firstProd.weight_diff) || 0) < 0 ? "text-red-500" : "text-green-600"}>{firstProd.weight_diff || 0}</span> / {firstProd.extra_weight || 0}
                                       </p>
                                     </div>
-                                    <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Extra Weight</p>
-                                      <p className="text-xs font-bold text-slate-700 leading-none">{firstProd.extra_weight || 0}</p>
-                                    </div>
-                                    <div className="md:col-span-4">
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Weight Diff Reason</p>
-                                      <p className="text-[10px] font-medium text-slate-500 italic mt-1 leading-tight border-l-2 border-slate-200 pl-3">
-                                        {firstProd.reason_of_difference_in_weight_if_any_speacefic || firstProd.reasonForDiff || "—"}
-                                      </p>
+                                    <div className="col-span-2 md:col-span-1">
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Reason</p>
+                                      <p className="text-[10px] font-medium text-slate-500 italic mt-1 leading-tight">{firstProd.reason_of_difference_in_weight_if_any_speacefic || "—"}</p>
                                     </div>
                                   </div>
                                 </div>
@@ -1010,67 +1078,120 @@ export default function SecurityApprovalPage() {
                           )}
 
                           {/* Simple Product Table (Always Visible) */}
+                          {/* Responsive Product List */}
                           <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
-                            <Table>
-                              <TableHeader className="bg-slate-50">
-                                <TableRow>
-                                  <TableHead className="w-12 text-center h-10">
-                                    <Checkbox
-                                      checked={allOrderSelected}
-                                      disabled={isOrderDisabled}
-                                      onCheckedChange={(checked) => {
-                                        if (checked) {
-                                          setSelectedProducts(prev => Array.from(new Set([...prev, ...enabledOrderProducts.map((p: any) => p._rowKey)])))
-                                        } else {
-                                          setSelectedProducts(prev => prev.filter(k => !enabledOrderProducts.some((p: any) => p._rowKey === k)))
-                                        }
-                                      }}
-                                    />
-                                  </TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black h-10">PRODUCT INFO</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">QTY</TableHead>
-                                  <TableHead className="text-[10px] uppercase font-black text-center h-10">STATUS</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {orderProducts.map((product: any) => (
-                                  <TableRow key={product._rowKey} className={cn(selectedProducts.includes(product._rowKey) ? "bg-blue-50/20" : "", "h-14")}>
-                                    <TableCell className="text-center p-2">
+                            {/* Desktop Table */}
+                            <div className="hidden md:block">
+                              <Table>
+                                <TableHeader className="bg-slate-50">
+                                  <TableRow>
+                                    <TableHead className="w-12 text-center h-10">
                                       <Checkbox
-                                        checked={selectedProducts.includes(product._rowKey)}
-                                        onCheckedChange={() => {
-                                          if (selectedProducts.includes(product._rowKey)) {
-                                            setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
+                                        checked={allOrderSelected}
+                                        disabled={isOrderDisabled}
+                                        onCheckedChange={(checked) => {
+                                          if (checked) {
+                                            setSelectedProducts(prev => Array.from(new Set([...prev, ...enabledOrderProducts.map((p: any) => p._rowKey)])))
                                           } else {
-                                            setSelectedProducts(prev => [...prev, product._rowKey])
+                                            setSelectedProducts(prev => prev.filter(k => !enabledOrderProducts.some((p: any) => p._rowKey === k)))
                                           }
                                         }}
                                       />
-                                    </TableCell>
-                                    <TableCell className="p-2">
-                                      <div className="flex flex-col">
-                                        <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{product.productName}</span>
-                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{product.specificOrderNo}</span>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell className="text-center p-2">
-                                      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">
-                                        {product.actual_qty_dispatch || product.actualQty || "0"}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-center p-2">
-                                      {product.security_guard_status === 'REJECT' ? (
-                                        <Badge variant="destructive" className="font-black text-[8px] uppercase">REJECTED BY SECURITY</Badge>
-                                      ) : product.actual_1 == null ? (
-                                        <Badge variant="destructive" className="font-black text-[8px] uppercase">Pending Data</Badge>
-                                      ) : (
-                                        <Badge className="bg-green-100 text-green-700 border-green-200 font-black text-[9px] uppercase">Loaded OK</Badge>
-                                      )}
-                                    </TableCell>
+                                    </TableHead>
+                                    <TableHead className="text-[10px] uppercase font-black h-10">PRODUCT INFO</TableHead>
+                                    <TableHead className="text-[10px] uppercase font-black text-center h-10">QTY</TableHead>
+                                    <TableHead className="text-[10px] uppercase font-black text-center h-10">STATUS</TableHead>
                                   </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
+                                </TableHeader>
+                                <TableBody>
+                                  {orderProducts.map((product: any) => (
+                                    <TableRow key={product._rowKey} className={cn(selectedProducts.includes(product._rowKey) ? "bg-blue-50/20" : "", "h-14")}>
+                                      <TableCell className="text-center p-2">
+                                        <Checkbox
+                                          checked={selectedProducts.includes(product._rowKey)}
+                                          onCheckedChange={() => {
+                                            if (selectedProducts.includes(product._rowKey)) {
+                                              setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
+                                            } else {
+                                              setSelectedProducts(prev => [...prev, product._rowKey])
+                                            }
+                                          }}
+                                        />
+                                      </TableCell>
+                                      <TableCell className="p-2">
+                                        <div className="flex flex-col">
+                                          <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{product.productName}</span>
+                                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{product.specificOrderNo}</span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-center p-2">
+                                        <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">
+                                          {product.actual_qty_dispatch || product.actualQty || "0"}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-center p-2">
+                                        {product.security_guard_status === 'REJECT' ? (
+                                          <Badge variant="destructive" className="font-black text-[8px] uppercase">REJECTED BY SECURITY</Badge>
+                                        ) : product.actual_1 == null ? (
+                                          <Badge variant="destructive" className="font-black text-[8px] uppercase">Pending Data</Badge>
+                                        ) : (
+                                          <Badge className="bg-green-100 text-green-700 border-green-200 font-black text-[9px] uppercase">Loaded OK</Badge>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+
+                            {/* Mobile Card-List for Products */}
+                            <div className="md:hidden divide-y divide-slate-100">
+                              <div className="p-3 bg-slate-50 flex items-center justify-between">
+                                <span className="text-[10px] font-black uppercase text-slate-500">Products in this Load</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[9px] font-black text-slate-400">SELECT ALL</span>
+                                  <Checkbox
+                                    checked={allOrderSelected}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setSelectedProducts(prev => Array.from(new Set([...prev, ...enabledOrderProducts.map((p: any) => p._rowKey)])))
+                                      } else {
+                                        setSelectedProducts(prev => prev.filter(k => !enabledOrderProducts.some((p: any) => p._rowKey === k)))
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                              {orderProducts.map((product: any) => (
+                                <div key={product._rowKey} className={cn("p-4 flex items-center justify-between gap-4", selectedProducts.includes(product._rowKey) ? "bg-blue-50/30" : "bg-white")}>
+                                  <div className="flex-1 space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-black text-slate-800 uppercase leading-none">{product.productName}</span>
+                                      <Badge className="bg-blue-600 text-white font-black text-[9px] h-4">QTY: {product.actual_qty_dispatch || 0}</Badge>
+                                    </div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">#{product.specificOrderNo}</p>
+                                    {product.security_guard_status === 'REJECT' ? (
+                                      <Badge variant="destructive" className="text-[8px] h-4">REJECTED</Badge>
+                                    ) : product.actual_1 == null ? (
+                                      <Badge variant="destructive" className="text-[8px] h-4">MISSING DATA</Badge>
+                                    ) : (
+                                      <Badge className="bg-green-100 text-green-700 text-[8px] h-4">LOADED OK</Badge>
+                                    )}
+                                  </div>
+                                  <Checkbox
+                                    checked={selectedProducts.includes(product._rowKey)}
+                                    onCheckedChange={() => {
+                                      if (selectedProducts.includes(product._rowKey)) {
+                                        setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
+                                      } else {
+                                        setSelectedProducts(prev => [...prev, product._rowKey])
+                                      }
+                                    }}
+                                    className="h-6 w-6 rounded-lg"
+                                  />
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1080,33 +1201,32 @@ export default function SecurityApprovalPage() {
               ))}
 
               {/* 2. Final Verification Form (Bottom Content) */}
-              <div className="pt-8 space-y-8 animate-in fade-in duration-500 border-t-4 border-slate-100">
+              <div className="px-4 md:px-8 pt-8 space-y-8 animate-in fade-in duration-500 border-t-4 border-slate-100">
                 <div className="flex items-center gap-3">
                   <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-[0.2em]">Six-Point Security Verdict</h3>
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest italic">Verification Checklist</h3>
                 </div>
 
-                <div className="bg-slate-50 border-2 border-slate-100 rounded-3xl p-8 space-y-8 shadow-sm">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="bg-slate-50 border-2 border-slate-100 rounded-3xl p-4 md:p-8 space-y-8 shadow-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Bilty/GR Number</Label>
+                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Bilty/GR No</Label>
                       <Input
-                        placeholder="E.G. BL-100293"
-                        className="h-14 border-2 border-slate-200 rounded-2xl px-6 font-black text-xl text-slate-700 focus:border-blue-600 transition-all uppercase placeholder:text-slate-300"
+                        placeholder="BL-100293"
+                        className="h-12 md:h-14 border-2 border-slate-200 rounded-2xl px-6 font-black text-lg text-slate-700 focus:border-blue-600 transition-all uppercase placeholder:text-slate-300"
                         value={uploadData.biltyNo}
                         onChange={(e) => setUploadData(p => ({ ...p, biltyNo: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Bilty Image</Label>
-                      <p className="text-[10px] text-slate-400 ml-1">Max file size: 10 MB</p>
-                      <div className="relative h-14">
+                      <div className="relative h-12 md:h-14">
                         <Input type="file" className="hidden" id="bilty-img" onChange={(e) => {
                           if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'bilty')
                         }} />
                         <Label htmlFor="bilty-img" className="absolute inset-0 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center bg-white cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all">
-                          <span className="text-[11px] font-black uppercase text-slate-400 tracking-widest">
-                            {isUploading === 'bilty' ? "UPLOADING..." : (uploadData.biltyImage ? `DONE: ${uploadData.biltyImageName}` : "UPLOAD SCANNED COPY")}
+                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                            {isUploading === 'bilty' ? "WAIT..." : (uploadData.biltyImage ? "FILE READY" : "SCAN COPY")}
                           </span>
                         </Label>
                       </div>
@@ -1116,12 +1236,12 @@ export default function SecurityApprovalPage() {
                       <Select value={uploadData.verdict} onValueChange={(v) => {
                         setUploadData(p => ({ ...p, verdict: v, remarks: v === "APPROVE" ? "" : p.remarks }))
                       }}>
-                        <SelectTrigger className={cn("h-14 border-2 rounded-2xl px-6 font-black text-sm uppercase transition-all", uploadData.verdict === "APPROVE" ? "border-green-200 bg-green-50 text-green-700" : uploadData.verdict === "REJECT" ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-white")}>
-                          <SelectValue placeholder="Select verdict" />
+                        <SelectTrigger className={cn("h-12 md:h-14 border-2 rounded-2xl px-6 font-black text-sm uppercase transition-all", uploadData.verdict === "APPROVE" ? "border-green-200 bg-green-50 text-green-700" : uploadData.verdict === "REJECT" ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-white")}>
+                          <SelectValue placeholder="Verdict" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="APPROVE" className="font-bold text-green-700">VERIFY & APPROVE</SelectItem>
-                          <SelectItem value="REJECT" className="font-bold text-red-700">REJECT - NEEDS AUDIT</SelectItem>
+                          <SelectItem value="APPROVE" className="font-bold text-green-700 uppercase">APPROVE GATEPASS</SelectItem>
+                          <SelectItem value="REJECT" className="font-bold text-red-700 uppercase">REJECT & REVERT</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1129,32 +1249,34 @@ export default function SecurityApprovalPage() {
 
                   {uploadData.verdict === "REJECT" && (
                     <div className="space-y-3 animate-in fade-in slide-in-from-top-4 duration-300">
-                      <Label className="text-[10px] font-black uppercase text-red-600 tracking-widest ml-1">Reason for Rejection (Required)</Label>
-                      <div className="relative">
-                        <textarea
-                          placeholder="Please explain why this load is being rejected by security..."
-                          className="w-full h-24 border-2 border-red-200 bg-red-50/50 rounded-2xl p-4 font-medium text-sm text-slate-700 focus:border-red-500 focus:ring-4 focus:ring-red-100 transition-all resize-none placeholder:text-red-300/80"
-                          value={uploadData.remarks || ""}
-                          onChange={(e) => setUploadData(p => ({ ...p, remarks: e.target.value }))}
-                        />
-                      </div>
+                      <Label className="text-[10px] font-black uppercase text-red-600 tracking-widest ml-1">Reason for Rejection <span className="text-red-500">*</span></Label>
+                      <textarea
+                        placeholder="Explain why this load is rejected..."
+                        className="w-full h-24 border-2 border-red-200 bg-red-50/50 rounded-2xl p-4 font-medium text-sm text-slate-700 focus:border-red-500 focus:ring-4 focus:ring-red-100 transition-all resize-none"
+                        value={uploadData.remarks || ""}
+                        onChange={(e) => setUploadData(p => ({ ...p, remarks: e.target.value }))}
+                      />
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     {Object.entries(uploadData.checklist).map(([key, val]) => (
-                      <div key={key} className={cn("flex items-center gap-3 p-4 rounded-2xl border-2 transition-all cursor-pointer", val ? "bg-white border-blue-500 shadow-md" : "bg-white border-slate-100")}>
-                        <Checkbox id={key} checked={val} onCheckedChange={(checked) => setUploadData(p => ({ ...p, checklist: { ...p.checklist, [key]: !!checked } }))} />
-                        <Label htmlFor={key} className="text-[10px] font-black uppercase text-slate-600 cursor-pointer tracking-tighter">{key.replace(/([A-Z])/g, ' $1')}</Label>
+                      <div 
+                        key={key} 
+                        onClick={() => setUploadData(p => ({ ...p, checklist: { ...p.checklist, [key]: !val } }))}
+                        className={cn("flex items-center gap-2 p-3 rounded-xl border-2 transition-all cursor-pointer", val ? "bg-blue-600 border-blue-600 shadow-md" : "bg-white border-slate-100")}
+                      >
+                        <Checkbox id={key} checked={val} onCheckedChange={(checked) => setUploadData(p => ({ ...p, checklist: { ...p.checklist, [key]: !!checked } }))} className={cn(val ? "border-white bg-white data-[state=checked]:text-blue-600" : "")} />
+                        <Label htmlFor={key} className={cn("text-[9px] font-black uppercase cursor-pointer tracking-tighter leading-none truncate", val ? "text-white" : "text-slate-600")}>{key.replace(/([A-Z])/g, ' $1')}</Label>
                       </div>
                     ))}
                   </div>
 
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Vehicle Proof Images</Label>
-                    <div className="flex flex-wrap gap-4">
+                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Proof Images</Label>
+                    <div className="flex flex-wrap gap-3">
                       {uploadData.vehicleImages.map((url, idx) => (
-                        <div key={idx} className="w-24 h-24 rounded-2xl border-2 border-slate-100 overflow-hidden relative group shadow-sm">
+                        <div key={idx} className="w-20 h-20 rounded-xl border-2 border-slate-100 overflow-hidden relative group shadow-sm">
                           <img src={url} className="w-full h-full object-cover" />
                           <button onClick={() => {
                             const images = [...uploadData.vehicleImages]
@@ -1165,9 +1287,8 @@ export default function SecurityApprovalPage() {
                           }} className="absolute inset-0 bg-red-600/80 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><X className="w-4 h-4" /></button>
                         </div>
                       ))}
-                      <p className="text-[10px] text-slate-400 mb-1">Max file size: 10 MB per image</p>
-                      <label className="w-24 h-24 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center bg-white cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all">
-                        {isUploading?.startsWith('vehicle') ? "..." : <Plus className="w-7 h-7 text-slate-200" />}
+                      <label className="w-20 h-20 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center bg-white cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all">
+                        {isUploading?.startsWith('vehicle') ? <Loader2 className="w-5 h-5 animate-spin text-blue-500" /> : <Plus className="w-6 h-6 text-slate-200" />}
                         <input type="file" multiple className="hidden" onChange={(e) => {
                           if (e.target.files) {
                             Array.from(e.target.files).forEach(file => handleFileUpload(file, 'vehicle'))
@@ -1181,14 +1302,14 @@ export default function SecurityApprovalPage() {
             </div>
           )}
 
-          <DialogFooter className="mt-8 border-t pt-6 bg-slate-50/50 -mx-6 -mb-6 p-6">
-            <Button variant="ghost" className="font-bold text-slate-500" onClick={() => setIsDialogOpen(false)}>Discard</Button>
+          <DialogFooter className="mt-8 border-t p-4 md:p-8 bg-slate-50/50 flex flex-col sm:flex-row gap-4">
+            <Button variant="ghost" className="font-bold text-slate-500 uppercase text-xs order-last sm:order-none" onClick={() => setIsDialogOpen(false)}>Cancel Action</Button>
             <Button
               onClick={handleBulkSubmit}
               disabled={isProcessing || selectedProducts.length === 0 || isReadOnly}
-              className="bg-purple-600 hover:bg-purple-700 h-12 px-8 rounded-xl shadow-lg font-black uppercase tracking-tighter italic text-lg"
+              className="bg-purple-600 hover:bg-purple-700 h-14 md:h-12 px-10 rounded-2xl md:rounded-xl shadow-lg font-black uppercase tracking-tighter italic text-base md:text-lg flex-1 sm:flex-none"
             >
-              {isProcessing ? "Verifying..." : `Authorize Security Gatepass (${selectedProducts.length})`}
+              {isProcessing ? "WAIT..." : `Authorize Gatepass (${selectedProducts.length})`}
             </Button>
           </DialogFooter>
         </DialogContent>

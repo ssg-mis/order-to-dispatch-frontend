@@ -757,6 +757,7 @@ export default function OwnerDashboardPage() {
                                     <TableRow className="border-slate-100 hover:bg-transparent">
                                       <TableHead className="pl-6 text-[10px] font-black uppercase text-slate-400 py-3 w-32">Order No</TableHead>
                                       <TableHead className="text-[10px] font-black uppercase text-slate-400">Customer</TableHead>
+                                      <TableHead className="text-[10px] font-black uppercase text-slate-400">Product / SKU</TableHead>
                                       <TableHead className="text-[10px] font-black uppercase text-slate-400 w-28">Planned Date</TableHead>
                                       <TableHead className="text-[10px] font-black uppercase text-slate-400 w-32">Status</TableHead>
                                       <TableHead className="pr-6 text-[10px] font-black uppercase text-slate-400 w-36">Time Used</TableHead>
@@ -778,6 +779,9 @@ export default function OwnerDashboardPage() {
                                           <TableCell>
                                             <div className="font-semibold text-slate-800 text-sm leading-tight">{order.customer}</div>
                                             <div className="text-[10px] text-slate-400 mt-0.5">{order.orderType}</div>
+                                          </TableCell>
+                                          <TableCell>
+                                            <div className="font-semibold text-slate-800 text-sm">{order.skuName || order.sku_name || order.productName || order.product_name || order.oilType || '—'}</div>
                                           </TableCell>
                                           <TableCell>
                                             <div className="text-xs font-semibold text-slate-700">{order.plannedDate ? new Date(order.plannedDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</div>
@@ -1169,7 +1173,7 @@ export default function OwnerDashboardPage() {
                                   {group.items.length > 1 && <Badge variant="outline" className="ml-2 text-[9px]">{group.items.length}</Badge>}
                                 </TableCell>
                                 <TableCell>
-                                  <div className="font-semibold text-slate-800 text-sm">{group.skuName || group.oilType || '—'}</div>
+                                  <div className="font-semibold text-slate-800 text-sm">{group.skuName || group.sku_name || group.productName || group.product_name || group.oilType || '—'}</div>
                                   <div className="text-[10px] text-slate-400">{group.orderType}</div>
                                 </TableCell>
                                 <TableCell className="text-xs text-slate-500">{group.depot || '—'}</TableCell>
@@ -1184,7 +1188,7 @@ export default function OwnerDashboardPage() {
                               {expandedGroups[group.orderNo] && group.items.length > 1 && group.items.map((item: any, ii: number) => (
                                 <TableRow key={`${i}-${ii}`} className="bg-slate-50/40 border-slate-50 hover:bg-slate-50 transition-colors" onClick={() => setDrillDown({ type: 'order', key: item.orderNo, title: `Order Journey — ${item.orderNo}` })}>
                                   <TableCell className="pl-12 py-2 font-bold text-indigo-400 font-mono text-xs italic">{item.orderNo}</TableCell>
-                                  <TableCell className="py-2 text-xs text-slate-600">{item.skuName || item.oilType || '—'}</TableCell>
+                                  <TableCell className="py-2 text-xs text-slate-600">{item.skuName || item.sku_name || item.productName || item.product_name || item.oilType || '—'}</TableCell>
                                   <TableCell className="py-2 text-[10px] text-slate-400">{item.depot}</TableCell>
                                   <TableCell className="py-2 text-xs font-medium text-slate-500">{fmt(item.quantity)} {item.uom}</TableCell>
                                   <TableCell className="py-2 text-xs font-bold text-slate-600">{fmtRs(item.amount)}</TableCell>
@@ -1215,7 +1219,7 @@ export default function OwnerDashboardPage() {
                               </span>
                               <Badge className={`text-[9px] font-black border-none px-2 py-0.5 shrink-0 ${group.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{group.currentStage}</Badge>
                             </div>
-                            <div className="text-xs font-semibold text-slate-700">{group.skuName || group.oilType || '—'}</div>
+                            <div className="text-xs font-semibold text-slate-700">{group.skuName || group.sku_name || group.productName || group.product_name || group.oilType || '—'}</div>
                             <div className="flex justify-between mt-1.5 text-[10px] font-bold text-slate-400">
                               <span>{group.depot || '—'} · {fmt(group.quantity)} {group.uom}</span>
                               <span className="text-indigo-600">{fmtRs(group.amount)}</span>
@@ -1248,7 +1252,7 @@ export default function OwnerDashboardPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-5 bg-slate-50 border-b border-slate-100">
                   {[
                     { label: 'Customer', val: ddOrder.customer },
-                    { label: 'Product', val: ddOrder.skuName || ddOrder.oilType || '—' },
+                    { label: 'Product', val: ddOrder.skuName || ddOrder.sku_name || ddOrder.productName || ddOrder.product_name || ddOrder.oilType || '—' },
                     { label: 'Quantity', val: `${fmt(ddOrder.quantity)} ${ddOrder.uom}` },
                     { label: 'Value', val: fmtRs(ddOrder.amount) },
                   ].map((item, i) => (
@@ -1326,7 +1330,7 @@ export default function OwnerDashboardPage() {
                       <Table>
                         <TableHeader className="bg-slate-50/80 sticky top-0 z-10">
                           <TableRow className="border-slate-100 hover:bg-transparent">
-                            {['Order No','Customer','Product','Depot','Planned At','Overdue'].map(h => (
+                            {['Order No','Customer','Product / SKU','Depot','Order Date','Planned At','Overdue'].map(h => (
                               <TableHead key={h} className="text-[10px] font-black uppercase text-slate-400 py-3 first:pl-6 last:pr-6">{h}</TableHead>
                             ))}
                           </TableRow>
@@ -1344,8 +1348,9 @@ export default function OwnerDashboardPage() {
                                   {group.items.length > 1 && <Badge variant="outline" className="ml-2 text-[9px]">{group.items.length}</Badge>}
                                 </TableCell>
                                 <TableCell className="font-semibold text-slate-800 text-sm max-w-[160px] truncate">{group.customer}</TableCell>
-                                <TableCell className="text-xs text-slate-500">{group.skuName || group.oilType || '—'}</TableCell>
+                                <TableCell className="text-xs text-slate-500">{group.skuName || group.sku_name || group.productName || group.product_name || group.oilType || '—'}</TableCell>
                                 <TableCell className="text-xs text-slate-500">{group.depot || '—'}</TableCell>
+                                <TableCell className="text-xs text-slate-400 font-bold">{group.createdAt ? new Date(group.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}</TableCell>
                                 <TableCell className="text-xs text-slate-600">{group.plannedAt ? new Date(group.plannedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</TableCell>
                                 <TableCell className="pr-6">
                                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black border ${group.daysOverdue > 7 ? 'text-red-600 bg-red-50 border-red-200' : group.daysOverdue > 3 ? 'text-orange-600 bg-orange-50 border-orange-200' : group.daysOverdue > 0 ? 'text-amber-600 bg-amber-50 border-amber-200' : 'text-emerald-600 bg-emerald-50 border-emerald-200'}`}>
@@ -1357,8 +1362,11 @@ export default function OwnerDashboardPage() {
                                 <TableRow key={`${i}-${ii}`} className="bg-slate-50/40 border-slate-50 hover:bg-slate-50 transition-colors" onClick={() => setDrillDown({ type: 'order', key: item.orderNo, title: `Order Journey — ${item.orderNo}` })}>
                                   <TableCell className="pl-12 py-2 font-bold text-indigo-400 font-mono text-xs italic">{item.orderNo}</TableCell>
                                   <TableCell className="py-2 text-xs text-slate-600 italic opacity-80">{item.customer}</TableCell>
-                                  <TableCell className="py-2 text-xs text-slate-500">{item.skuName || item.oilType || '—'}</TableCell>
+                                  <TableCell className="py-2 text-xs text-slate-500">{item.skuName || item.sku_name || item.productName || item.product_name || item.oilType || '—'}</TableCell>
                                   <TableCell className="py-2 text-xs text-slate-400 italic opacity-80">{item.depot}</TableCell>
+                                  <TableCell className="py-2 text-xs text-slate-500 italic opacity-80">
+                                    {item.createdAt ? new Date(item.createdAt).toLocaleDateString("en-IN", { day: '2-digit', month: 'short' }) : '—'}
+                                  </TableCell>
                                   <TableCell className="py-2 text-xs text-slate-500 italic opacity-80">
                                     {item.plannedAt ? new Date(item.plannedAt).toLocaleDateString("en-IN", { day: '2-digit', month: 'short' }) : '—'}
                                     <span className="ml-1 opacity-50">({fmt(item.quantity)})</span>

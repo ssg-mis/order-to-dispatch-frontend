@@ -403,7 +403,8 @@ export function WorkflowStageShell({
                   </div>
                 ) : historyData && historyData.length > 0 ? (
                   <div className="overflow-x-auto max-h-[600px] overflow-y-auto relative">
-                    <table className="w-full text-sm table-fixed">
+                    {/* Desktop Table View */}
+                    <table className="w-full text-sm table-fixed hidden md:table">
                       <thead className="bg-muted/30 border-b text-[10px] uppercase font-black text-slate-500 tracking-wider sticky top-0 z-10 shadow-sm">
                         <tr>
                           <th className="px-4 py-3 text-left w-[12%]">Date</th>
@@ -450,6 +451,62 @@ export function WorkflowStageShell({
                         ))}
                       </tbody>
                     </table>
+
+                    {/* Mobile Card View */}
+                    <div className="grid grid-cols-1 gap-4 p-4 md:hidden">
+                      {historyData.map((item, i) => (
+                        <Card key={i} className="p-4 border-2 border-slate-100 shadow-sm space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">{item.date || "-"}</p>
+                              <p className="text-sm font-black text-blue-700">{item.orderNo || "-"}</p>
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tight ${item.status === "Approved" || item.status === "Completed" || item.status === "Verified"
+                                ? "bg-green-100 text-green-700 border border-green-200"
+                                : item.status === "Rejected"
+                                  ? "bg-red-100 text-red-700 border border-red-200"
+                                  : "bg-slate-100 text-slate-700 border border-slate-200"
+                                }`}
+                            >
+                              {item.status || "Completed"}
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Party Name</p>
+                            <p className="text-sm font-bold text-slate-800 capitalize">{item.customerName || "-"}</p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{remarksColName || "Remarks"}</p>
+                            <p className="text-xs text-slate-600 italic leading-relaxed">{item.remarks || "-"}</p>
+                          </div>
+
+                          {/* Show specific remarks if available in data */}
+                          {(item.rawData?.order_punch_remarks || item.order_punch_remarks) && (
+                            <div className="space-y-1 border-l-2 border-slate-100 pl-3">
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Order Punch Remarks</p>
+                              <p className="text-xs text-slate-800 font-bold leading-tight">{item.rawData?.order_punch_remarks || item.order_punch_remarks}</p>
+                            </div>
+                          )}
+                          {(item.rawData?.revert_security_remarks || item.revert_security_remarks) && (
+                            <div className="space-y-1 border-l-2 border-red-100 pl-3">
+                              <p className="text-[9px] font-black text-red-400 uppercase tracking-widest leading-none mb-1">Security Remarks</p>
+                              <p className="text-xs text-red-700 font-bold leading-tight">{item.rawData?.revert_security_remarks || item.revert_security_remarks}</p>
+                            </div>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full h-9 font-black bg-white hover:bg-blue-50 hover:text-blue-700 border-2 transition-all uppercase italic tracking-tighter"
+                            onClick={() => setSelectedHistoryItem(item.rawData || item)}
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            View Full Details
+                          </Button>
+                        </Card>
+                      ))}
+                    </div>
+
                     {historyFooter}
                   </div>
                 ) : (

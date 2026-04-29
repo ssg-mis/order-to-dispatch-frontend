@@ -705,7 +705,12 @@ export default function ActualDispatchPage() {
         dsrNumber: order.d_sr_number,
         rate: order.final_rate || order.rate_of_material,
         processid: order.processid || null,
-        uploadSo: order.upload_so || order.uploadSo || null
+        uploadSo: order.upload_so || order.uploadSo || null,
+        // Ensure party details are present on each product for the slip generator
+        customerName: custName,
+        address: order.customer_delivery_address || order.customer_address || order.address || grouped[groupKey]._ordersMap[baseDo]?.address || "—",
+        whatsapp: order.customer_contact_person_whatsapp_no || order.whatsapp || grouped[groupKey]._ordersMap[baseDo]?.whatsapp || "—",
+        brokerName: order.broker_name || order.brokerName || grouped[groupKey]._ordersMap[baseDo]?.brokerName || "—"
       }
 
       grouped[groupKey]._ordersMap[baseDo]._products.push(productMeta)
@@ -882,6 +887,193 @@ export default function ActualDispatchPage() {
       setDialogSelectedProducts(prev => [...prev, key])
     }
   }
+
+  const handleDownloadSlip = () => {
+    if (selectedGroups.length === 0 || dialogSelectedProducts.length === 0) {
+      toast({ title: "Error", description: "Please select products to download slip", variant: "destructive" });
+      return;
+    }
+
+    const productsForSlip = selectedGroups.flatMap(group =>
+      group._allProducts.filter((p: any) => dialogSelectedProducts.includes(p._rowKey))
+    );
+
+
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    let fullHtml = `
+      <html>
+        <head>
+          <title>Dispatch Slips</title>
+          <style>
+            @page { size: A4; margin: 10mm; }
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 0; color: #1a1a1a; line-height: 1.4; background: #fff; }
+            .slip-container { padding: 15px; border: 2px solid #000; margin-bottom: 20px; page-break-inside: avoid; position: relative; display: flex; flex-direction: column; }
+            .header { text-align: center; border-bottom: 3px double #000; padding-bottom: 12px; margin-bottom: 20px; }
+            .company-name { font-size: 26px; font-weight: 900; margin: 0; letter-spacing: 1px; color: #000; }
+            .company-address { font-size: 13px; margin: 6px 0; font-weight: 600; color: #444; }
+            .voucher-title { font-size: 20px; font-weight: 800; text-decoration: underline; margin-top: 12px; letter-spacing: 2px; }
+            
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-bottom: 25px; border: 1.5px solid #000; }
+            .info-item { display: flex; border: 0.5px solid #000; padding: 8px 12px; align-items: center; }
+            .info-label { font-weight: 800; width: 140px; text-transform: uppercase; font-size: 11px; color: #000; border-right: 1.5px solid #000; margin-right: 12px; height: 100%; display: flex; align-items: center; }
+            .info-value { font-weight: 700; font-size: 13px; flex: 1; }
+
+            table { width: 100%; border-collapse: collapse; margin-bottom: 25px; border: 2px solid #000; }
+            th, td { border: 1px solid #000; padding: 10px 8px; text-align: left; font-size: 12px; font-weight: 700; }
+            th { background-color: #f0f0f0; text-transform: uppercase; font-weight: 900; border-bottom: 2px solid #000; }
+            .category-row { background-color: #e5e7eb; font-weight: 900; text-align: center; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+            .total-row { font-weight: 900; background-color: #f3f4f6; border-top: 1.5px solid #000; }
+            
+            .footer { margin-top: auto; display: flex; justify-content: space-between; padding: 40px 20px 20px; }
+            .signature { border-top: 2px solid #000; width: 220px; text-align: center; padding-top: 8px; font-size: 12px; font-weight: 900; text-transform: uppercase; }
+            
+            .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 100px; color: rgba(0,0,0,0.03); font-weight: 900; pointer-events: none; white-space: nowrap; }
+
+            @media print {
+              body { -webkit-print-color-adjust: exact; }
+              .no-print { display: none; }
+              .slip-container { border: 2px solid #000; height: auto; }
+            }
+          </style>
+        </head>
+        <body>
+    `;
+
+    const partyGroups: Record<string, any[]> = {};
+    productsForSlip.forEach(p => {
+      const pName = p.customerName || p.party_name || p.partyName || "Unknown Party";
+      if (!partyGroups[pName]) partyGroups[pName] = [];
+      partyGroups[pName].push(p);
+    });
+
+    Object.entries(partyGroups).forEach(([party, partyProducts]) => {
+      const firstProd = partyProducts[0];
+      const date = new Date().toLocaleDateString('en-GB');
+      const commitmentNo = firstProd.orderNo || "—";
+      const brokerName = firstProd.brokerName || firstProd.broker_name || "—";
+      
+      const rawAddress = firstProd.address || firstProd.customer_delivery_address || firstProd.customer_address || "";
+      const place = rawAddress || "—";
+      
+      const partyMo = firstProd.whatsapp || firstProd.customer_contact_person_whatsapp_no || firstProd.party_mo || firstProd.mobile || "—";
+
+      const categories: Record<string, any[]> = {
+        "HARI KESARI": [],
+        "SOYA": [],
+        "PALM OIL": [],
+        "OTHERS": []
+      };
+
+      partyProducts.forEach(prod => {
+        const name = (prod.productName || "").toUpperCase();
+        const qty = parseFloat(confirmDetails[prod._rowKey]?.qty || prod.qtyToDispatch || "0");
+        const unit = prod.uom || "PCS";
+        const rate = parseFloat(prod.rate || "0");
+        const weight = calculateWeight(prod.productName, qty);
+        const amount = qty * rate;
+
+        const item = { name: prod.productName, unit, qty, weight, rate, amount };
+
+        if (name.includes("HK") || name.includes("HARI KESARI")) categories["HARI KESARI"].push(item);
+        else if (name.includes("SBO") || name.includes("SOYA")) categories["SOYA"].push(item);
+        else if (name.includes("PALM")) categories["PALM OIL"].push(item);
+        else categories["OTHERS"].push(item);
+      });
+
+      fullHtml += `
+        <div class="slip-container">
+          <div class="watermark">SHRI SHYAM OIL</div>
+          <div class="header">
+            <h1 class="company-name">SHRI SHYAM OIL EXTRACTION PVT LTD.</h1>
+            <p class="company-address">VILL- BANARI, POST-BANARI, DISTT.- JANJGIR-CHAMPA</p>
+            <div class="voucher-title">OIL DISPATCH VOUCHER</div>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-item"><span class="info-label">Commitment No</span><span class="info-value">${commitmentNo}</span></div>
+            <div class="info-item"><span class="info-label">Date</span><span class="info-value">${date}</span></div>
+            <div class="info-item"><span class="info-label">Party Name</span><span class="info-value">${party}</span></div>
+            <div class="info-item"><span class="info-label">Broker Name</span><span class="info-value">${brokerName}</span></div>
+            <div class="info-item"><span class="info-label">Place</span><span class="info-value">${place}</span></div>
+            <div class="info-item"><span class="info-label">Party Mo.</span><span class="info-value">${partyMo}</span></div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 35%">Item Name</th>
+                <th style="width: 8%">Unit</th>
+                <th style="width: 10%">Qty</th>
+                <th style="width: 15%">Net Weight</th>
+                <th style="width: 12%">Rate</th>
+                <th style="width: 20%">Total Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${Object.entries(categories).map(([category, items]) => {
+                if (items.length === 0) return '';
+                const catQty = items.reduce((s, i) => s + i.qty, 0);
+                const catWeight = items.reduce((s, i) => s + i.weight, 0);
+                const catAmt = items.reduce((s, i) => s + i.amount, 0);
+
+                return `
+                  <tr class="category-row"><td colspan="6" style="text-align: center;">${category}</td></tr>
+                  ${items.map(item => `
+                    <tr>
+                      <td>${item.name}</td>
+                      <td>${item.unit}</td>
+                      <td>${item.qty}</td>
+                      <td>${item.weight.toFixed(2)} KG</td>
+                      <td>₹${item.rate.toFixed(2)}</td>
+                      <td>₹${item.amount.toFixed(2)}</td>
+                    </tr>
+                  `).join('')}
+                  <tr class="total-row">
+                    <td colspan="2">TOTAL ${category}</td>
+                    <td>${catQty}</td>
+                    <td>${catWeight.toFixed(2)} KG</td>
+                    <td></td>
+                    <td>₹${catAmt.toFixed(2)}</td>
+                  </tr>
+                `;
+              }).join('')}
+              <tr class="total-row" style="background-color: #000; color: #fff; font-size: 15px;">
+                <td colspan="2">GRAND TOTAL</td>
+                <td>${partyProducts.reduce((s, p) => s + parseFloat(confirmDetails[p._rowKey]?.qty || p.qtyToDispatch || "0"), 0)}</td>
+                <td>${partyProducts.reduce((s, p) => s + calculateWeight(p.productName, confirmDetails[p._rowKey]?.qty || p.qtyToDispatch), 0).toFixed(2)} KG</td>
+                <td></td>
+                <td>₹${partyProducts.reduce((s, p) => s + (parseFloat(confirmDetails[p._rowKey]?.qty || p.qtyToDispatch || "0") * parseFloat(p.rate || "0")), 0).toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+
+
+          <div class="footer" style="page-break-inside: avoid;">
+            <div class="signature">Receiver's Signature</div>
+            <div class="signature">Authorized Signatory</div>
+          </div>
+        </div>
+      `;
+    });
+
+    fullHtml += `
+          <script>
+            window.onload = () => {
+              window.print();
+              setTimeout(() => window.close(), 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(fullHtml);
+    printWindow.document.close();
+  };
 
   const handleSaveDraft = async () => {
     if (!user?.username) {
@@ -1304,10 +1496,10 @@ export default function ActualDispatchPage() {
       }
     >
       <div className="space-y-4">
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-col sm:flex-row justify-end gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="bg-transparent">
+              <Button variant="outline" size="sm" className="bg-transparent h-9 text-xs">
                 <Settings2 className="mr-2 h-4 w-4" />
                 Columns
               </Button>
@@ -1330,6 +1522,7 @@ export default function ActualDispatchPage() {
           <Button
             onClick={() => handleOpenDialog()}
             disabled={selectedOrders.length === 0}
+            className="h-9 text-xs font-black uppercase tracking-tight"
             title={isReadOnly ? "View Dispatch Details" : "Confirm Dispatch"}
           >
             Confirm Dispatch ({selectedOrders.length})
@@ -1355,7 +1548,8 @@ export default function ActualDispatchPage() {
         )}
 
         <Card className="border-none shadow-sm overflow-auto max-h-150">
-          <Table>
+          {/* Desktop Table View */}
+          <Table className="hidden md:table">
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>
                 <TableHead className="w-12 text-center">
@@ -1435,6 +1629,83 @@ export default function ActualDispatchPage() {
               )}
             </TableBody>
           </Table>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden grid grid-cols-1 gap-4 p-4">
+            {displayRows.length > 0 ? (
+              displayRows.map((row) => {
+                const rowKey = row._rowKey;
+                return (
+                  <Card key={rowKey} className={cn(
+                    "p-4 border-2 transition-all shadow-sm flex flex-col gap-3",
+                    selectedOrders.includes(rowKey) ? "border-blue-500 bg-blue-50/30" : "border-slate-100 bg-white"
+                  )}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={selectedOrders.includes(rowKey)}
+                          onCheckedChange={() => toggleSelectOrder(rowKey)}
+                          className="h-5 w-5"
+                        />
+                        <div className="space-y-0.5">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">{row.partySoDate || row.date || "—"}</p>
+                          <p className="text-sm font-black text-blue-800">{row.orderNo || "—"}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        {row.has_draft ? (
+                          <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[9px] uppercase font-black">Draft</Badge>
+                        ) : row.has_gate_in ? (
+                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[9px] uppercase font-black">Ready</Badge>
+                        ) : (
+                          <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[9px] uppercase font-black">Gate-In</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 border-t pt-3 border-slate-100">
+                      <div className="flex justify-between items-end">
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer</p>
+                          <p className="text-sm font-bold text-slate-800 capitalize leading-tight">{row.customerName || "—"}</p>
+                        </div>
+                        <div className="text-right space-y-1">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Qty</p>
+                          <p className="text-sm font-black text-blue-600">
+                            {row.qtyToDispatch}
+                            {row._productCount > 1 && <span className="ml-1 text-[10px] text-slate-500">(Total {row._productCount})</span>}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Dynamic columns selected by user */}
+                      <div className="grid grid-cols-1 gap-y-3 pt-2">
+                        {PAGE_COLUMNS.filter(col => 
+                          visibleColumns.includes(col.id) && 
+                          !['orderNo', 'partySoDate', 'status', 'customerName', 'qtyToDispatch'].includes(col.id)
+                        ).map(col => {
+                          let val = row[col.id as keyof typeof row] || "—";
+                          if (col.id === 'revertSecurityRemarks') val = row.revertSecurityRemarks || row.revert_security_remarks || "—";
+                          if (col.id === 'orderPunchRemarks') val = row.orderPunchRemarks || row.order_punch_remarks || "—";
+                          
+                          return (
+                            <div key={col.id} className="space-y-0.5 border-l-2 border-slate-100 pl-3">
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{col.label}</p>
+                              <p className="text-xs font-bold text-slate-700 leading-relaxed whitespace-pre-line">{val}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </Card>
+                )
+              })
+            ) : (
+              <div className="text-center py-12 text-slate-400 font-bold uppercase tracking-widest text-xs italic">
+                No pending items available
+              </div>
+            )}
+          </div>
           <div className="flex items-center justify-between px-6 py-4 border-t bg-slate-50/50 rounded-b-2xl">
             <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
               Showing Page <span className="text-slate-900 mx-1">{displayRows.length > 0 ? pendingPage : 0}</span>
@@ -1519,7 +1790,7 @@ export default function ActualDispatchPage() {
                     Submitted by <span className="text-slate-800">{gateInData.username}</span> on{" "}
                     {gateInData.submitted_at ? new Date(gateInData.submitted_at).toLocaleString("en-GB") : "—"}
                   </div>
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
                       { label: "Front Vehicle", url: gateInData.front_vehicle_image },
                       { label: "Back Vehicle",  url: gateInData.back_vehicle_image },
@@ -1527,13 +1798,13 @@ export default function ActualDispatchPage() {
                       { label: "Gatepass Photo", url: gateInData.gatepass_photo },
                     ].map(img => (
                       <div key={img.label} className="flex flex-col items-center gap-2">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{img.label}</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{img.label}</span>
                         {img.url ? (
-                          <a href={img.url} target="_blank" rel="noopener noreferrer">
-                            <img src={img.url} alt={img.label} className="w-full h-40 object-cover rounded-xl border-2 border-slate-200 hover:opacity-90 transition-opacity cursor-zoom-in shadow" />
+                          <a href={img.url} target="_blank" rel="noopener noreferrer" className="w-full">
+                            <img src={img.url} alt={img.label} className="w-full h-32 md:h-40 object-cover rounded-xl border-2 border-slate-200 hover:opacity-90 transition-opacity cursor-zoom-in shadow" />
                           </a>
                         ) : (
-                          <div className="w-full h-40 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-xs text-slate-400 font-bold">NO IMAGE</div>
+                          <div className="w-full h-32 md:h-40 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-xs text-slate-400 font-bold uppercase tracking-tighter">NO IMAGE</div>
                         )}
                       </div>
                     ))}
@@ -1589,150 +1860,150 @@ export default function ActualDispatchPage() {
                           {isExpanded && (
                             <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
                               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Depo Name</p>
-                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.depoName || "—"}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Purpose</p>
-                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.deliveryPurpose}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Order Type</p>
-                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.orderType}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Dates</p>
-                                    <p className="text-sm font-bold text-slate-900 leading-tight">S: {formatDate(orderDetails.startDate)} | E: {formatDate(orderDetails.endDate)}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Date</p>
-                                    <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.deliveryDate)}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">DO Date</p>
-                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.partySoDate || "—"}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">RST No</p>
-                                    {orderDetails.weightmentSlip || orderDetails.weightment_slip_copy ? (
-                                      <a href={orderDetails.weightmentSlip || orderDetails.weightment_slip_copy} target="_blank" rel="noopener noreferrer" className="text-sm font-black text-blue-600 hover:text-blue-800 underline leading-tight">
-                                        #{orderDetails.rstNo || orderDetails.rst_no || "—"}
-                                      </a>
-                                    ) : (
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">#{orderDetails.rstNo || orderDetails.rst_no || "—"}</p>
-                                    )}
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Gross / Tare / Net</p>
-                                    <p className="text-sm font-black text-slate-900 leading-tight">
-                                      {orderDetails.grossWeight} / {orderDetails.tareWeight} / <span className="text-blue-600 font-black">{((Number(orderDetails.grossWeight || 0) - Number(orderDetails.tareWeight || 0)) || "0").toString()}</span>
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Weight Diff</p>
-                                    <p className="text-sm font-black text-amber-600 leading-tight">{orderDetails.weightDiff}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Extra Weight</p>
-                                    <p className="text-sm font-black text-purple-600 leading-tight">{orderDetails.extraWeight || orderDetails.extra_weight || "0"}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Transport</p>
-                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.transportType}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Contact Person</p>
-                                    <p className="text-sm font-bold text-slate-900 truncate">{orderDetails.contactPerson || "—"}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">WhatsApp No.</p>
-                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.whatsapp || "—"}</p>
-                                  </div>
-                                  <div className="col-span-2">
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Address</p>
-                                    <p className="text-sm font-bold text-slate-900 truncate" title={orderDetails.address}>{orderDetails.address}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Payment Terms</p>
-                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.paymentTerms}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Advance Amount</p>
-                                    <p className="text-base font-black text-blue-700 leading-tight">₹{orderDetails.advanceAmount || 0} {orderDetails.advanceTaken ? "(REQ)" : "(NO)"}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Broker</p>
-                                    <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.isBroker ? orderDetails.brokerName : "No"}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Credit Status</p>
-                                    <Badge className={cn("text-[10px] font-bold px-2 py-0.5", orderDetails.partyCredit === 'Good' ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-red-100 text-red-700 hover:bg-red-100')}>
-                                      {orderDetails.partyCredit}
-                                    </Badge>
-                                  </div>
-                                  <div className="col-span-2 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
-                                    <div className="bg-amber-100 p-2 rounded-lg">
-                                      <Settings2 className="h-5 w-5 text-amber-600" />
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Depo Name</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.depoName || "—"}</p>
                                     </div>
                                     <div>
-                                      <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
-                                      <p className="text-sm font-medium text-slate-700 italic leading-snug">"{group.orderPunchRemarks || "No special instructions provided."}"</p>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Purpose</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.deliveryPurpose}</p>
                                     </div>
-                                  </div>
-                                  <div className={cn(
-                                    "col-span-2 p-4 rounded-xl border flex items-start gap-4 transition-all duration-300",
-                                    group.uploadSo 
-                                      ? "bg-blue-50 border-blue-100 hover:bg-blue-100 cursor-pointer group" 
-                                      : "bg-slate-50 border-slate-100 opacity-60"
-                                  )}
-                                  onClick={() => {
-                                    if (group.uploadSo) {
-                                      window.open(group.uploadSo, '_blank');
-                                    }
-                                  }}>
-                                    <div className={cn(
-                                      "p-2 rounded-lg",
-                                      group.uploadSo ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400"
-                                    )}>
-                                      <FileText className="h-5 w-5" />
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Order Type</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.orderType}</p>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className={cn(
-                                        "text-[11px] font-black uppercase tracking-widest mb-1 leading-none",
-                                        group.uploadSo ? "text-blue-800" : "text-slate-500"
-                                      )}>PO Copy (SO Upload)</p>
-                                      {group.uploadSo ? (
-                                        <div className="flex items-center gap-1">
-                                          <p className="text-sm font-bold text-blue-700 truncate">View Attachment</p>
-                                          <ExternalLink className="h-3 w-3 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                        </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Dates</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">S: {formatDate(orderDetails.startDate)} | E: {formatDate(orderDetails.endDate)}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Delivery Date</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{formatDate(orderDetails.deliveryDate)}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">DO Date</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.partySoDate || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">RST No</p>
+                                      {orderDetails.weightmentSlip || orderDetails.weightment_slip_copy ? (
+                                        <a href={orderDetails.weightmentSlip || orderDetails.weightment_slip_copy} target="_blank" rel="noopener noreferrer" className="text-sm font-black text-blue-600 hover:text-blue-800 underline leading-tight">
+                                          #{orderDetails.rstNo || orderDetails.rst_no || "—"}
+                                        </a>
                                       ) : (
-                                        <p className="text-sm font-medium text-slate-400 italic">No attachment</p>
+                                        <p className="text-sm font-bold text-slate-900 leading-tight">#{orderDetails.rstNo || orderDetails.rst_no || "—"}</p>
                                       )}
                                     </div>
-                                  </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Gross / Tare / Net</p>
+                                      <p className="text-sm font-black text-slate-900 leading-tight">
+                                        {orderDetails.grossWeight} / {orderDetails.tareWeight} / <span className="text-blue-600 font-black">{((Number(orderDetails.grossWeight || 0) - Number(orderDetails.tareWeight || 0)) || "0").toString()}</span>
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Weight Diff</p>
+                                      <p className="text-sm font-black text-amber-600 leading-tight">{orderDetails.weightDiff}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Extra Weight</p>
+                                      <p className="text-sm font-black text-purple-600 leading-tight">{orderDetails.extraWeight || orderDetails.extra_weight || "0"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Transport</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.transportType}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Contact Person</p>
+                                      <p className="text-sm font-bold text-slate-900 truncate">{orderDetails.contactPerson || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">WhatsApp No.</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.whatsapp || "—"}</p>
+                                    </div>
+                                    <div className="col-span-1 sm:col-span-2">
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Address</p>
+                                      <p className="text-sm font-bold text-slate-900 truncate md:whitespace-normal" title={orderDetails.address}>{orderDetails.address}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Payment Terms</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.paymentTerms}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Advance Amount</p>
+                                      <p className="text-base font-black text-blue-700 leading-tight">₹{orderDetails.advanceAmount || 0} {orderDetails.advanceTaken ? "(REQ)" : "(NO)"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Broker</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.isBroker ? orderDetails.brokerName : "No"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Credit Status</p>
+                                      <Badge className={cn("text-[10px] font-bold px-2 py-0.5", orderDetails.partyCredit === 'Good' ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-red-100 text-red-700 hover:bg-red-100')}>
+                                        {orderDetails.partyCredit}
+                                      </Badge>
+                                    </div>
+                                    <div className="col-span-1 sm:col-span-2 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
+                                      <div className="bg-amber-100 p-2 rounded-lg">
+                                        <Settings2 className="h-5 w-5 text-amber-600" />
+                                      </div>
+                                      <div>
+                                        <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
+                                        <p className="text-sm font-medium text-slate-700 italic leading-snug">"{group.orderPunchRemarks || "No special instructions provided."}"</p>
+                                      </div>
+                                    </div>
+                                    <div className={cn(
+                                      "col-span-1 sm:col-span-2 p-4 rounded-xl border flex items-start gap-4 transition-all duration-300",
+                                      group.uploadSo 
+                                        ? "bg-blue-50 border-blue-100 hover:bg-blue-100 cursor-pointer group" 
+                                        : "bg-slate-50 border-slate-100 opacity-60"
+                                    )}
+                                    onClick={() => {
+                                      if (group.uploadSo) {
+                                        window.open(group.uploadSo, '_blank');
+                                      }
+                                    }}>
+                                      <div className={cn(
+                                        "p-2 rounded-lg",
+                                        group.uploadSo ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400"
+                                      )}>
+                                        <FileText className="h-5 w-5" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className={cn(
+                                          "text-[11px] font-black uppercase tracking-widest mb-1 leading-none",
+                                          group.uploadSo ? "text-blue-800" : "text-slate-500"
+                                        )}>PO Copy (SO Upload)</p>
+                                        {group.uploadSo ? (
+                                          <div className="flex items-center gap-1">
+                                            <p className="text-sm font-bold text-blue-700 truncate">View Attachment</p>
+                                            <ExternalLink className="h-3 w-3 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                          </div>
+                                        ) : (
+                                          <p className="text-sm font-medium text-slate-400 italic">No attachment</p>
+                                        )}
+                                      </div>
+                                    </div>
 
-                                  <div className="col-span-full grid grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-200 mt-2">
-                                    <div className="flex items-center gap-2">
-                                      <div className={cn("w-2 h-2 rounded-full", orderDetails.weDealInSku ? 'bg-green-500' : 'bg-red-500')} />
-                                      <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">We Deal SKU?</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <div className={cn("w-2 h-2 rounded-full", orderDetails.dispatchConfirmed ? 'bg-green-500' : 'bg-red-500')} />
-                                      <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Dispatch Confirmed?</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <div className={cn("w-2 h-2 rounded-full", orderDetails.overallStatus === 'Approved' ? 'bg-green-500' : 'bg-red-500')} />
-                                      <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Status: {orderDetails.overallStatus}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <div className={cn("w-2 h-2 rounded-full", orderDetails.orderConfirmation ? 'bg-green-500' : 'bg-red-500')} />
-                                      <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Cust. Confirmed?</span>
+                                    <div className="col-span-full grid grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-200 mt-2">
+                                      <div className="flex items-center gap-2">
+                                        <div className={cn("w-2 h-2 rounded-full", orderDetails.weDealInSku ? 'bg-green-500' : 'bg-red-500')} />
+                                        <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">We Deal SKU?</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <div className={cn("w-2 h-2 rounded-full", orderDetails.dispatchConfirmed ? 'bg-green-500' : 'bg-red-500')} />
+                                        <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Dispatch Confirmed?</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <div className={cn("w-2 h-2 rounded-full", orderDetails.overallStatus === 'Approved' ? 'bg-green-500' : 'bg-red-500')} />
+                                        <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Status: {orderDetails.overallStatus}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <div className={cn("w-2 h-2 rounded-full", orderDetails.orderConfirmation ? 'bg-green-500' : 'bg-red-500')} />
+                                        <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Cust. Confirmed?</span>
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
                               </div>
                             </div>
                           )}
@@ -1753,7 +2024,8 @@ export default function ActualDispatchPage() {
                   </div>
 
                   <div className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm bg-white">
-                    <Table>
+                    {/* Desktop Table View */}
+                    <Table className="hidden md:table">
                       <TableHeader className="bg-slate-50 sticky top-0 z-10">
                         <TableRow>
                           <TableHead className="w-12.5 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">
@@ -1774,6 +2046,8 @@ export default function ActualDispatchPage() {
                           <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">PLANNED QTY</TableHead>
                           <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">DELIVERY FROM</TableHead>
                           <TableHead className="w-45 text-[10px] uppercase font-black text-slate-500 tracking-wider">ACTUAL QTY DISPATCHED</TableHead>
+                          <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">RATE</TableHead>
+                          <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">AMOUNT</TableHead>
                           <TableHead className="w-30 text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">GROSS WEIGHT (KG)</TableHead>
                           <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">STATUS</TableHead>
                         </TableRow>
@@ -1819,6 +2093,12 @@ export default function ActualDispatchPage() {
                                 />
                               </TableCell>
                               <TableCell className="p-3 text-center">
+                                <div className="font-black text-[11px] text-slate-700">₹{parseFloat(prod.rate || 0).toFixed(2)}</div>
+                              </TableCell>
+                              <TableCell className="p-3 text-center">
+                                <div className="font-black text-[11px] text-green-700">₹{(parseFloat(prod.rate || 0) * parseFloat(confirmDetails[rowKey]?.qty || prod.qtyToDispatch || 0)).toFixed(2)}</div>
+                              </TableCell>
+                              <TableCell className="p-3 text-center">
                                 <div className="font-black text-sm text-purple-700">
                                   {calculateGrossWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch).toFixed(2)} kg
                                 </div>
@@ -1829,7 +2109,7 @@ export default function ActualDispatchPage() {
                             </TableRow>
                           )
                         })}
-                        {/* Total Weight Row - only includes SELECTED products */}
+                        {/* Total Weight Row */}
                         <TableRow className="bg-purple-50 border-t-2 border-purple-200">
                           <TableCell colSpan={3} className="text-right p-4 font-black text-xs uppercase text-purple-900 tracking-wider">
                             TOTALS:
@@ -1843,6 +2123,22 @@ export default function ActualDispatchPage() {
                           <TableCell className="p-4 text-center">
                             <div className="font-black text-sm text-purple-700">
                               {selectedGroups.flatMap(g => g._allProducts).filter((p: any) => dialogSelectedProducts.includes(p._rowKey)).reduce((sum, p) => sum + parseFloat(confirmDetails[p._rowKey]?.qty || p.qtyToDispatch || "0"), 0)}
+                            </div>
+                          </TableCell>
+                          <TableCell />
+                          <TableCell className="p-4 text-center">
+                            <div className="flex flex-col items-center">
+                              <span className="text-[9px] font-black text-green-400 uppercase tracking-tighter mb-1">TOTAL AMOUNT</span>
+                              <div className="font-black text-sm text-green-700">
+                                ₹{selectedGroups.flatMap(g => g._allProducts)
+                                  .filter((prod: any) => dialogSelectedProducts.includes(prod._rowKey))
+                                  .reduce((total, prod) => {
+                                    const rowKey = prod._rowKey
+                                    const qty = parseFloat(confirmDetails[rowKey]?.qty || prod.qtyToDispatch || 0)
+                                    const rate = parseFloat(prod.rate || 0)
+                                    return total + (qty * rate)
+                                  }, 0).toFixed(2)}
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell className="p-4 text-center">
@@ -1862,6 +2158,109 @@ export default function ActualDispatchPage() {
                         </TableRow>
                       </TableBody>
                     </Table>
+
+                    {/* Mobile Card View for Products */}
+                    <div className="md:hidden divide-y divide-slate-100">
+                      {selectedGroups.flatMap(group => group._allProducts).map((prod: any) => {
+                        const rowKey = prod._rowKey;
+                        const isSelected = dialogSelectedProducts.includes(rowKey);
+                        const currentQty = confirmDetails[rowKey]?.qty || prod.qtyToDispatch || 0;
+                        const amount = parseFloat(prod.rate || 0) * parseFloat(currentQty);
+                        const weight = calculateGrossWeight(prod.productName, currentQty);
+
+                        return (
+                          <div key={rowKey} className={cn("p-4 space-y-4", isSelected ? "bg-blue-50/30" : "bg-white")}>
+                            <div className="flex items-start gap-3">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelectDialogProduct(rowKey)}
+                                className="mt-1"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest leading-none mb-1">{prod.customerName}</p>
+                                <p className="text-[10px] font-bold text-slate-500 mb-2">{prod.orderNo || "—"}</p>
+                                <p className="text-sm font-black text-slate-900 leading-tight">{prod.productName || "—"}</p>
+                              </div>
+                              <Badge variant="outline" className="text-[8px] bg-orange-50 text-orange-700 border-orange-200 uppercase font-black">Pending</Badge>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1">
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Planned Qty</p>
+                                <p className="text-sm font-black text-blue-700">{prod.qtyToDispatch} <span className="text-[9px] font-bold uppercase">{prod.uom}</span></p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Delivery From</p>
+                                <p className="text-sm font-bold text-slate-600 uppercase tracking-tighter">{prod.deliveryFrom}</p>
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5 pt-2 border-t border-slate-50">
+                              <Label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Actual Qty Dispatched</Label>
+                              <Input
+                                type="number"
+                                className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
+                                placeholder="Enter Qty"
+                                value={confirmDetails[rowKey]?.qty || ""}
+                                onChange={(e) => setConfirmDetails(prev => ({ ...prev, [rowKey]: { ...prev[rowKey], qty: e.target.value }}))}
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 pt-2">
+                              <div className="bg-slate-50 p-2 rounded-lg">
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 text-center">Rate</p>
+                                <p className="text-[10px] font-black text-slate-700 text-center">₹{parseFloat(prod.rate || 0).toFixed(2)}</p>
+                              </div>
+                              <div className="bg-green-50 p-2 rounded-lg">
+                                <p className="text-[8px] font-black text-green-400 uppercase tracking-widest mb-0.5 text-center">Amount</p>
+                                <p className="text-[10px] font-black text-green-700 text-center">₹{amount.toFixed(2)}</p>
+                              </div>
+                              <div className="bg-purple-50 p-2 rounded-lg">
+                                <p className="text-[8px] font-black text-purple-400 uppercase tracking-widest mb-0.5 text-center">Weight</p>
+                                <p className="text-[10px] font-black text-purple-700 text-center">{weight.toFixed(2)} kg</p>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+
+                      {/* Mobile Totals Summary */}
+                      <div className="p-4 bg-purple-50 border-t-2 border-purple-200 space-y-4">
+                        <p className="text-xs font-black text-purple-900 uppercase tracking-widest text-center">Consolidated Totals</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-white/60 p-3 rounded-2xl border border-purple-100">
+                            <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1">Total Qty</p>
+                            <p className="text-base font-black text-purple-700">
+                              {selectedGroups.flatMap(g => g._allProducts).filter((p: any) => dialogSelectedProducts.includes(p._rowKey)).reduce((sum, p) => sum + parseFloat(confirmDetails[p._rowKey]?.qty || p.qtyToDispatch || "0"), 0)}
+                            </p>
+                          </div>
+                          <div className="bg-white/60 p-3 rounded-2xl border border-purple-100">
+                            <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1">Total Weight</p>
+                            <p className="text-base font-black text-purple-700 leading-none">
+                              {selectedGroups.flatMap(g => g._allProducts)
+                                .filter((prod: any) => dialogSelectedProducts.includes(prod._rowKey))
+                                .reduce((total, prod) => {
+                                  const rowKey = prod._rowKey
+                                  return total + calculateGrossWeight(prod.productName, confirmDetails[rowKey]?.qty || prod.qtyToDispatch)
+                                }, 0).toFixed(1)} <span className="text-[10px]">kg</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="bg-green-600 p-4 rounded-2xl shadow-sm">
+                          <p className="text-[9px] font-black text-white/70 uppercase tracking-widest mb-1">Grand Total Amount</p>
+                          <p className="text-xl font-black text-white italic">
+                            ₹{selectedGroups.flatMap(g => g._allProducts)
+                              .filter((prod: any) => dialogSelectedProducts.includes(prod._rowKey))
+                              .reduce((total, prod) => {
+                                const rowKey = prod._rowKey
+                                const qty = parseFloat(confirmDetails[rowKey]?.qty || prod.qtyToDispatch || 0)
+                                const rate = parseFloat(prod.rate || 0)
+                                return total + (qty * rate)
+                              }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -2343,7 +2742,7 @@ export default function ActualDispatchPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                           <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Status (STG 7) <span className="text-red-500">*</span></Label>
                           <Select value={loadData.checkStatus} onValueChange={(v) => setLoadData(p => ({ ...p, checkStatus: v }))}>
@@ -2356,7 +2755,7 @@ export default function ActualDispatchPage() {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className={cn("space-y-1.5 w-full transition-all duration-300", (loadData.transporterName && !['Company Vehicle', 'Party Vehicle'].includes(loadData.transporterName)) ? "col-span-2 md:col-span-2" : "col-span-2")}>
+                        <div className={cn("space-y-1.5 w-full transition-all duration-300", (loadData.transporterName && !['Company Vehicle', 'Party Vehicle'].includes(loadData.transporterName)) ? "col-span-1 sm:col-span-2 md:col-span-2" : "col-span-1 sm:col-span-2")}>
                           <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Transporter <span className="text-red-500">*</span></Label>
                           <Select 
                             value={loadData.transporterName} 
@@ -2390,7 +2789,7 @@ export default function ActualDispatchPage() {
 
                       {loadData.transporterName && !['Company Vehicle', 'Party Vehicle'].includes(loadData.transporterName) && (
                         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Freight Rate Type <span className="text-red-500">*</span></Label>
                               <Select 
@@ -2409,7 +2808,7 @@ export default function ActualDispatchPage() {
                             {loadData.freightRateType && (
                               <div className="space-y-1.5 animate-in slide-in-from-right-2 duration-300">
                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">
-                                  {loadData.freightRateType === 'Bhada Rate' ? 'Bhada Rate (Per Metric Ton)' : 'Fixed Bhada Amount'} <span className="text-red-500">*</span>
+                                  {loadData.freightRateType === 'Bhada Rate' ? 'Bhada Rate (Per MT)' : 'Fixed Bhada Amount'} <span className="text-red-500">*</span>
                                 </Label>
                                 <div className="relative">
                                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
@@ -2433,7 +2832,7 @@ export default function ActualDispatchPage() {
                               <div className="h-px flex-1 bg-slate-100" />
                             </div>
                             
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                               <div className="space-y-1.5">
                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Bank</Label>
                                 <Input 
@@ -2509,8 +2908,8 @@ export default function ActualDispatchPage() {
             )}
           </div>
 
-            <DialogFooter className="mt-4 border-t pt-4 px-8 pb-8 flex flex-col gap-4 sm:flex-col w-full">
-              <div className="flex items-end gap-3 w-full">
+            <DialogFooter className="mt-4 border-t pt-4 px-4 md:px-8 pb-8 flex flex-col gap-6 w-full">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 w-full">
                 <div className="flex-1 space-y-1.5">
                   <Label className="text-[10px] font-black uppercase text-red-500 tracking-tighter ml-1">Revert Remarks <span className="text-red-500">*</span></Label>
                   <Input
@@ -2525,24 +2924,37 @@ export default function ActualDispatchPage() {
                   variant="destructive"
                   onClick={handleRevert}
                   disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly || !revertRemarks.trim()}
-                  className="font-black uppercase tracking-tight whitespace-nowrap"
+                  className="font-black uppercase tracking-tight h-10 px-6"
                 >
-                  {isProcessing ? "Processing..." : `Revert to Pre-Approval (${dialogSelectedProducts.length})`}
+                  {isProcessing ? "Wait..." : `Revert (${dialogSelectedProducts.length})`}
                 </Button>
               </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+
+              <div className="grid grid-cols-1 sm:flex sm:justify-end gap-3 w-full">
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="order-last sm:order-none">Cancel</Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleDownloadSlip} 
+                  disabled={dialogSelectedProducts.length === 0}
+                  className="border-blue-600 text-blue-600 hover:bg-blue-50 font-black h-11 sm:h-10"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Download
+                </Button>
                  <Button
                   variant="outline"
                   onClick={handleSaveDraft}
                   disabled={isSavingDraft || isProcessing || !vehicleNumber || !loadData.transporterName}
-                  className="border-amber-300 text-amber-700 hover:bg-amber-50 font-semibold"
-                  title={(!vehicleNumber || !loadData.transporterName) ? "Vehicle and Transporter details required to save draft" : "Save current form data as a draft to resume later"}
+                  className="border-amber-300 text-amber-700 hover:bg-amber-50 font-semibold h-11 sm:h-10"
                 >
-                  {isSavingDraft ? "Saving..." : "Save as Draft"}
+                  {isSavingDraft ? "Saving..." : "Save Draft"}
                 </Button>
-                <Button onClick={performDispatchConfirmation} disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly || !gateInData} title={isReadOnly ? "View Only Access" : !gateInData ? "Gate-In Required" : "Confirm Dispatch"}>
-                  {isProcessing ? "Processing..." : `Confirm Dispatch (${dialogSelectedProducts.length})`}
+                <Button 
+                  onClick={performDispatchConfirmation} 
+                  disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly || !gateInData}
+                  className="h-11 sm:h-10 font-black bg-blue-600 hover:bg-blue-700"
+                >
+                  {isProcessing ? "Wait..." : `Confirm Dispatch (${dialogSelectedProducts.length})`}
                 </Button>
               </div>
             </DialogFooter>
