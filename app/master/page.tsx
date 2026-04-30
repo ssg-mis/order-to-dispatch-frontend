@@ -1436,6 +1436,8 @@ export default function MasterPage() {
             <Select value={vehicleForm.transporter} onValueChange={val => setVehicleForm({...vehicleForm, transporter: val})}>
               <SelectTrigger><SelectValue placeholder="Select transporter" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="Company Vehicle">Company Vehicle</SelectItem>
+                <SelectItem value="Party Vehicle">Party Vehicle</SelectItem>
                 {transporters.map((t: any) => (
                   <SelectItem key={t.transporter_master_id || t.transporter_name} value={t.transporter_name}>{t.transporter_name}</SelectItem>
                 ))}

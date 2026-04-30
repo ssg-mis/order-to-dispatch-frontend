@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import React, { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { WorkflowStageShell } from "@/components/workflow/workflow-stage-shell"
@@ -10,11 +10,12 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Settings2, ChevronDown, ChevronUp, Truck, Weight, CheckCircle2, XCircle, FileText, ExternalLink } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import { Settings2, ChevronDown, ChevronUp, Truck, Weight, CheckCircle2, XCircle, FileText, ExternalLink, Printer, Download } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { actualDispatchApi, vehicleDetailsApi, materialLoadApi, skuApi, orderApi, depotApi, vehicleMasterApi, transportMasterApi, driverMasterApi, draftApi, gateInApi } from "@/lib/api-service"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -51,6 +52,7 @@ export default function ActualDispatchPage() {
   const [revertRemarks, setRevertRemarks] = useState("")
   const [filterOptions, setFilterOptions] = useState<{ customerNames: string[] }>({ customerNames: [] })
   const [isSavingDraft, setIsSavingDraft] = useState(false)
+  const [isSlipDialogOpen, setIsSlipDialogOpen] = useState(false)
   const [gateInData, setGateInData] = useState<any>(null)
   const [isGateInPopupOpen, setIsGateInPopupOpen] = useState(false)
 
@@ -136,7 +138,7 @@ export default function ActualDispatchPage() {
   // Interstate detection logic: Check if any selected order address state differs from vehicle RTO state
   const isInterState = useMemo(() => {
     if (selectedGroups.length === 0 || !vehicleData.rto) return false;
-    
+
     const rtoPrefix = vehicleData.rto.substring(0, 2).toUpperCase();
     const statePrefixMap: Record<string, string> = {
       "CG": "chhattisgarh", "KA": "karnataka", "MH": "maharashtra", "DL": "delhi",
@@ -244,10 +246,10 @@ export default function ActualDispatchPage() {
         const normalizedSkuName = normalizeSkuName(sku.sku_name || '')
         return normalizedSkuName.includes(normalizedProductName) || normalizedProductName.includes(normalizedSkuName)
       })
-    
+
     const grossWeight = matchedSku?.gross_weight ? parseFloat(matchedSku.gross_weight) : 0
     const skuWeight = matchedSku?.sku_weight ? parseFloat(matchedSku.sku_weight) : 0
-    
+
     return grossWeight > 0 ? grossWeight : skuWeight
   }
 
@@ -394,7 +396,7 @@ export default function ActualDispatchPage() {
           // Robust fallback
           skuArray = response.data.skus || response.data.items || []
         }
-        
+
         console.log(`[ACTUAL DISPATCH] Loaded ${skuArray.length} SKUs`)
         setSkus(skuArray)
       } else {
@@ -413,7 +415,7 @@ export default function ActualDispatchPage() {
 
         // Filter by user permissions: strict deny-by-default even for admins.
         const allowedDepos = user?.depo_access?.['Actual Dispatch'] || [];
-        depots = depots.filter((d: any) => 
+        depots = depots.filter((d: any) =>
           allowedDepos.some(ad => ad.toLowerCase() === d.depot_name.toLowerCase())
         );
 
@@ -850,10 +852,10 @@ export default function ActualDispatchPage() {
           if (res.success && res.data?.draft_data) {
             const d = res.data.draft_data;
             if (d.vehicleNumber !== undefined) setVehicleNumber(d.vehicleNumber);
-            if (d.vehicleData)    setVehicleData(prev => ({ ...prev, ...d.vehicleData }));
-            if (d.loadData)       setLoadData(prev => ({ ...prev, ...d.loadData }));
-            if (d.driverName)     setDriverName(d.driverName);
-            if (d.driverData)     setDriverData(prev => ({ ...prev, ...d.driverData }));
+            if (d.vehicleData) setVehicleData(prev => ({ ...prev, ...d.vehicleData }));
+            if (d.loadData) setLoadData(prev => ({ ...prev, ...d.loadData }));
+            if (d.driverName) setDriverName(d.driverName);
+            if (d.driverData) setDriverData(prev => ({ ...prev, ...d.driverData }));
             if (d.confirmDetails) setConfirmDetails(prev => ({ ...prev, ...d.confirmDetails }));
             if (d.dialogSelectedProducts) setDialogSelectedProducts(d.dialogSelectedProducts);
             toast({ title: "Draft Restored", description: "Your saved draft has been loaded." });
@@ -888,6 +890,131 @@ export default function ActualDispatchPage() {
     }
   }
 
+  const renderSlipContent = () => {
+    if (selectedGroups.length === 0 || dialogSelectedProducts.length === 0) return null;
+
+    const productsForSlip = selectedGroups.flatMap(group =>
+      group._allProducts.filter((p: any) => dialogSelectedProducts.includes(p._rowKey))
+    );
+
+    const partyGroups: Record<string, any[]> = {};
+    productsForSlip.forEach(p => {
+      const pName = p.customerName || p.party_name || p.partyName || "Unknown Party";
+      if (!partyGroups[pName]) partyGroups[pName] = [];
+      partyGroups[pName].push(p);
+    });
+
+    return (
+      <div className="space-y-8">
+        {Object.entries(partyGroups).map(([party, partyProducts]) => {
+          const firstProd = partyProducts[0];
+          const date = new Date().toLocaleDateString('en-GB');
+          const commitmentNo = firstProd.orderNo || "—";
+          const isBroker = firstProd.isBroker || firstProd.is_order_through_broker;
+          const brokerName = isBroker ? (firstProd.brokerName || firstProd.broker_name || "—") : "—";
+          const rawAddress = firstProd.address || firstProd.customer_delivery_address || firstProd.customer_address || "";
+          const place = rawAddress || "—";
+          const partyMo = firstProd.whatsapp || firstProd.customer_contact_person_whatsapp_no || firstProd.party_mo || firstProd.mobile || "—";
+          const processId = firstProd.processid || firstProd.process_id || firstProd.processId || "—";
+
+          const categories: Record<string, any[]> = {
+            "RICE OIL": [],
+            "SOYA OIL": [],
+            "PALM OIL": [],
+            "OTHERS": []
+          };
+
+          partyProducts.forEach(prod => {
+            const name = (prod.productName || "").toUpperCase();
+            const qty = parseFloat(confirmDetails[prod._rowKey]?.qty || prod.qtyToDispatch || "0");
+            const unit = prod.uom || "PCS";
+            const weight = calculateWeight(prod.productName, qty);
+            const grossWeight = calculateGrossWeight(prod.productName, qty);
+
+            const item = { name: prod.productName, unit, qty, weight, grossWeight };
+
+            if (name.includes("RBO") || name.includes("RICE")) categories["RICE OIL"].push(item);
+            else if (name.includes("SBO") || name.includes("SOYA")) categories["SOYA OIL"].push(item);
+            else if (name.includes("PALM")) categories["PALM OIL"].push(item);
+            else categories["OTHERS"].push(item);
+          });
+
+          return (
+            <div key={party} className="border-2 border-black p-4 bg-white text-black mb-8 last:mb-0">
+              <div className="text-center border-b-4 border-double border-black pb-4 mb-6">
+                <h1 className="text-2xl font-black">SHRI SHYAM OIL EXTRACTION PVT LTD.</h1>
+                <p className="text-xs font-bold uppercase">VILL- BANARI, POST-BANARI, DISTT.- JANJGIR-CHAMPA</p>
+                <div className="text-xl font-bold underline mt-2 tracking-widest uppercase">OIL DISPATCH VOUCHER</div>
+              </div>
+
+              <div className="grid grid-cols-2 border border-black mb-6">
+                <div className="flex border-b border-r border-black p-2"><span className="w-32 font-bold uppercase text-[10px] border-r border-black mr-2 pr-2 h-full flex items-center">Commitment No</span><span className="font-bold">{commitmentNo}</span></div>
+                <div className="flex border-b border-black p-2"><span className="w-32 font-bold uppercase text-[10px] border-r border-black mr-2 pr-2 h-full flex items-center">Date</span><span className="font-bold">{date}</span></div>
+                <div className="flex border-b border-r border-black p-2"><span className="w-32 font-bold uppercase text-[10px] border-r border-black mr-2 pr-2 h-full flex items-center">Party Name</span><span className="font-bold">{party}</span></div>
+                <div className="flex border-b border-black p-2"><span className="w-32 font-bold uppercase text-[10px] border-r border-black mr-2 pr-2 h-full flex items-center">Broker Name</span><span className="font-bold">{brokerName}</span></div>
+                <div className="flex border-b border-r border-black p-2"><span className="w-32 font-bold uppercase text-[10px] border-r border-black mr-2 pr-2 h-full flex items-center">Place</span><span className="font-bold">{place}</span></div>
+                <div className="flex border-b border-black p-2"><span className="w-32 font-bold uppercase text-[10px] border-r border-black mr-2 pr-2 h-full flex items-center">Party Mo.</span><span className="font-bold">{partyMo}</span></div>
+                <div className="flex border-r border-black p-2"><span className="w-32 font-bold uppercase text-[10px] border-r border-black mr-2 pr-2 h-full flex items-center">Process ID</span><span className="font-bold">{processId}</span></div>
+                <div className="flex p-2"><span className="w-32 font-bold uppercase text-[10px] border-r border-black mr-2 pr-2 h-full flex items-center"></span></div>
+              </div>
+
+              <table className="w-full border-collapse border-2 border-black mb-6">
+                <thead>
+                  <tr className="bg-slate-100">
+                    <th className="border border-black p-2 text-left text-[10px] uppercase">Item Name</th>
+                    <th className="border border-black p-2 text-left text-[10px] uppercase">Unit</th>
+                    <th className="border border-black p-2 text-left text-[10px] uppercase">Qty</th>
+                    <th className="border border-black p-2 text-left text-[10px] uppercase">Net Weight</th>
+                    <th className="border border-black p-2 text-left text-[10px] uppercase">Gross Weight</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(categories).map(([category, items]) => {
+                    if (items.length === 0) return null;
+                    const catQty = items.reduce((s, i) => s + i.qty, 0);
+                    const catWeight = items.reduce((s, i) => s + i.weight, 0);
+                    const catGrossWeight = items.reduce((s, i) => s + i.grossWeight, 0);
+                    return (
+                      <React.Fragment key={category}>
+                        <tr className="bg-slate-200 font-bold text-center"><td colSpan={5} className="border border-black p-1 uppercase text-xs">{category}</td></tr>
+                        {items.map((item, idx) => (
+                          <tr key={idx}>
+                            <td className="border border-black p-2 text-xs font-bold">{item.name}</td>
+                            <td className="border border-black p-2 text-xs font-bold">{item.unit}</td>
+                            <td className="border border-black p-2 text-xs font-bold">{item.qty}</td>
+                            <td className="border border-black p-2 text-xs font-bold">{item.weight.toFixed(2)} KG</td>
+                            <td className="border border-black p-2 text-xs font-bold">{item.grossWeight.toFixed(2)} KG</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-slate-50 font-black">
+                          <td colSpan={2} className="border border-black p-2 text-xs">TOTAL {category}</td>
+                          <td className="border border-black p-2 text-xs">{catQty}</td>
+                          <td className="border border-black p-2 text-xs">{catWeight.toFixed(2)} KG</td>
+                          <td className="border border-black p-2 text-xs">{catGrossWeight.toFixed(2)} KG</td>
+                        </tr>
+                      </React.Fragment>
+                    )
+                  })}
+                  <tr className="bg-black text-white font-bold">
+                    <td colSpan={2} className="border border-black p-2 text-sm uppercase">Grand Total</td>
+                    <td className="border border-black p-2 text-sm">{partyProducts.reduce((s, p) => s + parseFloat(confirmDetails[p._rowKey]?.qty || p.qtyToDispatch || "0"), 0)}</td>
+                    <td className="border border-black p-2 text-sm">{partyProducts.reduce((s, p) => s + calculateWeight(p.productName, confirmDetails[p._rowKey]?.qty || p.qtyToDispatch), 0).toFixed(2)} KG</td>
+                    <td className="border border-black p-2 text-sm">{partyProducts.reduce((s, p) => s + calculateGrossWeight(p.productName, confirmDetails[p._rowKey]?.qty || p.qtyToDispatch), 0).toFixed(2)} KG</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div className="flex justify-between mt-8 pb-4">
+                <div className="border-t-2 border-black w-48 text-center pt-2 text-[10px] font-black uppercase">Receiver's Signature</div>
+                <div className="border-t-2 border-black w-48 text-center pt-2 text-[10px] font-black uppercase">Authorized Signatory</div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    );
+  };
+
   const handleDownloadSlip = () => {
     if (selectedGroups.length === 0 || dialogSelectedProducts.length === 0) {
       toast({ title: "Error", description: "Please select products to download slip", variant: "destructive" });
@@ -898,8 +1025,6 @@ export default function ActualDispatchPage() {
       group._allProducts.filter((p: any) => dialogSelectedProducts.includes(p._rowKey))
     );
 
-
-    
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
@@ -953,16 +1078,18 @@ export default function ActualDispatchPage() {
       const firstProd = partyProducts[0];
       const date = new Date().toLocaleDateString('en-GB');
       const commitmentNo = firstProd.orderNo || "—";
-      const brokerName = firstProd.brokerName || firstProd.broker_name || "—";
-      
+      const isBroker = firstProd.isBroker || firstProd.is_order_through_broker;
+      const brokerName = isBroker ? (firstProd.brokerName || firstProd.broker_name || "—") : "—";
+
       const rawAddress = firstProd.address || firstProd.customer_delivery_address || firstProd.customer_address || "";
       const place = rawAddress || "—";
-      
+
       const partyMo = firstProd.whatsapp || firstProd.customer_contact_person_whatsapp_no || firstProd.party_mo || firstProd.mobile || "—";
+      const processId = firstProd.processid || firstProd.process_id || firstProd.processId || "—";
 
       const categories: Record<string, any[]> = {
-        "HARI KESARI": [],
-        "SOYA": [],
+        "RICE OIL": [],
+        "SOYA OIL": [],
         "PALM OIL": [],
         "OTHERS": []
       };
@@ -971,14 +1098,13 @@ export default function ActualDispatchPage() {
         const name = (prod.productName || "").toUpperCase();
         const qty = parseFloat(confirmDetails[prod._rowKey]?.qty || prod.qtyToDispatch || "0");
         const unit = prod.uom || "PCS";
-        const rate = parseFloat(prod.rate || "0");
         const weight = calculateWeight(prod.productName, qty);
-        const amount = qty * rate;
+        const grossWeight = calculateGrossWeight(prod.productName, qty);
 
-        const item = { name: prod.productName, unit, qty, weight, rate, amount };
+        const item = { name: prod.productName, unit, qty, weight, grossWeight };
 
-        if (name.includes("HK") || name.includes("HARI KESARI")) categories["HARI KESARI"].push(item);
-        else if (name.includes("SBO") || name.includes("SOYA")) categories["SOYA"].push(item);
+        if (name.includes("RBO") || name.includes("RICE")) categories["RICE OIL"].push(item);
+        else if (name.includes("SBO") || name.includes("SOYA")) categories["SOYA OIL"].push(item);
         else if (name.includes("PALM")) categories["PALM OIL"].push(item);
         else categories["OTHERS"].push(item);
       });
@@ -999,53 +1125,51 @@ export default function ActualDispatchPage() {
             <div class="info-item"><span class="info-label">Broker Name</span><span class="info-value">${brokerName}</span></div>
             <div class="info-item"><span class="info-label">Place</span><span class="info-value">${place}</span></div>
             <div class="info-item"><span class="info-label">Party Mo.</span><span class="info-value">${partyMo}</span></div>
+            <div class="info-item"><span class="info-label">Process ID</span><span class="info-value">${processId}</span></div>
+            <div class="info-item"><span class="info-label"></span><span class="info-value"></span></div>
           </div>
 
           <table>
             <thead>
               <tr>
                 <th style="width: 35%">Item Name</th>
-                <th style="width: 8%">Unit</th>
-                <th style="width: 10%">Qty</th>
-                <th style="width: 15%">Net Weight</th>
-                <th style="width: 12%">Rate</th>
-                <th style="width: 20%">Total Amount</th>
+                <th style="width: 10%">Unit</th>
+                <th style="width: 15%">Qty</th>
+                <th style="width: 20%">Net Weight</th>
+                <th style="width: 20%">Gross Weight</th>
               </tr>
             </thead>
             <tbody>
               ${Object.entries(categories).map(([category, items]) => {
-                if (items.length === 0) return '';
-                const catQty = items.reduce((s, i) => s + i.qty, 0);
-                const catWeight = items.reduce((s, i) => s + i.weight, 0);
-                const catAmt = items.reduce((s, i) => s + i.amount, 0);
+        if (items.length === 0) return '';
+        const catQty = items.reduce((s, i) => s + i.qty, 0);
+        const catWeight = items.reduce((s, i) => s + i.weight, 0);
+        const catGrossWeight = items.reduce((s, i) => s + i.grossWeight, 0);
 
-                return `
-                  <tr class="category-row"><td colspan="6" style="text-align: center;">${category}</td></tr>
+        return `
+                  <tr class="category-row"><td colspan="5" style="text-align: center;">${category}</td></tr>
                   ${items.map(item => `
                     <tr>
                       <td>${item.name}</td>
                       <td>${item.unit}</td>
                       <td>${item.qty}</td>
                       <td>${item.weight.toFixed(2)} KG</td>
-                      <td>₹${item.rate.toFixed(2)}</td>
-                      <td>₹${item.amount.toFixed(2)}</td>
+                      <td>${item.grossWeight.toFixed(2)} KG</td>
                     </tr>
                   `).join('')}
                   <tr class="total-row">
                     <td colspan="2">TOTAL ${category}</td>
                     <td>${catQty}</td>
                     <td>${catWeight.toFixed(2)} KG</td>
-                    <td></td>
-                    <td>₹${catAmt.toFixed(2)}</td>
+                    <td>${catGrossWeight.toFixed(2)} KG</td>
                   </tr>
                 `;
-              }).join('')}
+      }).join('')}
               <tr class="total-row" style="background-color: #000; color: #fff; font-size: 15px;">
                 <td colspan="2">GRAND TOTAL</td>
                 <td>${partyProducts.reduce((s, p) => s + parseFloat(confirmDetails[p._rowKey]?.qty || p.qtyToDispatch || "0"), 0)}</td>
                 <td>${partyProducts.reduce((s, p) => s + calculateWeight(p.productName, confirmDetails[p._rowKey]?.qty || p.qtyToDispatch), 0).toFixed(2)} KG</td>
-                <td></td>
-                <td>₹${partyProducts.reduce((s, p) => s + (parseFloat(confirmDetails[p._rowKey]?.qty || p.qtyToDispatch || "0") * parseFloat(p.rate || "0")), 0).toFixed(2)}</td>
+                <td>${partyProducts.reduce((s, p) => s + calculateGrossWeight(p.productName, confirmDetails[p._rowKey]?.qty || p.qtyToDispatch), 0).toFixed(2)} KG</td>
               </tr>
             </tbody>
           </table>
@@ -1085,15 +1209,15 @@ export default function ActualDispatchPage() {
       return;
     }
     const orderKey = selectedGroups[0]._rowKey;
-    const draftData = { 
-      vehicleNumber, 
-      vehicleData, 
-      loadData, 
-      confirmDetails, 
-      dialogSelectedProducts, 
-      driverName, 
+    const draftData = {
+      vehicleNumber,
+      vehicleData,
+      loadData,
+      confirmDetails,
+      dialogSelectedProducts,
+      driverName,
       driverData,
-      totalPackingWeight: totalPackingWeightFromSku 
+      totalPackingWeight: totalPackingWeightFromSku
     };
 
     setIsSavingDraft(true);
@@ -1680,14 +1804,14 @@ export default function ActualDispatchPage() {
 
                       {/* Dynamic columns selected by user */}
                       <div className="grid grid-cols-1 gap-y-3 pt-2">
-                        {PAGE_COLUMNS.filter(col => 
-                          visibleColumns.includes(col.id) && 
+                        {PAGE_COLUMNS.filter(col =>
+                          visibleColumns.includes(col.id) &&
                           !['orderNo', 'partySoDate', 'status', 'customerName', 'qtyToDispatch'].includes(col.id)
                         ).map(col => {
                           let val = row[col.id as keyof typeof row] || "—";
                           if (col.id === 'revertSecurityRemarks') val = row.revertSecurityRemarks || row.revert_security_remarks || "—";
                           if (col.id === 'orderPunchRemarks') val = row.orderPunchRemarks || row.order_punch_remarks || "—";
-                          
+
                           return (
                             <div key={col.id} className="space-y-0.5 border-l-2 border-slate-100 pl-3">
                               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{col.label}</p>
@@ -1793,8 +1917,8 @@ export default function ActualDispatchPage() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
                       { label: "Front Vehicle", url: gateInData.front_vehicle_image },
-                      { label: "Back Vehicle",  url: gateInData.back_vehicle_image },
-                      { label: "Driver Photo",  url: gateInData.driver_photo },
+                      { label: "Back Vehicle", url: gateInData.back_vehicle_image },
+                      { label: "Driver Photo", url: gateInData.driver_photo },
                       { label: "Gatepass Photo", url: gateInData.gatepass_photo },
                     ].map(img => (
                       <div key={img.label} className="flex flex-col items-center gap-2">
@@ -1823,43 +1947,43 @@ export default function ActualDispatchPage() {
                 {/* 1. Multi-Customer Interleaved Details */}
                 {selectedGroups.map((group, groupIdx) => {
                   return (
-                  <div key={group._rowKey} className="space-y-6">
-                    <h2 className="text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
-                      {group.customerName}
-                      <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
-                        {group._productCount} PRODUCTS
-                      </Badge>
-                    </h2>
+                    <div key={group._rowKey} className="space-y-6">
+                      <h2 className="text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
+                        {group.customerName}
+                        <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
+                          {group._productCount} PRODUCTS
+                        </Badge>
+                      </h2>
 
-                    {Object.entries(group._ordersMap).map(([baseDo, orderDetails]: [string, any], orderIdx) => {
-                      const isExpanded = expandedOrders.includes(baseDo);
-                      const toggleExpand = () => {
-                        setExpandedOrders(prev => isExpanded ? prev.filter(id => id !== baseDo) : [...prev, baseDo]);
-                      };
+                      {Object.entries(group._ordersMap).map(([baseDo, orderDetails]: [string, any], orderIdx) => {
+                        const isExpanded = expandedOrders.includes(baseDo);
+                        const toggleExpand = () => {
+                          setExpandedOrders(prev => isExpanded ? prev.filter(id => id !== baseDo) : [...prev, baseDo]);
+                        };
 
-                      return (
-                        <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
-                          <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
-                            <div className="flex items-center gap-4">
-                              <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
-                                ORDER: {baseDo}
-                              </Badge>
-                              <div className="flex flex-col">
-                                <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">Customer Group {groupIdx + 1} | Section {orderIdx + 1}</span>
-                                <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products.length} Items Selected</span>
+                        return (
+                          <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
+                            <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
+                              <div className="flex items-center gap-4">
+                                <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
+                                  ORDER: {baseDo}
+                                </Badge>
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">Customer Group {groupIdx + 1} | Section {orderIdx + 1}</span>
+                                  <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products.length} Items Selected</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20 rounded-full">
+                                  {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                                </Button>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20 rounded-full">
-                                {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                              </Button>
-                            </div>
-                          </div>
 
-                          {isExpanded && (
-                            <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
-                              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
+                            {isExpanded && (
+                              <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
+                                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
                                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
                                     <div>
                                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Depo Name</p>
@@ -1954,15 +2078,15 @@ export default function ActualDispatchPage() {
                                     </div>
                                     <div className={cn(
                                       "col-span-1 sm:col-span-2 p-4 rounded-xl border flex items-start gap-4 transition-all duration-300",
-                                      group.uploadSo 
-                                        ? "bg-blue-50 border-blue-100 hover:bg-blue-100 cursor-pointer group" 
+                                      group.uploadSo
+                                        ? "bg-blue-50 border-blue-100 hover:bg-blue-100 cursor-pointer group"
                                         : "bg-slate-50 border-slate-100 opacity-60"
                                     )}
-                                    onClick={() => {
-                                      if (group.uploadSo) {
-                                        window.open(group.uploadSo, '_blank');
-                                      }
-                                    }}>
+                                      onClick={() => {
+                                        if (group.uploadSo) {
+                                          window.open(group.uploadSo, '_blank');
+                                        }
+                                      }}>
                                       <div className={cn(
                                         "p-2 rounded-lg",
                                         group.uploadSo ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400"
@@ -2004,13 +2128,13 @@ export default function ActualDispatchPage() {
                                       </div>
                                     </div>
                                   </div>
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   );
                 })}
 
@@ -2078,7 +2202,8 @@ export default function ActualDispatchPage() {
                               <TableCell className="p-3">
                                 <Input
                                   type="number"
-                                  className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 transition-colors shadow-sm"
+                                  disabled
+                                  className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-slate-100 cursor-not-allowed focus:ring-0 transition-colors shadow-sm"
                                   placeholder="Actual Qty"
                                   value={confirmDetails[rowKey]?.qty || ""}
                                   onChange={(e) =>
@@ -2199,10 +2324,11 @@ export default function ActualDispatchPage() {
                               <Label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Actual Qty Dispatched</Label>
                               <Input
                                 type="number"
-                                className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
+                                disabled
+                                className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-slate-100 cursor-not-allowed"
                                 placeholder="Enter Qty"
                                 value={confirmDetails[rowKey]?.qty || ""}
-                                onChange={(e) => setConfirmDetails(prev => ({ ...prev, [rowKey]: { ...prev[rowKey], qty: e.target.value }}))}
+                                onChange={(e) => setConfirmDetails(prev => ({ ...prev, [rowKey]: { ...prev[rowKey], qty: e.target.value } }))}
                               />
                             </div>
 
@@ -2277,126 +2403,126 @@ export default function ActualDispatchPage() {
                     </div>
 
                     <div className="bg-slate-50 border-2 border-slate-200 rounded-3xl p-6 space-y-6 shadow-md transition-all hover:shadow-lg">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="space-y-1.5">
-                            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Vehicle Registration Number <span className="text-red-500">*</span></Label>
-                            <Select 
-                              value={vehicleNumber} 
-                              onValueChange={(v) => {
-                                setVehicleNumber(v);
-                                const selectedV = vehicleMaster.find(veh => veh.registration_no === v);
-                                if (selectedV) {
-                                  // Autofill Logic
-                                  setVehicleData(p => ({
-                                    ...p,
-                                    registration_no: selectedV.registration_no || "",
-                                    vehicle_type: selectedV.vehicle_type || "",
-                                    rto: selectedV.rto || "",
-                                    passing_weight: selectedV.passing || "",
-                                    fitness_end_date: selectedV.fitness ? new Date(selectedV.fitness).toISOString().split('T')[0] : "",
-                                    insurance_end_date: selectedV.insurance ? new Date(selectedV.insurance).toISOString().split('T')[0] : "",
-                                    tax_end_date: selectedV.road_tax ? new Date(selectedV.road_tax).toISOString().split('T')[0] : "",
-                                    pollution_end_date: selectedV.pollution ? new Date(selectedV.pollution).toISOString().split('T')[0] : "",
-                                    permit1_end_date: selectedV.state_permit ? new Date(selectedV.state_permit).toISOString().split('T')[0] : "",
-                                    // Images
-                                    fitness: selectedV.fitness_image || p.fitness,
-                                    insurance: selectedV.insurance_image || p.insurance,
-                                    tax_copy: selectedV.road_tax_image || p.tax_copy,
-                                    polution: selectedV.pollution_image || p.polution,
-                                    permit1: selectedV.state_permit_image || p.permit1,
-                                    gvw: selectedV.gvw || "",
-                                    ulw: selectedV.ulw || "",
-                                  }));
-                                  setLoadData(p => ({
-                                    ...p,
-                                    truckNo: selectedV.registration_no || "",
-                                    transporterName: selectedV.transporter || p.transporterName,
-                                    grossWeight: selectedV.gvw || p.grossWeight,
-                                    tareWeight: selectedV.ulw || p.tareWeight
-                                  }));
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl px-4 font-black text-lg focus:border-purple-500 transition-colors uppercase bg-white shadow-sm">
-                                <SelectValue placeholder="Select Vehicle" />
-                              </SelectTrigger>
-                              <SelectContent className="max-h-[300px]">
-                                {vehicleMaster.map(v => (
-                                  <SelectItem key={v.id} value={v.registration_no} className="font-bold">{v.registration_no}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Driver Name <span className="text-red-500">*</span></Label>
-                            <Select 
-                              value={driverName} 
-                              onValueChange={(v) => {
-                                setDriverName(v);
-                                const selectedD = driverMaster.find(d => d.driver_name === v);
-                                if (selectedD) {
-                                  setDriverData({
-                                    contact_no: selectedD.mobile_no || "",
-                                    license_no: selectedD.driving_licence_no || "",
-                                    valid_upto: selectedD.valid_upto ? new Date(selectedD.valid_upto).toISOString().split('T')[0] : ""
-                                  });
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl px-4 font-black text-lg focus:border-purple-500 transition-colors uppercase bg-white shadow-sm">
-                                <SelectValue placeholder="Select Driver" />
-                              </SelectTrigger>
-                              <SelectContent className="max-h-[300px]">
-                                {driverMaster.map(d => (
-                                  <SelectItem key={d.id} value={d.driver_name} className="font-bold">{d.driver_name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          {/* Vehicle Details Badges */}
-                          <div className="grid grid-cols-2 gap-2 mt-auto pb-1">
-                             <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
-                                <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">Type</p>
-                                <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{vehicleData.vehicle_type || '---'}</p>
-                             </div>
-                             <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
-                                <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">RTO</p>
-                                <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{vehicleData.rto || '---'}</p>
-                             </div>
-                             <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
-                                <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">Pass Wt</p>
-                                <p className={cn("text-[11px] font-black uppercase leading-none", (totalCombinedWeight > (parseFloat(vehicleData.passing_weight) || 0)) ? "text-red-600" : "text-purple-600")}>
-                                  {vehicleData.passing_weight || '0.00'} KG
-                                </p>
-                             </div>
-                             <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
-                                <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">GVW</p>
-                                <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{vehicleData.gvw || '---'} KG</p>
-                             </div>
-                             <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
-                                <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">ULW</p>
-                                <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{vehicleData.ulw || '---'} KG</p>
-                             </div>
-                           </div>
-
-                           {/* Driver Details Badges */}
-                           <div className="grid grid-cols-2 gap-2 mt-2">
-                              <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
-                                 <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">Contact</p>
-                                 <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{driverData.contact_no || '---'}</p>
-                              </div>
-                              <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
-                                 <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">License No</p>
-                                 <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{driverData.license_no || '---'}</p>
-                              </div>
-                              <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
-                                 <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">Valid Upto</p>
-                                 <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{formatDate(driverData.valid_upto) || '---'}</p>
-                              </div>
-                           </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Vehicle Registration Number <span className="text-red-500">*</span></Label>
+                          <Select
+                            value={vehicleNumber}
+                            onValueChange={(v) => {
+                              setVehicleNumber(v);
+                              const selectedV = vehicleMaster.find(veh => veh.registration_no === v);
+                              if (selectedV) {
+                                // Autofill Logic
+                                setVehicleData(p => ({
+                                  ...p,
+                                  registration_no: selectedV.registration_no || "",
+                                  vehicle_type: selectedV.vehicle_type || "",
+                                  rto: selectedV.rto || "",
+                                  passing_weight: selectedV.passing || "",
+                                  fitness_end_date: selectedV.fitness ? new Date(selectedV.fitness).toISOString().split('T')[0] : "",
+                                  insurance_end_date: selectedV.insurance ? new Date(selectedV.insurance).toISOString().split('T')[0] : "",
+                                  tax_end_date: selectedV.road_tax ? new Date(selectedV.road_tax).toISOString().split('T')[0] : "",
+                                  pollution_end_date: selectedV.pollution ? new Date(selectedV.pollution).toISOString().split('T')[0] : "",
+                                  permit1_end_date: selectedV.state_permit ? new Date(selectedV.state_permit).toISOString().split('T')[0] : "",
+                                  // Images
+                                  fitness: selectedV.fitness_image || p.fitness,
+                                  insurance: selectedV.insurance_image || p.insurance,
+                                  tax_copy: selectedV.road_tax_image || p.tax_copy,
+                                  polution: selectedV.pollution_image || p.polution,
+                                  permit1: selectedV.state_permit_image || p.permit1,
+                                  gvw: selectedV.gvw || "",
+                                  ulw: selectedV.ulw || "",
+                                }));
+                                setLoadData(p => ({
+                                  ...p,
+                                  truckNo: selectedV.registration_no || "",
+                                  transporterName: selectedV.transporter || p.transporterName,
+                                  grossWeight: selectedV.gvw || p.grossWeight,
+                                  tareWeight: selectedV.ulw || p.tareWeight
+                                }));
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl px-4 font-black text-lg focus:border-purple-500 transition-colors uppercase bg-white shadow-sm">
+                              <SelectValue placeholder="Select Vehicle" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[300px]">
+                              {vehicleMaster.map(v => (
+                                <SelectItem key={v.id} value={v.registration_no} className="font-bold">{v.registration_no}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Driver Name <span className="text-red-500">*</span></Label>
+                          <Select
+                            value={driverName}
+                            onValueChange={(v) => {
+                              setDriverName(v);
+                              const selectedD = driverMaster.find(d => d.driver_name === v);
+                              if (selectedD) {
+                                setDriverData({
+                                  contact_no: selectedD.mobile_no || "",
+                                  license_no: selectedD.driving_licence_no || "",
+                                  valid_upto: selectedD.valid_upto ? new Date(selectedD.valid_upto).toISOString().split('T')[0] : ""
+                                });
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl px-4 font-black text-lg focus:border-purple-500 transition-colors uppercase bg-white shadow-sm">
+                              <SelectValue placeholder="Select Driver" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[300px]">
+                              {driverMaster.map(d => (
+                                <SelectItem key={d.id} value={d.driver_name} className="font-bold">{d.driver_name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Vehicle Details Badges */}
+                        <div className="grid grid-cols-2 gap-2 mt-auto pb-1">
+                          <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
+                            <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">Type</p>
+                            <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{vehicleData.vehicle_type || '---'}</p>
+                          </div>
+                          <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
+                            <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">RTO</p>
+                            <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{vehicleData.rto || '---'}</p>
+                          </div>
+                          <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
+                            <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">Pass Wt</p>
+                            <p className={cn("text-[11px] font-black uppercase leading-none", (totalCombinedWeight > (parseFloat(vehicleData.passing_weight) || 0)) ? "text-red-600" : "text-purple-600")}>
+                              {vehicleData.passing_weight || '0.00'} KG
+                            </p>
+                          </div>
+                          <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
+                            <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">GVW</p>
+                            <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{vehicleData.gvw || '---'} KG</p>
+                          </div>
+                          <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
+                            <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">ULW</p>
+                            <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{vehicleData.ulw || '---'} KG</p>
+                          </div>
+                        </div>
+
+                        {/* Driver Details Badges */}
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                          <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
+                            <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">Contact</p>
+                            <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{driverData.contact_no || '---'}</p>
+                          </div>
+                          <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
+                            <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">License No</p>
+                            <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{driverData.license_no || '---'}</p>
+                          </div>
+                          <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
+                            <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">Valid Upto</p>
+                            <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{formatDate(driverData.valid_upto) || '---'}</p>
+                          </div>
+                        </div>
+                      </div>
 
                       <div className="pt-4 border-t border-slate-200">
                         <p className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest leading-none">Digital Documents (STAGE 6)</p>
@@ -2406,24 +2532,24 @@ export default function ActualDispatchPage() {
                               <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
                                 Fitness <span className="text-red-500">*</span> {vehicleData.fitness_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.fitness_file_name})</span>}
                               </span>
-                               <div className="flex items-center gap-2">
-                                 {vehicleData.fitness && vehicleData.fitness !== 'pending' ? (
-                                   <a 
-                                     href={vehicleData.fitness} 
-                                     target="_blank" 
-                                     className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                                   >
-                                     VIEW
-                                   </a>
-                                 ) : (
-                                   <>
-                                     <Input type="file" className="hidden" id="fitness-doc" onChange={(e) => handleFileChange('fitness', 'fitness_file_name', e.target.files?.[0] || null)} />
-                                     <Label htmlFor="fitness-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                       {isUploading === 'fitness' ? "..." : (vehicleData.fitness_file_name ? 'REPLACE' : 'UPLOAD')}
-                                     </Label>
-                                   </>
-                                 )}
-                               </div>
+                              <div className="flex items-center gap-2">
+                                {vehicleData.fitness && vehicleData.fitness !== 'pending' ? (
+                                  <a
+                                    href={vehicleData.fitness}
+                                    target="_blank"
+                                    className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
+                                  >
+                                    VIEW
+                                  </a>
+                                ) : (
+                                  <>
+                                    <Input type="file" className="hidden" id="fitness-doc" onChange={(e) => handleFileChange('fitness', 'fitness_file_name', e.target.files?.[0] || null)} />
+                                    <Label htmlFor="fitness-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                      {isUploading === 'fitness' ? "..." : (vehicleData.fitness_file_name ? 'REPLACE' : 'UPLOAD')}
+                                    </Label>
+                                  </>
+                                )}
+                              </div>
                             </div>
                             <Input
                               type="date"
@@ -2439,24 +2565,24 @@ export default function ActualDispatchPage() {
                               <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
                                 Insurance <span className="text-red-500">*</span> {vehicleData.insurance_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.insurance_file_name})</span>}
                               </span>
-                               <div className="flex items-center gap-2">
-                                 {vehicleData.insurance && vehicleData.insurance !== 'pending' ? (
-                                   <a 
-                                     href={vehicleData.insurance} 
-                                     target="_blank" 
-                                     className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                                   >
-                                     VIEW
-                                   </a>
-                                 ) : (
-                                   <>
-                                     <Input type="file" className="hidden" id="ins-doc" onChange={(e) => handleFileChange('insurance', 'insurance_file_name', e.target.files?.[0] || null)} />
-                                     <Label htmlFor="ins-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                       {isUploading === 'insurance' ? "..." : (vehicleData.insurance_file_name ? 'REPLACE' : 'UPLOAD')}
-                                     </Label>
-                                   </>
-                                 )}
-                               </div>
+                              <div className="flex items-center gap-2">
+                                {vehicleData.insurance && vehicleData.insurance !== 'pending' ? (
+                                  <a
+                                    href={vehicleData.insurance}
+                                    target="_blank"
+                                    className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
+                                  >
+                                    VIEW
+                                  </a>
+                                ) : (
+                                  <>
+                                    <Input type="file" className="hidden" id="ins-doc" onChange={(e) => handleFileChange('insurance', 'insurance_file_name', e.target.files?.[0] || null)} />
+                                    <Label htmlFor="ins-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                      {isUploading === 'insurance' ? "..." : (vehicleData.insurance_file_name ? 'REPLACE' : 'UPLOAD')}
+                                    </Label>
+                                  </>
+                                )}
+                              </div>
                             </div>
                             <Input
                               type="date"
@@ -2472,24 +2598,24 @@ export default function ActualDispatchPage() {
                               <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
                                 Tax Copy <span className="text-red-500">*</span> {vehicleData.tax_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.tax_file_name})</span>}
                               </span>
-                               <div className="flex items-center gap-2">
-                                 {vehicleData.tax_copy && vehicleData.tax_copy !== 'pending' ? (
-                                   <a 
-                                     href={vehicleData.tax_copy} 
-                                     target="_blank" 
-                                     className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                                   >
-                                     VIEW
-                                   </a>
-                                 ) : (
-                                   <>
-                                     <Input type="file" className="hidden" id="tax-doc" onChange={(e) => handleFileChange('tax_copy', 'tax_file_name', e.target.files?.[0] || null)} />
-                                     <Label htmlFor="tax-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                       {isUploading === 'tax_copy' ? "..." : (vehicleData.tax_file_name ? 'REPLACE' : 'UPLOAD')}
-                                     </Label>
-                                   </>
-                                 )}
-                               </div>
+                              <div className="flex items-center gap-2">
+                                {vehicleData.tax_copy && vehicleData.tax_copy !== 'pending' ? (
+                                  <a
+                                    href={vehicleData.tax_copy}
+                                    target="_blank"
+                                    className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
+                                  >
+                                    VIEW
+                                  </a>
+                                ) : (
+                                  <>
+                                    <Input type="file" className="hidden" id="tax-doc" onChange={(e) => handleFileChange('tax_copy', 'tax_file_name', e.target.files?.[0] || null)} />
+                                    <Label htmlFor="tax-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                      {isUploading === 'tax_copy' ? "..." : (vehicleData.tax_file_name ? 'REPLACE' : 'UPLOAD')}
+                                    </Label>
+                                  </>
+                                )}
+                              </div>
                             </div>
                             <Input
                               type="date"
@@ -2505,24 +2631,24 @@ export default function ActualDispatchPage() {
                               <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
                                 Pollution <span className="text-red-500">*</span> {vehicleData.pollution_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.pollution_file_name})</span>}
                               </span>
-                               <div className="flex items-center gap-2">
-                                 {vehicleData.polution && vehicleData.polution !== 'pending' ? (
-                                   <a 
-                                     href={vehicleData.polution} 
-                                     target="_blank" 
-                                     className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                                   >
-                                     VIEW
-                                   </a>
-                                 ) : (
-                                   <>
-                                     <Input type="file" className="hidden" id="poll-doc" onChange={(e) => handleFileChange('polution', 'pollution_file_name', e.target.files?.[0] || null)} />
-                                     <Label htmlFor="poll-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                       {isUploading === 'polution' ? "..." : (vehicleData.pollution_file_name ? 'REPLACE' : 'UPLOAD')}
-                                     </Label>
-                                   </>
-                                 )}
-                               </div>
+                              <div className="flex items-center gap-2">
+                                {vehicleData.polution && vehicleData.polution !== 'pending' ? (
+                                  <a
+                                    href={vehicleData.polution}
+                                    target="_blank"
+                                    className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
+                                  >
+                                    VIEW
+                                  </a>
+                                ) : (
+                                  <>
+                                    <Input type="file" className="hidden" id="poll-doc" onChange={(e) => handleFileChange('polution', 'pollution_file_name', e.target.files?.[0] || null)} />
+                                    <Label htmlFor="poll-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                      {isUploading === 'polution' ? "..." : (vehicleData.pollution_file_name ? 'REPLACE' : 'UPLOAD')}
+                                    </Label>
+                                  </>
+                                )}
+                              </div>
                             </div>
                             <Input
                               type="date"
@@ -2538,24 +2664,24 @@ export default function ActualDispatchPage() {
                               <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
                                 State Permit <span className="text-red-500">*</span> {vehicleData.permit1_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit1_file_name})</span>}
                               </span>
-                               <div className="flex items-center gap-2">
-                                 {vehicleData.permit1 && vehicleData.permit1 !== 'pending' ? (
-                                   <a 
-                                     href={vehicleData.permit1} 
-                                     target="_blank" 
-                                     className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                                   >
-                                     VIEW
-                                   </a>
-                                 ) : (
-                                   <>
-                                     <Input type="file" className="hidden" id="permit1-doc" onChange={(e) => handleFileChange('permit1', 'permit1_file_name', e.target.files?.[0] || null)} />
-                                     <Label htmlFor="permit1-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                       {isUploading === 'permit1' ? "..." : (vehicleData.permit1_file_name ? 'REPLACE' : 'UPLOAD')}
-                                     </Label>
-                                   </>
-                                 )}
-                               </div>
+                              <div className="flex items-center gap-2">
+                                {vehicleData.permit1 && vehicleData.permit1 !== 'pending' ? (
+                                  <a
+                                    href={vehicleData.permit1}
+                                    target="_blank"
+                                    className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
+                                  >
+                                    VIEW
+                                  </a>
+                                ) : (
+                                  <>
+                                    <Input type="file" className="hidden" id="permit1-doc" onChange={(e) => handleFileChange('permit1', 'permit1_file_name', e.target.files?.[0] || null)} />
+                                    <Label htmlFor="permit1-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                      {isUploading === 'permit1' ? "..." : (vehicleData.permit1_file_name ? 'REPLACE' : 'UPLOAD')}
+                                    </Label>
+                                  </>
+                                )}
+                              </div>
                             </div>
                             <Input
                               type="date"
@@ -2577,37 +2703,37 @@ export default function ActualDispatchPage() {
                               )}>
                                 National / Other State Permit {isInterState && <span className="text-red-500">*</span>} {vehicleData.permit2_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit2_file_name})</span>}
                               </span>
-                               <div className="flex items-center gap-2">
-                                 {vehicleData.permit2_out_state && vehicleData.permit2_out_state !== 'pending' ? (
-                                   <a 
-                                     href={vehicleData.permit2_out_state} 
-                                     target="_blank" 
-                                     className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                                   >
-                                     VIEW
-                                   </a>
-                                 ) : (
-                                   <>
-                                     <Input 
-                                       type="file" 
-                                       className="hidden" 
-                                       id="permit2-doc" 
-                                       disabled={!isInterState}
-                                       onChange={(e) => handleFileChange('permit2_out_state', 'permit2_file_name', e.target.files?.[0] || null)} 
-                                     />
-                                     <Label
-                                       htmlFor="permit2-doc"
-                                       title="Max file size: 10 MB"
-                                       className={cn(
-                                         "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all",
-                                         isInterState ? "bg-slate-100 text-slate-600 hover:bg-purple-600 hover:text-white cursor-pointer" : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                                       )}
-                                     >
-                                       {isUploading === 'permit2_out_state' ? "..." : (vehicleData.permit2_file_name ? 'REPLACE' : 'UPLOAD')}
-                                     </Label>
-                                   </>
-                                 )}
-                               </div>
+                              <div className="flex items-center gap-2">
+                                {vehicleData.permit2_out_state && vehicleData.permit2_out_state !== 'pending' ? (
+                                  <a
+                                    href={vehicleData.permit2_out_state}
+                                    target="_blank"
+                                    className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
+                                  >
+                                    VIEW
+                                  </a>
+                                ) : (
+                                  <>
+                                    <Input
+                                      type="file"
+                                      className="hidden"
+                                      id="permit2-doc"
+                                      disabled={!isInterState}
+                                      onChange={(e) => handleFileChange('permit2_out_state', 'permit2_file_name', e.target.files?.[0] || null)}
+                                    />
+                                    <Label
+                                      htmlFor="permit2-doc"
+                                      title="Max file size: 10 MB"
+                                      className={cn(
+                                        "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all",
+                                        isInterState ? "bg-slate-100 text-slate-600 hover:bg-purple-600 hover:text-white cursor-pointer" : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                                      )}
+                                    >
+                                      {isUploading === 'permit2_out_state' ? "..." : (vehicleData.permit2_file_name ? 'REPLACE' : 'UPLOAD')}
+                                    </Label>
+                                  </>
+                                )}
+                              </div>
                             </div>
                             <Input
                               type="date"
@@ -2652,7 +2778,7 @@ export default function ActualDispatchPage() {
                     </div>
                   </div>
 
-                {/* Column B: Material Load Details */}
+                  {/* Column B: Material Load Details */}
                   <div className="space-y-6">
                     <div className="bg-blue-800 px-6 py-4 rounded-3xl flex items-center justify-between shadow-lg">
                       <div className="flex items-center gap-3">
@@ -2757,14 +2883,14 @@ export default function ActualDispatchPage() {
                         </div>
                         <div className={cn("space-y-1.5 w-full transition-all duration-300", (loadData.transporterName && !['Company Vehicle', 'Party Vehicle'].includes(loadData.transporterName)) ? "col-span-1 sm:col-span-2 md:col-span-2" : "col-span-1 sm:col-span-2")}>
                           <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Transporter <span className="text-red-500">*</span></Label>
-                          <Select 
-                            value={loadData.transporterName} 
+                          <Select
+                            value={loadData.transporterName}
                             onValueChange={(v) => {
                               const isNormal = !['Company Vehicle', 'Party Vehicle'].includes(v);
-                              setLoadData(p => ({ 
-                                ...p, 
-                                transporterName: v, 
-                                freightRateType: isNormal ? p.freightRateType : "", 
+                              setLoadData(p => ({
+                                ...p,
+                                transporterName: v,
+                                freightRateType: isNormal ? p.freightRateType : "",
                                 freightAmount: isNormal ? p.freightAmount : "",
                                 cash_bank: isNormal ? p.cash_bank : "",
                                 diesel_advance: isNormal ? p.diesel_advance : "",
@@ -2792,8 +2918,8 @@ export default function ActualDispatchPage() {
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                               <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Freight Rate Type <span className="text-red-500">*</span></Label>
-                              <Select 
-                                value={loadData.freightRateType} 
+                              <Select
+                                value={loadData.freightRateType}
                                 onValueChange={(v) => setLoadData(p => ({ ...p, freightRateType: v }))}
                               >
                                 <SelectTrigger className="h-10 border-2 border-slate-200 rounded-xl font-bold bg-white focus:ring-2 focus:ring-blue-500">
@@ -2812,13 +2938,13 @@ export default function ActualDispatchPage() {
                                 </Label>
                                 <div className="relative">
                                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
-                                  <Input 
-                                    type="number" 
+                                  <Input
+                                    type="number"
                                     step="0.01"
                                     className="h-10 pl-7 border-2 border-slate-200 rounded-lg font-bold bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                                     placeholder="0.00"
-                                    value={loadData.freightAmount} 
-                                    onChange={(e) => setLoadData(p => ({ ...p, freightAmount: e.target.value }))} 
+                                    value={loadData.freightAmount}
+                                    onChange={(e) => setLoadData(p => ({ ...p, freightAmount: e.target.value }))}
                                   />
                                 </div>
                               </div>
@@ -2831,39 +2957,39 @@ export default function ActualDispatchPage() {
                               <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 font-black px-3">Advance Bhada</Badge>
                               <div className="h-px flex-1 bg-slate-100" />
                             </div>
-                            
+
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                               <div className="space-y-1.5">
                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Bank</Label>
-                                <Input 
-                                  type="number" 
+                                <Input
+                                  type="number"
                                   step="0.01"
                                   className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-white focus:border-blue-500 transition-all"
                                   placeholder="0.00"
-                                  value={loadData.cash_bank} 
-                                  onChange={(e) => setLoadData(p => ({ ...p, cash_bank: e.target.value }))} 
+                                  value={loadData.cash_bank}
+                                  onChange={(e) => setLoadData(p => ({ ...p, cash_bank: e.target.value }))}
                                 />
                               </div>
                               <div className="space-y-1.5">
                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Diesel Advance</Label>
-                                <Input 
-                                  type="number" 
+                                <Input
+                                  type="number"
                                   step="0.01"
                                   className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-white focus:border-blue-500 transition-all"
                                   placeholder="0.00"
-                                  value={loadData.diesel_advance} 
-                                  onChange={(e) => setLoadData(p => ({ ...p, diesel_advance: e.target.value }))} 
+                                  value={loadData.diesel_advance}
+                                  onChange={(e) => setLoadData(p => ({ ...p, diesel_advance: e.target.value }))}
                                 />
                               </div>
                               <div className="space-y-1.5">
                                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Cash Advance</Label>
-                                <Input 
-                                  type="number" 
+                                <Input
+                                  type="number"
                                   step="0.01"
                                   className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-white focus:border-blue-500 transition-all"
                                   placeholder="0.00"
-                                  value={loadData.bhada} 
-                                  onChange={(e) => setLoadData(p => ({ ...p, bhada: e.target.value }))} 
+                                  value={loadData.bhada}
+                                  onChange={(e) => setLoadData(p => ({ ...p, bhada: e.target.value }))}
                                 />
                               </div>
                             </div>
@@ -2885,19 +3011,19 @@ export default function ActualDispatchPage() {
                         {/* Overload Alert & Remarks */}
                         {totalCombinedWeight > (parseFloat(vehicleData.passing_weight) || 0) && (
                           <div className="p-4 bg-red-50 border-2 border-red-100 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2">
-                             <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                                <p className="text-sm font-black text-red-600 uppercase tracking-tighter">Vehicle is overload!</p>
-                             </div>
-                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-black uppercase text-red-500 tracking-widest ml-1">Overload Remarks <span className="text-red-500">*</span></Label>
-                                <Input 
-                                  placeholder="Why is the vehicle being overloaded? (MANDATORY)"
-                                  className="h-10 border-2 border-red-200 rounded-xl bg-white font-bold text-red-700 placeholder:text-red-300 focus:border-red-500 transition-all"
-                                  value={loadData.overloadRemarks}
-                                  onChange={(e) => setLoadData(p => ({ ...p, overloadRemarks: e.target.value }))}
-                                />
-                             </div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                              <p className="text-sm font-black text-red-600 uppercase tracking-tighter">Vehicle is overload!</p>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-[10px] font-black uppercase text-red-500 tracking-widest ml-1">Overload Remarks <span className="text-red-500">*</span></Label>
+                              <Input
+                                placeholder="Why is the vehicle being overloaded? (MANDATORY)"
+                                className="h-10 border-2 border-red-200 rounded-xl bg-white font-bold text-red-700 placeholder:text-red-300 focus:border-red-500 transition-all"
+                                value={loadData.overloadRemarks}
+                                onChange={(e) => setLoadData(p => ({ ...p, overloadRemarks: e.target.value }))}
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -2908,58 +3034,91 @@ export default function ActualDispatchPage() {
             )}
           </div>
 
-            <DialogFooter className="mt-4 border-t pt-4 px-4 md:px-8 pb-8 flex flex-col gap-6 w-full">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 w-full">
-                <div className="flex-1 space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-red-500 tracking-tighter ml-1">Revert Remarks <span className="text-red-500">*</span></Label>
-                  <Input
-                    className="h-10 border-2 border-red-200 rounded-lg font-medium bg-white focus:border-red-400 transition-colors"
-                    disabled={isReadOnly}
-                    placeholder="Enter reason for reverting..."
-                    value={revertRemarks}
-                    onChange={(e) => setRevertRemarks(e.target.value)}
-                  />
-                </div>
-                <Button
-                  variant="destructive"
-                  onClick={handleRevert}
-                  disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly || !revertRemarks.trim()}
-                  className="font-black uppercase tracking-tight h-10 px-6"
-                >
-                  {isProcessing ? "Wait..." : `Revert (${dialogSelectedProducts.length})`}
-                </Button>
+          <DialogFooter className="mt-4 border-t pt-4 px-4 md:px-8 pb-8 flex flex-col gap-6 w-full">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 w-full">
+              <div className="flex-1 space-y-1.5">
+                <Label className="text-[10px] font-black uppercase text-red-500 tracking-tighter ml-1">Revert Remarks <span className="text-red-500">*</span></Label>
+                <Input
+                  className="h-10 border-2 border-red-200 rounded-lg font-medium bg-white focus:border-red-400 transition-colors"
+                  disabled={isReadOnly}
+                  placeholder="Enter reason for reverting..."
+                  value={revertRemarks}
+                  onChange={(e) => setRevertRemarks(e.target.value)}
+                />
               </div>
+              <Button
+                variant="destructive"
+                onClick={handleRevert}
+                disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly || !revertRemarks.trim()}
+                className="font-black uppercase tracking-tight h-10 px-6"
+              >
+                {isProcessing ? "Wait..." : `Revert (${dialogSelectedProducts.length})`}
+              </Button>
+            </div>
 
-              <div className="grid grid-cols-1 sm:flex sm:justify-end gap-3 w-full">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="order-last sm:order-none">Cancel</Button>
-                <Button 
-                  variant="outline" 
-                  onClick={handleDownloadSlip} 
-                  disabled={dialogSelectedProducts.length === 0}
-                  className="border-blue-600 text-blue-600 hover:bg-blue-50 font-black h-11 sm:h-10"
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Download
-                </Button>
-                 <Button
-                  variant="outline"
-                  onClick={handleSaveDraft}
-                  disabled={isSavingDraft || isProcessing || !vehicleNumber || !loadData.transporterName}
-                  className="border-amber-300 text-amber-700 hover:bg-amber-50 font-semibold h-11 sm:h-10"
-                >
-                  {isSavingDraft ? "Saving..." : "Save Draft"}
-                </Button>
-                <Button 
-                  onClick={performDispatchConfirmation} 
-                  disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly || !gateInData}
-                  className="h-11 sm:h-10 font-black bg-blue-600 hover:bg-blue-700"
-                >
-                  {isProcessing ? "Wait..." : `Confirm Dispatch (${dialogSelectedProducts.length})`}
-                </Button>
-              </div>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            <div className="grid grid-cols-1 sm:flex sm:justify-end gap-3 w-full">
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="order-last sm:order-none">Cancel</Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsSlipDialogOpen(true)}
+                disabled={dialogSelectedProducts.length === 0}
+                className="border-blue-600 text-blue-600 hover:bg-blue-50 font-black h-11 sm:h-10"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Slip
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSaveDraft}
+                disabled={isSavingDraft || isProcessing || !vehicleNumber || !loadData.transporterName}
+                className="border-amber-300 text-amber-700 hover:bg-amber-50 font-semibold h-11 sm:h-10"
+              >
+                {isSavingDraft ? "Saving..." : "Save Draft"}
+              </Button>
+              <Button
+                onClick={performDispatchConfirmation}
+                disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly || (selectedDepoTab?.toUpperCase() === 'BANARI' && !gateInData)}
+                className="h-11 sm:h-10 font-black bg-blue-600 hover:bg-blue-700"
+              >
+                {isProcessing ? "Wait..." : `Confirm Dispatch (${dialogSelectedProducts.length})`}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Slip Dialog */}
+      <Dialog open={isSlipDialogOpen} onOpenChange={setIsSlipDialogOpen}>
+        <DialogContent className="max-w-4xl sm:max-w-4xl md:max-w-5xl lg:max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Dispatch Slip Preview</DialogTitle>
+            <DialogDescription>Review the dispatch slip details below.</DialogDescription>
+          </DialogHeader>
+          
+          <div className="bg-slate-50 p-4 rounded-lg overflow-x-auto">
+            {renderSlipContent()}
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setIsSlipDialogOpen(false)} className="sm:order-first">Close</Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={handleDownloadSlip}
+                className="border-blue-600 text-blue-600 hover:bg-blue-50"
+              >
+                <Printer className="mr-2 h-4 w-4" /> Print Slip
+              </Button>
+              <Button 
+                onClick={handleDownloadSlip}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Download className="mr-2 h-4 w-4" /> Download PDF
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </WorkflowStageShell>
   );
 }
