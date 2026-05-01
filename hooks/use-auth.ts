@@ -34,6 +34,7 @@ const URL_TO_PAGE: Record<string, string> = {
   '/gate-in': 'Gate In',
   '/variable-parameters': 'Variable Parameters',
   '/settings': 'Settings',
+  '/set-turn-around-time': 'Set Turn Around Time',
   '/master': 'Master',
   '/reports': 'Reports',
 }

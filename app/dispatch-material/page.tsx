@@ -378,9 +378,9 @@ export default function DispatchMaterialPage() {
         await refetchPending();
         await refetchHistory();
 
-        setTimeout(() => {
-          router.push("/actual-dispatch")
-        }, 1500)
+        // setTimeout(() => {
+        //   router.push("/actual-dispatch")
+        // }, 1500)
       }
 
       if (failedDispatches.length > 0) {

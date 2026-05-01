@@ -1479,9 +1479,9 @@ export default function ActualDispatchPage() {
         await refetchPending();
         await refetchHistory();
 
-        setTimeout(() => {
-          router.push("/security-approval")
-        }, 1500)
+        // setTimeout(() => {
+        //   router.push("/security-approval")
+        // }, 1500)
       }
 
       if (failedDispatches.length > 0) {
@@ -2202,19 +2202,28 @@ export default function ActualDispatchPage() {
                               <TableCell className="p-3">
                                 <Input
                                   type="number"
-                                  disabled
-                                  className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-slate-100 cursor-not-allowed focus:ring-0 transition-colors shadow-sm"
+                                  className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 transition-colors shadow-sm"
                                   placeholder="Actual Qty"
                                   value={confirmDetails[rowKey]?.qty || ""}
-                                  onChange={(e) =>
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    const planned = parseFloat(prod.qtyToDispatch || 0);
+                                    if (parseFloat(val) > planned) {
+                                      toast({
+                                        title: "Limit Exceeded",
+                                        description: `Actual qty cannot be more than planned qty (${planned})`,
+                                        variant: "destructive"
+                                      });
+                                      return;
+                                    }
                                     setConfirmDetails((prev) => ({
                                       ...prev,
                                       [rowKey]: {
                                         ...prev[rowKey],
-                                        qty: e.target.value
+                                        qty: val
                                       }
                                     }))
-                                  }
+                                  }}
                                 />
                               </TableCell>
                               <TableCell className="p-3 text-center">
@@ -2324,11 +2333,22 @@ export default function ActualDispatchPage() {
                               <Label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Actual Qty Dispatched</Label>
                               <Input
                                 type="number"
-                                disabled
-                                className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-slate-100 cursor-not-allowed"
+                                className="h-10 text-xs font-black border-2 border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-blue-500"
                                 placeholder="Enter Qty"
                                 value={confirmDetails[rowKey]?.qty || ""}
-                                onChange={(e) => setConfirmDetails(prev => ({ ...prev, [rowKey]: { ...prev[rowKey], qty: e.target.value } }))}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const planned = parseFloat(prod.qtyToDispatch || 0);
+                                  if (parseFloat(val) > planned) {
+                                    toast({
+                                      title: "Limit Exceeded",
+                                      description: `Actual qty cannot be more than planned qty (${planned})`,
+                                      variant: "destructive"
+                                    });
+                                    return;
+                                  }
+                                  setConfirmDetails(prev => ({ ...prev, [rowKey]: { ...prev[rowKey], qty: val } }));
+                                }}
                               />
                             </div>
 

@@ -1114,6 +1114,19 @@ export const depotApi = {
   },
 };
 
+export const processStageApi = {
+  getAll: async (): Promise<ApiResponse> => {
+    return request('/process-stages');
+  },
+
+  save: async (data: { stage_name: string; total_minutes: number }): Promise<ApiResponse> => {
+    return request('/process-stages', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 /**
  * Broker API
  */

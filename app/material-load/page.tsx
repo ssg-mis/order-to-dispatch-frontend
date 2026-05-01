@@ -360,9 +360,9 @@ export default function MaterialLoadPage() {
         await fetchMaterialLoadHistory();
 
         // Navigate to next stage after delay
-        setTimeout(() => {
-          router.push("/security-approval")
-        }, 1500)
+        // setTimeout(() => {
+        //   router.push("/security-approval")
+        // }, 1500)
       }
 
       if (failedSubmissions.length > 0) {

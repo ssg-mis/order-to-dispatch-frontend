@@ -60,6 +60,7 @@ export default function RootLayout({
           "/gate-in": "Gate In",
           "/variable-parameters": "Variable Parameters",
           "/settings": "Settings",
+          "/set-turn-around-time": "Set Turn Around Time",
           "/master": "Master",
           "/reports": "Reports",
         }

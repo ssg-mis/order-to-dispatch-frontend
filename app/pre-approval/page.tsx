@@ -764,11 +764,11 @@ export default function PreApprovalPage() {
       setProductRates({})
 
       // Navigate if all pending items are processed
-      if (successfulApprovals.length > 0 && pendingOrders.length === successfulApprovals.length) {
-        setTimeout(() => {
-          router.push("/approval-of-order")
-        }, 1500)
-      }
+      // if (successfulApprovals.length > 0 && pendingOrders.length === successfulApprovals.length) {
+      //   setTimeout(() => {
+      //     router.push("/approval-of-order")
+      //   }, 1500)
+      // }
     } finally {
       setIsApproving(false)
     }

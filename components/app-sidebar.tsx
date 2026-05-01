@@ -27,6 +27,7 @@ import {
   Save,
   Calendar,
   Handshake,
+  Clock,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { useEffect, useState, useMemo } from "react"
@@ -64,6 +65,7 @@ const modules = [
   { title: "Gate In", icon: Car, url: "/gate-in" },
   { title: "Variable Parameters", icon: Calculator, url: "/variable-parameters" },
   { title: "Settings", icon: Settings2, url: "/settings" },
+  { title: "Set Turn Around Time", icon: Clock, url: "/set-turn-around-time" },
   { title: "Master", icon: BookMarked, url: "/master" },
   { title: "Reports", icon: BarChart2, url: "/reports" },
 ]

@@ -324,9 +324,9 @@ export default function VehicleDetailsPage() {
         await fetchVehicleDetailsHistory();
 
         // Navigate to next stage after delay
-        setTimeout(() => {
-          router.push("/material-load")
-        }, 1500)
+        // setTimeout(() => {
+        //   router.push("/material-load")
+        // }, 1500)
       }
 
       if (failedSubmissions.length > 0) {

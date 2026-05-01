@@ -346,9 +346,9 @@ export default function SecurityApprovalPage() {
         await refetchHistory();
 
         // Navigate to next stage after delay
-        setTimeout(() => {
-          router.push("/make-invoice")
-        }, 1500)
+        // setTimeout(() => {
+        //   router.push("/make-invoice")
+        // }, 1500)
       }
 
       if (failedSubmissions.length > 0) {

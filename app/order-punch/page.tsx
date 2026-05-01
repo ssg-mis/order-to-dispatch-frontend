@@ -573,9 +573,9 @@ export default function OrderPunchPage() {
 
         resetForm()
 
-        setTimeout(() => {
-          router.push(orderType === "regular" ? "/approval-of-order" : "/pre-approval")
-        }, 1500)
+        // setTimeout(() => {
+        //   router.push(orderType === "regular" ? "/approval-of-order" : "/pre-approval")
+        // }, 1500)
       }
 
     } catch (error: any) {

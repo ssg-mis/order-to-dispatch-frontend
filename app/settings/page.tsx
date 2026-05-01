@@ -67,6 +67,7 @@ const PAGE_ACCESS_OPTIONS = [
   "Gate In",
   "Variable Parameters",
   "Settings",
+  "Set Turn Around Time",
   "Master",
   "Reports"
 ]

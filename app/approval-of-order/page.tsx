@@ -447,9 +447,9 @@ export default function CommitmentReviewPage() {
       }
 
       if (pendingOrders.length <= selectedItems.length) {
-        setTimeout(() => {
-          router.push("/dispatch-material")
-        }, 1000)
+        // setTimeout(() => {
+        //   router.push("/dispatch-material")
+        // }, 1000)
       }
       setSelectedItems([])
       setSelectedOrder(null)

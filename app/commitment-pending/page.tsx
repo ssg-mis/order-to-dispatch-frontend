@@ -43,7 +43,7 @@ export default function CommitmentPendingPage() {
         localStorage.removeItem("commitmentReviewData")
         localStorage.removeItem("finalOrderData")
         localStorage.removeItem("currentOrderIndex")
-        router.push("/")
+        // router.push("/")
       }, 1500)
     } finally {
       setIsCompleting(false)
