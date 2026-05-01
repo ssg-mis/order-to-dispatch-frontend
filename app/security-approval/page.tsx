@@ -842,23 +842,23 @@ export default function SecurityApprovalPage() {
 
       {/* Split-View Dialog (Premium Refactor) */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[95vw] max-w-[95vw]! max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] p-0">
-          <DialogHeader className="border-b p-6 md:p-8 bg-slate-50/50">
-            <DialogTitle className="text-xl md:text-2xl font-black text-slate-900 leading-none uppercase tracking-tighter italic">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:w-[95vw] sm:!max-w-[95vw] max-h-[95dvh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] p-0">
+          <DialogHeader className="border-b p-4 sm:p-6 md:p-8 pr-10 bg-slate-50/50">
+            <DialogTitle className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 leading-tight uppercase tracking-tighter italic">
               Security Verification Audit
             </DialogTitle>
-            <DialogDescription className="text-slate-500 mt-2 font-bold uppercase text-[10px] tracking-widest">
+            <DialogDescription className="text-slate-500 mt-2 font-bold uppercase text-[10px] tracking-widest leading-relaxed">
               Reviewing {selectedGroups.length} Batch(es) for final gatepass authorization
             </DialogDescription>
           </DialogHeader>
 
           {selectedGroups.length > 0 && (
-            <div className="space-y-12 mt-6">
+            <div className="space-y-8 lg:space-y-12 mt-4 sm:mt-6">
               {selectedGroups.map((group, groupIdx) => (
-                <div key={group._rowKey} className="space-y-6">
-                  <h2 className="text-xl font-black text-slate-800 border-b-4 border-slate-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
+                <div key={group._rowKey} className="space-y-4 sm:space-y-6 px-4 sm:px-6 md:px-8">
+                  <h2 className="text-base sm:text-xl font-black text-slate-800 border-b-4 border-slate-100 pb-2 mt-4 uppercase tracking-tight flex flex-col sm:flex-row sm:items-center justify-between gap-2 break-words">
                     {group.customerName}
-                    <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
+                    <Badge className="bg-blue-600 text-white sm:ml-3 px-3 py-1 font-black w-fit">
                       {group._productCount} PRODUCTS
                     </Badge>
                   </h2>
@@ -877,21 +877,21 @@ export default function SecurityApprovalPage() {
                     const firstProd = orderProducts[0] || {};
 
                     return (
-                      <div key={`${group._rowKey}-${baseDo}`} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm">
-                        <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
-                          <div className="flex items-center gap-4">
-                            <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-sm font-black tracking-tight rounded-full shadow-sm">
+                      <div key={`${group._rowKey}-${baseDo}`} className="space-y-4 border-2 border-slate-100 rounded-xl sm:rounded-3xl overflow-hidden bg-white shadow-sm">
+                        <div className="bg-blue-600 px-3 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer" onClick={toggleExpand}>
+                          <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0">
+                            <Badge className="bg-white text-blue-800 hover:bg-white px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-black tracking-tight rounded-full shadow-sm max-w-full whitespace-normal">
                               ORDER: {baseDo}
                             </Badge>
-                            <div className="flex flex-col">
+                            <div className="flex flex-col min-w-0">
                               <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">GROUP {groupIdx + 1} | SECTION {orderIdx + 1}</span>
                               <span className="text-xs text-blue-100 font-bold leading-none">
                                 {orderProducts.filter((p: any) => selectedProducts.includes(p._rowKey)).length} Items Selected
                               </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2 leading-none cursor-pointer">
+                          <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                            <div className="text-[10px] sm:text-[11px] text-blue-50 font-bold uppercase tracking-widest sm:mr-2 leading-tight cursor-pointer">
                               {isExpanded ? 'HIDE DISPATCH DETAILS ▲' : 'CLICK TO SHOW DETAILS ▼'}
                             </div>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20 rounded-full">
@@ -900,57 +900,57 @@ export default function SecurityApprovalPage() {
                           </div>
                         </div>
 
-                        <div className="px-5 pb-5 space-y-4">
+                        <div className="px-3 sm:px-5 pb-5 space-y-4">
                           {/* Collapsible Dispatch Details Bar */}
                           {isExpanded && (
-                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:p-6 relative shadow-inner mt-2 animate-in slide-in-from-top-2 duration-300">
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl p-4 md:p-6 relative shadow-inner mt-2 animate-in slide-in-from-top-2 duration-300">
                                <div className="space-y-6">
                                   {/* Section 1: Order Information */}
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                                    <div className="col-span-1">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
+                                    <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Purpose</p>
                                       <p className="text-xs font-bold text-slate-900">{orderDetails.deliveryPurpose || "—"}</p>
                                     </div>
-                                    <div className="col-span-1">
+                                    <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Start/End Date</p>
                                       <p className="text-[10px] md:text-xs font-bold text-slate-700">
                                         {formatDate(orderDetails.startDate)} - {formatDate(orderDetails.endDate)}
                                       </p>
                                     </div>
-                                    <div className="col-span-1">
+                                    <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">DO Date</p>
                                       <p className="text-xs font-bold text-slate-700">{orderDetails.partySoDate || "—"}</p>
                                     </div>
-                                    <div className="col-span-1">
+                                    <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transport</p>
                                       <p className="text-xs font-bold text-slate-900">{orderDetails.transportType || "—"}</p>
                                     </div>
 
-                                    <div className="col-span-1">
+                                    <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Credit</p>
                                       <Badge className={cn("text-[10px] font-black px-2 py-0.5", orderDetails.partyCredit === 'Good' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
                                         {orderDetails.partyCredit || "Good"}
                                       </Badge>
                                     </div>
-                                    <div className="col-span-2 md:col-span-1">
+                                    <div className="sm:col-span-2 xl:col-span-1">
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Address</p>
-                                      <p className="text-[10px] font-medium text-slate-600 leading-tight truncate" title={orderDetails.address}>{orderDetails.address || "—"}</p>
+                                      <p className="text-[10px] font-medium text-slate-600 leading-tight break-words" title={orderDetails.address}>{orderDetails.address || "—"}</p>
                                     </div>
-                                    <div className="col-span-1">
+                                    <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact</p>
                                       <p className="text-[10px] md:text-xs font-bold text-slate-900">{orderDetails.contactPerson} ({orderDetails.whatsapp || "—"})</p>
                                     </div>
 
-                                    <div className="col-span-2">
+                                    <div className="sm:col-span-2">
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Broker / Advance</p>
                                       <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.brokerName || "—"} / ₹{orderDetails.advanceAmount || 0}</p>
                                     </div>
 
-                                    <div className="col-span-2">
+                                    <div className="sm:col-span-2">
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Order Punch Remarks</p>
                                       <p className="text-[10px] font-medium text-slate-600 leading-tight italic">"{orderDetails.orderPunchRemarks || "No special instructions."}"</p>
                                     </div>
-                                    <div className="col-span-2">
+                                    <div className="sm:col-span-2">
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">PO Copy</p>
                                       {group.uploadSo ? (
                                         <a href={group.uploadSo} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-all border border-blue-200 w-fit group shadow-sm mt-0.5">
@@ -964,14 +964,14 @@ export default function SecurityApprovalPage() {
                                   <div className="h-px bg-slate-200" />
 
                                   {/* Section 2: Dispatch Details (Documents) */}
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Truck No</p>
                                       <p className="text-xs font-black text-blue-700 uppercase">{firstProd.truck_no || firstProd.truckNo || "—"}</p>
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transporter</p>
-                                      <p className="text-xs font-bold text-slate-700 leading-none truncate">{firstProd.transporter_name || "—"}</p>
+                                      <p className="text-xs font-bold text-slate-700 leading-tight break-words">{firstProd.transporter_name || "—"}</p>
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Fitness</p>
@@ -1002,8 +1002,8 @@ export default function SecurityApprovalPage() {
                                   <div className="h-px bg-slate-200" />
 
                                   {/* Section 3: Vehicle & Driver Details */}
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-x-6 md:gap-y-8">
-                                    <div className="col-span-2 md:col-span-4 flex items-center gap-2 mb-[-8px]">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-x-6 md:gap-y-8">
+                                    <div className="sm:col-span-2 xl:col-span-4 flex items-center gap-2 mb-[-8px]">
                                       <div className="h-3 w-1 bg-blue-600 rounded-full" />
                                       <p className="text-[10px] font-black uppercase tracking-widest text-blue-900/60 italic">Vehicle Specifications</p>
                                     </div>
@@ -1025,7 +1025,7 @@ export default function SecurityApprovalPage() {
                                       <p className="text-xs font-bold text-slate-900">{firstProd.road_tax || "—"}</p>
                                     </div>
 
-                                    <div className="col-span-2 md:col-span-4 flex items-center gap-2 mb-[-8px] mt-2">
+                                    <div className="sm:col-span-2 xl:col-span-4 flex items-center gap-2 mb-[-8px] mt-2">
                                       <div className="h-3 w-1 bg-amber-600 rounded-full" />
                                       <p className="text-[10px] font-black uppercase tracking-widest text-amber-900/60 italic">Driver Information</p>
                                     </div>
@@ -1051,12 +1051,12 @@ export default function SecurityApprovalPage() {
                                   <div className="h-px bg-slate-200" />
 
                                   {/* Section 4: Weight Details */}
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">RST No</p>
                                       <p className="text-xs font-black text-blue-700 leading-none">#{firstProd.rst_no || firstProd.rstNo || "—"}</p>
                                     </div>
-                                    <div className="col-span-1">
+                                    <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Gross / Tare / Net</p>
                                       <p className="text-[10px] font-black text-slate-700 leading-none">
                                         {firstProd.gross_weight || 0}/{firstProd.tare_weight || 0}/<span className="text-blue-600">{(Number(firstProd.gross_weight || 0) - Number(firstProd.tare_weight || 0))}</span>
@@ -1068,7 +1068,7 @@ export default function SecurityApprovalPage() {
                                         <span className={(parseFloat(firstProd.weight_diff) || 0) < 0 ? "text-red-500" : "text-green-600"}>{firstProd.weight_diff || 0}</span> / {firstProd.extra_weight || 0}
                                       </p>
                                     </div>
-                                    <div className="col-span-2 md:col-span-1">
+                                    <div className="sm:col-span-2 xl:col-span-1">
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Reason</p>
                                       <p className="text-[10px] font-medium text-slate-500 italic mt-1 leading-tight">{firstProd.reason_of_difference_in_weight_if_any_speacefic || "—"}</p>
                                     </div>
@@ -1079,9 +1079,9 @@ export default function SecurityApprovalPage() {
 
                           {/* Simple Product Table (Always Visible) */}
                           {/* Responsive Product List */}
-                          <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                          <div className="border border-slate-200 rounded-xl sm:rounded-2xl overflow-hidden shadow-sm bg-white">
                             {/* Desktop Table */}
-                            <div className="hidden md:block">
+                            <div className="hidden lg:block">
                               <Table>
                                 <TableHeader className="bg-slate-50">
                                   <TableRow>
@@ -1145,7 +1145,7 @@ export default function SecurityApprovalPage() {
                             </div>
 
                             {/* Mobile Card-List for Products */}
-                            <div className="md:hidden divide-y divide-slate-100">
+                            <div className="lg:hidden divide-y divide-slate-100">
                               <div className="p-3 bg-slate-50 flex items-center justify-between">
                                 <span className="text-[10px] font-black uppercase text-slate-500">Products in this Load</span>
                                 <div className="flex items-center gap-2">
@@ -1163,10 +1163,10 @@ export default function SecurityApprovalPage() {
                                 </div>
                               </div>
                               {orderProducts.map((product: any) => (
-                                <div key={product._rowKey} className={cn("p-4 flex items-center justify-between gap-4", selectedProducts.includes(product._rowKey) ? "bg-blue-50/30" : "bg-white")}>
+                                <div key={product._rowKey} className={cn("p-4 flex items-start justify-between gap-4", selectedProducts.includes(product._rowKey) ? "bg-blue-50/30" : "bg-white")}>
                                   <div className="flex-1 space-y-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs font-black text-slate-800 uppercase leading-none">{product.productName}</span>
+                                    <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center gap-2">
+                                      <span className="text-xs font-black text-slate-800 uppercase leading-tight break-words">{product.productName}</span>
                                       <Badge className="bg-blue-600 text-white font-black text-[9px] h-4">QTY: {product.actual_qty_dispatch || 0}</Badge>
                                     </div>
                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">#{product.specificOrderNo}</p>
@@ -1201,19 +1201,19 @@ export default function SecurityApprovalPage() {
               ))}
 
               {/* 2. Final Verification Form (Bottom Content) */}
-              <div className="px-4 md:px-8 pt-8 space-y-8 animate-in fade-in duration-500 border-t-4 border-slate-100">
+              <div className="px-4 sm:px-6 md:px-8 pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in duration-500 border-t-4 border-slate-100">
                 <div className="flex items-center gap-3">
                   <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
                   <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest italic">Verification Checklist</h3>
                 </div>
 
-                <div className="bg-slate-50 border-2 border-slate-100 rounded-3xl p-4 md:p-8 space-y-8 shadow-sm">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+                <div className="bg-slate-50 border-2 border-slate-100 rounded-xl sm:rounded-3xl p-4 md:p-8 space-y-6 sm:space-y-8 shadow-sm">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-8">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Bilty/GR No</Label>
                       <Input
                         placeholder="BL-100293"
-                        className="h-12 md:h-14 border-2 border-slate-200 rounded-2xl px-6 font-black text-lg text-slate-700 focus:border-blue-600 transition-all uppercase placeholder:text-slate-300"
+                        className="h-12 md:h-14 border-2 border-slate-200 rounded-2xl px-4 sm:px-6 font-black text-sm sm:text-lg text-slate-700 focus:border-blue-600 transition-all uppercase placeholder:text-slate-300"
                         value={uploadData.biltyNo}
                         onChange={(e) => setUploadData(p => ({ ...p, biltyNo: e.target.value }))}
                       />
@@ -1236,7 +1236,7 @@ export default function SecurityApprovalPage() {
                       <Select value={uploadData.verdict} onValueChange={(v) => {
                         setUploadData(p => ({ ...p, verdict: v, remarks: v === "APPROVE" ? "" : p.remarks }))
                       }}>
-                        <SelectTrigger className={cn("h-12 md:h-14 border-2 rounded-2xl px-6 font-black text-sm uppercase transition-all", uploadData.verdict === "APPROVE" ? "border-green-200 bg-green-50 text-green-700" : uploadData.verdict === "REJECT" ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-white")}>
+                        <SelectTrigger className={cn("h-12 md:h-14 border-2 rounded-2xl px-4 sm:px-6 font-black text-sm uppercase transition-all", uploadData.verdict === "APPROVE" ? "border-green-200 bg-green-50 text-green-700" : uploadData.verdict === "REJECT" ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-white")}>
                           <SelectValue placeholder="Verdict" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1259,12 +1259,12 @@ export default function SecurityApprovalPage() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-5 gap-3">
                     {Object.entries(uploadData.checklist).map(([key, val]) => (
                       <div 
                         key={key} 
                         onClick={() => setUploadData(p => ({ ...p, checklist: { ...p.checklist, [key]: !val } }))}
-                        className={cn("flex items-center gap-2 p-3 rounded-xl border-2 transition-all cursor-pointer", val ? "bg-blue-600 border-blue-600 shadow-md" : "bg-white border-slate-100")}
+                        className={cn("flex items-center gap-2 p-3 rounded-xl border-2 transition-all cursor-pointer min-w-0", val ? "bg-blue-600 border-blue-600 shadow-md" : "bg-white border-slate-100")}
                       >
                         <Checkbox id={key} checked={val} onCheckedChange={(checked) => setUploadData(p => ({ ...p, checklist: { ...p.checklist, [key]: !!checked } }))} className={cn(val ? "border-white bg-white data-[state=checked]:text-blue-600" : "")} />
                         <Label htmlFor={key} className={cn("text-[9px] font-black uppercase cursor-pointer tracking-tighter leading-none truncate", val ? "text-white" : "text-slate-600")}>{key.replace(/([A-Z])/g, ' $1')}</Label>
@@ -1274,9 +1274,9 @@ export default function SecurityApprovalPage() {
 
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Proof Images</Label>
-                    <div className="flex flex-wrap gap-3">
+                    <div className="grid grid-cols-3 min-[420px]:grid-cols-4 sm:flex sm:flex-wrap gap-3">
                       {uploadData.vehicleImages.map((url, idx) => (
-                        <div key={idx} className="w-20 h-20 rounded-xl border-2 border-slate-100 overflow-hidden relative group shadow-sm">
+                        <div key={idx} className="aspect-square sm:w-20 sm:h-20 rounded-xl border-2 border-slate-100 overflow-hidden relative group shadow-sm">
                           <img src={url} className="w-full h-full object-cover" />
                           <button onClick={() => {
                             const images = [...uploadData.vehicleImages]
@@ -1287,7 +1287,7 @@ export default function SecurityApprovalPage() {
                           }} className="absolute inset-0 bg-red-600/80 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><X className="w-4 h-4" /></button>
                         </div>
                       ))}
-                      <label className="w-20 h-20 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center bg-white cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all">
+                      <label className="aspect-square sm:w-20 sm:h-20 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center bg-white cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all">
                         {isUploading?.startsWith('vehicle') ? <Loader2 className="w-5 h-5 animate-spin text-blue-500" /> : <Plus className="w-6 h-6 text-slate-200" />}
                         <input type="file" multiple className="hidden" onChange={(e) => {
                           if (e.target.files) {
@@ -1303,7 +1303,7 @@ export default function SecurityApprovalPage() {
           )}
 
           <DialogFooter className="mt-8 border-t p-4 md:p-8 bg-slate-50/50 flex flex-col sm:flex-row gap-4">
-            <Button variant="ghost" className="font-bold text-slate-500 uppercase text-xs order-last sm:order-none" onClick={() => setIsDialogOpen(false)}>Cancel Action</Button>
+            <Button variant="ghost" className="font-bold text-slate-500 uppercase text-xs order-last sm:order-none h-11 sm:h-10" onClick={() => setIsDialogOpen(false)}>Cancel Action</Button>
             <Button
               onClick={handleBulkSubmit}
               disabled={isProcessing || selectedProducts.length === 0 || isReadOnly}

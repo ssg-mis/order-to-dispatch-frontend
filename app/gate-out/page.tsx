@@ -565,88 +565,111 @@ export default function GateOutPage() {
           </DropdownMenu>
         </div>
 
-        {/* Main Table (Grouped) */}
-        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
-          <Table>
-            <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
-              <TableRow>
-                <TableHead className="w-12 text-center">
-                  <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
-                </TableHead>
-                <TableHead className="whitespace-nowrap text-center">DO Date</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Actual 1</TableHead>
-                <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Products</TableHead>
-                {visibleColumns.includes("invoiceNo") && <TableHead className="whitespace-nowrap text-center">Invoice No.</TableHead>}
-                <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isPendingLoading && pendingOrders.length === 0 ? (
-                [...Array(5)].map((_, i) => (
-                  <TableRow key={i} className="opacity-40 border-b border-slate-50">
-                    <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-40 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-16 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    {visibleColumns.includes("invoiceNo") && <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>}
-                    <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-32 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-5 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                  </TableRow>
-                ))
-              ) : displayRows.length > 0 ? (
-                displayRows.map((group) => (
-                  <TableRow key={group._rowKey} className={selectedItems.includes(group._rowKey) ? "bg-blue-50/50" : ""}>
-                    <TableCell className="text-center">
-                      <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
-                    </TableCell>
-                    <TableCell className="text-center text-xs font-medium">{group.partySoDate}</TableCell>
-                    <TableCell className="text-center text-xs font-medium text-blue-700">{group.actual1Date}</TableCell>
-                    <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
-                    <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
-                    <TableCell className="text-center text-xs">{group.customerName}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="secondary">{group._productCount} items</Badge>
-                    </TableCell>
-                    {visibleColumns.includes("invoiceNo") && (
-                      <TableCell className="text-center text-xs font-medium">
-                        {group._allProducts?.[0]?.invoice_copy ? (
-                          <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-bold">
-                            {group.invoiceNo}
-                          </a>
-                        ) : (
-                          group.invoiceNo
-                        )}
-                      </TableCell>
+        {/* Main Card View (Grouped) */}
+        <Card className="border-none shadow-sm overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b bg-slate-50/70 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-slate-700">Gate Out Loads</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{selectedItems.length} selected</p>
+              </div>
+            </div>
+            <Badge className="w-fit bg-rose-100 text-rose-700 hover:bg-rose-100">
+              {displayRows.length} Ready
+            </Badge>
+          </div>
+
+          <div className="max-h-[600px] overflow-y-auto p-3 sm:p-4">
+            {isPendingLoading && pendingOrders.length === 0 ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                {[...Array(6)].map((_, i) => (
+                  <Card key={i} className="p-4 space-y-4 border-slate-100 shadow-sm animate-pulse">
+                    <div className="flex justify-between">
+                      <div className="h-4 w-32 bg-slate-200 rounded" />
+                      <div className="h-5 w-20 bg-slate-200 rounded-full" />
+                    </div>
+                    <div className="h-5 w-3/4 bg-slate-100 rounded" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="h-12 bg-slate-100 rounded-lg" />
+                      <div className="h-12 bg-slate-100 rounded-lg" />
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            ) : displayRows.length > 0 ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                {displayRows.map((group) => (
+                  <Card
+                    key={group._rowKey}
+                    className={cn(
+                      "p-4 border-2 transition-all shadow-sm bg-white",
+                      selectedItems.includes(group._rowKey) ? "border-blue-500 bg-blue-50/30 shadow-md" : "border-slate-100 hover:border-blue-200"
                     )}
-                    <TableCell className="text-center">
-                      <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge className="bg-rose-100 text-rose-700">Ready for Gate Out</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                    No orders pending for gate out
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{group.partySoDate}</p>
+                        <h3 className="text-sm font-black uppercase tracking-tight text-slate-900 leading-tight break-words">{group.customerName}</h3>
+                      </div>
+                      <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} className="mt-1 h-5 w-5" />
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-1.5">
+                      {String(group.doNumber || "—").split(", ").map((doNo: string) => (
+                        <Badge key={doNo} variant="outline" className="bg-white text-blue-700 border-blue-100 text-[10px] font-bold">
+                          {doNo}
+                        </Badge>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 min-[420px]:grid-cols-2 gap-3 border-y border-slate-100 py-3">
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Actual 1</p>
+                        <p className="text-xs font-bold text-blue-700">{group.actual1Date}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Process ID</p>
+                        <p className="text-xs font-bold text-slate-700 break-words">{group.processId}</p>
+                      </div>
+                      {visibleColumns.includes("invoiceNo") && (
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Invoice</p>
+                          {group._allProducts?.[0]?.invoice_copy ? (
+                            <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="text-xs font-black text-blue-600 hover:underline break-words">
+                              {group.invoiceNo}
+                            </a>
+                          ) : (
+                            <p className="text-xs font-bold text-slate-700 break-words">{group.invoiceNo}</p>
+                          )}
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vehicle</p>
+                        <p className="text-xs font-black text-slate-800">{group.vehicleNo}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                      <Badge variant="secondary" className="font-black">{group._productCount} items</Badge>
+                      <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">Ready for Gate Out</Badge>
+                    </div>
+
+                    {group.orderPunchRemarks && group.orderPunchRemarks !== "—" && (
+                      <div className="mt-3 rounded-lg bg-slate-50 p-3">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Order Punch Remarks</p>
+                        <p className="mt-1 text-[11px] font-medium italic text-slate-600 leading-relaxed break-words">"{group.orderPunchRemarks}"</p>
+                      </div>
+                    )}
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                No orders pending for gate out
+              </div>
+            )}
+          </div>
           <div ref={pendingEndRef} className="py-2 flex justify-center">
             {isFetchingNextPending && (
               <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-[10px]">
@@ -660,16 +683,16 @@ export default function GateOutPage() {
 
       {/* Split-View Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-[95vw]! w-full max-h-[95vh] overflow-y-auto p-0">
-          <div className="p-6">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-slate-900 border-b pb-4 mb-4">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:w-[95vw] sm:!max-w-[95vw] max-h-[95dvh] overflow-y-auto p-0">
+          <div className="p-4 sm:p-6">
+            <DialogHeader className="pr-8">
+              <DialogTitle className="text-lg sm:text-xl font-bold text-slate-900 border-b pb-4 mb-4 leading-tight">
                 Complete Gate Out - {selectedGroups.length > 1 ? `${selectedGroups.length} Invoices Selected` : selectedGroups[0]?.invoiceNo}
               </DialogTitle>
             </DialogHeader>
 
             {selectedGroups.length > 0 && (
-              <div className="space-y-12 mt-6">
+              <div className="space-y-8 lg:space-y-12 mt-6">
                 {selectedGroups.map((group, groupIdx) => {
                   const allProducts = group._allProducts;
                   const allSelected = allProducts.every((p: any) => selectedProducts.includes(p._rowKey));
@@ -681,48 +704,48 @@ export default function GateOutPage() {
                   const uniqueOrderDetails = Object.values(group._ordersMap);
 
                   return (
-                    <div key={group._rowKey} className="space-y-6">
-                      <h2 className="text-xl font-black text-slate-800 border-b-4 border-slate-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
-                        Invoice: {group.invoiceNo} <span className="text-sm font-medium text-slate-500 ml-2">({group.customerName})</span>
-                        <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
+                    <div key={group._rowKey} className="space-y-4 sm:space-y-6">
+                      <h2 className="text-base sm:text-xl font-black text-slate-800 border-b-4 border-slate-100 pb-2 mt-4 uppercase tracking-tight flex flex-col sm:flex-row sm:items-center justify-between gap-2 break-words">
+                        <span>Invoice: {group.invoiceNo} <span className="text-sm font-medium text-slate-500">({group.customerName})</span></span>
+                        <Badge className="bg-blue-600 text-white px-3 py-1 font-black w-fit">
                           {group._productCount} PRODUCTS
                         </Badge>
                       </h2>
 
-                      <div className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm">
-                        <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
-                          <div className="flex items-center gap-4">
-                            <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-sm font-black tracking-tight rounded-full shadow-sm uppercase">
+                      <div className="space-y-4 border-2 border-slate-100 rounded-xl sm:rounded-3xl overflow-hidden bg-white shadow-sm">
+                        <div className="bg-blue-600 px-3 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer" onClick={toggleExpand}>
+                          <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0">
+                            <Badge className="bg-white text-blue-800 hover:bg-white px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-black tracking-tight rounded-full shadow-sm uppercase whitespace-normal">
                               DISPATCH & AUDIT DATA
                             </Badge>
-                            <div className="flex flex-col">
+                            <div className="flex flex-col min-w-0">
                               <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">GROUP {groupIdx + 1} | {group.doNumber}</span>
                               <span className="text-xs text-blue-100 font-bold leading-none">
                                 {allProducts.filter((p: any) => selectedProducts.includes(p._rowKey)).length} Items Checked
                               </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2 leading-none">
+                          <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                            <div className="text-[10px] sm:text-[11px] text-blue-50 font-bold uppercase tracking-widest leading-tight">
                               {isExpanded ? 'HIDE DETAILS ▲' : 'SHOW DETAILS ▼'}
                             </div>
                           </div>
                         </div>
 
-                        <div className="px-5 pb-5 space-y-4">
+                        <div className="px-3 sm:px-5 pb-5 space-y-4">
                           {/* Consolidated Collapsible Details Bar */}
                           {isExpanded && (
                             <div className="space-y-6 animate-in slide-in-from-top-2 duration-300 mt-2">
                               {uniqueOrderDetails.map((orderDetails: any, idx) => {
                                 const firstProd = orderDetails._products[0] || {};
                                 return (
-                                  <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-6 relative shadow-inner">
+                                  <div key={idx} className="bg-slate-50 border border-slate-100 rounded-xl sm:rounded-2xl p-4 sm:p-6 relative shadow-inner">
                                     <div className="absolute -top-3 left-6">
                                       <Badge className="bg-slate-200 text-slate-700 hover:bg-slate-200 text-[10px] font-black uppercase px-3 py-1">
                                         ORDER: {firstProd.specificOrderNo}
                                       </Badge>
                                     </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
                                       {/* Order Info */}
                                       {/* Order Info */}
                                       <div>
@@ -753,7 +776,7 @@ export default function GateOutPage() {
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Customer Address</p>
-                                        <p className="text-[10px] font-medium text-slate-600 leading-tight truncate" title={orderDetails.customerAddress}>{orderDetails.customerAddress}</p>
+                                        <p className="text-[10px] font-medium text-slate-600 leading-tight break-words" title={orderDetails.customerAddress}>{orderDetails.customerAddress}</p>
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact Person</p>
@@ -765,11 +788,11 @@ export default function GateOutPage() {
                                           {(orderDetails.isOrderThrough === "Direct" || (orderDetails.isOrderThrough === "—" && !orderDetails.isBroker)) ? "No" : orderDetails.brokerName} / ₹{orderDetails.advanceAmount}
                                         </p>
                                       </div>
-                                      <div className="md:col-span-2">
+                                      <div className="sm:col-span-2">
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Order Punch Remarks</p>
                                         <p className="text-[10px] font-medium text-slate-600 leading-tight italic">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
                                       </div>
-                                      <div className="md:col-span-2">
+                                      <div className="sm:col-span-2">
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">PO Copy (SO Upload)</p>
                                         {group.uploadSo ? (
                                           <a 
@@ -787,7 +810,7 @@ export default function GateOutPage() {
                                         )}
                                       </div>
 
-                                      <div className="md:col-span-4 h-px bg-slate-200 my-1" />
+                                      <div className="sm:col-span-2 xl:col-span-4 h-px bg-slate-200 my-1" />
 
                                       {/* Dispatch Info */}
                                       <div>
@@ -809,10 +832,10 @@ export default function GateOutPage() {
                                         </p>
                                       </div>
 
-                                      <div className="md:col-span-4 h-px bg-slate-200 my-1" />
+                                      <div className="sm:col-span-2 xl:col-span-4 h-px bg-slate-200 my-1" />
 
                                       {/* Vehicle Info */}
-                                      <div className="md:col-span-4 flex items-center gap-2 mb-[-8px]">
+                                      <div className="sm:col-span-2 xl:col-span-4 flex items-center gap-2 mb-[-8px]">
                                         <div className="h-3 w-1 bg-blue-600 rounded-full" />
                                         <p className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-900/60">Vehicle Specifications</p>
                                       </div>
@@ -843,7 +866,7 @@ export default function GateOutPage() {
                                       </div>
 
                                       {/* Driver Info */}
-                                      <div className="md:col-span-4 flex items-center gap-2 mb-[-8px] mt-2">
+                                      <div className="sm:col-span-2 xl:col-span-4 flex items-center gap-2 mb-[-8px] mt-2">
                                         <div className="h-3 w-1 bg-amber-600 rounded-full" />
                                         <p className="text-[10px] font-black uppercase tracking-[0.15em] text-amber-900/60">Driver Information</p>
                                       </div>
@@ -865,7 +888,7 @@ export default function GateOutPage() {
                                         <p className="text-xs font-bold text-slate-900 leading-none">{firstProd.dl_valid_upto ? new Date(firstProd.dl_valid_upto).toLocaleDateString("en-GB") : "—"}</p>
                                       </div>
 
-                                      <div className="md:col-span-4 h-px bg-slate-200 my-1" />
+                                      <div className="sm:col-span-2 xl:col-span-4 h-px bg-slate-200 my-1" />
 
                                       {/* Security Audit Info */}
                                       <div>
@@ -899,7 +922,7 @@ export default function GateOutPage() {
                                         </Badge>
                                       </div>
 
-                                      <div className="md:col-span-4 h-px bg-slate-200 my-1" />
+                                      <div className="sm:col-span-2 xl:col-span-4 h-px bg-slate-200 my-1" />
 
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Tax Copy</p>
@@ -926,7 +949,7 @@ export default function GateOutPage() {
                                         ) : <span className="text-[10px] text-slate-400">—</span>}
                                       </div>
 
-                                      <div className="md:col-span-4 h-px bg-slate-200 my-1" />
+                                      <div className="sm:col-span-2 xl:col-span-4 h-px bg-slate-200 my-1" />
 
                                       {/* Weightment Info */}
                                       <div>
@@ -959,7 +982,7 @@ export default function GateOutPage() {
                                       </div>
                                       <div>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transporter Name</p>
-                                        <p className="text-xs font-bold text-slate-700 truncate" title={firstProd.transporterName}>{firstProd.transporterName || "—"}</p>
+                                        <p className="text-xs font-bold text-slate-700 break-words" title={firstProd.transporterName}>{firstProd.transporterName || "—"}</p>
                                       </div>
                                     </div>
                                   </div>
@@ -968,8 +991,9 @@ export default function GateOutPage() {
                             </div>
                           )}
 
-                          {/* Product Table (Always Visible) */}
-                          <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                          {/* Product List (Responsive) */}
+                          <div className="border border-slate-200 rounded-xl sm:rounded-2xl overflow-hidden shadow-sm bg-white">
+                            <div className="hidden xl:block">
                             <Table>
                               <TableHeader className="bg-slate-50">
                                 <TableRow>
@@ -1062,6 +1086,94 @@ export default function GateOutPage() {
                                 </TableRow>
                               </TableBody>
                             </Table>
+                            </div>
+
+                            <div className="xl:hidden divide-y divide-slate-100">
+                              <div className="flex items-center justify-between gap-3 bg-slate-50 p-3">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Products</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Select All</span>
+                                  <Checkbox
+                                    checked={allSelected}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setSelectedProducts(prev => Array.from(new Set([...prev, ...allProducts.map((p: any) => p._rowKey)])))
+                                      } else {
+                                        setSelectedProducts(prev => prev.filter(k => !allProducts.some((p: any) => p._rowKey === k)))
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                              {allProducts.map((product: any) => (
+                                <div key={product._rowKey} className={cn("p-4 space-y-3", selectedProducts.includes(product._rowKey) ? "bg-blue-50/30" : "bg-white")}>
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-black text-slate-800 uppercase leading-tight break-words">{product.productName}</p>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">#{product.specificOrderNo}</p>
+                                    </div>
+                                    <Checkbox
+                                      checked={selectedProducts.includes(product._rowKey)}
+                                      onCheckedChange={() => {
+                                        if (selectedProducts.includes(product._rowKey)) {
+                                          setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
+                                        } else {
+                                          setSelectedProducts(prev => [...prev, product._rowKey])
+                                        }
+                                      }}
+                                      className="h-5 w-5"
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
+                                    <div>
+                                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Actual Qty</p>
+                                      <Badge variant="outline" className="mt-1 border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">{product.actualQty || "0"}</Badge>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Truck No</p>
+                                      <p className="text-xs font-bold text-slate-700">{(product.truckNo || "—").toUpperCase()}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Rate</p>
+                                      <p className="text-xs font-bold text-slate-700">{product.rate ? `₹${product.rate.toFixed(2)}` : "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Amount</p>
+                                      <p className="text-xs font-black text-blue-700">{product.amount ? `₹${product.amount.toFixed(2)}` : "—"}</p>
+                                    </div>
+                                    <div className="min-[420px]:col-span-2">
+                                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Invoice</p>
+                                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                                        <span className="text-xs font-bold text-green-700">{product.invoiceNo || "—"}</span>
+                                        {product.invoice_copy ? (
+                                          <a href={product.invoice_copy} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black text-blue-600 underline">
+                                            View Invoice
+                                          </a>
+                                        ) : (
+                                          <span className="text-[10px] text-slate-400 font-bold italic tracking-tighter">NO FILE</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                              <div className="bg-slate-50 p-4">
+                                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
+                                  <div>
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total Qty</p>
+                                    <Badge className="mt-1 bg-blue-600 text-white font-black text-xs px-3">
+                                      {allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.actualQty) || 0), 0)}
+                                    </Badge>
+                                  </div>
+                                  <div>
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total Amount</p>
+                                    <p className="text-sm font-black text-blue-700">
+                                      ₹{allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0).toFixed(2)}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1072,13 +1184,13 @@ export default function GateOutPage() {
             )}
 
             {/* Gate Out Form (Bottom) */}
-            <div className="mt-8 space-y-6 border rounded-lg p-6 bg-white shadow-sm">
+            <div className="mt-8 space-y-6 border rounded-lg p-4 sm:p-6 bg-white shadow-sm">
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
                 <CheckCircle className="h-4 w-4 text-blue-600" />
                 Gate Pass & Evidence
               </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
                 <div className="space-y-2">
                   <Label>Upload Gate Pass <span className="text-red-500">*</span></Label>
                   <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
@@ -1096,7 +1208,7 @@ export default function GateOutPage() {
                     />
                     <label htmlFor="gatepass-upload" className="cursor-pointer block">
                       <Upload className="h-6 w-6 mx-auto mb-2 text-blue-600" />
-                      <p className="text-xs font-bold text-slate-700 uppercase tracking-tight">
+                      <p className="text-xs font-bold text-slate-700 uppercase tracking-tight break-words">
                         {isUploading === 'gatePass' ? "UPLOADING..." : (gateOutData.gatePassFile ? `REPLACE: ${gateOutData.gatePassFileName}` : "Click to upload gate pass")}
                       </p>
                     </label>
@@ -1120,7 +1232,7 @@ export default function GateOutPage() {
                     />
                     <label htmlFor="vehicle-loaded-upload" className="cursor-pointer block">
                       <Upload className="h-6 w-6 mx-auto mb-2 text-violet-600" />
-                      <p className="text-xs font-bold text-slate-700 uppercase tracking-tight">
+                      <p className="text-xs font-bold text-slate-700 uppercase tracking-tight break-words">
                         {isUploading === 'vehicleImage' ? "UPLOADING..." : (gateOutData.vehicleLoadedImage ? `REPLACE: ${gateOutData.vehicleLoadedImageName}` : "Click to upload vehicle image")}
                       </p>
                     </label>
@@ -1129,14 +1241,14 @@ export default function GateOutPage() {
               </div>
             </div>
 
-            <DialogFooter className="mt-8 border-t pt-4 bg-gray-50 -mx-6 -mb-6 px-6 py-4">
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isProcessing}>
+            <DialogFooter className="mt-8 border-t pt-4 bg-gray-50 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 px-4 sm:px-6 py-4 flex flex-col sm:flex-row gap-3">
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isProcessing} className="h-11 sm:h-10">
                 Cancel
               </Button>
               <Button
                 onClick={handleSubmit}
                 disabled={isProcessing || isReadOnly}
-                className="bg-blue-600 hover:bg-blue-700 min-w-37.5"
+                className="bg-blue-600 hover:bg-blue-700 min-w-37.5 h-11 sm:h-10"
               >
                 {isProcessing ? "Processing..." : "Complete Gate Out"}
               </Button>

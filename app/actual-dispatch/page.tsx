@@ -1874,24 +1874,24 @@ export default function ActualDispatchPage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[95vw] max-w-[95vw]! max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] p-0">
-          <div className="p-8">
-            <DialogHeader className="border-b pb-6 mb-6">
-              <DialogTitle className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                <Truck className="h-7 w-7 text-blue-600" />
+        <DialogContent className="w-[calc(100vw-1rem)] sm:w-[95vw] sm:!max-w-[95vw] max-h-[95dvh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] p-0">
+          <div className="p-4 sm:p-6 lg:p-8">
+            <DialogHeader className="border-b pb-4 sm:pb-6 mb-4 sm:mb-6 pr-8">
+              <DialogTitle className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 tracking-tight flex flex-wrap items-start gap-3 leading-tight">
+                <Truck className="h-6 w-6 sm:h-7 sm:w-7 text-blue-600 shrink-0" />
                 Actual Dispatch Confirmation - {selectedGroups.length > 1 ? `${selectedGroups.length} Customer Groups` : selectedGroups[0]?.customerName}
               </DialogTitle>
-              <DialogDescription className="text-slate-500 font-medium text-base mt-2">
+              <DialogDescription className="text-slate-500 font-medium text-sm sm:text-base mt-2">
                 Review and confirm dispatch quantities for selected customers.
               </DialogDescription>
             </DialogHeader>
 
             {/* Gate-In Status Banner */}
-            <div className={`flex items-center gap-3 px-5 py-3 rounded-xl mb-4 border-2 ${gateInData ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+            <div className={`flex items-start sm:items-center gap-3 px-3 sm:px-5 py-3 rounded-xl mb-4 border-2 ${gateInData ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
               <button
                 type="button"
                 onClick={() => { if (gateInData) setIsGateInPopupOpen(true); }}
-                className={`flex items-center gap-2 font-black text-sm uppercase tracking-tight ${gateInData ? 'text-emerald-700 cursor-pointer hover:underline' : 'text-red-600 cursor-default'}`}
+                className={`flex items-start sm:items-center gap-2 text-left font-black text-xs sm:text-sm uppercase tracking-tight ${gateInData ? 'text-emerald-700 cursor-pointer hover:underline' : 'text-red-600 cursor-default'}`}
               >
                 {gateInData
                   ? <><CheckCircle2 className="h-5 w-5 text-emerald-500" /> Gate-In Verified — Click to View Images</>
@@ -1903,7 +1903,7 @@ export default function ActualDispatchPage() {
             {/* Gate-In Images Popup */}
             {isGateInPopupOpen && gateInData && (
               <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60" onClick={() => setIsGateInPopupOpen(false)}>
-                <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full mx-4" onClick={e => e.stopPropagation()}>
+                <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-8 max-w-2xl max-h-[90vh] overflow-y-auto w-full mx-4" onClick={e => e.stopPropagation()}>
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                       <CheckCircle2 className="h-6 w-6 text-emerald-500" /> Gate-In Images
@@ -1914,7 +1914,7 @@ export default function ActualDispatchPage() {
                     Submitted by <span className="text-slate-800">{gateInData.username}</span> on{" "}
                     {gateInData.submitted_at ? new Date(gateInData.submitted_at).toLocaleString("en-GB") : "—"}
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                     {[
                       { label: "Front Vehicle", url: gateInData.front_vehicle_image },
                       { label: "Back Vehicle", url: gateInData.back_vehicle_image },
@@ -1943,12 +1943,12 @@ export default function ActualDispatchPage() {
             )}
 
             {selectedGroups.length > 0 && (
-              <div className="space-y-12 mt-6">
+              <div className="space-y-8 lg:space-y-12 mt-6">
                 {/* 1. Multi-Customer Interleaved Details */}
                 {selectedGroups.map((group, groupIdx) => {
                   return (
                     <div key={group._rowKey} className="space-y-6">
-                      <h2 className="text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
+                      <h2 className="text-base sm:text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex flex-col sm:flex-row sm:items-center justify-between gap-2 break-words">
                         {group.customerName}
                         <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
                           {group._productCount} PRODUCTS
@@ -1962,19 +1962,19 @@ export default function ActualDispatchPage() {
                         };
 
                         return (
-                          <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
-                            <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
-                              <div className="flex items-center gap-4">
-                                <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
+                          <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-xl sm:rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
+                            <div className="bg-blue-600 px-3 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer" onClick={toggleExpand}>
+                              <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0">
+                                <Badge className="bg-white text-blue-800 hover:bg-white px-3 sm:px-4 py-1.5 text-xs sm:text-base font-black tracking-tight rounded-full shadow-sm max-w-full whitespace-normal">
                                   ORDER: {baseDo}
                                 </Badge>
-                                <div className="flex flex-col">
+                                <div className="flex flex-col min-w-0">
                                   <span className="text-[10px] text-blue-100 font-black uppercase tracking-widest leading-none mb-1">Customer Group {groupIdx + 1} | Section {orderIdx + 1}</span>
                                   <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products.length} Items Selected</span>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-3">
-                                <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
+                              <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                                <div className="text-[10px] sm:text-[11px] text-blue-50 font-bold uppercase tracking-widest sm:mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20 rounded-full">
                                   {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                                 </Button>
@@ -1982,9 +1982,9 @@ export default function ActualDispatchPage() {
                             </div>
 
                             {isExpanded && (
-                              <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
-                                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                              <div className="px-3 sm:px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
+                                <div className="bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-inner">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
                                     <div>
                                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Depo Name</p>
                                       <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.depoName || "—"}</p>
@@ -2047,7 +2047,7 @@ export default function ActualDispatchPage() {
                                     </div>
                                     <div className="col-span-1 sm:col-span-2">
                                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Address</p>
-                                      <p className="text-sm font-bold text-slate-900 truncate md:whitespace-normal" title={orderDetails.address}>{orderDetails.address}</p>
+                                      <p className="text-sm font-bold text-slate-900 break-words" title={orderDetails.address}>{orderDetails.address}</p>
                                     </div>
                                     <div>
                                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Payment Terms</p>
@@ -2109,7 +2109,7 @@ export default function ActualDispatchPage() {
                                       </div>
                                     </div>
 
-                                    <div className="col-span-full grid grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-200 mt-2">
+                                    <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-200 mt-2">
                                       <div className="flex items-center gap-2">
                                         <div className={cn("w-2 h-2 rounded-full", orderDetails.weDealInSku ? 'bg-green-500' : 'bg-red-500')} />
                                         <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">We Deal SKU?</span>
@@ -2140,16 +2140,16 @@ export default function ActualDispatchPage() {
 
                 {/* 2. Consolidated Product Table */}
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between border-b-2 border-slate-100 pb-4">
-                    <h3 className="text-xl font-black text-slate-800 flex items-center gap-2 uppercase tracking-tight">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-slate-100 pb-4 gap-2">
+                    <h3 className="text-base sm:text-xl font-black text-slate-800 flex flex-wrap items-center gap-2 uppercase tracking-tight">
                       Consolidated Product List
                       <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 text-sm px-3">{dialogSelectedProducts.length} / {selectedGroups.reduce((s, g) => s + g._allProducts.length, 0)} Items</Badge>
                     </h3>
                   </div>
 
-                  <div className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm bg-white">
+                  <div className="border border-slate-200 rounded-xl sm:rounded-3xl overflow-hidden shadow-sm bg-white">
                     {/* Desktop Table View */}
-                    <Table className="hidden md:table">
+                    <Table className="hidden xl:table">
                       <TableHeader className="bg-slate-50 sticky top-0 z-10">
                         <TableRow>
                           <TableHead className="w-12.5 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">
@@ -2294,7 +2294,7 @@ export default function ActualDispatchPage() {
                     </Table>
 
                     {/* Mobile Card View for Products */}
-                    <div className="md:hidden divide-y divide-slate-100">
+                    <div className="xl:hidden divide-y divide-slate-100">
                       {selectedGroups.flatMap(group => group._allProducts).map((prod: any) => {
                         const rowKey = prod._rowKey;
                         const isSelected = dialogSelectedProducts.includes(rowKey);
@@ -2318,7 +2318,7 @@ export default function ActualDispatchPage() {
                               <Badge variant="outline" className="text-[8px] bg-orange-50 text-orange-700 border-orange-200 uppercase font-black">Pending</Badge>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div className="space-y-1">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Planned Qty</p>
                                 <p className="text-sm font-black text-blue-700">{prod.qtyToDispatch} <span className="text-[9px] font-bold uppercase">{prod.uom}</span></p>
@@ -2352,7 +2352,7 @@ export default function ActualDispatchPage() {
                               />
                             </div>
 
-                            <div className="grid grid-cols-3 gap-2 pt-2">
+                            <div className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-2 pt-2">
                               <div className="bg-slate-50 p-2 rounded-lg">
                                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 text-center">Rate</p>
                                 <p className="text-[10px] font-black text-slate-700 text-center">₹{parseFloat(prod.rate || 0).toFixed(2)}</p>
@@ -2373,7 +2373,7 @@ export default function ActualDispatchPage() {
                       {/* Mobile Totals Summary */}
                       <div className="p-4 bg-purple-50 border-t-2 border-purple-200 space-y-4">
                         <p className="text-xs font-black text-purple-900 uppercase tracking-widest text-center">Consolidated Totals</p>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-3">
                           <div className="bg-white/60 p-3 rounded-2xl border border-purple-100">
                             <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1">Total Qty</p>
                             <p className="text-base font-black text-purple-700">
@@ -2411,19 +2411,19 @@ export default function ActualDispatchPage() {
                 </div>
 
                 {/* 3. Consolidated Vehicle & Load Forms */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-8 border-t-4 border-slate-100">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8 pt-6 lg:pt-8 border-t-4 border-slate-100">
                   {/* Column A: Vehicle Information */}
                   <div className="space-y-6">
-                    <div className="bg-purple-600 px-6 py-4 rounded-3xl flex items-center justify-between shadow-lg">
+                    <div className="bg-purple-600 px-4 sm:px-6 py-4 rounded-xl sm:rounded-3xl flex flex-wrap items-center justify-between gap-3 shadow-lg">
                       <div className="flex items-center gap-3">
                         <Truck className="h-6 w-6 text-white" />
-                        <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">Vehicle Setup</h3>
+                        <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tighter italic">Vehicle Setup</h3>
                       </div>
                       <Badge className="bg-white text-purple-700 font-black">STAGE 6</Badge>
                     </div>
 
-                    <div className="bg-slate-50 border-2 border-slate-200 rounded-3xl p-6 space-y-6 shadow-md transition-all hover:shadow-lg">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-slate-50 border-2 border-slate-200 rounded-xl sm:rounded-3xl p-4 sm:p-6 space-y-6 shadow-md transition-all hover:shadow-lg">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
                         <div className="space-y-1.5">
                           <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Vehicle Registration Number <span className="text-red-500">*</span></Label>
                           <Select
@@ -2463,7 +2463,7 @@ export default function ActualDispatchPage() {
                               }
                             }}
                           >
-                            <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl px-4 font-black text-lg focus:border-purple-500 transition-colors uppercase bg-white shadow-sm">
+                            <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl px-3 sm:px-4 font-black text-sm sm:text-lg focus:border-purple-500 transition-colors uppercase bg-white shadow-sm">
                               <SelectValue placeholder="Select Vehicle" />
                             </SelectTrigger>
                             <SelectContent className="max-h-[300px]">
@@ -2490,7 +2490,7 @@ export default function ActualDispatchPage() {
                               }
                             }}
                           >
-                            <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl px-4 font-black text-lg focus:border-purple-500 transition-colors uppercase bg-white shadow-sm">
+                            <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl px-3 sm:px-4 font-black text-sm sm:text-lg focus:border-purple-500 transition-colors uppercase bg-white shadow-sm">
                               <SelectValue placeholder="Select Driver" />
                             </SelectTrigger>
                             <SelectContent className="max-h-[300px]">
@@ -2502,7 +2502,7 @@ export default function ActualDispatchPage() {
                         </div>
 
                         {/* Vehicle Details Badges */}
-                        <div className="grid grid-cols-2 gap-2 mt-auto pb-1">
+                        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-2 mt-auto pb-1">
                           <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
                             <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">Type</p>
                             <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{vehicleData.vehicle_type || '---'}</p>
@@ -2528,7 +2528,7 @@ export default function ActualDispatchPage() {
                         </div>
 
                         {/* Driver Details Badges */}
-                        <div className="grid grid-cols-2 gap-2 mt-2">
+                        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-2 mt-2">
                           <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
                             <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">Contact</p>
                             <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{driverData.contact_no || '---'}</p>
@@ -2546,10 +2546,10 @@ export default function ActualDispatchPage() {
 
                       <div className="pt-4 border-t border-slate-200">
                         <p className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest leading-none">Digital Documents (STAGE 6)</p>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
-                            <div className="flex items-center justify-between w-full">
-                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                            <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-2 w-full">
+                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase break-words">
                                 Fitness <span className="text-red-500">*</span> {vehicleData.fitness_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.fitness_file_name})</span>}
                               </span>
                               <div className="flex items-center gap-2">
@@ -2581,8 +2581,8 @@ export default function ActualDispatchPage() {
                             />
                           </div>
                           <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
-                            <div className="flex items-center justify-between w-full">
-                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                            <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-2 w-full">
+                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase break-words">
                                 Insurance <span className="text-red-500">*</span> {vehicleData.insurance_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.insurance_file_name})</span>}
                               </span>
                               <div className="flex items-center gap-2">
@@ -2614,8 +2614,8 @@ export default function ActualDispatchPage() {
                             />
                           </div>
                           <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
-                            <div className="flex items-center justify-between w-full">
-                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                            <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-2 w-full">
+                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase break-words">
                                 Tax Copy <span className="text-red-500">*</span> {vehicleData.tax_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.tax_file_name})</span>}
                               </span>
                               <div className="flex items-center gap-2">
@@ -2647,8 +2647,8 @@ export default function ActualDispatchPage() {
                             />
                           </div>
                           <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
-                            <div className="flex items-center justify-between w-full">
-                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                            <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-2 w-full">
+                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase break-words">
                                 Pollution <span className="text-red-500">*</span> {vehicleData.pollution_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.pollution_file_name})</span>}
                               </span>
                               <div className="flex items-center gap-2">
@@ -2680,8 +2680,8 @@ export default function ActualDispatchPage() {
                             />
                           </div>
                           <div className="bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group cursor-pointer hover:border-purple-400 transition-colors">
-                            <div className="flex items-center justify-between w-full">
-                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase">
+                            <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-2 w-full">
+                              <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase break-words">
                                 State Permit <span className="text-red-500">*</span> {vehicleData.permit1_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit1_file_name})</span>}
                               </span>
                               <div className="flex items-center gap-2">
@@ -2716,9 +2716,9 @@ export default function ActualDispatchPage() {
                             "bg-white border border-dashed border-slate-300 rounded-xl p-2.5 flex flex-col gap-2 group transition-colors",
                             !isInterState ? "opacity-40 grayscale cursor-not-allowed bg-slate-50 border-slate-200" : "hover:border-purple-400 cursor-pointer"
                           )}>
-                            <div className="flex items-center justify-between w-full">
+                            <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-2 w-full">
                               <span className={cn(
-                                "text-[10px] font-black uppercase transition-colors",
+                                "text-[10px] font-black uppercase transition-colors break-words",
                                 isInterState ? "text-slate-500 group-hover:text-purple-600" : "text-slate-400"
                               )}>
                                 National / Other State Permit {isInterState && <span className="text-red-500">*</span>} {vehicleData.permit2_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit2_file_name})</span>}
@@ -2770,7 +2770,7 @@ export default function ActualDispatchPage() {
                         </div>
                       </div>
 
-                      <div className="pt-4 border-t border-slate-200 grid grid-cols-2 gap-4">
+                      <div className="pt-4 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                           <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Check Status <span className="text-red-500">*</span></Label>
                           <Select value={vehicleData.checkStatus} onValueChange={(v) => setVehicleData(p => ({ ...p, checkStatus: v }))}>
@@ -2800,16 +2800,16 @@ export default function ActualDispatchPage() {
 
                   {/* Column B: Material Load Details */}
                   <div className="space-y-6">
-                    <div className="bg-blue-800 px-6 py-4 rounded-3xl flex items-center justify-between shadow-lg">
+                    <div className="bg-blue-800 px-4 sm:px-6 py-4 rounded-xl sm:rounded-3xl flex flex-wrap items-center justify-between gap-3 shadow-lg">
                       <div className="flex items-center gap-3">
                         <Weight className="h-6 w-6 text-white" />
-                        <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">Weightment Audit</h3>
+                        <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tighter italic">Weightment Audit</h3>
                       </div>
                       <Badge className="bg-white text-blue-800 font-black">STAGE 7</Badge>
                     </div>
 
-                    <div className="bg-white border-2 border-slate-200 rounded-3xl p-6 space-y-5 shadow-md overflow-hidden relative group hover:shadow-lg transition-all">
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="bg-white border-2 border-slate-200 rounded-xl sm:rounded-3xl p-4 sm:p-6 space-y-5 shadow-md overflow-hidden relative group hover:shadow-lg transition-all">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="space-y-1.5">
                           <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Actual Qty <span className="text-red-500">*</span></Label>
                           <Input type="number" step="0.01" className="h-10 border-2 border-slate-200 rounded-lg font-bold bg-white focus:border-blue-500 transition-colors"
@@ -2825,7 +2825,7 @@ export default function ActualDispatchPage() {
                           <Input className="h-10 border-slate-200 rounded-lg font-bold bg-slate-50 font-mono uppercase" value={loadData.truckNo || vehicleNumber} readOnly />
                         </div>
                         <div className="space-y-1.5">
-                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex justify-between items-center">
+                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-1">
                             Weightment Slip <span className="text-slate-400 font-normal normal-case">(Optional)</span> {loadData.weightmentSlip_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.weightmentSlip_file_name})</span>}
                           </Label>
                           <div className="flex gap-2">
@@ -2836,7 +2836,7 @@ export default function ActualDispatchPage() {
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex justify-between items-center">
+                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-1">
                             No Plate Image <span className="text-slate-400 font-normal normal-case">(Optional)</span> {loadData.vehicleNoPlateImage_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.vehicleNoPlateImage_file_name})</span>}
                           </Label>
                           <div className="flex gap-2">
@@ -2848,7 +2848,7 @@ export default function ActualDispatchPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="space-y-1.5">
                           <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1">Gross Wt <span className="text-red-500">*</span></Label>
                           <Input type="number" step="0.01" className="h-10 border-slate-200 rounded-lg font-bold text-blue-600"
@@ -3114,7 +3114,7 @@ export default function ActualDispatchPage() {
             <DialogTitle>Dispatch Slip Preview</DialogTitle>
             <DialogDescription>Review the dispatch slip details below.</DialogDescription>
           </DialogHeader>
-          
+
           <div className="bg-slate-50 p-4 rounded-lg overflow-x-auto">
             {renderSlipContent()}
           </div>
@@ -3122,14 +3122,14 @@ export default function ActualDispatchPage() {
           <DialogFooter className="flex flex-col sm:flex-row justify-end gap-3 mt-4">
             <Button variant="outline" onClick={() => setIsSlipDialogOpen(false)} className="sm:order-first">Close</Button>
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={handleDownloadSlip}
                 className="border-blue-600 text-blue-600 hover:bg-blue-50"
               >
                 <Printer className="mr-2 h-4 w-4" /> Print Slip
               </Button>
-              <Button 
+              <Button
                 onClick={handleDownloadSlip}
                 className="bg-blue-600 hover:bg-blue-700"
               >
