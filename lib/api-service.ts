@@ -1125,6 +1125,10 @@ export const processStageApi = {
       body: JSON.stringify(data),
     });
   },
+
+  delete: async (id: number): Promise<ApiResponse> => {
+    return request(`/process-stages/${id}`, { method: 'DELETE' });
+  },
 };
 
 /**

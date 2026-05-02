@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Clock, Loader2, RefreshCw, Save } from "lucide-react"
+import { Clock, Loader2, Pencil, RefreshCw, Save, Trash2 } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -57,6 +57,7 @@ export default function SetTurnAroundTimePage() {
   const [minutes, setMinutes] = useState("30")
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const selectedExistingStage = useMemo(
     () => stages.find((stage) => stage.stage_name === stageName),
@@ -91,6 +92,33 @@ export default function SetTurnAroundTimePage() {
     setHours(String(Math.floor(totalMinutes / 60)))
     setMinutes(String(totalMinutes % 60))
   }, [selectedExistingStage])
+
+  const handleEdit = (stage: ProcessStage) => {
+    setStageName(stage.stage_name)
+    const totalMinutes = Math.round(Number(stage.stage_time_seconds || 0) / 60)
+    setHours(String(Math.floor(totalMinutes / 60)))
+    setMinutes(String(totalMinutes % 60))
+  }
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this TAT entry?")) return
+    setDeletingId(id)
+    try {
+      const response = await processStageApi.delete(id)
+      if (response.success) {
+        toast({ title: "TAT deleted", description: "Stage TAT has been deleted." })
+        await fetchStages()
+      }
+    } catch (error: any) {
+      toast({
+        title: "Delete failed",
+        description: error?.message || "Unable to delete process stage TAT.",
+        variant: "destructive",
+      })
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const handleSubmit = async () => {
     const totalMinutes = Number(hours || 0) * 60 + Number(minutes || 0)
@@ -214,19 +242,20 @@ export default function SetTurnAroundTimePage() {
                     <TableHead>Stage Name</TableHead>
                     <TableHead className="text-center">TAT</TableHead>
                     <TableHead className="text-center">Submitted At</TableHead>
+                    <TableHead className="text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                         <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                         Loading TAT data...
                       </TableCell>
                     </TableRow>
                   ) : stages.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                         No TAT configured yet.
                       </TableCell>
                     </TableRow>
@@ -242,6 +271,29 @@ export default function SetTurnAroundTimePage() {
                         </TableCell>
                         <TableCell className="text-center text-muted-foreground">
                           {stage.submitted_at ? new Date(stage.submitted_at).toLocaleString() : ""}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEdit(stage)}
+                              disabled={isReadOnly}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleDelete(stage.id)}
+                              disabled={isReadOnly || deletingId === stage.id}
+                            >
+                              {deletingId === stage.id
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : <Trash2 className="h-3.5 w-3.5" />
+                              }
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))

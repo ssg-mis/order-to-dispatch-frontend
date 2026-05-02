@@ -580,10 +580,90 @@ export default function GateOutPage() {
             </Badge>
           </div>
 
-          <div className="max-h-[600px] overflow-y-auto p-3 sm:p-4">
+          {/* Desktop Table View */}
+          <div className="hidden md:block max-h-[600px] overflow-auto">
             {isPendingLoading && pendingOrders.length === 0 ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                {[...Array(6)].map((_, i) => (
+              <div className="p-6 space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="h-10 bg-slate-100 rounded animate-pulse" />
+                ))}
+              </div>
+            ) : displayRows.length > 0 ? (
+              <Table>
+                <TableHeader className="sticky top-0 z-10">
+                  <TableRow className="bg-slate-50">
+                    <TableHead className="w-10 text-center">
+                      <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
+                    </TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest">DO Date</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest">Customer</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest">DO Number(s)</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-center">Actual 1</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest">Process ID</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest">Invoice No</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest">Vehicle No</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-center">Items</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-center">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {displayRows.map((group) => (
+                    <TableRow
+                      key={group._rowKey}
+                      className={cn(
+                        "cursor-pointer transition-colors",
+                        selectedItems.includes(group._rowKey) ? "bg-blue-50/40" : "hover:bg-slate-50/60"
+                      )}
+                      onClick={() => toggleSelectItem(group._rowKey)}
+                    >
+                      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-500 font-medium whitespace-nowrap">{group.partySoDate}</TableCell>
+                      <TableCell className="text-xs font-black text-slate-900 uppercase">{group.customerName}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {String(group.doNumber || "—").split(", ").map((doNo: string) => (
+                            <Badge key={doNo} variant="outline" className="bg-white text-blue-700 border-blue-100 text-[10px] font-bold whitespace-nowrap">
+                              {doNo}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center text-xs font-bold text-blue-700 whitespace-nowrap">{group.actual1Date}</TableCell>
+                      <TableCell className="text-xs font-bold text-slate-700">{group.processId}</TableCell>
+                      <TableCell className="text-xs font-bold text-slate-700">
+                        {group._allProducts?.[0]?.invoice_copy ? (
+                          <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-blue-600 hover:underline font-black">
+                            {group.invoiceNo}
+                          </a>
+                        ) : (
+                          group.invoiceNo
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs font-black text-slate-800 whitespace-nowrap">{group.vehicleNo}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary" className="font-black text-[10px]">{group._productCount}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 text-[10px] font-black whitespace-nowrap">Ready</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                No orders pending for gate out
+              </div>
+            )}
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden max-h-[600px] overflow-y-auto p-3">
+            {isPendingLoading && pendingOrders.length === 0 ? (
+              <div className="grid grid-cols-1 gap-4">
+                {[...Array(4)].map((_, i) => (
                   <Card key={i} className="p-4 space-y-4 border-slate-100 shadow-sm animate-pulse">
                     <div className="flex justify-between">
                       <div className="h-4 w-32 bg-slate-200 rounded" />
@@ -598,7 +678,7 @@ export default function GateOutPage() {
                 ))}
               </div>
             ) : displayRows.length > 0 ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 {displayRows.map((group) => (
                   <Card
                     key={group._rowKey}
@@ -623,7 +703,7 @@ export default function GateOutPage() {
                       ))}
                     </div>
 
-                    <div className="mt-4 grid grid-cols-1 min-[420px]:grid-cols-2 gap-3 border-y border-slate-100 py-3">
+                    <div className="mt-4 grid grid-cols-2 gap-3 border-y border-slate-100 py-3">
                       <div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Actual 1</p>
                         <p className="text-xs font-bold text-blue-700">{group.actual1Date}</p>
@@ -632,18 +712,16 @@ export default function GateOutPage() {
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Process ID</p>
                         <p className="text-xs font-bold text-slate-700 break-words">{group.processId}</p>
                       </div>
-                      {visibleColumns.includes("invoiceNo") && (
-                        <div>
-                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Invoice</p>
-                          {group._allProducts?.[0]?.invoice_copy ? (
-                            <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="text-xs font-black text-blue-600 hover:underline break-words">
-                              {group.invoiceNo}
-                            </a>
-                          ) : (
-                            <p className="text-xs font-bold text-slate-700 break-words">{group.invoiceNo}</p>
-                          )}
-                        </div>
-                      )}
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Invoice</p>
+                        {group._allProducts?.[0]?.invoice_copy ? (
+                          <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="text-xs font-black text-blue-600 hover:underline break-words">
+                            {group.invoiceNo}
+                          </a>
+                        ) : (
+                          <p className="text-xs font-bold text-slate-700 break-words">{group.invoiceNo}</p>
+                        )}
+                      </div>
                       <div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vehicle</p>
                         <p className="text-xs font-black text-slate-800">{group.vehicleNo}</p>
