@@ -15,8 +15,6 @@ import { useAuth } from "@/hooks/use-auth"
 import { processStageApi } from "@/lib/api-service"
 
 const STAGE_OPTIONS = [
-  "Commitment Punch",
-  "Order Punch",
   "Pre Approval",
   "Approval of Order",
   "Dispatch Planning",
@@ -58,10 +56,16 @@ export default function SetTurnAroundTimePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [editingStageId, setEditingStageId] = useState<number | null>(null)
 
   const selectedExistingStage = useMemo(
-    () => stages.find((stage) => stage.stage_name === stageName),
-    [stages, stageName]
+    () => {
+      if (editingStageId) {
+        return stages.find((stage) => stage.id === editingStageId)
+      }
+      return stages.find((stage) => stage.stage_name === stageName)
+    },
+    [editingStageId, stages, stageName]
   )
 
   const fetchStages = async () => {
@@ -94,6 +98,7 @@ export default function SetTurnAroundTimePage() {
   }, [selectedExistingStage])
 
   const handleEdit = (stage: ProcessStage) => {
+    setEditingStageId(stage.id)
     setStageName(stage.stage_name)
     const totalMinutes = Math.round(Number(stage.stage_time_seconds || 0) / 60)
     setHours(String(Math.floor(totalMinutes / 60)))
@@ -135,9 +140,13 @@ export default function SetTurnAroundTimePage() {
 
     setIsSubmitting(true)
     try {
-      const response = await processStageApi.save({ stage_name: stageName, total_minutes: totalMinutes })
+      const payload = { stage_name: stageName, total_minutes: totalMinutes }
+      const response = editingStageId
+        ? await processStageApi.update(editingStageId, payload)
+        : await processStageApi.save(payload)
       if (response.success) {
         toast({ title: "TAT saved", description: `${stageName} TAT has been saved.` })
+        setEditingStageId(null)
         await fetchStages()
       }
     } catch (error: any) {
@@ -175,7 +184,13 @@ export default function SetTurnAroundTimePage() {
           <CardContent className="p-6 space-y-5">
             <div className="space-y-2">
               <Label htmlFor="stage-name">Stage Name</Label>
-              <Select value={stageName} onValueChange={setStageName}>
+              <Select
+                value={stageName}
+                onValueChange={(value) => {
+                  setStageName(value)
+                  setEditingStageId(null)
+                }}
+              >
                 <SelectTrigger id="stage-name" className="h-10">
                   <SelectValue placeholder="Select stage" />
                 </SelectTrigger>
@@ -223,7 +238,7 @@ export default function SetTurnAroundTimePage() {
 
             <Button className="w-full" onClick={handleSubmit} disabled={isSubmitting || isReadOnly}>
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Save TAT
+              {editingStageId ? "Update TAT" : "Save TAT"}
             </Button>
           </CardContent>
         </Card>

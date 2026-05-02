@@ -1126,6 +1126,13 @@ export const processStageApi = {
     });
   },
 
+  update: async (id: number, data: { stage_name: string; total_minutes: number }): Promise<ApiResponse> => {
+    return request(`/process-stages/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
   delete: async (id: number): Promise<ApiResponse> => {
     return request(`/process-stages/${id}`, { method: 'DELETE' });
   },
