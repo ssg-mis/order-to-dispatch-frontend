@@ -261,6 +261,22 @@ export default function CommitmentReviewPage() {
     return pendingResult?.orders.map(mapBackendOrderToFrontend) || [];
   }, [pendingResult]);
 
+  const isRejectedValue = (value: any) => value === false || String(value).toLowerCase().trim() === "false";
+  const getApprovalHistoryStatus = (order: any) => {
+    const approvalChecks = [
+      order.rate_is_rightly_as_per_current_market_rate,
+      order.we_are_dealing_in_ordered_sku,
+      order.party_credit_status,
+      order.dispatch_date_confirmed,
+      order.overall_status_of_order,
+      order.order_confirmation_with_customer,
+    ];
+
+    if (approvalChecks.some(isRejectedValue)) return "Rejected";
+    if (order.overall_status_of_order === true || String(order.overall_status_of_order).toLowerCase().trim() === "true") return "Approved";
+    return "Completed";
+  };
+
   const historyItems = useMemo(() => {
     return historyResult?.orders.map((order: any) => ({
       ...order,
@@ -268,8 +284,7 @@ export default function CommitmentReviewPage() {
       orderNo: order.order_no,
       customerName: order.customer_name,
       stage: "Approval Of Order",
-      status: order.overall_status_of_order === true ? "Approved" :
-        order.overall_status_of_order === false ? "Rejected" : "Completed",
+      status: getApprovalHistoryStatus(order),
       processedBy: "System",
       timestamp: order.actual_2,
       date: order.actual_2 ? new Date(order.actual_2).toLocaleDateString("en-GB") : "-",

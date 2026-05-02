@@ -383,7 +383,7 @@ export default function SecurityApprovalPage() {
 
     filteredPendingOrders.forEach((order: any) => {
       // Step 1: Create a grouping key based on date (YYYY-MM-DD) and truck_no
-      const actualDate = order.actual_1 ? order.actual_1.split('T')[0] : 'NoDate'
+      const actualDate = order.actual_1 ? String(order.actual_1).split(/[T ]/)[0] : 'NoDate'
       const truckNo = (order.truck_no || order.truckNo || 'NoTruck').toUpperCase().trim()
       const groupKey = `${actualDate}_${truckNo}`
 

@@ -319,8 +319,83 @@ export default function GateInPage() {
       }
     >
       <div className="space-y-4">
+        {/* Pending cards for mobile */}
+        <div className="md:hidden space-y-3">
+          {isPendingLoading && pendingRecords.length === 0 ? (
+            [...Array(3)].map((_, i) => (
+              <Card key={i} className="border-slate-200 p-4 shadow-sm">
+                <div className="space-y-3 opacity-50">
+                  <div className="h-4 w-32 bg-slate-200 animate-pulse rounded" />
+                  <div className="h-3 w-full bg-slate-200 animate-pulse rounded" />
+                  <div className="h-3 w-2/3 bg-slate-200 animate-pulse rounded" />
+                </div>
+              </Card>
+            ))
+          ) : pendingRecords.length === 0 ? (
+            <Card className="border-slate-200 p-6 text-center text-sm font-semibold text-slate-400 shadow-sm">
+              No pending gate-ins. Orders saved as draft in Actual Dispatch will appear here.
+            </Card>
+          ) : (
+            pendingRecords.map((record: any) => {
+              const draft = record.draft_data || {}
+              const productCount = draft.dialogSelectedProducts?.length ?? "—"
+              const isSelected = selectedRows.includes(record.order_key)
+
+              return (
+                <Card
+                  key={record.order_key}
+                  className={`border-slate-200 p-4 shadow-sm ${isSelected ? "bg-blue-50 border-blue-200" : "bg-white"}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Order Key</div>
+                      <div className="mt-1 truncate text-base font-black text-blue-700">{record.order_key}</div>
+                    </div>
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => toggleRow(record.order_key)}
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vehicle</div>
+                      <div className="mt-1 truncate font-semibold text-slate-700">{draft.vehicleNumber || "—"}</div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Driver</div>
+                      <div className="mt-1 truncate font-semibold italic text-slate-700">{draft.driverName || "—"}</div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saved By</div>
+                      <div className="mt-1 truncate font-medium text-slate-600">{record.username || "—"}</div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saved At</div>
+                      <div className="mt-1 truncate text-xs font-medium text-slate-500">{formatDate(record.saved_at)}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                    <Badge variant="outline" className="text-xs font-bold">{productCount} item(s)</Badge>
+                    <Button
+                      size="sm"
+                      disabled={isReadOnly}
+                      onClick={() => handleOpenDialog(record)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm"
+                    >
+                      Gate In
+                    </Button>
+                  </div>
+                </Card>
+              )
+            })
+          )}
+        </div>
+
         {/* Pending table */}
-        <Card className="border-none shadow-sm overflow-auto max-h-150">
+        <Card className="hidden md:block border-none shadow-sm overflow-auto max-h-150">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>
