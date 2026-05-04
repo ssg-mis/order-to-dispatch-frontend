@@ -1139,11 +1139,11 @@ export default function DamageAdjustmentPage() {
 
                     <div className="space-y-2">
                       <Label>Upload CN Copy</Label>
-                      <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
+                      <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
                       <div className="border-2 border-dashed rounded-lg p-3 text-center hover:bg-slate-50 transition-colors bg-blue-50/20">
                         <Input
                           type="file"
-                          accept="image/*,.pdf"
+                          accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
                           onChange={(e) => {
                             if (e.target.files?.[0]) {
                               handleFileUpload(e.target.files[0])

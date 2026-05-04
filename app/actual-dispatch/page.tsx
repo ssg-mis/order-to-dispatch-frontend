@@ -2589,7 +2589,7 @@ export default function ActualDispatchPage() {
                                 ) : (
                                   <>
                                     <Input type="file" className="hidden" id="fitness-doc" onChange={(e) => handleFileChange('fitness', 'fitness_file_name', e.target.files?.[0] || null)} />
-                                    <Label htmlFor="fitness-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                    <Label htmlFor="fitness-doc" title="Max file size: 20 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
                                       {isUploading === 'fitness' ? "..." : (vehicleData.fitness_file_name ? 'REPLACE' : 'UPLOAD')}
                                     </Label>
                                   </>
@@ -2622,7 +2622,7 @@ export default function ActualDispatchPage() {
                                 ) : (
                                   <>
                                     <Input type="file" className="hidden" id="ins-doc" onChange={(e) => handleFileChange('insurance', 'insurance_file_name', e.target.files?.[0] || null)} />
-                                    <Label htmlFor="ins-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                    <Label htmlFor="ins-doc" title="Max file size: 20 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
                                       {isUploading === 'insurance' ? "..." : (vehicleData.insurance_file_name ? 'REPLACE' : 'UPLOAD')}
                                     </Label>
                                   </>
@@ -2655,7 +2655,7 @@ export default function ActualDispatchPage() {
                                 ) : (
                                   <>
                                     <Input type="file" className="hidden" id="tax-doc" onChange={(e) => handleFileChange('tax_copy', 'tax_file_name', e.target.files?.[0] || null)} />
-                                    <Label htmlFor="tax-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                    <Label htmlFor="tax-doc" title="Max file size: 20 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
                                       {isUploading === 'tax_copy' ? "..." : (vehicleData.tax_file_name ? 'REPLACE' : 'UPLOAD')}
                                     </Label>
                                   </>
@@ -2688,7 +2688,7 @@ export default function ActualDispatchPage() {
                                 ) : (
                                   <>
                                     <Input type="file" className="hidden" id="poll-doc" onChange={(e) => handleFileChange('polution', 'pollution_file_name', e.target.files?.[0] || null)} />
-                                    <Label htmlFor="poll-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                    <Label htmlFor="poll-doc" title="Max file size: 20 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
                                       {isUploading === 'polution' ? "..." : (vehicleData.pollution_file_name ? 'REPLACE' : 'UPLOAD')}
                                     </Label>
                                   </>
@@ -2721,7 +2721,7 @@ export default function ActualDispatchPage() {
                                 ) : (
                                   <>
                                     <Input type="file" className="hidden" id="permit1-doc" onChange={(e) => handleFileChange('permit1', 'permit1_file_name', e.target.files?.[0] || null)} />
-                                    <Label htmlFor="permit1-doc" title="Max file size: 10 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
+                                    <Label htmlFor="permit1-doc" title="Max file size: 20 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
                                       {isUploading === 'permit1' ? "..." : (vehicleData.permit1_file_name ? 'REPLACE' : 'UPLOAD')}
                                     </Label>
                                   </>
@@ -2768,7 +2768,7 @@ export default function ActualDispatchPage() {
                                     />
                                     <Label
                                       htmlFor="permit2-doc"
-                                      title="Max file size: 10 MB"
+                                      title="Max file size: 20 MB"
                                       className={cn(
                                         "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all",
                                         isInterState ? "bg-slate-100 text-slate-600 hover:bg-purple-600 hover:text-white cursor-pointer" : "bg-slate-200 text-slate-400 cursor-not-allowed"
@@ -2855,7 +2855,7 @@ export default function ActualDispatchPage() {
                           </Label>
                           <div className="flex gap-2">
                             <Input type="file" className="hidden" id="weightment-slip" onChange={(e) => handleFileChange('weightmentSlip', 'weightmentSlip_file_name', e.target.files?.[0] || null, 'load')} />
-                            <Label htmlFor="weightment-slip" title="Max file size: 10 MB" className="h-10 flex-1 flex items-center justify-center bg-slate-100 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-black text-slate-600 cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all">
+                            <Label htmlFor="weightment-slip" title="Max file size: 20 MB" className="h-10 flex-1 flex items-center justify-center bg-slate-100 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-black text-slate-600 cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all">
                               {isUploading === 'weightmentSlip' ? "..." : (loadData.weightmentSlip ? 'REPLACE' : 'UPLOAD')}
                             </Label>
                           </div>
@@ -2866,7 +2866,7 @@ export default function ActualDispatchPage() {
                           </Label>
                           <div className="flex gap-2">
                             <Input type="file" className="hidden" id="no-plate" onChange={(e) => handleFileChange('vehicleNoPlateImage', 'vehicleNoPlateImage_file_name', e.target.files?.[0] || null, 'load')} />
-                            <Label htmlFor="no-plate" title="Max file size: 10 MB" className="h-10 flex-1 flex items-center justify-center bg-slate-100 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-black text-slate-600 cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all">
+                            <Label htmlFor="no-plate" title="Max file size: 20 MB" className="h-10 flex-1 flex items-center justify-center bg-slate-100 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-black text-slate-600 cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all">
                               {isUploading === 'vehicleNoPlateImage' ? "..." : (loadData.vehicleNoPlateImage ? 'REPLACE' : 'UPLOAD')}
                             </Label>
                           </div>

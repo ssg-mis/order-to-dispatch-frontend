@@ -1268,11 +1268,11 @@ export default function CommitmentPunchPage() {
                 <Input
                   id="p-uploadCopy"
                   type="file"
-                  accept="image/*,application/pdf"
+                  accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
                   onChange={e => setProcessUploadCopy(e.target.files?.[0] || null)}
                   className="cursor-pointer"
                 />
-                <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
+                <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
                 {processUploadCopy && (
                   <p className="text-xs text-emerald-600">✅ {processUploadCopy.name}</p>
                 )}

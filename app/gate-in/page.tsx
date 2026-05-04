@@ -30,7 +30,7 @@ function formatDate(dateStr: string) {
 
 interface ImageUploadCardProps {
   label: string
-  capture: "environment" | "user" // rear vs front camera
+  capture?: "environment" | "user" // optional camera hint
   value: string
   fileName: string
   isUploading: boolean
@@ -86,7 +86,7 @@ function ImageUploadCard({ label, capture, value, fileName, isUploading, onFile,
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif"
         capture={capture}
         className="hidden"
         onChange={e => {
@@ -649,7 +649,7 @@ export default function GateInPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <ImageUploadCard
                       label="Front Vehicle Image"
-                      capture="environment"
+                      capture={undefined}
                       value={frontVehicleImage}
                       fileName={frontVehicleFileName}
                       isUploading={uploadingField === "front"}
@@ -658,7 +658,7 @@ export default function GateInPage() {
                     />
                     <ImageUploadCard
                       label="Back Vehicle Image"
-                      capture="environment"
+                      capture={undefined}
                       value={backVehicleImage}
                       fileName={backVehicleFileName}
                       isUploading={uploadingField === "back"}
@@ -667,7 +667,7 @@ export default function GateInPage() {
                     />
                     <ImageUploadCard
                       label="Driver Photo"
-                      capture="user"
+                      capture={undefined}
                       value={driverPhoto}
                       fileName={driverPhotoFileName}
                       isUploading={uploadingField === "driver"}
@@ -676,7 +676,7 @@ export default function GateInPage() {
                     />
                     <ImageUploadCard
                       label="Vehicle Gate Pass"
-                      capture="environment"
+                      capture={undefined}
                       value={gatepassPhoto}
                       fileName={gatepassPhotoFileName}
                       isUploading={uploadingField === "gatepass"}
@@ -687,7 +687,7 @@ export default function GateInPage() {
                   <p className="text-[11px] text-slate-400 font-medium mt-3">
                     On mobile, tapping a card opens your camera directly. On desktop, it opens the file picker.
                     All images are optional but recommended for complete gate-in records.
-                    Max file size: <span className="font-bold">10 MB</span> per image.
+                    Max file size: <span className="font-bold">20 MB</span> per image.
                   </p>
                 </div>
 

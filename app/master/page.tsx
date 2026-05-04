@@ -1475,7 +1475,7 @@ export default function MasterPage() {
               <Input type="file" onChange={e => handleFileUpload(e, 'road_tax_image')} className="flex-1" />
               {vehicleForm.road_tax_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
             </div>
-            <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
+            <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
           </div>
         </div>
 
@@ -1490,7 +1490,7 @@ export default function MasterPage() {
               <Input type="file" onChange={e => handleFileUpload(e, 'pollution_image')} className="flex-1" />
               {vehicleForm.pollution_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
             </div>
-            <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
+            <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
           </div>
         </div>
 
@@ -1505,7 +1505,7 @@ export default function MasterPage() {
               <Input type="file" onChange={e => handleFileUpload(e, 'insurance_image')} className="flex-1" />
               {vehicleForm.insurance_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
             </div>
-            <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
+            <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
           </div>
         </div>
 
@@ -1520,7 +1520,7 @@ export default function MasterPage() {
               <Input type="file" onChange={e => handleFileUpload(e, 'fitness_image')} className="flex-1" />
               {vehicleForm.fitness_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
             </div>
-            <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
+            <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
           </div>
         </div>
 
@@ -1535,7 +1535,7 @@ export default function MasterPage() {
               <Input type="file" onChange={e => handleFileUpload(e, 'state_permit_image')} className="flex-1" />
               {vehicleForm.state_permit_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
             </div>
-            <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
+            <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
           </div>
         </div>
 
@@ -1645,7 +1645,7 @@ export default function MasterPage() {
             <Input type="file" onChange={e => handleFileUpload(e, 'aadhaar_upload')} className="flex-1" />
             {driverForm.aadhaar_upload && <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Uploaded</Badge>}
           </div>
-          <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
+          <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
         </div>
       </div>
 

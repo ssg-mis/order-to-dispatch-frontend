@@ -1523,12 +1523,12 @@ export default function MakeInvoicePage() {
 
                     <div className="space-y-2">
                       <Label>Upload Invoice Copy <span className="text-red-500">*</span></Label>
-                      <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
+                      <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
                       <div className="flex items-center gap-2">
                         <Input
                           type="file"
                           id="invoice-file"
-                          accept=".pdf,.jpg,.png"
+                          accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
                           onChange={(e) => {
                             if (e.target.files?.[0]) {
                               handleFileUpload(e.target.files[0])

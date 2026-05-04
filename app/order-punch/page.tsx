@@ -1466,7 +1466,7 @@ export default function OrderPunchPage() {
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="soFile">Upload SO Copy</Label>
                 <Input id="soFile" type="file" className="cursor-pointer" onChange={handleFileChange} />
-                <p className="text-[10px] text-slate-400">Max file size: 10 MB</p>
+                <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
               </div>
 
               <div className="space-y-2 md:col-span-2">

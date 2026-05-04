@@ -865,9 +865,10 @@ export default function MaterialReceiptPage() {
                                 </div>
                                 <div className="space-y-1.5">
                                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Image</Label>
-                                  <label title="Max file size: 10 MB" className="cursor-pointer inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors ring-1 ring-inset ring-slate-100">
+                                  <label title="Max file size: 20 MB" className="cursor-pointer inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors ring-1 ring-inset ring-slate-100">
                                     <Input
                                       type="file"
+                                      accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif"
                                       className="hidden"
                                       onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'damage', product._rowKey)}
                                     />
@@ -950,9 +951,10 @@ export default function MaterialReceiptPage() {
                                     />
                                   </TableCell>
                                   <TableCell className="text-center">
-                                    <label title="Max file size: 10 MB" className="cursor-pointer inline-flex items-center justify-center p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors ring-1 ring-inset ring-slate-100">
+                                    <label title="Max file size: 20 MB" className="cursor-pointer inline-flex items-center justify-center p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors ring-1 ring-inset ring-slate-100">
                                       <Input
                                         type="file"
+                                        accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif"
                                         className="hidden"
                                         onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'damage', product._rowKey)}
                                       />
@@ -1022,12 +1024,12 @@ export default function MaterialReceiptPage() {
 
                       <div className="space-y-4">
                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Received Image (Proof)</Label>
-                        <p className="text-[10px] text-slate-400 ml-1">Max file size: 10 MB</p>
+                        <p className="text-[10px] text-slate-400 ml-1">Max file size: 20 MB</p>
                         <Card className={cn("border-2 border-dashed rounded-2xl sm:rounded-3xl p-4 sm:p-8 bg-slate-50/50 hover:bg-slate-50 transition-all cursor-pointer group flex flex-col items-center justify-center min-h-[140px] sm:min-h-[160px]",
                           receiptData.receivedProof ? "border-green-200" : "border-slate-200"
                         )}>
                           <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
-                            <Input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'proof')} />
+                            <Input type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'proof')} />
                             <div className="bg-white p-4 rounded-2xl shadow-lg ring-1 ring-slate-100 mb-4 group-hover:scale-110 transition-transform">
                               <Upload className="h-6 w-6 text-blue-600" />
                             </div>
