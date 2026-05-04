@@ -228,6 +228,7 @@ export default function OrderPunchPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeliveryDatePickerOpen, setIsDeliveryDatePickerOpen] = useState(false)
   const [isFuturePeriodDatePickerOpen, setIsFuturePeriodDatePickerOpen] = useState(false)
+  const [salespersonName, setSalespersonName] = useState<string>("")
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -455,7 +456,8 @@ export default function OrderPunchPage() {
         advance_amount: advanceAmount ? parseFloat(advanceAmount) : null,
         is_order_through_broker: isBrokerOrder === "Broker" || isBrokerOrder === "Salesperson",
         is_order_through: isBrokerOrder,
-        broker_name: brokerName || null,
+        broker_name: isBrokerOrder === "Broker" ? brokerName || null : null,
+        salesperson_name: isBrokerOrder === "Salesperson" ? salespersonName || null : null,
         type_of_transporting: transportType || null,
         order_punch_remarks: orderPunchRemarks || null,
         remark: null,
@@ -534,6 +536,7 @@ export default function OrderPunchPage() {
           customerAddress,
           deliveryAddress,
           brokerName,
+          salespersonName,
           deliveryDate,
           startDate,
           endDate,
@@ -1394,12 +1397,12 @@ export default function OrderPunchPage() {
 
               {isBrokerOrder === "Salesperson" && (
                 <div className="space-y-2">
-                  <Label htmlFor="brokerName">Salesperson Name</Label>
+                  <Label htmlFor="salespersonName">Salesperson Name</Label>
                   <AsyncCombobox
                     placeholder={isLoadingSalespersons ? "Loading..." : "Select salesperson"}
                     searchPlaceholder="Search salespersons..."
-                    value={brokerName}
-                    onValueChange={setBrokerName}
+                    value={salespersonName}
+                    onValueChange={setSalespersonName}
                     onSelectOption={(opt: any) => {
                       if (opt.original) {
                         setSalespersons(prev => {

@@ -487,6 +487,26 @@ export default function CheckInvoicePage() {
     statusText: group.isReverted || group._allProducts?.some((p: any) => p.status_1 === "Issue") ? "Issue Reported" : "Pending Review",
   })
 
+  const dynamicColumns = visibleColumns.filter(
+    (colId) => !["partySoDate", "doNumber", "processId", "customerName", "productCount", "productName", "vehicleNo", "orderPunchRemarks", "status", "invoiceNo", "actual1Date"].includes(colId)
+  )
+
+  const getDynamicColumnValue = (group: any, colId: string) => {
+    const directValue = group?.[colId]
+    if (directValue !== undefined && directValue !== null && directValue !== "") return directValue
+
+    const firstProduct = group?._allProducts?.[0] || {}
+    const firstOrder = Object.values(group?._ordersMap || {})[0] || {}
+
+    const orderValue = (firstOrder as any)?.[colId]
+    if (orderValue !== undefined && orderValue !== null && orderValue !== "") return orderValue
+
+    const productValue = (firstProduct as any)?.[colId]
+    if (productValue !== undefined && productValue !== null && productValue !== "") return productValue
+
+    return "—"
+  }
+
   return (
     <WorkflowStageShell
       partyNames={customerNames}
@@ -579,6 +599,15 @@ export default function CheckInvoicePage() {
                 {visibleColumns.includes("invoiceNo") && <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("invoiceNo")}>Invoice No.<PendingSortIcon field="invoiceNo" /></TableHead>}
                 <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicleNo")}>Vehicle No.<PendingSortIcon field="vehicleNo" /></TableHead>
                 <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("orderPunchRemarks")}>Order Punch Remarks<PendingSortIcon field="orderPunchRemarks" /></TableHead>
+                {dynamicColumns.map((colId) => {
+                  const col = ALL_COLUMNS.find((c) => c.id === colId)
+                  if (!col) return null
+                  return (
+                    <TableHead key={colId} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(colId)}>
+                      {col.label}<PendingSortIcon field={colId} />
+                    </TableHead>
+                  )
+                })}
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -637,6 +666,11 @@ export default function CheckInvoicePage() {
                     <TableCell className="text-center">
                       <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
                     </TableCell>
+                    {dynamicColumns.map((colId) => (
+                      <TableCell key={colId} className="text-center text-xs font-medium text-slate-700">
+                        {String(getDynamicColumnValue(group, colId))}
+                      </TableCell>
+                    ))}
                     <TableCell className="text-center">
                       {group.isReverted ? (
                         <Badge className="bg-red-100 text-red-700">Issue Reported</Badge>
@@ -650,7 +684,7 @@ export default function CheckInvoicePage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={11 + dynamicColumns.length} className="text-center py-8 text-muted-foreground">
                     No invoices pending for review
                   </TableCell>
                 </TableRow>
@@ -729,6 +763,20 @@ export default function CheckInvoicePage() {
                         <p className="mt-1 font-mono font-bold">₹{Number(display.amount).toFixed(2)}</p>
                       </div>
                     </div>
+                    {dynamicColumns.length > 0 && (
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                        {dynamicColumns.map((colId) => {
+                          const col = ALL_COLUMNS.find((c) => c.id === colId)
+                          if (!col) return null
+                          return (
+                            <div key={colId} className="rounded-md bg-slate-50 p-2">
+                              <p className="text-[10px] font-black uppercase text-slate-400">{col.label}</p>
+                              <p className="mt-1 font-bold break-words">{String(getDynamicColumnValue(group, colId))}</p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
 
                     {display.orderPunchRemarks !== "—" && (
                       <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs">

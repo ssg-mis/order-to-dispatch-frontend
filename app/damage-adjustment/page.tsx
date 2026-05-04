@@ -346,6 +346,26 @@ export default function DamageAdjustmentPage() {
     })
   }, [displayRows, pendingSortField, pendingSortDir])
 
+  const dynamicColumns = visibleColumns.filter(
+    (colId) => !["partySoDate", "doNumber", "processId", "customerName", "productCount", "productName", "vehicleNo", "orderPunchRemarks", "status", "invoiceNo"].includes(colId)
+  )
+
+  const getDynamicColumnValue = (group: any, colId: string) => {
+    const directValue = group?.[colId]
+    if (directValue !== undefined && directValue !== null && directValue !== "") return directValue
+
+    const firstProduct = group?._allProducts?.[0] || {}
+    const firstOrder = Object.values(group?._ordersMap || {})[0] || {}
+
+    const orderValue = (firstOrder as any)?.[colId]
+    if (orderValue !== undefined && orderValue !== null && orderValue !== "") return orderValue
+
+    const productValue = (firstProduct as any)?.[colId]
+    if (productValue !== undefined && productValue !== null && productValue !== "") return productValue
+
+    return "—"
+  }
+
 
 
   const toggleSelectItem = (itemKey: string) => {
@@ -614,6 +634,21 @@ export default function DamageAdjustmentPage() {
                   </div>
                 </div>
 
+                {dynamicColumns.length > 0 && (
+                  <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-xs">
+                    {dynamicColumns.map((colId) => {
+                      const col = ALL_COLUMNS.find((c) => c.id === colId)
+                      if (!col) return null
+                      return (
+                        <div key={colId} className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{col.label}</p>
+                          <p className="break-words font-bold text-slate-700">{String(getDynamicColumnValue(group, colId))}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Badge variant="secondary">{group._productCount} items</Badge>
                   <Badge className="bg-red-100 text-red-700">{group._allProducts.filter((p: any) => p.damageStatus === "Damaged").length} damaged</Badge>
@@ -624,6 +659,20 @@ export default function DamageAdjustmentPage() {
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Order Punch Remarks</p>
                   <p className="break-words text-xs font-medium text-slate-600">{group.orderPunchRemarks}</p>
                 </div>
+                {dynamicColumns.length > 0 && (
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                    {dynamicColumns.map((colId) => {
+                      const col = ALL_COLUMNS.find((c) => c.id === colId)
+                      if (!col) return null
+                      return (
+                        <div key={colId} className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{col.label}</p>
+                          <p className="break-words font-bold text-slate-700">{String(getDynamicColumnValue(group, colId))}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </Card>
             ))
           ) : (
@@ -657,6 +706,15 @@ export default function DamageAdjustmentPage() {
                 {visibleColumns.includes("invoiceNo") && <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("invoiceNo")}>Invoice No.<PendingSortIcon field="invoiceNo" /></TableHead>}
                 <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicleNo")}>Vehicle No.<PendingSortIcon field="vehicleNo" /></TableHead>
                 <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("orderPunchRemarks")}>Order Punch Remarks<PendingSortIcon field="orderPunchRemarks" /></TableHead>
+                {dynamicColumns.map((colId) => {
+                  const col = ALL_COLUMNS.find((c) => c.id === colId)
+                  if (!col) return null
+                  return (
+                    <TableHead key={colId} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(colId)}>
+                      {col.label}<PendingSortIcon field={colId} />
+                    </TableHead>
+                  )
+                })}
                 <TableHead className="whitespace-nowrap text-center">Damage Info</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
@@ -674,6 +732,9 @@ export default function DamageAdjustmentPage() {
                     {visibleColumns.includes("invoiceNo") && <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>}
                     <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                     <TableCell className="text-center py-4"><div className="h-3 w-32 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    {dynamicColumns.map((colId) => (
+                      <TableCell key={colId} className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    ))}
                     <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                     <TableCell className="text-center py-4"><div className="h-5 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                   </TableRow>
@@ -714,6 +775,11 @@ export default function DamageAdjustmentPage() {
                         {group._allProducts.filter((p: any) => p.damageStatus === "Damaged").length} damaged items
                       </div>
                     </TableCell>
+                    {dynamicColumns.map((colId) => (
+                      <TableCell key={colId} className="text-center text-xs font-medium text-slate-700">
+                        {String(getDynamicColumnValue(group, colId))}
+                      </TableCell>
+                    ))}
                     <TableCell className="text-center">
                       <Badge className="bg-red-100 text-red-700">Pending Adjustment</Badge>
                     </TableCell>
@@ -721,7 +787,7 @@ export default function DamageAdjustmentPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={11 + dynamicColumns.length} className="text-center py-8 text-muted-foreground">
                     No pending damage adjustments
                   </TableCell>
                 </TableRow>

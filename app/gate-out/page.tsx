@@ -378,6 +378,26 @@ export default function GateOutPage() {
     })
   }, [displayRows, pendingSortField, pendingSortDir])
 
+  const dynamicColumns = visibleColumns.filter(
+    (colId) => !["partySoDate", "customerName", "doNumber", "actual1Date", "processId", "vehicleNo", "status", "invoiceNo", "orderPunchRemarks"].includes(colId)
+  )
+
+  const getDynamicColumnValue = (group: any, colId: string) => {
+    const directValue = group?.[colId]
+    if (directValue !== undefined && directValue !== null && directValue !== "") return directValue
+
+    const firstProduct = group?._allProducts?.[0] || {}
+    const firstOrder = Object.values(group?._ordersMap || {})[0] || {}
+
+    const orderValue = (firstOrder as any)?.[colId]
+    if (orderValue !== undefined && orderValue !== null && orderValue !== "") return orderValue
+
+    const productValue = (firstProduct as any)?.[colId]
+    if (productValue !== undefined && productValue !== null && productValue !== "") return productValue
+
+    return "—"
+  }
+
   const toggleSelectItem = (itemKey: string) => {
     setSelectedItems(prev =>
       prev.includes(itemKey)
@@ -633,6 +653,15 @@ export default function GateOutPage() {
                     <TableHead className="text-[10px] font-black uppercase tracking-widest cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("invoiceNo")}>Invoice No<PendingSortIcon field="invoiceNo" /></TableHead>
                     <TableHead className="text-[10px] font-black uppercase tracking-widest cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicleNo")}>Vehicle No<PendingSortIcon field="vehicleNo" /></TableHead>
                     <TableHead className="text-[10px] font-black uppercase tracking-widest text-center">Items</TableHead>
+                    {dynamicColumns.map((colId) => {
+                      const col = ALL_COLUMNS.find((c) => c.id === colId)
+                      if (!col) return null
+                      return (
+                        <TableHead key={colId} className="text-[10px] font-black uppercase tracking-widest cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(colId)}>
+                          {col.label}<PendingSortIcon field={colId} />
+                        </TableHead>
+                      )
+                    })}
                     <TableHead className="text-[10px] font-black uppercase tracking-widest text-center">Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -672,18 +701,27 @@ export default function GateOutPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-xs font-black text-slate-800 whitespace-nowrap">{group.vehicleNo}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="secondary" className="font-black text-[10px]">{group._productCount}</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 text-[10px] font-black whitespace-nowrap">Ready</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                    <TableCell className="text-center">
+                      <Badge variant="secondary" className="font-black text-[10px]">{group._productCount}</Badge>
+                    </TableCell>
+                    {dynamicColumns.map((colId) => {
+                      const col = ALL_COLUMNS.find((c) => c.id === colId)
+                      if (!col) return null
+                      return (
+                        <TableCell key={colId} className="text-xs font-bold text-slate-700">
+                          {String(getDynamicColumnValue(group, colId))}
+                        </TableCell>
+                      )
+                    })}
+                    <TableCell className="text-center">
+                      <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 text-[10px] font-black whitespace-nowrap">Ready</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
                 </TableBody>
               </Table>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
                 No orders pending for gate out
               </div>
             )}
@@ -767,6 +805,20 @@ export default function GateOutPage() {
                       <div className="mt-3 rounded-lg bg-slate-50 p-3">
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Order Punch Remarks</p>
                         <p className="mt-1 text-[11px] font-medium italic text-slate-600 leading-relaxed break-words">"{group.orderPunchRemarks}"</p>
+                      </div>
+                    )}
+                    {dynamicColumns.length > 0 && (
+                      <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                        {dynamicColumns.map((colId) => {
+                          const col = ALL_COLUMNS.find((c) => c.id === colId)
+                          if (!col) return null
+                          return (
+                            <div key={colId} className="rounded-md bg-slate-50 p-2">
+                              <p className="text-[10px] font-black uppercase text-slate-400">{col.label}</p>
+                              <p className="mt-1 font-bold break-words">{String(getDynamicColumnValue(group, colId))}</p>
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </Card>

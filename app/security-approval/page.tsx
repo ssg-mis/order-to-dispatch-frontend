@@ -519,6 +519,22 @@ export default function SecurityApprovalPage() {
     })
   }, [displayRows, pendingSortField, pendingSortDir])
 
+  const getDynamicColumnValue = (group: any, colId: string) => {
+    const directValue = group?.[colId]
+    if (directValue !== undefined && directValue !== null && directValue !== "") return directValue
+
+    const firstProduct = group?._allProducts?.[0] || {}
+    const firstOrder = Object.values(group?._ordersMap || {})[0] || {}
+
+    const orderValue = (firstOrder as any)?.[colId]
+    if (orderValue !== undefined && orderValue !== null && orderValue !== "") return orderValue
+
+    const productValue = (firstProduct as any)?.[colId]
+    if (productValue !== undefined && productValue !== null && productValue !== "") return productValue
+
+    return "—"
+  }
+
 
 
   const toggleSelectItem = (itemKey: string) => {
@@ -649,8 +665,6 @@ export default function SecurityApprovalPage() {
           </Button>
         </div>
 
-        <Card className="border-none shadow-xl rounded-3xl overflow-hidden bg-white/50 backdrop-blur-md">
-        {/* Desktop Table View */}
         <Card className="hidden md:block border-none shadow-xl rounded-3xl overflow-hidden bg-white/50 backdrop-blur-md">
           <Table>
             <TableHeader className="bg-slate-50 sticky top-0 z-10">
@@ -668,6 +682,16 @@ export default function SecurityApprovalPage() {
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">ITEM COUNT</TableHead>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicleNo")}>VEHICLE NO.<PendingSortIcon field="vehicleNo" /></TableHead>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("orderPunchRemarks")}>ORDER PUNCH REMARKS<PendingSortIcon field="orderPunchRemarks" /></TableHead>
+                {visibleColumns.filter(colId => !['partySoDate', 'doNumber', 'customerName', 'vehicleNo', 'processId', 'status', 'orderPunchRemarks'].includes(colId)).map(colId => {
+                  const col = ALL_COLUMNS.find(c => c.id === colId)
+                  if (!col) return null
+                  return (
+                    <TableHead key={colId} className="text-[10px] uppercase font-black text-slate-500 tracking-wider cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(colId)}>
+                      {col.label}
+                      <PendingSortIcon field={colId} />
+                    </TableHead>
+                  )
+                })}
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">STATUS</TableHead>
               </TableRow>
             </TableHeader>
@@ -716,6 +740,15 @@ export default function SecurityApprovalPage() {
                     <TableCell className="text-center p-4">
                       <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
                     </TableCell>
+                    {visibleColumns.filter(colId => !['partySoDate', 'doNumber', 'customerName', 'vehicleNo', 'processId', 'status', 'orderPunchRemarks'].includes(colId)).map(colId => {
+                      const col = ALL_COLUMNS.find(c => c.id === colId)
+                      if (!col) return null
+                      return (
+                        <TableCell key={colId} className="text-center p-4">
+                          <span className="text-xs font-medium text-slate-700">{String(getDynamicColumnValue(group, colId))}</span>
+                        </TableCell>
+                      )
+                    })}
                     <TableCell className="text-center p-4">
                       {group._allProducts.some((p: any) => p.security_guard_status === 'REJECT') ? (
                         <Badge className="bg-red-100 text-red-700 border-red-200 font-black text-[10px] uppercase">REJECTED</Badge>
@@ -726,8 +759,8 @@ export default function SecurityApprovalPage() {
                   </TableRow>
                 ))
               ) : (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-20">
+                  <TableRow>
+                  <TableCell colSpan={9 + visibleColumns.filter(colId => !['partySoDate', 'doNumber', 'customerName', 'vehicleNo', 'processId', 'status', 'orderPunchRemarks'].includes(colId)).length} className="text-center py-20">
                     <div className="flex flex-col items-center gap-2">
                       <ShieldAlert className="w-12 h-12 text-slate-200" />
                       <p className="text-slate-400 font-black uppercase tracking-widest text-xs">No vehicles pending for security check</p>
@@ -843,7 +876,7 @@ export default function SecurityApprovalPage() {
                       ).map(colId => {
                         const col = ALL_COLUMNS.find(c => c.id === colId);
                         if (!col) return null;
-                        let val = group[colId as keyof typeof group] || "—";
+                        const val = getDynamicColumnValue(group, colId);
                         return (
                           <div key={colId} className="space-y-0.5 border-l-2 border-slate-100 pl-3">
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{col.label}</p>
@@ -870,7 +903,6 @@ export default function SecurityApprovalPage() {
             <Button variant="outline" size="sm" onClick={() => setPendingPage(p => p + 1)} disabled={pendingPage >= (pendingResult?.pagination?.totalPages || 1)}>Next</Button>
           </div>
         </div>
-        </Card>
       </div>
 
       {/* Split-View Dialog (Premium Refactor) */}

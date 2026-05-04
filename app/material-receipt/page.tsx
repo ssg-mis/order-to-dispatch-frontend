@@ -406,6 +406,26 @@ export default function MaterialReceiptPage() {
       }), { billAmt: 0, actualQty: 0, netWt: 0 })
   }, [selectedGroup, selectedProducts])
 
+  const dynamicColumns = visibleColumns.filter(
+    (colId) => !["partySoDate", "doNumber", "processId", "customerName", "productCount", "vehicleNo", "orderPunchRemarks", "status", "invoiceNo"].includes(colId)
+  )
+
+  const getDynamicColumnValue = (group: any, colId: string) => {
+    const directValue = group?.[colId]
+    if (directValue !== undefined && directValue !== null && directValue !== "") return directValue
+
+    const firstProduct = group?._allProducts?.[0] || {}
+    const firstOrder = Object.values(group?._ordersMap || {})[0] || {}
+
+    const orderValue = (firstOrder as any)?.[colId]
+    if (orderValue !== undefined && orderValue !== null && orderValue !== "") return orderValue
+
+    const productValue = (firstProduct as any)?.[colId]
+    if (productValue !== undefined && productValue !== null && productValue !== "") return productValue
+
+    return "—"
+  }
+
   return (
     <WorkflowStageShell
       partyNames={customerNames}
@@ -543,6 +563,20 @@ export default function MaterialReceiptPage() {
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Order Punch Remarks</p>
                   <p className="break-words text-xs font-bold text-slate-500">{group.orderPunchRemarks}</p>
                 </div>
+                {dynamicColumns.length > 0 && (
+                  <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-xs">
+                    {dynamicColumns.map((colId) => {
+                      const col = ALL_COLUMNS.find((c) => c.id === colId)
+                      if (!col) return null
+                      return (
+                        <div key={colId} className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{col.label}</p>
+                          <p className="break-words font-bold text-slate-700">{String(getDynamicColumnValue(group, colId))}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </Card>
             ))
           ) : (
@@ -585,6 +619,15 @@ export default function MaterialReceiptPage() {
                 {visibleColumns.includes("invoiceNo") && <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("invoiceNo")}>Invoice No.<PendingSortIcon field="invoiceNo" /></TableHead>}
                 <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicleNo")}>Vehicle No.<PendingSortIcon field="vehicleNo" /></TableHead>
                 <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("orderPunchRemarks")}>Order Punch Remarks<PendingSortIcon field="orderPunchRemarks" /></TableHead>
+                {dynamicColumns.map((colId) => {
+                  const col = ALL_COLUMNS.find((c) => c.id === colId)
+                  if (!col) return null
+                  return (
+                    <TableHead key={colId} className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(colId)}>
+                      {col.label}<PendingSortIcon field={colId} />
+                    </TableHead>
+                  )
+                })}
                 <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -630,6 +673,11 @@ export default function MaterialReceiptPage() {
                     )}
                     <TableCell className="text-center"><span className="text-xs font-black text-slate-700 tracking-tighter">{group.vehicleNo}</span></TableCell>
                     <TableCell className="text-center"><span className="text-xs text-slate-500 font-bold truncate max-w-[150px] block mx-auto">{group.orderPunchRemarks}</span></TableCell>
+                    {dynamicColumns.map((colId) => (
+                      <TableCell key={colId} className="text-center text-xs font-medium text-slate-700">
+                        {String(getDynamicColumnValue(group, colId))}
+                      </TableCell>
+                    ))}
                     <TableCell className="text-center">
                       <Badge className="bg-cyan-100 text-cyan-700 font-black text-[9px] uppercase tracking-widest px-3 py-1 ring-1 ring-inset ring-cyan-200">In Transit</Badge>
                     </TableCell>
@@ -637,7 +685,7 @@ export default function MaterialReceiptPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-20 text-slate-400 font-black uppercase text-[10px] tracking-[0.3em] bg-slate-50/50">
+                  <TableCell colSpan={10 + dynamicColumns.length} className="text-center py-20 text-slate-400 font-black uppercase text-[10px] tracking-[0.3em] bg-slate-50/50">
                     No orders pending for receipt confirmation
                   </TableCell>
                 </TableRow>
