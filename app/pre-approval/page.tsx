@@ -1596,6 +1596,137 @@ export default function PreApprovalPage() {
     });
   }, [selectedItems, dialogNewProducts]);
 
+  const buildPendingDisplayRow = (rawOrder: any) => {
+    const CUSTOMER_MAP: Record<string, string> = {
+      cust1: "Acme Corp",
+      cust2: "Global Industries",
+      cust3: "Zenith Supply",
+    }
+    const oilTypes = rawOrder._allProducts?.map((p: any) => p.oilType || p.productName).filter(Boolean).join(", ") || "—"
+    const firstProduct = rawOrder._allProducts?.[0]
+
+    return {
+      orderNo: rawOrder._displayDo,
+      deliveryPurpose: rawOrder.orderPurpose || "Week On Week",
+      customerType: rawOrder.customerType || "Existing",
+      orderType: rawOrder.orderType || "Regular",
+      soNo: rawOrder._displayDo,
+      partySoDate: formatDate(rawOrder.soDate),
+      customerName: CUSTOMER_MAP[rawOrder.customerName] || rawOrder.customerName || "Acme Corp",
+      startDate: formatDate(rawOrder.startDate),
+      endDate: formatDate(rawOrder.endDate),
+      deliveryDate: formatDate(rawOrder.deliveryDate),
+      oilType: `${oilTypes} (${rawOrder._productCount} items)`,
+      ratePerLtr: firstProduct?.ratePerLtr || "—",
+      ratePer15Kg: firstProduct?.ratePer15Kg || "—",
+      itemConfirm: rawOrder.itemConfirm?.toUpperCase() || "YES",
+      productName: firstProduct?.productName || firstProduct?.oilType || "",
+      uom: firstProduct?.uom || "",
+      orderQty: (parseFloat(firstProduct?.order_quantity || firstProduct?.orderQty || "0") - parseFloat(firstProduct?.remaining_dispatch_qty || firstProduct?.remainingDispatchQty || "0")) || "—",
+      altUom: firstProduct?.altUom || "",
+      altQty: firstProduct?.altQty || "",
+      totalWithGst: rawOrder.totalWithGst || "—",
+      transportType: rawOrder.transportType || "—",
+      contactPerson: rawOrder.contactPerson || "—",
+      whatsapp: rawOrder.whatsappNo || "—",
+      address: rawOrder.customerAddress || "—",
+      paymentTerms: rawOrder.paymentTerms || "—",
+      advanceTaken: rawOrder.advancePaymentTaken || "—",
+      advanceAmount: rawOrder.advanceAmount || "—",
+      isBroker: rawOrder.isBrokerOrder || "—",
+      brokerName: rawOrder.brokerName || "—",
+      uploadSo: "so_document.pdf",
+      orderPunchRemarks: rawOrder.orderPunchRemarks || "—",
+      revertDispatchRemarks: rawOrder.revertDispatchRemarks || "—",
+      revertPlanningRemarks: rawOrder.revertPlanningRemarks || "—",
+      products: rawOrder._allProducts || [],
+    }
+  }
+
+  const handleMobileApprovalQtyChange = (value: string, rowKey: string, product: any, orderDetails: any, baseDo: string) => {
+    const qty = parseFloat(value) || 0
+    const allProducts = [...orderDetails._products, ...(dialogNewProducts[baseDo] || [])]
+    const originalTotalOrderQty = orderDetails._products.reduce((sum: number, p: any) => {
+      const pQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0
+      return sum + pQty
+    }, 0)
+    const totalApprovalQty = allProducts.reduce((sum, p) => {
+      if (p._rowKey === rowKey) return sum + qty
+      return sum + (parseFloat(productRates[p._rowKey]?.approvalQty || "0") || 0)
+    }, 0)
+
+    if (value && totalApprovalQty > originalTotalOrderQty) {
+      setQtyValidationErrors({ ...qtyValidationErrors, [rowKey]: `Total exceeds budget ${originalTotalOrderQty}` })
+    } else {
+      const newErrors = { ...qtyValidationErrors }
+      delete newErrors[rowKey]
+      setQtyValidationErrors(newErrors)
+    }
+
+    const currentOilType = (product.oilType || product.productName || productRates[rowKey]?.productName || "").toLowerCase()
+    const sameOilTypeProducts = allProducts.filter(p => {
+      if (p._isNew) return false
+      const pOilType = (p.oilType || p.productName || "").toLowerCase()
+      return pOilType.includes("palm") && currentOilType.includes("palm") ||
+        (pOilType.includes("rice") || pOilType.includes("rbo")) && (currentOilType.includes("rice") || currentOilType.includes("rbo")) ||
+        (pOilType.includes("soya") || pOilType.includes("sbo")) && (currentOilType.includes("soya") || currentOilType.includes("sbo")) ||
+        pOilType.includes("sunflower") && currentOilType.includes("sunflower")
+    })
+    const totalOilTypeOrderQty = sameOilTypeProducts.reduce((sum, p) => {
+      const pQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0
+      return sum + pQty
+    }, 0)
+    if (value && qty > 0) {
+      const sameOilTypeName = sameOilTypeProducts[0]?.productName || sameOilTypeProducts[0]?.oilType || "product"
+      setQtyInfoNotices({ ...qtyInfoNotices, [rowKey]: `Using ${qty} from ${sameOilTypeName}'s ${totalOilTypeOrderQty} budget` })
+    } else {
+      const newNotices = { ...qtyInfoNotices }
+      delete newNotices[rowKey]
+      setQtyInfoNotices(newNotices)
+    }
+
+    setProductRates({
+      ...productRates,
+      [rowKey]: {
+        ...productRates[rowKey],
+        approvalQty: value
+      }
+    })
+  }
+
+  const handleMobileFinalRateChange = (newValue: string, rowKey: string, product: any, orderDetails: any) => {
+    const enteredRate = parseFloat(newValue) || 0
+    const productOilType = product.oilType || product.productName || ""
+    const doDate = orderDetails.soDate || ""
+    const dynamicCost = computeDynamicLandingCost(productRates[rowKey]?.skuName, productOilType, doDate)
+
+    if (dynamicCost && !dynamicCost.noVarCalc && dynamicCost.landingCost > 0 && newValue !== "") {
+      const minAllowed = dynamicCost.landingCost
+      const maxAllowed = minAllowed * (1 + dynamicCost.margin / 100)
+      if (enteredRate < minAllowed) {
+        setRateValidationErrors({ ...rateValidationErrors, [rowKey]: `Below Landing Cost (Min ₹${minAllowed})` })
+      } else if (enteredRate > maxAllowed) {
+        setRateValidationErrors({ ...rateValidationErrors, [rowKey]: `Exceeds Max Margin (Max ₹${maxAllowed.toFixed(2)})` })
+      } else {
+        const newErrors = { ...rateValidationErrors }
+        delete newErrors[rowKey]
+        setRateValidationErrors(newErrors)
+      }
+    } else {
+      const newErrors = { ...rateValidationErrors }
+      delete newErrors[rowKey]
+      setRateValidationErrors(newErrors)
+    }
+
+    setProductRates({
+      ...productRates,
+      [rowKey]: {
+        ...productRates[rowKey],
+        rate: newValue
+      }
+    })
+  }
+
   return (
     <WorkflowStageShell
       title="Stage 2: Pre-Approval"
@@ -1608,11 +1739,11 @@ export default function PreApprovalPage() {
       isHistoryLoading={isHistoryLoading}
       showDateFilters={false}
       historyFooter={
-        <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
+        <div className="px-3 py-4 border-t bg-slate-50/50 flex flex-col gap-3 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-slate-500 font-bold uppercase tracking-tighter">
             Showing Page {historyPage} of {historyData?.pagination?.totalPages || 1} ({historyData?.pagination?.total || 0} Groups)
           </div>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex">
             <Button
               variant="outline"
               size="sm"
@@ -1636,7 +1767,7 @@ export default function PreApprovalPage() {
       }
     >
       <div className="space-y-4">
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-col justify-end gap-2 sm:flex-row">
           {selectedRows.length > 0 && (
             <Dialog
               open={isBulkDialogOpen}
@@ -1650,23 +1781,23 @@ export default function PreApprovalPage() {
               }}
             >
               <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700 shadow-md">
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 shadow-md sm:w-auto">
                   Process Selected ({selectedRows.length})
                 </Button>
               </DialogTrigger>
-              <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-4xl lg:max-w-6xl xl:max-w-7xl max-h-[95vh] overflow-y-auto p-3 sm:p-6">
-                <DialogHeader className="border-b pb-4">
-                  <DialogTitle className="text-xl font-bold text-slate-900 leading-none">Complete Pre-Approval ({allProductsFromSelectedOrders.length} Products)</DialogTitle>
+              <DialogContent className="w-[calc(100vw-0.75rem)] max-w-[calc(100vw-0.75rem)] sm:max-w-4xl lg:max-w-6xl xl:max-w-7xl max-h-[95vh] overflow-x-hidden overflow-y-auto p-2 sm:p-6 [overflow-wrap:anywhere]">
+                <DialogHeader className="min-w-0 border-b pb-4 px-1 sm:px-0">
+                  <DialogTitle className="text-lg sm:text-xl font-bold text-slate-900 leading-tight break-words">Complete Pre-Approval ({allProductsFromSelectedOrders.length} Products)</DialogTitle>
                   <DialogDescription className="text-slate-500 mt-1.5">Select and edit products to approve. Only checked products will be processed.</DialogDescription>
                 </DialogHeader>
 
                 {/* Interleaved Order Details and Product Tables Section */}
-                <div className="space-y-12 mb-8">
+                <div className="space-y-6 sm:space-y-12 mb-6 sm:mb-8 min-w-0">
                   {selectedItems.map((customerGrp) => (
-                    <div key={customerGrp._rowKey} className="space-y-6">
-                      <h2 className="text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
-                        {customerGrp.customerName}
-                        <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
+                    <div key={customerGrp._rowKey} className="space-y-4 sm:space-y-6 min-w-0">
+                      <h2 className="text-base sm:text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <span className="break-words">{customerGrp.customerName}</span>
+                        <Badge className="w-fit bg-blue-600 text-white px-3 py-1 font-black sm:ml-3">
                           {customerGrp._productCount} PRODUCTS
                         </Badge>
                       </h2>
@@ -1682,10 +1813,10 @@ export default function PreApprovalPage() {
                         };
 
                         return (
-                          <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
-                            <div className="bg-blue-600 px-3 sm:px-5 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 cursor-pointer" onClick={toggleExpand}>
-                              <div className="flex items-center gap-4">
-                                <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
+                          <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-xl sm:rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow min-w-0">
+                            <div className="bg-blue-600 px-3 sm:px-5 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 cursor-pointer min-w-0" onClick={toggleExpand}>
+                              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                                <Badge className="max-w-full bg-white text-blue-800 hover:bg-white px-3 sm:px-4 py-1.5 text-xs sm:text-base font-black tracking-tight rounded-full shadow-sm whitespace-normal break-all">
                                   ORDER: {baseDo}
                                 </Badge>
                                 <div className="flex flex-col">
@@ -1693,8 +1824,8 @@ export default function PreApprovalPage() {
                                   <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products.length} Items Selected</span>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-3">
-                                <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
+                              <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-start">
+                                <div className="text-[10px] sm:text-[11px] text-blue-50 font-bold uppercase tracking-widest sm:mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1707,12 +1838,12 @@ export default function PreApprovalPage() {
 
                             {/* Collapsible Order Details */}
                             {isExpanded && (
-                              <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
-                                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
+                              <div className="px-3 sm:px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
+                                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-inner">
                                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                                     <div>
                                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Customer Name</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{customerGrp.customerName || "—"}</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight break-words">{customerGrp.customerName || "—"}</p>
                                     </div>
                                     <div>
                                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Depo Name</p>
@@ -1754,9 +1885,9 @@ export default function PreApprovalPage() {
                                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">WhatsApp No.</p>
                                       <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.whatsappNo || "—"}</p>
                                     </div>
-                                    <div className="col-span-2">
+                                    <div className="sm:col-span-2">
                                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Customer Address</p>
-                                      <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.customerAddress || "—"}</p>
+                                      <p className="text-sm font-bold text-slate-900 leading-tight break-words">{orderDetails.customerAddress || "—"}</p>
                                     </div>
                                     <div>
                                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Payment Terms</p>
@@ -1793,13 +1924,13 @@ export default function PreApprovalPage() {
                                         <p className="text-[10px] font-black text-slate-400 leading-none">NOT UPLOADED</p>
                                       )}
                                     </div>
-                                    <div className="col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
+                                    <div className="sm:col-span-4 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
                                       <div className="bg-amber-100 p-2 rounded-lg">
                                         <Settings2 className="h-5 w-5 text-amber-600" />
                                       </div>
-                                      <div>
+                                      <div className="min-w-0">
                                         <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
-                                        <p className="text-sm font-medium text-slate-700 italic leading-snug">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
+                                        <p className="text-sm font-medium text-slate-700 italic leading-snug break-words">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
                                       </div>
                                     </div>
                                   </div>
@@ -1809,30 +1940,50 @@ export default function PreApprovalPage() {
 
                             {/* Base Rates Summary Table */}
                             {orderDetails.oilWiseRates && Object.keys(orderDetails.oilWiseRates).length > 0 && (
-                              <div className="px-5 mb-2">
+                              <div className="px-3 sm:px-5 mb-2 min-w-0">
                                 <div className="border border-blue-100 rounded-2xl overflow-hidden shadow-sm bg-blue-50/30">
-                                  <Table>
-                                    <TableHeader className="bg-blue-600">
-                                      <TableRow className="hover:bg-transparent border-blue-600">
-                                        <TableHead className="h-8 text-[10px] uppercase font-black text-white tracking-widest pl-4">Base Rate Summary</TableHead>
-                                        <TableHead className="h-8 text-[10px] uppercase font-black text-white tracking-widest">Rate / 15KG</TableHead>
-                                        <TableHead className="h-8 text-[10px] uppercase font-black text-white tracking-widest">Rate / 1 LTR</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {Object.entries(orderDetails.oilWiseRates).map(([oilType, rates]: [string, any]) => (
-                                        <TableRow key={oilType} className="hover:bg-blue-100/20 border-blue-100 last:border-0">
-                                          <TableCell className="py-2.5 px-4 text-xs font-black text-blue-900 uppercase tracking-tight">{oilType}</TableCell>
-                                          <TableCell className="py-2.5 px-4 text-xs font-black text-blue-600">
-                                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-md">₹{rates.ratePer15Kg || "—"}</span>
-                                          </TableCell>
-                                          <TableCell className="py-2.5 px-4 text-xs font-black text-blue-600">
-                                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-md">₹{rates.ratePerLtr || "—"}</span>
-                                          </TableCell>
+                                  <div className="hidden sm:block">
+                                    <Table>
+                                      <TableHeader className="bg-blue-600">
+                                        <TableRow className="hover:bg-transparent border-blue-600">
+                                          <TableHead className="h-8 text-[10px] uppercase font-black text-white tracking-widest pl-4">Base Rate Summary</TableHead>
+                                          <TableHead className="h-8 text-[10px] uppercase font-black text-white tracking-widest">Rate / 15KG</TableHead>
+                                          <TableHead className="h-8 text-[10px] uppercase font-black text-white tracking-widest">Rate / 1 LTR</TableHead>
                                         </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {Object.entries(orderDetails.oilWiseRates).map(([oilType, rates]: [string, any]) => (
+                                          <TableRow key={oilType} className="hover:bg-blue-100/20 border-blue-100 last:border-0">
+                                            <TableCell className="py-2.5 px-4 text-xs font-black text-blue-900 uppercase tracking-tight">{oilType}</TableCell>
+                                            <TableCell className="py-2.5 px-4 text-xs font-black text-blue-600">
+                                              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-md">₹{rates.ratePer15Kg || "—"}</span>
+                                            </TableCell>
+                                            <TableCell className="py-2.5 px-4 text-xs font-black text-blue-600">
+                                              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-md">₹{rates.ratePerLtr || "—"}</span>
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                  <div className="space-y-2 p-3 sm:hidden">
+                                    <p className="text-[10px] uppercase font-black text-blue-900 tracking-widest">Base Rate Summary</p>
+                                    {Object.entries(orderDetails.oilWiseRates).map(([oilType, rates]: [string, any]) => (
+                                      <div key={oilType} className="rounded-lg border border-blue-100 bg-white p-3">
+                                        <p className="text-xs font-black uppercase tracking-tight text-blue-900 break-words">{oilType}</p>
+                                        <div className="mt-2 grid grid-cols-2 gap-2">
+                                          <div className="rounded-md bg-blue-50 p-2">
+                                            <p className="text-[9px] font-black uppercase text-blue-400">Rate / 15KG</p>
+                                            <p className="mt-1 text-xs font-black text-blue-700">₹{rates.ratePer15Kg || "—"}</p>
+                                          </div>
+                                          <div className="rounded-md bg-blue-50 p-2">
+                                            <p className="text-[9px] font-black uppercase text-blue-400">Rate / 1 LTR</p>
+                                            <p className="mt-1 text-xs font-black text-blue-700">₹{rates.ratePerLtr || "—"}</p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
                             )}
@@ -1868,14 +2019,14 @@ export default function PreApprovalPage() {
                             </div>
 
                             {/* Render Product Table for this DO */}
-                            <div className="px-2 sm:px-5 pb-6">
+                            <div className="px-2 sm:px-5 pb-6 min-w-0">
                               {(() => {
                                 const sectionProducts = [...orderDetails._products, ...(dialogNewProducts[baseDo] || [])];
                                 const groupOilTypes = Array.from(new Set(sectionProducts.map((p: any) => (p.oilType || "").toLowerCase())));
 
                                 return (
-                                  <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
-                                    <div className="overflow-x-auto">
+                                  <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white min-w-0">
+                                    <div className="hidden overflow-x-auto md:block">
                                       <Table>
                                         <TableHeader>
                                           <TableRow className="bg-slate-50 border-b">
@@ -2438,6 +2589,247 @@ export default function PreApprovalPage() {
                                         </tfoot>
                                       </Table>
                                     </div>
+                                    <div className="space-y-3 p-3 md:hidden">
+                                      {sectionProducts.map((product: any) => {
+                                        const rowKey = product._rowKey
+                                        const isSelected = selectedProductRows.includes(rowKey)
+                                        const hasError = qtyValidationErrors[rowKey]
+                                        const isNew = product._isNew
+                                        const calculatedOrderQty = parseFloat(product.remaining_dispatch_qty || product.remainingDispatchQty || product.order_quantity || product.orderQty || "0") || 0
+                                        const maxQty = isNew ? (parseFloat(productRates[rowKey]?.orderQty || "0") || 0) : calculatedOrderQty
+                                        const dynamicCost = computeDynamicLandingCost(productRates[rowKey]?.skuName, product.oilType || product.productName || "", orderDetails.soDate || "")
+                                        const maxRate = dynamicCost && !dynamicCost.noVarCalc && dynamicCost.landingCost > 0
+                                          ? dynamicCost.landingCost * (1 + (dynamicCost.margin || 0) / 100)
+                                          : null
+
+                                        return (
+                                          <div
+                                            key={rowKey}
+                                            className={cn(
+                                              "rounded-xl border bg-white p-3 space-y-3 min-w-0 overflow-hidden",
+                                              isSelected && "border-blue-200 bg-blue-50/40",
+                                              hasError && "border-red-200 bg-red-50"
+                                            )}
+                                          >
+                                            <div className="flex items-start justify-between gap-3">
+                                              <div className="min-w-0">
+                                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Product Info</p>
+                                                {!isNew ? (
+                                                  <>
+                                                    <p className="text-sm font-black text-slate-900 break-words">{product.productName || product.oilType || "—"}</p>
+                                                    <p className="text-[10px] font-bold uppercase tracking-tight text-slate-400">{product._originalOrderId}</p>
+                                                  </>
+                                                ) : (
+                                                  <div className="mt-1 space-y-1">
+                                                    <Select
+                                                      value={product.oilType || ""}
+                                                      onValueChange={(value) => {
+                                                        setDialogNewProducts(prev => ({
+                                                          ...prev,
+                                                          [baseDo]: prev[baseDo].map(p =>
+                                                            p._pid === product._pid ? { ...p, oilType: value } : p
+                                                          )
+                                                        }))
+                                                        setProductRates(prev => ({
+                                                          ...prev,
+                                                          [rowKey]: {
+                                                            ...prev[rowKey],
+                                                            skuName: "",
+                                                            rateOfMaterial: "0",
+                                                            rate: "0"
+                                                          }
+                                                        }))
+                                                      }}
+                                                    >
+                                                      <SelectTrigger className="h-9 bg-blue-50 border-blue-100 text-xs font-black uppercase">
+                                                        <SelectValue placeholder="Select Oil..." />
+                                                      </SelectTrigger>
+                                                      <SelectContent>
+                                                        {Array.from(new Set(orderDetails._products.map((p: any) => p.oilType).filter(Boolean))).map((ot: any) => (
+                                                          <SelectItem key={ot} value={ot} className="text-xs font-black uppercase">
+                                                            {ot}
+                                                          </SelectItem>
+                                                        ))}
+                                                      </SelectContent>
+                                                    </Select>
+                                                    <p className="text-[10px] font-bold uppercase tracking-tight text-slate-400">{product._originalOrderId}</p>
+                                                  </div>
+                                                )}
+                                              </div>
+                                              <Checkbox
+                                                checked={isSelected}
+                                                onCheckedChange={() => toggleSelectProductRow(rowKey, product)}
+                                              />
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                              <div className="rounded-md bg-slate-50 p-2">
+                                                <p className="text-[10px] font-black uppercase text-slate-400">Order Qty</p>
+                                                {!isNew ? (
+                                                  <>
+                                                    <Badge variant="outline" className="mt-1 border-blue-200 text-blue-700 font-black px-2">{calculatedOrderQty}</Badge>
+                                                    {product.approvalQty && parseFloat(product.approvalQty) > 0 && parseFloat(product.approvalQty) < maxQty && (
+                                                      <p className="mt-1 text-[9px] text-amber-600 font-bold">Remaining: {maxQty - parseFloat(product.approvalQty)}</p>
+                                                    )}
+                                                  </>
+                                                ) : (
+                                                  <Input
+                                                    type="number"
+                                                    className="mt-1 h-9 w-full text-xs font-black bg-gray-100 border-gray-200"
+                                                    value={(() => {
+                                                      const currentOilType = (productRates[rowKey]?.productName || "").toLowerCase()
+                                                      const sameOilTypeProducts = orderDetails._products.filter((p: any) => {
+                                                        const pOilType = (p.oilType || p.productName || "").toLowerCase()
+                                                        return pOilType.includes("palm") && currentOilType.includes("palm") ||
+                                                          (pOilType.includes("rice") || pOilType.includes("rbo")) && (currentOilType.includes("rice") || currentOilType.includes("rbo")) ||
+                                                          (pOilType.includes("soya") || pOilType.includes("sbo")) && (currentOilType.includes("soya") || currentOilType.includes("sbo")) ||
+                                                          pOilType.includes("sunflower") && currentOilType.includes("sunflower")
+                                                      })
+                                                      return sameOilTypeProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.order_quantity || p.orderQty) || 0), 0) || ""
+                                                    })()}
+                                                    placeholder="Auto"
+                                                    disabled
+                                                    readOnly
+                                                  />
+                                                )}
+                                              </div>
+                                              <div className="rounded-md bg-slate-50 p-2">
+                                                <p className="text-[10px] font-black uppercase text-slate-400">Rate (Mat.)</p>
+                                                <div className="relative mt-1">
+                                                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-black">₹</span>
+                                                  <Input
+                                                    type="number"
+                                                    className="h-9 text-xs bg-white pl-5 font-bold border-slate-200"
+                                                    value={isNew
+                                                      ? (productRates[rowKey]?.rateOfMaterial || "")
+                                                      : (productRates[rowKey]?.skuName ? (productRates[rowKey]?.rateOfMaterial || product.rateOfMaterial || "") : "")}
+                                                    disabled
+                                                    readOnly
+                                                    placeholder="0.00"
+                                                  />
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                              <Label className="text-[10px] font-black uppercase text-slate-400">Select SKU</Label>
+                                              <AsyncCombobox
+                                                value={productRates[rowKey]?.skuName || ""}
+                                                onValueChange={(value: string) => handleSkuSelection(value, rowKey, product, orderDetails)}
+                                                disabled={!isSelected}
+                                                placeholder="Select SKU..."
+                                                searchPlaceholder="Search products..."
+                                                fetchOptions={async (search: string, page: number) => {
+                                                  const res = await skuDetailsApi.getAll({ search, page, limit: 20 })
+                                                  let list = res.data.skuDetails || []
+                                                  const productOilType = (product.oilType || product.productName || "").toLowerCase()
+                                                  list = list.filter((sku: any) => {
+                                                    const skuLower = sku.sku_name.toLowerCase()
+                                                    if (productOilType.includes("palm")) return skuLower.includes("palm") || skuLower.includes("p.o.")
+                                                    if (productOilType.includes("rice") || productOilType.includes("rbo")) return skuLower.includes("rbo") || skuLower.includes("rice") || skuLower.includes("r.o.")
+                                                    if (productOilType.includes("soya") || productOilType.includes("sbo")) return skuLower.includes("sbo") || skuLower.includes("soya") || skuLower.includes("s.o.")
+                                                    if (productOilType.includes("sunflower")) return skuLower.includes("sun")
+                                                    return true
+                                                  })
+                                                  return {
+                                                    options: list.map((sku: any) => ({ value: sku.sku_name, label: sku.sku_name })),
+                                                    hasMore: (list.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
+                                                  }
+                                                }}
+                                                className="h-9 w-full min-w-0 bg-white text-xs font-bold"
+                                              />
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-3">
+                                              <div className="space-y-2">
+                                                <Label className="text-[10px] font-black uppercase text-slate-400">Approval Qty</Label>
+                                                <Input
+                                                  type="number"
+                                                  placeholder="Qty"
+                                                  className={cn("h-9 text-xs bg-white font-bold border-slate-200", hasError && "border-red-500 ring-1 ring-red-500")}
+                                                  value={productRates[rowKey]?.approvalQty || ""}
+                                                  onChange={(e) => handleMobileApprovalQtyChange(e.target.value, rowKey, product, orderDetails, baseDo)}
+                                                  disabled={!isSelected}
+                                                />
+                                                {hasError && <p className="text-[9px] text-red-600 font-black uppercase tracking-tighter">{hasError}</p>}
+                                                {!hasError && qtyInfoNotices[rowKey] && (
+                                                  <p className="text-[9px] text-blue-600 font-bold tracking-tight leading-tight">{qtyInfoNotices[rowKey]}</p>
+                                                )}
+                                              </div>
+
+                                              <div className="space-y-2">
+                                                <Label className="text-[10px] font-black uppercase text-slate-400">Final Rate</Label>
+                                                <div className="relative">
+                                                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-400 text-xs font-black">₹</span>
+                                                  <Input
+                                                    type="number"
+                                                    className={cn(
+                                                      "h-9 text-xs bg-white pl-5 border-slate-200 font-medium",
+                                                      rateValidationErrors[rowKey] ? "border-red-400 focus-visible:ring-red-400" : ""
+                                                    )}
+                                                    value={productRates[rowKey]?.rate || ""}
+                                                    onChange={(e) => handleMobileFinalRateChange(e.target.value, rowKey, product, orderDetails)}
+                                                    disabled={!isSelected}
+                                                    placeholder="0.00"
+                                                    min={dynamicCost && !dynamicCost.noVarCalc && dynamicCost.landingCost > 0 ? dynamicCost.landingCost : undefined}
+                                                    max={maxRate || undefined}
+                                                  />
+                                                </div>
+                                                {rateValidationErrors[rowKey] && (
+                                                  <p className="text-[9px] text-red-600 font-black uppercase tracking-tighter">{rateValidationErrors[rowKey]}</p>
+                                                )}
+                                                {dynamicCost && !dynamicCost.noVarCalc && maxRate && (
+                                                  <p className="text-[9px] text-slate-400 font-bold break-words">Range: ₹{dynamicCost.landingCost} - ₹{maxRate}</p>
+                                                )}
+                                                {dynamicCost?.noVarCalc && (
+                                                  <p className="rounded-sm border border-red-200 bg-red-50 p-1 text-[10px] font-bold text-red-700">
+                                                    No variable parameter found for {normalizeOilType(product.oilType || product.productName || "")}
+                                                  </p>
+                                                )}
+                                              </div>
+
+                                              <div className="space-y-2">
+                                                <Label className="text-[10px] font-black uppercase text-slate-400">Remarks</Label>
+                                                <Input
+                                                  className="h-9 text-xs bg-white border-slate-200 italic font-medium"
+                                                  value={productRates[rowKey]?.remark || ""}
+                                                  onChange={(e) => setProductRates({
+                                                    ...productRates,
+                                                    [rowKey]: {
+                                                      ...productRates[rowKey],
+                                                      remark: e.target.value
+                                                    }
+                                                  })}
+                                                  disabled={!isSelected}
+                                                  placeholder="Add review remark..."
+                                                />
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )
+                                      })}
+                                      <div className="grid grid-cols-2 gap-3 rounded-lg border bg-slate-50 p-3">
+                                        <div>
+                                          <p className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Total Order Qty</p>
+                                          <Badge variant="secondary" className="mt-1 bg-blue-100 text-blue-800 font-black px-2 shadow-sm border-blue-200">
+                                            {sectionProducts.reduce((sum: number, p: any) => {
+                                              if (p._isNew) return sum
+                                              const calculatedQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0
+                                              return sum + calculatedQty
+                                            }, 0)}
+                                          </Badge>
+                                        </div>
+                                        <div>
+                                          <p className="text-[10px] uppercase font-black text-slate-500 tracking-wider">Total Approval Qty</p>
+                                          <Badge variant="secondary" className="mt-1 bg-green-100 text-green-800 font-black px-2 shadow-sm border-green-200">
+                                            {sectionProducts.reduce((sum: number, p: any) => {
+                                              const rowKey = p._rowKey
+                                              return sum + (parseFloat(productRates[rowKey]?.approvalQty) || 0)
+                                            }, 0)}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    </div>
                                   </div>
                                 )
                               })()}
@@ -2452,11 +2844,11 @@ export default function PreApprovalPage() {
 
 
 
-                <DialogFooter className="sm:justify-between gap-3 border-t pt-4">
+                <DialogFooter className="gap-3 border-t pt-4 sm:justify-between">
                   {/* SKU Price List Button */}
 
-                  <div className="flex gap-3">
-                    <Button variant="outline" onClick={() => {
+                  <div className="grid w-full grid-cols-1 gap-3 sm:flex sm:justify-end">
+                    <Button variant="outline" className="w-full sm:w-auto" onClick={() => {
                       setIsBulkDialogOpen(false)
                       setSelectedProductRows([])
                       setQtyValidationErrors({})
@@ -2483,7 +2875,7 @@ export default function PreApprovalPage() {
                         Object.keys(qtyValidationErrors).length > 0 ||
                         Object.keys(rateValidationErrors).length > 0
                       }
-                      className="min-w-50 h-11 bg-blue-600 font-bold shadow-lg"
+                      className="w-full min-w-0 h-11 bg-blue-600 font-bold shadow-lg sm:w-auto"
                     >
                       {isApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       {isApproving ? "Processing..." : `Submit ${selectedProductRows.length} Product(s)`}
@@ -2496,7 +2888,7 @@ export default function PreApprovalPage() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="bg-transparent shadow-sm">
+              <Button variant="outline" size="sm" className="w-full bg-transparent shadow-sm sm:w-auto">
                 <Settings2 className="mr-2 h-4 w-4" />
                 Columns
               </Button>
@@ -2522,8 +2914,8 @@ export default function PreApprovalPage() {
 
         <div className="flex gap-6 items-start">
           <div className="flex-1 space-y-4 overflow-hidden">
-            <Card className="border-none shadow-sm overflow-auto max-h-150">
-              <Table>
+            <Card className="border-none shadow-sm overflow-hidden md:max-h-150 md:overflow-auto">
+              <Table className="hidden md:table">
                 <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                   <TableRow>
                     <TableHead className="w-12 text-center">
@@ -2561,58 +2953,7 @@ export default function PreApprovalPage() {
                       </TableCell>
                     </TableRow>
                   ) : displayRows.map((rawOrder, i) => {
-                    const CUSTOMER_MAP: Record<string, string> = {
-                      cust1: "Acme Corp",
-                      cust2: "Global Industries",
-                      cust3: "Zenith Supply",
-                    }
-
-                    // Get oil types from all products
-                    const oilTypes = rawOrder._allProducts?.map((p: any) => p.oilType || p.productName).filter(Boolean).join(", ") || "—"
-                    const firstProduct = rawOrder._allProducts?.[0]
-
-                    const row = {
-                      orderNo: rawOrder._displayDo,
-                      deliveryPurpose: rawOrder.orderPurpose || "Week On Week",
-                      customerType: rawOrder.customerType || "Existing",
-                      orderType: rawOrder.orderType || "Regular",
-                      soNo: rawOrder._displayDo,
-                      partySoDate: formatDate(rawOrder.soDate),
-                      customerName: CUSTOMER_MAP[rawOrder.customerName] || rawOrder.customerName || "Acme Corp",
-                      // Handle new date fields
-                      startDate: formatDate(rawOrder.startDate),
-                      endDate: formatDate(rawOrder.endDate),
-                      deliveryDate: formatDate(rawOrder.deliveryDate),
-                      // Show all oil types and product count
-                      oilType: `${oilTypes} (${rawOrder._productCount} items)`,
-                      ratePerLtr: firstProduct?.ratePerLtr || "—",
-                      ratePer15Kg: firstProduct?.ratePer15Kg || "—",
-
-                      itemConfirm: rawOrder.itemConfirm?.toUpperCase() || "YES",
-                      productName: firstProduct?.productName || firstProduct?.oilType || "",
-                      uom: firstProduct?.uom || "",
-                      orderQty: (parseFloat(firstProduct?.order_quantity || firstProduct?.orderQty || "0") - parseFloat(firstProduct?.remaining_dispatch_qty || firstProduct?.remainingDispatchQty || "0")) || "—",
-                      altUom: firstProduct?.altUom || "",
-                      altQty: firstProduct?.altQty || "",
-
-                      // Extended Columns
-                      totalWithGst: rawOrder.totalWithGst || "—",
-                      transportType: rawOrder.transportType || "—",
-                      contactPerson: rawOrder.contactPerson || "—",
-                      whatsapp: rawOrder.whatsappNo || "—",
-                      address: rawOrder.customerAddress || "—",
-                      paymentTerms: rawOrder.paymentTerms || "—",
-                      advanceTaken: rawOrder.advancePaymentTaken || "—",
-                      advanceAmount: rawOrder.advanceAmount || "—",
-                      isBroker: rawOrder.isBrokerOrder || "—",
-                      brokerName: rawOrder.brokerName || "—",
-                      uploadSo: "so_document.pdf",
-                      orderPunchRemarks: rawOrder.orderPunchRemarks || "—",
-                      revertDispatchRemarks: rawOrder.revertDispatchRemarks || "—",
-                      revertPlanningRemarks: rawOrder.revertPlanningRemarks || "—",
-
-                      products: rawOrder._allProducts || [],
-                    }
+                    const row = buildPendingDisplayRow(rawOrder)
 
                     return (
                       <TableRow key={rawOrder._rowKey} className={selectedRows.includes(rawOrder._rowKey) ? "bg-blue-50/50" : ""}>
@@ -2632,11 +2973,92 @@ export default function PreApprovalPage() {
                   })}
                 </TableBody>
               </Table>
-              <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
+
+              <div className="space-y-3 p-3 md:hidden">
+                {isPendingLoading && pendingOrders.length === 0 ? (
+                  [...Array(5)].map((_, i) => (
+                    <div key={i} className="rounded-lg border p-4 space-y-3 opacity-60">
+                      <div className="h-4 w-32 bg-slate-200 animate-pulse rounded" />
+                      <div className="grid grid-cols-2 gap-3">
+                        {[...Array(6)].map((__, j) => <div key={j} className="h-10 bg-slate-100 animate-pulse rounded" />)}
+                      </div>
+                    </div>
+                  ))
+                ) : displayRows.length === 0 ? (
+                  <div className="py-10 text-center text-muted-foreground">
+                    {isPendingLoading ? "Fetching more..." : "No Data pending for Pre Approval"}
+                  </div>
+                ) : displayRows.map((rawOrder) => {
+                  const row = buildPendingDisplayRow(rawOrder)
+                  const selected = selectedRows.includes(rawOrder._rowKey)
+                  return (
+                    <div
+                      key={rawOrder._rowKey}
+                      className={cn("rounded-lg border bg-white p-4 shadow-sm", selected && "border-blue-200 bg-blue-50")}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-mono text-sm font-black text-blue-700 break-words">{row.soNo}</p>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">{row.partySoDate}</p>
+                        </div>
+                        <Checkbox
+                          checked={selected}
+                          onCheckedChange={() => toggleSelectRow(rawOrder._rowKey)}
+                        />
+                      </div>
+                      <div className="mt-3">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Customer Name</p>
+                        <p className="text-sm font-bold text-slate-900 break-words">{row.customerName}</p>
+                      </div>
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                        <div className="rounded-md bg-slate-50 p-2">
+                          <p className="text-[10px] font-black uppercase text-slate-400">Delivery Purpose</p>
+                          <p className="mt-1 font-bold capitalize">{String(row.deliveryPurpose).replace(/-/g, " ")}</p>
+                        </div>
+                        <div className="rounded-md bg-slate-50 p-2">
+                          <p className="text-[10px] font-black uppercase text-slate-400">Products</p>
+                          <p className="mt-1 font-bold">{rawOrder._productCount} items</p>
+                        </div>
+                        <div className="rounded-md bg-slate-50 p-2">
+                          <p className="text-[10px] font-black uppercase text-slate-400">Oil Type</p>
+                          <p className="mt-1 font-semibold break-words">{row.oilType}</p>
+                        </div>
+                        <div className="rounded-md bg-slate-50 p-2">
+                          <p className="text-[10px] font-black uppercase text-slate-400">Transport</p>
+                          <p className="mt-1 font-semibold">{row.transportType}</p>
+                        </div>
+                        <div className="rounded-md bg-slate-50 p-2">
+                          <p className="text-[10px] font-black uppercase text-slate-400">Rate / 15kg</p>
+                          <p className="mt-1 font-mono font-bold">₹{row.ratePer15Kg}</p>
+                        </div>
+                        <div className="rounded-md bg-slate-50 p-2">
+                          <p className="text-[10px] font-black uppercase text-slate-400">Rate / Ltr</p>
+                          <p className="mt-1 font-mono font-bold">₹{row.ratePerLtr}</p>
+                        </div>
+                      </div>
+                      {(row.orderPunchRemarks !== "—" || row.revertDispatchRemarks !== "—" || row.revertPlanningRemarks !== "—") && (
+                        <div className="mt-3 space-y-2 rounded-md bg-amber-50 p-3 text-xs">
+                          {row.orderPunchRemarks !== "—" && (
+                            <p><span className="font-black text-amber-800">Order Remarks:</span> {row.orderPunchRemarks}</p>
+                          )}
+                          {row.revertDispatchRemarks !== "—" && (
+                            <p><span className="font-black text-amber-800">Dispatch Revert:</span> {row.revertDispatchRemarks}</p>
+                          )}
+                          {row.revertPlanningRemarks !== "—" && (
+                            <p><span className="font-black text-amber-800">Planning Revert:</span> {row.revertPlanningRemarks}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="px-3 py-4 border-t bg-slate-50/50 flex flex-col gap-3 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-slate-500 font-bold uppercase tracking-tighter">
                   Showing Page {pendingPage} of {pendingData?.pagination?.totalPages || 1} ({pendingData?.pagination?.total || 0} Groups)
                 </div>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:flex">
                   <Button
                     variant="outline"
                     size="sm"
@@ -2664,18 +3086,18 @@ export default function PreApprovalPage() {
 
         {/* SKU Price List Modal */}
         <Dialog open={showSkuPriceList} onOpenChange={setShowSkuPriceList}>
-          <DialogContent className="w-[95vw] max-w-[95vw] lg:max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-4">
+          <DialogContent className="w-[95vw] max-w-[95vw] lg:max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-3 sm:p-4">
             <DialogHeader className="px-2 pt-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <DialogTitle className="text-2xl font-black text-blue-900 tracking-tight uppercase">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <DialogTitle className="text-xl sm:text-2xl font-black text-blue-900 tracking-tight uppercase break-words">
                     {catalogContext ? `SKU Price List for ${catalogContext.orderNo}` : "SKU Price List Catalog"}
                   </DialogTitle>
                   <DialogDescription className="text-slate-500 font-bold text-xs mt-1">
                     Automated rate calculations based on Order Punch inputs.
                   </DialogDescription>
                 </div>
-                <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200 px-4 py-1.5 font-black text-xs">
+                <Badge className="w-fit bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200 px-4 py-1.5 font-black text-xs">
                   {Object.keys(calculatedPrices).length} OIL CATEGORIES
                 </Badge>
               </div>

@@ -658,6 +658,56 @@ export default function CommitmentReviewPage() {
     })).filter(group => group._productCount > 0)
   }, [filteredPendingOrders, history])
 
+  const buildApprovalDisplayRow = (order: any) => {
+    const products = order._allProducts || []
+    const firstProduct = products[0] || {}
+    const orderDetails = Object.values(order._ordersMap)[0] as any || {}
+    const baseDos = Array.from(new Set(products.map((p: any) => {
+      const id = p._originalOrderId || "DO/26-27/0001"
+      const match = id.match(/^(DO[-\/](?:\d{2}-\d{2}\/)?\d+)/i)
+      return match ? match[1] : id
+    }))).join(", ")
+    const oilTypes = Array.from(new Set(products.map((p: any) => p.oilType || p.productName))).filter(Boolean).join(", ")
+
+    return {
+      orderNo: baseDos || "—",
+      deliveryPurpose: orderDetails.orderPurpose || "—",
+      customerType: orderDetails.customerType || "—",
+      orderType: orderDetails.orderType || "—",
+      soNo: baseDos || "—",
+      partySoDate: orderDetails.partySoDate || "—",
+      customerName: order.customerName || "—",
+      startDate: orderDetails.startDate || "—",
+      endDate: orderDetails.endDate || "—",
+      deliveryDate: orderDetails.deliveryDate || "—",
+      orderCategory: orderDetails.orderCategory || "—",
+      oilType: oilTypes || "—",
+      ratePerLtr: firstProduct?.ratePerLtr || "—",
+      ratePer15Kg: firstProduct?.rateLtr || "—",
+      productName: `${order._productCount} Items`,
+      uom: firstProduct?.uom || "—",
+      orderQty: products.reduce((sum: number, p: any) => sum + (Number(p.orderQty) || 0), 0).toFixed(2),
+      altUom: firstProduct?.altUom || "—",
+      altQty: products.reduce((sum: number, p: any) => sum + (Number(p.altQty) || 0), 0).toFixed(2),
+      rate: firstProduct?.rate || "—",
+      totalWithGst: products.reduce((sum: number, p: any) => sum + (Number(p.totalWithGst) || 0), 0).toFixed(2) || "—",
+      transportType: orderDetails.transportType || "—",
+      contactPerson: orderDetails.contactPerson || "—",
+      whatsapp: orderDetails.whatsappNo || "—",
+      address: orderDetails.customerAddress || "—",
+      paymentTerms: orderDetails.paymentTerms || "—",
+      advanceTaken: orderDetails.advancePaymentTaken ? "YES" : "NO",
+      advanceAmount: orderDetails.advanceAmount || "—",
+      isBroker: orderDetails.isBrokerOrder ? "YES" : "NO",
+      brokerName: orderDetails.brokerName || "—",
+      uploadSo: "do_document.pdf",
+      orderPunchRemarks: order.orderPunchRemarks || "—",
+      status: "Pending",
+      products,
+      orderDetails,
+    }
+  }
+
   return (
     <WorkflowStageShell
       title="Stage 3: Approval Of Order"
@@ -670,13 +720,13 @@ export default function CommitmentReviewPage() {
       isHistoryLoading={isHistoryLoading}
       showDateFilters={false}
       historyFooter={
-        <div className="flex items-center justify-between w-full mt-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between w-full mt-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
           <div className="text-xs font-bold text-slate-500 bg-white px-4 py-2 rounded-full border border-slate-200/50">
             Page <span className="text-blue-600 px-1">{historyPage}</span> of <span className="text-blue-600 px-1">{historyResult?.pagination?.totalPages || 1}</span>
             <span className="mx-2 text-slate-300">|</span>
             Total <span className="text-blue-600 px-1">{historyResult?.pagination?.total || 0}</span> Groups
           </div>
-          <div className="flex gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:flex">
             <Button
               variant="outline"
               size="sm"
@@ -700,32 +750,32 @@ export default function CommitmentReviewPage() {
       }
     >
       <div className="space-y-4">
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-col justify-end gap-2 sm:flex-row">
           <Dialog open={selectedOrder !== null} onOpenChange={handleBulkVerifyOpen}>
             <DialogTrigger asChild>
               <Button
                 disabled={selectedItems.length === 0}
-                className="bg-blue-600 hover:bg-blue-700 shadow-md transition-all active:scale-95"
+                className="w-full bg-blue-600 hover:bg-blue-700 shadow-md transition-all active:scale-95 sm:w-auto"
               >
                 <CheckCircle2 className="mr-2 h-4 w-4" />
                 Verify Selected ({selectedItems.length})
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-6xl! max-h-[90vh] flex flex-col p-0 overflow-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              <DialogHeader className="border-b pb-4">
-                <DialogTitle className="text-xl font-bold text-slate-900 leading-none">
+            <DialogContent className="w-[calc(100vw-0.75rem)] max-w-[calc(100vw-0.75rem)] sm:max-w-4xl lg:max-w-6xl max-h-[90vh] flex flex-col p-3 sm:p-6 overflow-x-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] [overflow-wrap:anywhere]">
+              <DialogHeader className="border-b pb-4 min-w-0">
+                <DialogTitle className="text-lg sm:text-xl font-bold text-slate-900 leading-tight break-words">
                   Bulk Approval: {selectedItems.length > 1 ? `${selectedItems.length} Items Selected` : (selectedOrder?.doNumber || "Order Verification")}
                 </DialogTitle>
                 <DialogDescription className="text-slate-500 mt-1.5">Verify order details and complete the six-point check for commitment.</DialogDescription>
               </DialogHeader>
 
               {/* Interleaved Order Details and Product Tables Section */}
-              <div className="space-y-12 mt-6">
+              <div className="space-y-6 sm:space-y-12 mt-4 sm:mt-6 min-w-0">
                 {selectedItems.map((customerGrp) => (
-                  <div key={customerGrp._rowKey} className="space-y-6">
-                    <h2 className="text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
-                      {customerGrp.customerName}
-                      <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
+                  <div key={customerGrp._rowKey} className="space-y-4 sm:space-y-6 min-w-0">
+                    <h2 className="text-base sm:text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="break-words">{customerGrp.customerName}</span>
+                      <Badge className="w-fit bg-blue-600 text-white px-3 py-1 font-black sm:ml-3">
                         {customerGrp._productCount} PRODUCTS
                       </Badge>
                     </h2>
@@ -741,10 +791,10 @@ export default function CommitmentReviewPage() {
                       };
 
                       return (
-                        <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
-                          <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
-                            <div className="flex items-center gap-4">
-                              <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
+                        <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-xl sm:rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow min-w-0">
+                          <div className="bg-blue-600 px-3 sm:px-5 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between cursor-pointer" onClick={toggleExpand}>
+                            <div className="min-w-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                              <Badge className="max-w-full bg-white text-blue-800 hover:bg-white px-3 sm:px-4 py-1.5 text-xs sm:text-base font-black tracking-tight rounded-full shadow-sm whitespace-normal break-all">
                                 ORDER: {baseDo}
                               </Badge>
                               <div className="flex flex-col">
@@ -752,8 +802,8 @@ export default function CommitmentReviewPage() {
                                 <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products.length} Items Selected</span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
+                            <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-start">
+                              <div className="text-[10px] sm:text-[11px] text-blue-50 font-bold uppercase tracking-widest sm:mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -766,12 +816,12 @@ export default function CommitmentReviewPage() {
 
                           {/* Collapsible Order Details */}
                           {isExpanded && (
-                            <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
-                              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            <div className="px-3 sm:px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
+                              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-inner">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Customer Name</p>
-                                    <p className="text-sm font-bold text-slate-900 leading-tight">{customerGrp.customerName || "—"}</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight break-words">{customerGrp.customerName || "—"}</p>
                                   </div>
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Depo Name</p>
@@ -817,9 +867,9 @@ export default function CommitmentReviewPage() {
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">WhatsApp No.</p>
                                     <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.whatsappNo || "—"}</p>
                                   </div>
-                                  <div className="col-span-2">
+                                  <div className="sm:col-span-2">
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Customer Address</p>
-                                    <p className="text-sm font-bold text-slate-900 leading-tight truncate" title={orderDetails.customerAddress}>{orderDetails.customerAddress || "—"}</p>
+                                    <p className="text-sm font-bold text-slate-900 leading-tight break-words" title={orderDetails.customerAddress}>{orderDetails.customerAddress || "—"}</p>
                                   </div>
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Payment Terms</p>
@@ -841,17 +891,17 @@ export default function CommitmentReviewPage() {
                                       {orderDetails.isBrokerOrder ? orderDetails.brokerName || "Yes" : "No"}
                                     </p>
                                   </div>
-                                    <div className="col-span-2 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
+                                    <div className="sm:col-span-2 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
                                       <div className="bg-amber-100 p-2 rounded-lg">
                                         <Settings2 className="h-5 w-5 text-amber-600" />
                                       </div>
                                       <div>
                                         <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
-                                        <p className="text-sm font-medium text-slate-700 italic leading-snug">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
+                                        <p className="text-sm font-medium text-slate-700 italic leading-snug break-words">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
                                       </div>
                                     </div>
                                     <div className={cn(
-                                      "col-span-2 p-4 rounded-xl border flex items-start gap-4 transition-all duration-300",
+                                      "sm:col-span-2 p-4 rounded-xl border flex items-start gap-4 transition-all duration-300",
                                       orderDetails.uploadSo 
                                         ? "bg-blue-50 border-blue-100 hover:bg-blue-100 cursor-pointer group" 
                                         : "bg-slate-50 border-slate-100 opacity-60"
@@ -888,8 +938,9 @@ export default function CommitmentReviewPage() {
                           )}
 
                           {/* Render Product Table for this DO */}
-                          <div className="px-5 pb-6">
-                            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                          <div className="px-3 sm:px-5 pb-6 min-w-0">
+                            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white min-w-0">
+                              <div className="hidden md:block">
                               <Table>
                                 <TableHeader>
                                   <TableRow className="bg-slate-50 border-b">
@@ -939,6 +990,58 @@ export default function CommitmentReviewPage() {
                                   ))}
                                 </TableBody>
                               </Table>
+                              </div>
+                              <div className="space-y-3 p-3 md:hidden">
+                                <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
+                                  <div>
+                                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Products</p>
+                                    <p className="text-xs font-bold text-slate-700">{orderDetails._products.length} items</p>
+                                  </div>
+                                  <Checkbox
+                                    checked={orderDetails._products.length > 0 && orderDetails._products.every((p: any) => dialogSelectedProducts.includes(p._rowKey))}
+                                    onCheckedChange={(checked) => {
+                                      const productKeys = orderDetails._products.map((p: any) => p._rowKey);
+                                      if (checked) {
+                                        setDialogSelectedProducts(prev => Array.from(new Set([...prev, ...productKeys])))
+                                      } else {
+                                        setDialogSelectedProducts(prev => prev.filter(k => !productKeys.includes(k)))
+                                      }
+                                    }}
+                                  />
+                                </div>
+                                {orderDetails._products.map((prod: any) => {
+                                  const selected = dialogSelectedProducts.includes(prod._rowKey)
+                                  return (
+                                    <div
+                                      key={prod._rowKey}
+                                      className={cn("rounded-xl border bg-white p-3 space-y-3", selected && "border-blue-200 bg-blue-50/40")}
+                                    >
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Product Info</p>
+                                          <p className="text-sm font-black text-slate-900 break-words">{prod.productName || prod.oilType || "—"}</p>
+                                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight break-all">{prod._originalOrderId}</p>
+                                        </div>
+                                        <Checkbox
+                                          checked={selected}
+                                          onCheckedChange={() => toggleSelectDialogProduct(prod._rowKey)}
+                                        />
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-3 text-xs">
+                                        <div className="rounded-md bg-slate-50 p-2">
+                                          <p className="text-[10px] font-black uppercase text-slate-400">Qty</p>
+                                          <Badge variant="outline" className="mt-1 border-blue-200 text-blue-700 font-black px-2">{prod.orderQty}</Badge>
+                                        </div>
+                                        <div className="rounded-md bg-slate-50 p-2">
+                                          <p className="text-[10px] font-black uppercase text-slate-400">Rate</p>
+                                          <p className="mt-1 font-mono font-bold text-slate-700">₹{prod.rate || "—"}</p>
+                                        </div>
+                                      </div>
+                                      <Badge variant="outline" className="text-[9px] bg-green-50 text-green-700 border-green-200 uppercase font-black">Pending Approval</Badge>
+                                    </div>
+                                  )
+                                })}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1002,7 +1105,7 @@ export default function CommitmentReviewPage() {
                 <Button
                   onClick={handleConfirmCommitment}
                   disabled={isConfirming || isReadOnly}
-                  className="min-w-75 px-8 h-11 text-base font-bold shadow-lg shadow-blue-100 transition-all hover:scale-[1.01] active:scale-[0.99]"
+                  className="w-full min-w-0 px-8 h-11 text-sm sm:text-base font-bold shadow-lg shadow-blue-100 transition-all hover:scale-[1.01] active:scale-[0.99] sm:w-auto"
                   variant={Object.values(checklistValues).includes("reject") ? "destructive" : "default"}
                 >
                   {isConfirming
@@ -1017,7 +1120,7 @@ export default function CommitmentReviewPage() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="bg-transparent">
+              <Button variant="outline" className="w-full bg-transparent sm:w-auto">
                 <Settings2 className="mr-2 h-4 w-4" />
                 Columns
               </Button>
@@ -1041,8 +1144,8 @@ export default function CommitmentReviewPage() {
           </DropdownMenu>
         </div>
 
-        <Card className="border-none shadow-sm overflow-auto max-h-150">
-          <Table>
+        <Card className="border-none shadow-sm overflow-hidden md:max-h-150 md:overflow-auto">
+          <Table className="hidden md:table">
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>
                 <TableHead className="w-12.5 text-center">
@@ -1075,55 +1178,7 @@ export default function CommitmentReviewPage() {
                 ))
               ) : displayRows.length > 0 ? (
                 displayRows.map((order: any) => {
-                  const products = order._allProducts || []
-                  const firstProduct = products[0] || {}
-                  const orderDetails = Object.values(order._ordersMap)[0] as any || {}
-
-                  const baseDos = Array.from(new Set(products.map((p: any) => {
-                    const id = p._originalOrderId || "DO/26-27/0001"
-                    const match = id.match(/^(DO[-\/](?:\d{2}-\d{2}\/)?\d+)/i)
-                    return match ? match[1] : id
-                  }))).join(", ")
-
-                  const oilTypes = Array.from(new Set(products.map((p: any) => p.oilType || p.productName))).filter(Boolean).join(", ")
-
-                  const row: any = {
-                    orderNo: baseDos || "—",
-                    deliveryPurpose: orderDetails.orderPurpose || "—",
-                    customerType: orderDetails.customerType || "—",
-                    orderType: orderDetails.orderType || "—",
-                    soNo: baseDos || "—",
-                    partySoDate: orderDetails.partySoDate || "—",
-                    customerName: order.customerName || "—",
-                    startDate: orderDetails.startDate || "—",
-                    endDate: orderDetails.endDate || "—",
-                    deliveryDate: orderDetails.deliveryDate || "—",
-                    orderCategory: orderDetails.orderCategory || "—",
-
-                    oilType: oilTypes || "—",
-                    ratePerLtr: firstProduct?.ratePerLtr || "—",
-                    ratePer15Kg: firstProduct?.rateLtr || "—",
-                    productName: `${order._productCount} Items`,
-                    uom: firstProduct?.uom || "—",
-                    orderQty: products.reduce((sum: number, p: any) => sum + (Number(p.orderQty) || 0), 0).toFixed(2),
-                    altUom: firstProduct?.altUom || "—",
-                    altQty: products.reduce((sum: number, p: any) => sum + (Number(p.altQty) || 0), 0).toFixed(2),
-                    rate: firstProduct?.rate || "—",
-
-                    totalWithGst: products.reduce((sum: number, p: any) => sum + (Number(p.totalWithGst) || 0), 0).toFixed(2) || "—",
-                    transportType: orderDetails.transportType || "—",
-                    contactPerson: orderDetails.contactPerson || "—",
-                    whatsapp: orderDetails.whatsappNo || "—",
-                    address: orderDetails.customerAddress || "—",
-                    paymentTerms: orderDetails.paymentTerms || "—",
-                    advanceTaken: orderDetails.advancePaymentTaken ? "YES" : "NO",
-                    advanceAmount: orderDetails.advanceAmount || "—",
-                    isBroker: orderDetails.isBrokerOrder ? "YES" : "NO",
-                    brokerName: orderDetails.brokerName || "—",
-                    uploadSo: "do_document.pdf",
-                    orderPunchRemarks: order.orderPunchRemarks || "—",
-                    status: "Pending",
-                  }
+                  const row: any = buildApprovalDisplayRow(order)
 
                   return (
                     <TableRow
@@ -1164,16 +1219,93 @@ export default function CommitmentReviewPage() {
               )}
             </TableBody>
           </Table>
+
+          <div className="space-y-3 p-3 md:hidden">
+            {isPendingLoading && pendingOrders.length === 0 ? (
+              [...Array(5)].map((_, i) => (
+                <div key={i} className="rounded-lg border p-4 space-y-3 opacity-60">
+                  <div className="h-4 w-32 bg-slate-200 animate-pulse rounded" />
+                  <div className="grid grid-cols-2 gap-3">
+                    {[...Array(6)].map((__, j) => <div key={j} className="h-10 bg-slate-100 animate-pulse rounded" />)}
+                  </div>
+                </div>
+              ))
+            ) : displayRows.length > 0 ? (
+              displayRows.map((order: any) => {
+                const row = buildApprovalDisplayRow(order)
+                const selected = selectedItems.some(i => i._rowKey === order._rowKey)
+                return (
+                  <div
+                    key={order._rowKey}
+                    className={cn("rounded-lg border bg-white p-4 shadow-sm", selected && "border-blue-200 bg-blue-50")}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-mono text-sm font-black text-blue-700 break-all">{row.orderNo}</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">{row.partySoDate}</p>
+                      </div>
+                      <Checkbox
+                        checked={selected}
+                        onCheckedChange={() => toggleSelectItem(order)}
+                      />
+                    </div>
+                    <div className="mt-3">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Customer Name</p>
+                      <p className="text-sm font-bold text-slate-900 break-words">{row.customerName}</p>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">Category</p>
+                        <p className="mt-1 font-bold break-words">{row.orderCategory}</p>
+                      </div>
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">Products</p>
+                        <p className="mt-1 font-bold">{order._productCount} items</p>
+                      </div>
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">Oil Type</p>
+                        <p className="mt-1 font-semibold break-words">{row.oilType}</p>
+                      </div>
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">Qty</p>
+                        <p className="mt-1 font-mono font-bold">{row.orderQty}</p>
+                      </div>
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">Rate</p>
+                        <p className="mt-1 font-mono font-bold">₹{row.rate}</p>
+                      </div>
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">Transport</p>
+                        <p className="mt-1 font-semibold break-words">{row.transportType}</p>
+                      </div>
+                    </div>
+                    {row.orderPunchRemarks !== "—" && (
+                      <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs">
+                        <span className="font-black text-amber-800">Order Remarks:</span> {row.orderPunchRemarks}
+                      </div>
+                    )}
+                    <Badge variant="outline" className="mt-3 text-[10px] bg-slate-100 text-slate-700 border-slate-200 uppercase font-black tracking-tighter">
+                      Pending Approval
+                    </Badge>
+                  </div>
+                )
+              })
+            ) : (
+              <div className="py-10 text-center text-muted-foreground">
+                No orders pending for commitment review
+              </div>
+            )}
+          </div>
         </Card>
 
         {activeTab === "pending" && (
-          <div className="flex items-center justify-between w-full mt-4 bg-white/50 backdrop-blur-sm p-4 rounded-2xl border border-blue-50">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between w-full mt-4 bg-white/50 backdrop-blur-sm p-4 rounded-2xl border border-blue-50">
             <div className="text-xs font-bold text-slate-500 bg-slate-100/50 px-4 py-2 rounded-full border border-slate-200/50">
               Page <span className="text-blue-600 px-1">{pendingPage}</span> of <span className="text-blue-600 px-1">{pendingResult?.pagination?.totalPages || 1}</span>
               <span className="mx-2 text-slate-300">|</span>
               Total <span className="text-blue-600 px-1">{pendingResult?.pagination?.total || 0}</span> Groups
             </div>
-            <div className="flex gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:flex">
               <Button
                 variant="outline"
                 size="sm"

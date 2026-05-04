@@ -487,11 +487,11 @@ export default function DamageAdjustmentPage() {
     >
       <div className="space-y-4">
         {/* Action Bar */}
-        <div className="flex justify-end gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:flex sm:justify-end">
           <Button
             onClick={handleOpenDialog}
             disabled={selectedItems.length === 0}
-            className="bg-blue-600 hover:bg-blue-700"
+            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
           >
             <CheckCircle className="mr-2 h-4 w-4" />
             Process Adjustment ({selectedItems.length})
@@ -499,7 +499,7 @@ export default function DamageAdjustmentPage() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="bg-transparent">
+              <Button variant="outline" size="sm" className="w-full sm:w-auto bg-transparent">
                 <Settings2 className="mr-2 h-4 w-4" />
                 Columns
               </Button>
@@ -523,8 +523,94 @@ export default function DamageAdjustmentPage() {
           </DropdownMenu>
         </div>
 
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-3">
+          {isPendingLoading && pendingOrders.length === 0 ? (
+            [...Array(4)].map((_, i) => (
+              <Card key={i} className="p-4 rounded-2xl border border-slate-100 bg-white shadow-sm">
+                <div className="space-y-3 opacity-50">
+                  <div className="flex items-center justify-between">
+                    <div className="h-4 w-4 rounded bg-slate-200 animate-pulse" />
+                    <div className="h-5 w-28 rounded-full bg-slate-200 animate-pulse" />
+                  </div>
+                  <div className="h-4 w-40 rounded-full bg-slate-200 animate-pulse" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="h-3 rounded-full bg-slate-200 animate-pulse" />
+                    <div className="h-3 rounded-full bg-slate-200 animate-pulse" />
+                  </div>
+                </div>
+              </Card>
+            ))
+          ) : displayRows.length > 0 ? (
+            displayRows.map((group) => (
+              <Card key={group._rowKey} className={cn("p-4 rounded-2xl border bg-white shadow-sm", selectedItems.includes(group._rowKey) ? "border-blue-200 bg-blue-50/40" : "border-slate-100")}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">DO Number</p>
+                    <p className="break-words text-sm font-black text-slate-900">{group.doNumber}</p>
+                  </div>
+                  <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
+                </div>
+
+                <div className="mt-3 min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Customer</p>
+                  <p className="break-words text-xs font-bold text-slate-700">{group.customerName}</p>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">DO Date</p>
+                    <p className="font-medium text-slate-700">{group.partySoDate}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Process ID</p>
+                    <p className="break-words font-medium text-slate-700">{group.processId}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Invoice</p>
+                    {group._allProducts?.[0]?.invoice_copy ? (
+                      <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="break-words font-bold text-blue-600 hover:underline">
+                        {group.invoiceNo}
+                      </a>
+                    ) : (
+                      <p className="break-words font-medium text-slate-700">{group.invoiceNo}</p>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vehicle</p>
+                    <p className="break-words font-bold text-slate-700">{group.vehicleNo}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Badge variant="secondary">{group._productCount} items</Badge>
+                  <Badge className="bg-red-100 text-red-700">{group._allProducts.filter((p: any) => p.damageStatus === "Damaged").length} damaged</Badge>
+                  <Badge className="bg-red-100 text-red-700">Pending Adjustment</Badge>
+                </div>
+
+                <div className="mt-3 min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Order Punch Remarks</p>
+                  <p className="break-words text-xs font-medium text-slate-600">{group.orderPunchRemarks}</p>
+                </div>
+              </Card>
+            ))
+          ) : (
+            <Card className="p-10 text-center rounded-2xl border border-slate-100 bg-white text-muted-foreground">
+              No pending damage adjustments
+            </Card>
+          )}
+          <div ref={pendingEndRef} className="py-2 flex justify-center">
+            {isFetchingNextPending && (
+              <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-[10px]">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>LOADING MORE...</span>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Main Table (Grouped) */}
-        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
+        <Card className="hidden md:block border-none shadow-sm overflow-auto max-h-[600px]">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>
@@ -623,94 +709,94 @@ export default function DamageAdjustmentPage() {
 
       {/* Split-View Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-[95vw]! w-full max-h-[95vh] overflow-y-auto p-0">
-          <div className="p-6">
+        <DialogContent className="w-[calc(100vw-0.75rem)] max-w-[calc(100vw-0.75rem)] sm:max-w-[95vw] max-h-[95vh] overflow-x-hidden overflow-y-auto p-0 [overflow-wrap:anywhere]">
+          <div className="p-3 sm:p-6">
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-slate-900">
+              <DialogTitle className="text-base sm:text-xl font-bold text-slate-900 leading-tight">
                 Damage Adjustment - Invoice: {selectedGroup?.invoiceNo} <span className="text-sm font-medium text-slate-500">({selectedGroup?.customerName})</span>
               </DialogTitle>
             </DialogHeader>
 
             {selectedGroup && (
-              <div className="space-y-6 mt-4">
+              <div className="space-y-4 sm:space-y-6 mt-4">
                 {/* Order Details Top Section */}
-                <div className="border rounded-lg p-4 bg-muted/30">
+                <div className="border rounded-lg p-3 sm:p-4 bg-muted/30">
                   <h3 className="text-sm font-semibold mb-3 text-primary">Order & Logistics Details</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4 text-xs">
-                    <div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4 text-xs">
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Delivery Purpose</Label>
-                      <p className="font-medium">{selectedGroup.deliveryPurpose}</p>
+                      <p className="font-medium break-words">{selectedGroup.deliveryPurpose}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Order Type</Label>
-                      <p className="font-medium">{selectedGroup.orderType}</p>
+                      <p className="font-medium break-words">{selectedGroup.orderType}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Start Date</Label>
-                      <p className="font-medium">{selectedGroup.startDate}</p>
+                      <p className="font-medium break-words">{selectedGroup.startDate}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">End Date</Label>
-                      <p className="font-medium">{selectedGroup.endDate}</p>
+                      <p className="font-medium break-words">{selectedGroup.endDate}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Delivery Date</Label>
-                      <p className="font-medium">{selectedGroup.deliveryDate}</p>
+                      <p className="font-medium break-words">{selectedGroup.deliveryDate}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">DO Date</Label>
-                      <p className="font-medium">{selectedGroup.partySoDate || "—"}</p>
+                      <p className="font-medium break-words">{selectedGroup.partySoDate || "—"}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Transport Type</Label>
-                      <p className="font-medium">{selectedGroup.transportType}</p>
+                      <p className="font-medium break-words">{selectedGroup.transportType}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Contact Person</Label>
-                      <p className="font-medium">{selectedGroup.contactPerson}</p>
+                      <p className="font-medium break-words">{selectedGroup.contactPerson}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Customer Address</Label>
-                      <p className="font-medium truncate" title={selectedGroup.customerAddress}>{selectedGroup.customerAddress}</p>
+                      <p className="font-medium break-words" title={selectedGroup.customerAddress}>{selectedGroup.customerAddress}</p>
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Delivery Purpose</Label>
-                      <p className="font-medium">{selectedGroup.deliveryPurpose}</p>
+                      <p className="font-medium break-words">{selectedGroup.deliveryPurpose}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Start / End Date</Label>
-                      <p className="font-medium">{selectedGroup.startDate} / {selectedGroup.endDate}</p>
+                      <p className="font-medium break-words">{selectedGroup.startDate} / {selectedGroup.endDate}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">DO Date</Label>
-                      <p className="font-medium">{selectedGroup.partySoDate}</p>
+                      <p className="font-medium break-words">{selectedGroup.partySoDate}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Transport Type</Label>
-                      <p className="font-medium text-purple-600">{selectedGroup.transportType}</p>
+                      <p className="font-medium text-purple-600 break-words">{selectedGroup.transportType}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Contact Person</Label>
-                      <p className="font-medium">{selectedGroup.contactPerson} ({selectedGroup.contactWhatsapp})</p>
+                      <p className="font-medium break-words">{selectedGroup.contactPerson} ({selectedGroup.contactWhatsapp})</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Broker / Advance</Label>
-                      <p className="font-medium text-blue-600">{selectedGroup.brokerName} / ₹{selectedGroup.advanceAmount}</p>
+                      <p className="font-medium text-blue-600 break-words">{selectedGroup.brokerName} / ₹{selectedGroup.advanceAmount}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Address</Label>
-                      <p className="font-medium truncate" title={selectedGroup.customerAddress}>{selectedGroup.customerAddress}</p>
+                      <p className="font-medium break-words" title={selectedGroup.customerAddress}>{selectedGroup.customerAddress}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Invoice No / Date</Label>
-                      <p className="font-medium text-blue-600">{selectedGroup.invoiceNo} / {selectedGroup.invoiceDate}</p>
+                      <p className="font-medium text-blue-600 break-words">{selectedGroup.invoiceNo} / {selectedGroup.invoiceDate}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Order Punch Remarks</Label>
-                      <p className="font-medium text-amber-600 italic">"{selectedGroup.orderPunchRemarks || "No special instructions provided."}"</p>
+                      <p className="font-medium text-amber-600 italic break-words">"{selectedGroup.orderPunchRemarks || "No special instructions provided."}"</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">PO Copy (SO Upload)</Label>
                       {selectedGroup.uploadSo ? (
                         <a 
@@ -727,87 +813,87 @@ export default function DamageAdjustmentPage() {
                         <p className="text-[10px] font-black text-slate-400 leading-none mt-1 uppercase">NOT UPLOADED</p>
                       )}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Bilty No</Label>
-                      <p className="font-medium">{selectedGroup.biltyNo}</p>
+                      <p className="font-medium break-words">{selectedGroup.biltyNo}</p>
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Truck No</Label>
-                      <p className="font-medium">{(selectedGroup.truckNo || "—").toUpperCase()}</p>
+                      <p className="font-medium break-words">{(selectedGroup.truckNo || "—").toUpperCase()}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Transporter</Label>
-                      <p className="font-medium truncate" title={selectedGroup.transporterName}>{selectedGroup.transporterName}</p>
+                      <p className="font-medium break-words" title={selectedGroup.transporterName}>{selectedGroup.transporterName}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Vehicle Type</Label>
-                      <p className="font-medium">{selectedGroup.vehicleType}</p>
+                      <p className="font-medium break-words">{selectedGroup.vehicleType}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">RTO</Label>
-                      <p className="font-medium">{selectedGroup.rto}</p>
+                      <p className="font-medium break-words">{selectedGroup.rto}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Passing Weight</Label>
-                      <p className="font-medium">{selectedGroup.passingWeight}</p>
+                      <p className="font-medium break-words">{selectedGroup.passingWeight}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Road Tax</Label>
-                      <p className="font-medium">{selectedGroup.roadTax}</p>
+                      <p className="font-medium break-words">{selectedGroup.roadTax}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">GVW</Label>
-                      <p className="font-medium">{selectedGroup.gvw}</p>
+                      <p className="font-medium break-words">{selectedGroup.gvw}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">ULW</Label>
-                      <p className="font-medium">{selectedGroup.ulw}</p>
+                      <p className="font-medium break-words">{selectedGroup.ulw}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Driver Name</Label>
-                      <p className="font-medium">{selectedGroup.driverName}</p>
+                      <p className="font-medium break-words">{selectedGroup.driverName}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Driver Contact</Label>
-                      <p className="font-medium">{selectedGroup.driverContact}</p>
+                      <p className="font-medium break-words">{selectedGroup.driverContact}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">License No</Label>
-                      <p className="font-medium">{selectedGroup.driverLicense}</p>
+                      <p className="font-medium break-words">{selectedGroup.driverLicense}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">DL Valid Upto</Label>
-                      <p className="font-medium">{selectedGroup.dlValidUpto ? new Date(selectedGroup.dlValidUpto).toLocaleDateString("en-IN") : "—"}</p>
+                      <p className="font-medium break-words">{selectedGroup.dlValidUpto ? new Date(selectedGroup.dlValidUpto).toLocaleDateString("en-IN") : "—"}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">RST No</Label>
                       {selectedGroup.weightmentSlip ? (
-                        <a href={selectedGroup.weightmentSlip} target="_blank" rel="noopener noreferrer" className="block text-blue-600 hover:text-blue-800 underline font-black">
+                        <a href={selectedGroup.weightmentSlip} target="_blank" rel="noopener noreferrer" className="block text-blue-600 hover:text-blue-800 underline font-black break-words">
                           #{selectedGroup.rstNo}
                         </a>
                       ) : (
-                        <p className="font-medium">#{selectedGroup.rstNo}</p>
+                        <p className="font-medium break-words">#{selectedGroup.rstNo}</p>
                       )}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Gross / Tare / Net</Label>
-                      <p className="font-medium text-slate-900 leading-tight">
+                      <p className="font-medium text-slate-900 leading-tight break-words">
                         {selectedGroup.grossWeight || "0"} / {selectedGroup.tareWeight || "0"} / <span className="text-blue-600 font-black">{((Number(selectedGroup.grossWeight || 0) - Number(selectedGroup.tareWeight || 0)) || "0").toString()}</span>
                       </p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Weight Diff</Label>
-                      <p className="font-black text-amber-600">{selectedGroup.weightDiff || "0"}</p>
+                      <p className="font-black text-amber-600 break-words">{selectedGroup.weightDiff || "0"}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Extra Weight</Label>
-                      <p className="font-black text-purple-600">{selectedGroup.extraWeight || "0"}</p>
+                      <p className="font-black text-purple-600 break-words">{selectedGroup.extraWeight || "0"}</p>
                     </div>
                     {selectedGroup.diffReason && selectedGroup.diffReason !== "—" && (
-                      <div className="col-span-1">
+                      <div className="min-w-0">
                         <Label className="text-xs text-muted-foreground">Diff Reason</Label>
-                        <p className="font-medium text-red-500 italic">{selectedGroup.diffReason}</p>
+                        <p className="font-medium text-red-500 italic break-words">{selectedGroup.diffReason}</p>
                       </div>
                     )}
                   </div>
@@ -818,7 +904,62 @@ export default function DamageAdjustmentPage() {
                   <div className="bg-muted/50 px-4 py-2 border-b">
                     <h3 className="text-sm font-semibold text-primary">Products ({selectedProducts.length}/{selectedGroup._productCount} selected)</h3>
                   </div>
-                  <div className="overflow-x-auto">
+                  <div className="md:hidden p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-3">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Select All</span>
+                      <Checkbox
+                        checked={selectedProducts.length === selectedGroup._allProducts.length && selectedGroup._allProducts.length > 0}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedProducts(selectedGroup._allProducts.map((p: any) => p._rowKey))
+                          } else {
+                            setSelectedProducts([])
+                          }
+                        }}
+                      />
+                    </div>
+                    {selectedGroup._allProducts.map((product: any) => (
+                      <Card key={product._rowKey} className={cn("p-4 rounded-2xl border shadow-sm", selectedProducts.includes(product._rowKey) ? "border-red-200 bg-red-50/20" : "border-slate-100 bg-white")}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Product</p>
+                            <p className="break-words text-xs font-bold text-slate-900">{product.productName}</p>
+                          </div>
+                          <Checkbox
+                            checked={selectedProducts.includes(product._rowKey)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedProducts(prev => [...prev, product._rowKey])
+                              } else {
+                                setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Order No</p>
+                            <p className="break-words font-medium text-slate-500">{product.specificOrderNo || "—"}</p>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Inv Qty</p>
+                            <p className="font-medium text-slate-700">{product.actualQty || "—"}</p>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Damage Qty</p>
+                            <p className="font-bold text-red-600">{product.damageQty || 0}</p>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</p>
+                            <Badge variant="outline" className="border-red-200 text-red-700 bg-red-50">
+                              {product.damageStatus || "Pending"}
+                            </Badge>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                  <div className="hidden md:block overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -873,7 +1014,7 @@ export default function DamageAdjustmentPage() {
                 </div>
 
                 {/* Adjustment Form (Bottom) */}
-                <div className="space-y-6 border rounded-lg p-6 bg-white shadow-sm">
+                <div className="space-y-6 border rounded-lg p-3 sm:p-6 bg-white shadow-sm">
                   <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
                     <FileText className="h-4 w-4 text-blue-600" />
                     Credit Note & Adjustment Details
@@ -916,7 +1057,9 @@ export default function DamageAdjustmentPage() {
                         <label htmlFor="cn-upload" className="cursor-pointer block">
                           <Upload className="h-5 w-5 mx-auto mb-1 text-blue-600" />
                           <p className="text-xs font-bold text-slate-700 uppercase tracking-tight block">
+                            <span className="block break-words">
                             {isUploading ? "UPLOADING..." : (adjustmentData.creditNoteCopyName ? `REPLACE: ${adjustmentData.creditNoteCopyName}` : "Upload Copy")}
+                            </span>
                           </p>
                         </label>
                       </div>
@@ -926,14 +1069,14 @@ export default function DamageAdjustmentPage() {
               </div>
             )}
 
-            <DialogFooter className="mt-8 border-t pt-4 bg-gray-50 -mx-6 -mb-6 px-6 py-4">
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isProcessing}>
+            <DialogFooter className="mt-8 border-t pt-4 bg-gray-50 -mx-3 sm:-mx-6 -mb-3 sm:-mb-6 px-3 sm:px-6 py-4 flex flex-col gap-3 sm:flex-row">
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isProcessing} className="w-full sm:w-auto">
                 Cancel
               </Button>
               <Button
                 onClick={handleSubmit}
                 disabled={isProcessing || isReadOnly}
-                className="bg-blue-600 hover:bg-blue-700 min-w-37.5"
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 min-w-37.5"
                 title={isReadOnly ? "View Only Access" : "Complete Adjustment"}
               >
                 {isProcessing ? "Processing..." : "Complete Adjustment"}

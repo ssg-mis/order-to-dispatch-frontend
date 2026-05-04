@@ -458,7 +458,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-8 max-w-[1600px] mx-auto min-h-screen space-y-8 animate-in fade-in duration-700">
+    <div className="p-4 md:p-8 max-w-[1600px] mx-auto min-h-screen space-y-8 animate-in fade-in duration-700">
       {/* Header */}
       <PageHeader
         title="Settings"
@@ -613,8 +613,8 @@ export default function SettingsPage() {
                               type="button"
                               onClick={() => setPageAccessLevel(page, 'view_only')}
                               className={`px-2 py-0.5 font-medium transition-colors ${getPageLevel(page) === 'view_only'
-                                  ? 'bg-amber-100 text-amber-700 border-amber-300'
-                                  : 'bg-white text-slate-500 hover:bg-slate-50'
+                                ? 'bg-amber-100 text-amber-700 border-amber-300'
+                                : 'bg-white text-slate-500 hover:bg-slate-50'
                                 }`}
                             >
                               View
@@ -623,8 +623,8 @@ export default function SettingsPage() {
                               type="button"
                               onClick={() => setPageAccessLevel(page, 'modify')}
                               className={`px-2 py-0.5 font-medium transition-colors border-l ${getPageLevel(page) === 'modify'
-                                  ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
-                                  : 'bg-white text-slate-500 hover:bg-slate-50'
+                                ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                                : 'bg-white text-slate-500 hover:bg-slate-50'
                                 }`}
                             >
                               Modify
@@ -643,7 +643,7 @@ export default function SettingsPage() {
                             <div className="grid grid-cols-2 gap-2">
                               {Array.isArray(depots) && depots.map((depo, idx) => (
                                 <div key={`${depo.depot_id || idx}-${page}`} className="flex items-center gap-2">
-                                  <Checkbox 
+                                  <Checkbox
                                     id={`add-depo-${page}-${depo.depot_id}`}
                                     checked={(formData.depo_access[page] || []).some(d => d.toLowerCase() === depo.depot_name.toLowerCase())}
                                     onCheckedChange={() => toggleDepoAccess(page, depo.depot_name)}
@@ -699,7 +699,127 @@ export default function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
+          {/* Mobile card view */}
+          <div className="md:hidden">
+            {isUsersLoading && users.length === 0 ? (
+              <div className="p-4 space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-2 animate-pulse">
+                    <div className="h-4 w-32 bg-slate-200 rounded" />
+                    <div className="h-3 w-48 bg-slate-200 rounded" />
+                    <div className="h-3 w-24 bg-slate-200 rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : users.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground py-16 px-4">
+                <Users className="h-12 w-12 text-slate-300" />
+                <div className="text-center">
+                  <p className="font-medium text-slate-600">No users found</p>
+                  <p className="text-sm text-slate-400">Click "Add User" to create one.</p>
+                </div>
+              </div>
+            ) : filteredAndSortedUsers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground py-16 px-4">
+                <Search className="h-10 w-10 text-slate-300" />
+                <p className="font-medium text-slate-600">No users match your search</p>
+                <p className="text-sm text-slate-400">Try a different keyword</p>
+              </div>
+            ) : (
+              <div className="p-3 space-y-3 overflow-auto" style={{ maxHeight: 600 }}>
+                {filteredAndSortedUsers.map((user) => {
+                  const pages = getDisplayPageAccess(user)
+                  const shown = pages.slice(0, 1)
+                  const rest = pages.length - 1
+                  return (
+                    <div key={user.id} className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-800 truncate">{user.username}</p>
+                          <p className="text-xs text-slate-500 truncate">{user.email || "—"}</p>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditDialog(user)}
+                            className="h-8 w-8 hover:bg-blue-50 hover:text-blue-600"
+                            disabled={isReadOnly}
+                            title={isReadOnly ? "View Only Access" : "Edit User"}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openDeleteDialog(user)}
+                            className="h-8 w-8 text-destructive hover:bg-red-50 hover:text-red-600"
+                            disabled={isReadOnly}
+                            title={isReadOnly ? "View Only Access" : "Delete User"}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <Badge
+                          variant={user.status === "active" ? "default" : "secondary"}
+                          className={user.status === "active" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : ""}
+                        >
+                          {user.status}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className={user.role === "admin" ? "border-blue-500 text-blue-600 bg-blue-50" : "border-slate-300"}
+                        >
+                          <Shield className="h-3 w-3 mr-1" />
+                          {user.role}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+                        <div>
+                          <span className="font-medium text-slate-600">Phone: </span>
+                          {user.phone_no || "—"}
+                        </div>
+                        <div>
+                          <span className="font-medium text-slate-600">Created: </span>
+                          {new Date(user.created_at).toLocaleDateString("en-GB")}
+                        </div>
+                      </div>
+                      {pages.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {shown.map(({ page, level }) => (
+                            <Badge key={page} variant="secondary" className={`text-xs ${level === 'view_only' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
+                              {page} {level === 'view_only' ? '👁' : ''}
+                            </Badge>
+                          ))}
+                          {rest > 0 && (
+                            <Badge variant="secondary" className="text-xs bg-slate-100">+{rest} more</Badge>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                <div ref={loadMoreRef} className="py-4 flex justify-center">
+                  {isFetchingNextPage && (
+                    <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-xs tracking-widest">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>LOADING MORE USERS...</span>
+                    </div>
+                  )}
+                  {!hasNextPage && users.length > 0 && (
+                    <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest bg-white px-4 py-1.5 rounded-full border border-slate-100 italic">
+                      END OF USERS
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop table view */}
+          <div className="hidden md:block overflow-auto rounded-b-2xl" style={{ maxHeight: 600 }}>
             <table className="w-full caption-bottom text-sm">
               <thead className="[&_tr]:border-b">
                 <tr>
@@ -863,6 +983,7 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+
       {/* Footer */}
       <div className="flex items-center justify-center pt-12 border-t border-slate-100 opacity-100">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.5em] hover:text-primary transition-colors cursor-default">
@@ -995,67 +1116,67 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-1.5 max-h-[260px] overflow-y-auto border rounded-lg p-3">
                 {PAGE_ACCESS_OPTIONS.map((page) => (
-                    <div key={page} className="py-1 px-1 rounded hover:bg-slate-50 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id={`edit-page-${page}`}
-                            checked={isPageEnabled(page)}
-                            onCheckedChange={() => togglePageAccess(page)}
-                          />
-                          <Label htmlFor={`edit-page-${page}`} className="text-sm cursor-pointer font-normal">
-                            {page}
-                          </Label>
-                        </div>
-                        {isPageEnabled(page) && (
-                          <div className="flex rounded-md border overflow-hidden text-xs">
-                            <button
-                              type="button"
-                              onClick={() => setPageAccessLevel(page, 'view_only')}
-                              className={`px-2 py-0.5 font-medium transition-colors ${getPageLevel(page) === 'view_only'
-                                  ? 'bg-amber-100 text-amber-700 border-amber-300'
-                                  : 'bg-white text-slate-500 hover:bg-slate-50'
-                                }`}
-                            >
-                              View
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPageAccessLevel(page, 'modify')}
-                              className={`px-2 py-0.5 font-medium transition-colors border-l ${getPageLevel(page) === 'modify'
-                                  ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
-                                  : 'bg-white text-slate-500 hover:bg-slate-50'
-                                }`}
-                            >
-                              Modify
-                            </button>
-                          </div>
-                        )}
+                  <div key={page} className="py-1 px-1 rounded hover:bg-slate-50 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id={`edit-page-${page}`}
+                          checked={isPageEnabled(page)}
+                          onCheckedChange={() => togglePageAccess(page)}
+                        />
+                        <Label htmlFor={`edit-page-${page}`} className="text-sm cursor-pointer font-normal">
+                          {page}
+                        </Label>
                       </div>
-                      {isPageEnabled(page) && (page === 'Dispatch Planning' || page === 'Actual Dispatch') && (
-                        <div className="mt-2 ml-6 p-2 bg-slate-50 rounded-md border border-slate-100 space-y-2">
-                          <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Select Accessible Locations</Label>
-                          {isDepotsLoading ? (
-                            <div className="flex items-center gap-1 text-[10px] text-slate-400">
-                              <Loader2 className="h-3 w-3 animate-spin" /> Fetching depots...
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-2 gap-2">
-                              {Array.isArray(depots) && depots.map((depo, idx) => (
-                                <div key={`${depo.depot_id || idx}-${page}`} className="flex items-center gap-2">
-                                  <Checkbox 
-                                    id={`edit-depo-${page}-${depo.depot_id}`}
-                                    checked={(formData.depo_access[page] || []).some(d => d.toLowerCase() === depo.depot_name.toLowerCase())}
-                                    onCheckedChange={() => toggleDepoAccess(page, depo.depot_name)}
-                                  />
-                                  <Label htmlFor={`edit-depo-${page}-${depo.depot_id}`} className="text-xs font-normal cursor-pointer uppercase">{depo.depot_name}</Label>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                      {isPageEnabled(page) && (
+                        <div className="flex rounded-md border overflow-hidden text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setPageAccessLevel(page, 'view_only')}
+                            className={`px-2 py-0.5 font-medium transition-colors ${getPageLevel(page) === 'view_only'
+                              ? 'bg-amber-100 text-amber-700 border-amber-300'
+                              : 'bg-white text-slate-500 hover:bg-slate-50'
+                              }`}
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPageAccessLevel(page, 'modify')}
+                            className={`px-2 py-0.5 font-medium transition-colors border-l ${getPageLevel(page) === 'modify'
+                              ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                              : 'bg-white text-slate-500 hover:bg-slate-50'
+                              }`}
+                          >
+                            Modify
+                          </button>
                         </div>
                       )}
                     </div>
+                    {isPageEnabled(page) && (page === 'Dispatch Planning' || page === 'Actual Dispatch') && (
+                      <div className="mt-2 ml-6 p-2 bg-slate-50 rounded-md border border-slate-100 space-y-2">
+                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Select Accessible Locations</Label>
+                        {isDepotsLoading ? (
+                          <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                            <Loader2 className="h-3 w-3 animate-spin" /> Fetching depots...
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            {Array.isArray(depots) && depots.map((depo, idx) => (
+                              <div key={`${depo.depot_id || idx}-${page}`} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`edit-depo-${page}-${depo.depot_id}`}
+                                  checked={(formData.depo_access[page] || []).some(d => d.toLowerCase() === depo.depot_name.toLowerCase())}
+                                  onCheckedChange={() => toggleDepoAccess(page, depo.depot_name)}
+                                />
+                                <Label htmlFor={`edit-depo-${page}-${depo.depot_id}`} className="text-xs font-normal cursor-pointer uppercase">{depo.depot_name}</Label>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>

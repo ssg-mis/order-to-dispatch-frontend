@@ -588,6 +588,20 @@ export default function MakeInvoicePage() {
 
   const customerNames = Array.from(new Set(pendingOrders.map(order => (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || "Unknown Customer"))))
 
+  const buildInvoiceGroupDisplay = (group: any) => ({
+    doNumber: group.doNumber || "—",
+    partySoDate: group.partySoDate || "—",
+    actual1Date: formatDate(group._allProducts?.[0]?.lrc_actual_1 || group._allProducts?.[0]?.actual_1),
+    processId: group.processId || "—",
+    customerName: group.customerName || "—",
+    productName: group._allProducts?.[0]?.productName || "—",
+    productCount: group._productCount || group._allProducts?.length || 0,
+    vehicleNo: group.vehicleNo || "—",
+    orderPunchRemarks: group.orderPunchRemarks || "—",
+    qty: group._allProducts?.reduce((sum: number, p: any) => sum + (Number(p.qtyToDispatch) || 0), 0) || 0,
+    amount: group._allProducts?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0,
+  })
+
   return (
     <WorkflowStageShell
       partyNames={customerNames}
@@ -628,11 +642,11 @@ export default function MakeInvoicePage() {
     >
       <div className="space-y-4">
         {/* Action Bar */}
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-col justify-end gap-2 sm:flex-row">
           <Button
             onClick={handleOpenDialog}
             disabled={selectedItems.length === 0}
-            className="bg-blue-600 hover:bg-blue-700"
+            className="w-full bg-blue-600 hover:bg-blue-700 sm:w-auto"
           >
             <FileText className="mr-2 h-4 w-4" />
             Create Invoice ({selectedItems.length})
@@ -640,7 +654,7 @@ export default function MakeInvoicePage() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="bg-transparent">
+              <Button variant="outline" size="sm" className="w-full bg-transparent sm:w-auto">
                 <Settings2 className="mr-2 h-4 w-4" />
                 Columns
               </Button>
@@ -665,8 +679,8 @@ export default function MakeInvoicePage() {
         </div>
 
         {/* Main Table (Grouped) */}
-        <Card className="border-none shadow-sm overflow-auto max-h-[600px]">
-          <Table>
+        <Card className="border-none shadow-sm overflow-hidden md:max-h-[600px] md:overflow-auto">
+          <Table className="hidden md:table">
             <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
               <TableRow>
                 <TableHead className="w-12 text-center">
@@ -735,6 +749,80 @@ export default function MakeInvoicePage() {
               )}
             </TableBody>
           </Table>
+          <div className="space-y-3 p-3 md:hidden">
+            {isPendingLoading && pendingOrders.length === 0 ? (
+              [...Array(5)].map((_, i) => (
+                <div key={i} className="rounded-lg border p-4 space-y-3 opacity-60">
+                  <div className="h-4 w-32 bg-slate-200 animate-pulse rounded" />
+                  <div className="grid grid-cols-2 gap-3">
+                    {[...Array(6)].map((__, j) => <div key={j} className="h-10 bg-slate-100 animate-pulse rounded" />)}
+                  </div>
+                </div>
+              ))
+            ) : displayRows.length > 0 ? (
+              displayRows.map((group) => {
+                const display = buildInvoiceGroupDisplay(group)
+                const selected = selectedItems.includes(group._rowKey)
+                return (
+                  <div
+                    key={group._rowKey}
+                    className={cn("rounded-lg border bg-white p-4 shadow-sm", selected && "border-blue-200 bg-blue-50")}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-mono text-sm font-black text-blue-700 break-all">{display.doNumber}</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">{display.partySoDate}</p>
+                      </div>
+                      <Checkbox checked={selected} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
+                    </div>
+
+                    <div className="mt-3">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Customer Name</p>
+                      <p className="text-sm font-bold text-slate-900 break-words">{display.customerName}</p>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">Actual 1</p>
+                        <p className="mt-1 font-bold text-blue-700">{display.actual1Date}</p>
+                      </div>
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">Process ID</p>
+                        <p className="mt-1 font-bold break-words">{display.processId}</p>
+                      </div>
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">Product</p>
+                        <p className="mt-1 font-semibold break-words">{display.productName}</p>
+                      </div>
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">Items</p>
+                        <p className="mt-1 font-bold">{display.productCount}</p>
+                      </div>
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">Vehicle No.</p>
+                        <p className="mt-1 font-bold break-words">{display.vehicleNo}</p>
+                      </div>
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <p className="text-[10px] font-black uppercase text-slate-400">Qty</p>
+                        <p className="mt-1 font-mono font-bold">{display.qty}</p>
+                      </div>
+                    </div>
+
+                    {display.orderPunchRemarks !== "—" && (
+                      <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs">
+                        <span className="font-black text-amber-800">Order Remarks:</span> {display.orderPunchRemarks}
+                      </div>
+                    )}
+                    <Badge className="mt-3 bg-cyan-100 text-cyan-700 hover:bg-cyan-100">Pending Invoice</Badge>
+                  </div>
+                )
+              })
+            ) : (
+              <div className="py-10 text-center text-muted-foreground">
+                No orders pending for invoice creation
+              </div>
+            )}
+          </div>
           <div ref={pendingEndRef} className="py-2 flex justify-center">
             {isFetchingNextPending && (
               <div className="flex items-center gap-2 text-blue-600 font-bold animate-pulse text-[10px]">
@@ -748,18 +836,18 @@ export default function MakeInvoicePage() {
 
       {/* Split-View Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="!max-w-[95vw] w-full max-h-[95vh] overflow-y-auto p-0">
-          <div className="p-6">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-slate-900">
+        <DialogContent className="w-[calc(100vw-0.75rem)] max-w-[calc(100vw-0.75rem)] sm:!max-w-[95vw] max-h-[95vh] overflow-x-hidden overflow-y-auto p-0 [overflow-wrap:anywhere]">
+          <div className="p-3 sm:p-6">
+            <DialogHeader className="min-w-0">
+              <DialogTitle className="text-lg sm:text-xl font-bold text-slate-900 break-words">
                 Create Invoice - {selectedGroups.length > 1 ? `${selectedGroups.length} Parties` : selectedGroups[0]?.customerName}
               </DialogTitle>
             </DialogHeader>
 
             {selectedGroups.length > 0 && (
-              <div className="space-y-6 mt-6">
+              <div className="space-y-6 mt-6 min-w-0">
                 {/* 1. Stacked Company Information Bars */}
-                <div className="space-y-4">
+                <div className="space-y-4 min-w-0">
                   {selectedGroups.map((group, groupIdx) => {
                     const isExpanded = expandedOrders.includes(group._rowKey);
                     const toggleExpand = () => {
@@ -768,10 +856,10 @@ export default function MakeInvoicePage() {
                     const uniqueOrderDetails = Object.values(group._ordersMap);
 
                     return (
-                      <div key={group._rowKey} className="border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm">
-                        <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
-                          <div className="flex items-center gap-4">
-                            <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-sm font-black tracking-tight rounded-full shadow-sm uppercase">
+                      <div key={group._rowKey} className="border-2 border-slate-100 rounded-xl sm:rounded-3xl overflow-hidden bg-white shadow-sm min-w-0">
+                        <div className="bg-blue-600 px-3 sm:px-5 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between cursor-pointer" onClick={toggleExpand}>
+                          <div className="min-w-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                            <Badge className="max-w-full bg-white text-blue-800 hover:bg-white px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-black tracking-tight rounded-full shadow-sm uppercase whitespace-normal break-words">
                               DETAILS FOR {group.customerName}
                             </Badge>
                             <div className="flex flex-col">
@@ -781,8 +869,8 @@ export default function MakeInvoicePage() {
                               </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2 leading-none cursor-pointer">
+                          <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-start">
+                            <div className="text-[10px] sm:text-[11px] text-blue-50 font-bold uppercase tracking-widest sm:mr-2 leading-none cursor-pointer">
                               {isExpanded ? 'HIDE PARTY DETAILS ▲' : 'CLICK TO SHOW PARTY DETAILS ▼'}
                             </div>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20 rounded-full">
@@ -792,17 +880,17 @@ export default function MakeInvoicePage() {
                         </div>
 
                         {isExpanded && (
-                          <div className="px-5 pb-5 pt-4 space-y-6 bg-slate-50 border-t border-slate-100 animate-in slide-in-from-top-2 duration-300">
+                          <div className="px-3 sm:px-5 pb-5 pt-4 space-y-6 bg-slate-50 border-t border-slate-100 animate-in slide-in-from-top-2 duration-300">
                             {uniqueOrderDetails.map((orderDetails: any, idx) => {
                               const firstProd = orderDetails._products[0] || {};
                               return (
-                                <div key={idx} className="bg-white border border-slate-100 rounded-2xl p-6 relative shadow-sm">
+                                <div key={idx} className="bg-white border border-slate-100 rounded-2xl p-4 sm:p-6 relative shadow-sm">
                                   <div className="absolute -top-3 left-6">
                                     <Badge className="bg-slate-200 text-slate-700 hover:bg-slate-200 text-[10px] font-black uppercase px-3 py-1">
                                       ORDER: {firstProd.specificOrderNo}
                                     </Badge>
                                   </div>
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
                                     {/* Order Info */}
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Delivery Purpose</p>
@@ -830,11 +918,11 @@ export default function MakeInvoicePage() {
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Customer Address</p>
-                                      <p className="text-[10px] font-medium text-slate-600 leading-tight truncate" title={orderDetails.address}>{orderDetails.address}</p>
+                                      <p className="text-[10px] font-medium text-slate-600 leading-tight break-words" title={orderDetails.address}>{orderDetails.address}</p>
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Contact Person</p>
-                                      <p className="text-xs font-bold text-slate-900 leading-none">{orderDetails.contactPerson} ({orderDetails.whatsapp})</p>
+                                      <p className="text-xs font-bold text-slate-900 leading-tight break-words">{orderDetails.contactPerson} ({orderDetails.whatsapp})</p>
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Broker / Advance</p>
@@ -843,13 +931,13 @@ export default function MakeInvoicePage() {
 
                                     <div className="md:col-span-2">
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Order Punch Remarks</p>
-                                      <p className="text-[10px] font-medium text-slate-600 leading-tight italic">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
+                                      <p className="text-[10px] font-medium text-slate-600 leading-tight italic break-words">"{orderDetails.orderPunchRemarks || "No special instructions provided."}"</p>
                                     </div>
                                     <div className="md:col-span-2">
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">PO Copy (SO Upload)</p>
                                       {group.uploadSo ? (
-                                        <a 
-                                          href={group.uploadSo} 
+                                        <a
+                                          href={group.uploadSo}
                                           target="_blank" 
                                           rel="noopener noreferrer"
                                           className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-all border border-blue-200 w-fit group shadow-sm mt-0.5"
@@ -1036,8 +1124,8 @@ export default function MakeInvoicePage() {
                 </div>
 
                 {/* 2. Unified Product Table (Shows ALL selected groups products) */}
-                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
-                  <Table>
+                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white min-w-0">
+                  <Table className="hidden md:table">
                     <TableHeader className="bg-slate-50">
                       <TableRow>
                         <TableHead className="w-12 text-center h-10">
@@ -1191,15 +1279,160 @@ export default function MakeInvoicePage() {
                       </TableRow>
                     </TableBody>
                   </Table>
+                  <div className="space-y-3 p-3 md:hidden">
+                    <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Products</p>
+                        <p className="text-xs font-bold text-slate-700">{selectedGroups.flatMap(g => g._allProducts).length} items</p>
+                      </div>
+                      <Checkbox
+                        checked={selectedGroups.every(g => g._allProducts.every((p: any) => selectedProducts.includes(p._rowKey)))}
+                        onCheckedChange={(checked) => {
+                          const allKeys = selectedGroups.flatMap(g => g._allProducts.map((p: any) => p._rowKey));
+                          if (checked) {
+                            setSelectedProducts(prev => Array.from(new Set([...prev, ...allKeys])))
+                          } else {
+                            setSelectedProducts(prev => prev.filter(k => !allKeys.includes(k)))
+                          }
+                        }}
+                      />
+                    </div>
+                    {selectedGroups.flatMap(g => g._allProducts).map((product: any) => {
+                      const selected = selectedProducts.includes(product._rowKey)
+                      const originalRate = Number(product.rate) || 0
+                      const cdAmt = productCdData[product.id]?.isCd === 'yes' ? parseFloat(productCdData[product.id]?.cdAmount || '0') : 0
+                      const adjustedRate = originalRate - cdAmt
+                      const qty = parseFloat(product.qtyToDispatch) || 0
+                      const adjustedAmount = adjustedRate * qty
+
+                      return (
+                        <div key={product._rowKey} className={cn("rounded-xl border bg-white p-3 space-y-3", selected && "border-blue-200 bg-blue-50/40")}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Product Info</p>
+                              <p className="text-sm font-black text-slate-800 uppercase tracking-tight break-words">{product.productName}</p>
+                              <div className="mt-1 flex flex-col gap-1">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest break-all">{product.specificOrderNo}</span>
+                                <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest break-words">{product.party_name || product.partyName}</span>
+                              </div>
+                            </div>
+                            <Checkbox
+                              checked={selected}
+                              onCheckedChange={() => {
+                                if (selected) {
+                                  setSelectedProducts(prev => prev.filter(k => k !== product._rowKey))
+                                } else {
+                                  setSelectedProducts(prev => [...prev, product._rowKey])
+                                }
+                              }}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div className="rounded-md bg-slate-50 p-2">
+                              <p className="text-[10px] font-black uppercase text-slate-400">Actual Qty</p>
+                              <p className="mt-1 font-mono font-bold text-blue-700">{product.qtyToDispatch || "0"}</p>
+                            </div>
+                            <div className="rounded-md bg-slate-50 p-2">
+                              <p className="text-[10px] font-black uppercase text-slate-400">Rate</p>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <p className="mt-1 cursor-pointer font-mono font-bold text-slate-700">
+                                    {adjustedRate ? `₹${adjustedRate.toFixed(2)}` : "—"}
+                                  </p>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-fit p-3 bg-white border-2 border-blue-100 shadow-xl rounded-xl">
+                                  <div className="space-y-1.5">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Freight Rate</p>
+                                    <p className="text-sm font-black text-blue-700 leading-none">
+                                      {product.freight_rate ? `₹${product.freight_rate}` : "No Freight Rate Available"}
+                                    </p>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                            <div className="rounded-md bg-slate-50 p-2">
+                              <p className="text-[10px] font-black uppercase text-slate-400">Base Amount</p>
+                              <p className="mt-1 font-mono font-bold text-slate-700">{adjustedAmount ? `₹${adjustedAmount.toFixed(2)}` : "—"}</p>
+                            </div>
+                            <div className="rounded-md bg-slate-50 p-2">
+                              <p className="text-[10px] font-black uppercase text-slate-400">Vehicle</p>
+                              <p className="mt-1 font-bold break-words">{(product.truckNo || "—").toUpperCase()}</p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-3">
+                            <div className="space-y-2">
+                              <Label className="text-[10px] font-black uppercase text-slate-400">Is CD</Label>
+                              <Select
+                                value={productCdData[product.id]?.isCd || "no"}
+                                onValueChange={(val) => setProductCdData(prev => ({
+                                  ...prev,
+                                  [product.id]: { ...(prev[product.id] || { cdAmount: "0" }), isCd: val }
+                                }))}
+                              >
+                                <SelectTrigger className="h-9 text-xs font-bold">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="no">No</SelectItem>
+                                  <SelectItem value="yes">Yes</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {productCdData[product.id]?.isCd === 'yes' && (
+                              <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase text-slate-400">CD Amount</Label>
+                                <Input
+                                  type="number"
+                                  className="h-9 text-xs font-bold"
+                                  value={productCdData[product.id]?.cdAmount || ""}
+                                  onChange={(e) => setProductCdData(prev => ({
+                                    ...prev,
+                                    [product.id]: { ...(prev[product.id] || { isCd: "yes" }), cdAmount: e.target.value }
+                                  }))}
+                                  placeholder="Amount"
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          <Badge className="bg-green-100 text-green-700 border-green-200 font-black text-[9px] uppercase hover:bg-green-100">Ready for Invoice</Badge>
+                        </div>
+                      )
+                    })}
+                    <div className="grid grid-cols-2 gap-3 rounded-lg border bg-slate-50 p-3 text-xs">
+                      <div>
+                        <p className="text-[9px] uppercase font-black text-slate-500">Total Qty</p>
+                        <p className="mt-1 font-black text-blue-700">
+                          {selectedGroups.flatMap(g => g._allProducts).filter(p => selectedProducts.includes(p._rowKey)).reduce((sum, p) => sum + (parseFloat(p.qtyToDispatch) || 0), 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] uppercase font-black text-slate-500">Total Amount</p>
+                        <p className="mt-1 font-black text-blue-700">
+                          ₹{selectedGroups.flatMap(g => g._allProducts)
+                            .filter(p => selectedProducts.includes(p._rowKey))
+                            .reduce((sum, p) => {
+                              const originalRate = Number(p.rate) || 0;
+                              const cdAmt = productCdData[p.id]?.isCd === 'yes' ? parseFloat(productCdData[p.id]?.cdAmount || '0') : 0;
+                              const adjustedRate = originalRate - cdAmt;
+                              const qty = parseFloat(p.qtyToDispatch) || 0;
+                              return sum + (adjustedRate * qty);
+                            }, 0).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 {/* 3. Invoice Form */}
-                <div className="space-y-6 border rounded-lg p-6 bg-white shadow-sm">
+                <div className="space-y-6 border rounded-lg p-4 sm:p-6 bg-white shadow-sm">
                   <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
                     <FileText className="h-4 w-4 text-blue-600" />
                     Invoice Details
                   </h3>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                     <div className="space-y-2">
                       <Label>Invoice Number <span className="text-red-500">*</span></Label>
                       <Input
@@ -1249,14 +1482,14 @@ export default function MakeInvoicePage() {
               </div>
             )}
 
-            <DialogFooter className="mt-8 border-t pt-4 bg-gray-50 -mx-6 -mb-6 px-6 py-4">
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isProcessing}>
+            <DialogFooter className="mt-8 border-t pt-4 bg-gray-50 -mx-3 sm:-mx-6 -mb-3 sm:-mb-6 px-3 sm:px-6 py-4 gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isProcessing} className="w-full sm:w-auto">
                 Cancel
               </Button>
               <Button
                 onClick={handleSubmit}
                 disabled={isProcessing || !invoiceData.invoiceNo || isReadOnly}
-                className="bg-blue-600 hover:bg-blue-700 min-w-[150px]"
+                className="w-full bg-blue-600 hover:bg-blue-700 min-w-[150px] sm:w-auto"
                 title={isReadOnly ? "View Only Access" : "Generate Invoice"}
               >
                 {isProcessing ? "Processing..." : "Generate Invoice"}

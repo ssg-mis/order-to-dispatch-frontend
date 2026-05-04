@@ -548,36 +548,36 @@ export default function CommitmentPunchPage() {
   // ═══════════════════════════════════════════════════════════
 
   return (
-    <div className="p-6 max-w-full space-y-6" suppressHydrationWarning>
+    <div className="p-3 sm:p-6 max-w-full space-y-4 sm:space-y-6" suppressHydrationWarning>
 
       {/* ── Page Header ── */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+        <div className="flex items-start gap-3 min-w-0">
           <SidebarTrigger className="-ml-1" />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Commitment Punch</h1>
-            <p className="text-muted-foreground">Manage and process customer oil commitments.</p>
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Commitment Punch</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">Manage and process customer oil commitments.</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={loadPending} disabled={isLoadingPending}>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+          <Button variant="outline" size="sm" onClick={loadPending} disabled={isLoadingPending} className="w-full sm:w-auto">
             <RefreshCw className={`h-4 w-4 mr-1 ${isLoadingPending ? "animate-spin" : ""}`} />
             Refresh
           </Button>
           <Button
-            className="gap-2 bg-blue-600 hover:bg-blue-700"
+            className="w-full gap-2 bg-blue-600 hover:bg-blue-700 sm:w-auto"
             onClick={() => { resetAddForm(); setIsAddOpen(true) }}
           >
             <Plus className="h-4 w-4" />
-            Add Commitment
+            <span className="truncate">Add Commitment</span>
           </Button>
         </div>
       </div>
 
       {/* ── Pending Commitments Table ── */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between py-4">
-          <div>
+        <CardHeader className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <CardTitle>Commitment Name</CardTitle>
             <CardDescription>
               Showing pending commitments ({pendingList.length} record{pendingList.length !== 1 ? "s" : ""})
@@ -585,7 +585,7 @@ export default function CommitmentPunchPage() {
           </div>
           {selectedIds.size > 0 && (
             <Button
-              className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+              className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 sm:w-auto"
               onClick={() => setIsProcessOpen(true)}
             >
               <ChevronRight className="h-4 w-4" />
@@ -594,7 +594,7 @@ export default function CommitmentPunchPage() {
           )}
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto rounded-b-xl">
+          <div className="hidden overflow-x-auto rounded-b-xl md:block">
             <Table>
               <TableHeader className="bg-slate-50">
                 <TableRow>
@@ -681,6 +681,97 @@ export default function CommitmentPunchPage() {
               </TableBody>
             </Table>
           </div>
+
+          <div className="space-y-3 p-3 md:hidden">
+            {isLoadingPending ? (
+              [...Array(4)].map((_, i) => (
+                <div key={i} className="rounded-lg border p-4 space-y-3 opacity-60">
+                  <div className="h-4 w-32 bg-slate-200 animate-pulse rounded" />
+                  <div className="grid grid-cols-2 gap-3">
+                    {[...Array(6)].map((__, j) => (
+                      <div key={j} className="h-10 bg-slate-100 animate-pulse rounded" />
+                    ))}
+                  </div>
+                </div>
+              ))
+            ) : pendingList.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                <div className="flex flex-col items-center gap-2">
+                  <CheckCircle2 className="h-10 w-10 text-slate-300" />
+                  <p className="font-medium">No pending commitments</p>
+                  <p className="text-sm text-slate-400">Click "Add Commitment" to create one.</p>
+                </div>
+              </div>
+            ) : (
+              pendingList.map(row => (
+                <div
+                  key={row.id}
+                  className={`rounded-lg border p-4 transition-colors ${selectedIds.has(row.id) ? "border-blue-200 bg-blue-50" : "bg-white"}`}
+                  onClick={() => toggleSelect(row.id)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-mono text-sm font-bold text-blue-700 break-words">{row.commitment_no}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {row.commitment_date ? new Date(row.commitment_date).toLocaleDateString("en-IN") : "—"}
+                      </p>
+                    </div>
+                    <div onClick={e => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.has(row.id)}
+                        onCheckedChange={() => toggleSelect(row.id)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Customer Name</p>
+                    <p className="text-sm font-semibold text-slate-800 break-words">{row.party_name || "—"}</p>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                    <div className="rounded-md bg-slate-50 p-2">
+                      <p className="text-[10px] font-bold uppercase text-slate-400">Oil Type</p>
+                      <Badge variant="outline" className="mt-1 text-[10px]">{row.oil_type || "—"}</Badge>
+                    </div>
+                    <div className="rounded-md bg-slate-50 p-2">
+                      <p className="text-[10px] font-bold uppercase text-slate-400">Rate</p>
+                      <p className="mt-1 font-mono font-semibold">₹{row.rate ?? "—"}</p>
+                    </div>
+                    <div className="rounded-md bg-slate-50 p-2">
+                      <p className="text-[10px] font-bold uppercase text-slate-400">Qty (MT)</p>
+                      <p className="mt-1 font-mono font-semibold">{row.quantity ?? "—"}</p>
+                    </div>
+                    <div className="rounded-md bg-slate-50 p-2">
+                      <p className="text-[10px] font-bold uppercase text-slate-400">PO Raised</p>
+                      {Number(row.processed_qty || 0) > 0 ? (
+                        <button
+                          onClick={(e) => openDetails(row, e)}
+                          className="mt-1 text-blue-600 underline hover:text-blue-800 font-semibold font-mono bg-transparent border-none p-0"
+                        >
+                          {Number(row.processed_qty || 0).toFixed(4)}
+                        </button>
+                      ) : (
+                        <p className="mt-1 font-mono text-slate-400">0.0000</p>
+                      )}
+                    </div>
+                    <div className="rounded-md bg-slate-50 p-2">
+                      <p className="text-[10px] font-bold uppercase text-slate-400">Delivery Qty</p>
+                      <p className="mt-1 font-mono font-semibold text-purple-600">{Number(row.delivery_qty || 0).toFixed(4)}</p>
+                    </div>
+                    <div className="rounded-md bg-slate-50 p-2">
+                      <p className="text-[10px] font-bold uppercase text-slate-400">PO Pending</p>
+                      <p className="mt-1 font-mono font-semibold text-amber-600">{Number(row.po_pending_qty || 0).toFixed(4)}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-md bg-emerald-50 p-2">
+                    <p className="text-[10px] font-bold uppercase text-emerald-700">Commitment Pending (MT)</p>
+                    <p className="mt-1 font-mono text-base font-bold text-emerald-700">{Number(row.remaining_qty ?? row.quantity).toFixed(4)}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -688,7 +779,7 @@ export default function CommitmentPunchPage() {
           ADD COMMITMENT DIALOG
       ═══════════════════════════════════════════════════════ */}
       <Dialog open={isAddOpen} onOpenChange={open => { setIsAddOpen(open); if (!open) resetAddForm() }}>
-        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-[700px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Add Commitment</DialogTitle>
             <DialogDescription>Enter commitment details. A unique Commitment No. will be auto-generated.</DialogDescription>
@@ -740,14 +831,14 @@ export default function CommitmentPunchPage() {
 
             {/* Product rows */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Label className="text-base font-semibold">Oil / Product Details</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addRow} className="gap-1">
+                <Button type="button" variant="outline" size="sm" onClick={addRow} className="w-full gap-1 sm:w-auto">
                   <Plus className="h-3 w-3" /> Add Row
                 </Button>
               </div>
 
-              <div className="rounded-lg border overflow-hidden">
+              <div className="hidden rounded-lg border overflow-hidden sm:block">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 border-b">
                     <tr>
@@ -790,11 +881,47 @@ export default function CommitmentPunchPage() {
                   </tbody>
                 </table>
               </div>
+
+              <div className="space-y-3 sm:hidden">
+                {rows.map((row, idx) => (
+                  <div key={row.id} className="rounded-lg border p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Row {String.fromCharCode(65 + idx)}</p>
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => removeRow(row.id)} disabled={rows.length === 1}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Oil Type *</Label>
+                      <Select value={row.oil_type} onValueChange={v => updateRow(row.id, "oil_type", v)}>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="Select oil" /></SelectTrigger>
+                        <SelectContent>
+                          {OIL_TYPES.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div className="space-y-2">
+                        <Label>Quantity *</Label>
+                        <Input type="number" min="0" step="0.0001" value={row.quantity} onChange={e => updateRow(row.id, "quantity", e.target.value)} placeholder="0.0000" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Unit</Label>
+                        <Input type="text" value={row.unit} onChange={e => updateRow(row.id, "unit", e.target.value)} placeholder="e.g. Ltr" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Rate (PMT) *</Label>
+                        <Input type="number" min="0" step="0.01" value={row.rate} onChange={e => updateRow(row.id, "rate", e.target.value)} placeholder="₹ 0.00" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)} disabled={isSubmitting}>Cancel</Button>
-              <Button type="submit" disabled={isSubmitting} className="gap-2 bg-blue-600 hover:bg-blue-700 min-w-[140px]">
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)} disabled={isSubmitting} className="w-full sm:w-auto">Cancel</Button>
+              <Button type="submit" disabled={isSubmitting} className="w-full gap-2 bg-blue-600 hover:bg-blue-700 min-w-[140px] sm:w-auto">
                 <Save className="h-4 w-4" />
                 {isSubmitting ? "Saving..." : "Save Commitment"}
               </Button>
@@ -807,7 +934,7 @@ export default function CommitmentPunchPage() {
           PROCESS DIALOG
       ═══════════════════════════════════════════════════════ */}
       <Dialog open={isProcessOpen} onOpenChange={open => { setIsProcessOpen(open); if (!open) resetProcess() }}>
-        <DialogContent className="sm:max-w-[900px] max-h-[95vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-[900px] max-h-[95vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Process Commitment</DialogTitle>
             <DialogDescription>
@@ -825,7 +952,7 @@ export default function CommitmentPunchPage() {
               const isOverLimit = totalReqMt > (c.remaining_qty ?? c.quantity) + 0.0001
 
               return (
-                <div key={id} className={`rounded-lg border transition-all px-4 py-3 flex flex-wrap gap-6 text-sm ${isOverLimit ? "border-red-200 bg-red-50" : "border-blue-100 bg-blue-50/60"}`}>
+                <div key={id} className={`rounded-lg border transition-all px-4 py-3 grid grid-cols-1 gap-3 text-sm sm:flex sm:flex-wrap sm:gap-6 ${isOverLimit ? "border-red-200 bg-red-50" : "border-blue-100 bg-blue-50/60"}`}>
                   <div>
                     <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Company Name</p>
                     <p className="font-semibold text-slate-800 mt-0.5">{c.party_name || "—"}</p>
@@ -1128,7 +1255,7 @@ export default function CommitmentPunchPage() {
             {/* ── PO Details ── */}
             <div className="space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b pb-1">PO Details</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="po_no">PO No. <span className="text-red-500">*</span></Label>
                   <Input
@@ -1152,14 +1279,14 @@ export default function CommitmentPunchPage() {
 
             {/* ── SKU Rows ── */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between border-b pb-1">
+              <div className="flex flex-col gap-2 border-b pb-2 sm:flex-row sm:items-center sm:justify-between sm:pb-1">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500">SKU Details <span className="text-slate-400 font-normal normal-case">(Good Life only)</span></p>
-                <Button type="button" variant="outline" size="sm" onClick={addSkuRow} className="gap-1 h-7 text-xs">
+                <Button type="button" variant="outline" size="sm" onClick={addSkuRow} className="w-full gap-1 h-8 text-xs sm:h-7 sm:w-auto">
                   <Plus className="h-3 w-3" /> Add Sku
                 </Button>
               </div>
 
-              <div className="rounded-lg border overflow-hidden">
+              <div className="hidden rounded-lg border overflow-hidden sm:block">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 border-b">
                     <tr>
@@ -1243,16 +1370,91 @@ export default function CommitmentPunchPage() {
                   </tbody>
                 </table>
               </div>
+
+              <div className="space-y-3 sm:hidden">
+                {skuRows.map((row, idx) => {
+                  const packType = (() => {
+                    if (!row.sku) return "";
+                    const u = row.sku.toUpperCase();
+                    if (u.includes("JAR")) return "JAR";
+                    if (u.includes("PP") || u.includes("POUCH")) return "PP";
+                    if (u.includes("TIN")) return "TIN";
+                    if (u.includes("CAN")) return "CAN";
+                    if (u.includes("PKT") || u.includes("PACKET")) return "PKT";
+                    return "";
+                  })();
+
+                  return (
+                    <div key={row.id} className="rounded-lg border p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">SKU {idx + 1}</p>
+                        <Button
+                          type="button" variant="ghost" size="icon"
+                          className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => removeSkuRow(row.id)}
+                          disabled={skuRows.length === 1}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>SKU Name *</Label>
+                        <AsyncCombobox
+                          fetchOptions={fetchSkuOptions}
+                          value={row.sku}
+                          onValueChange={v => updateSkuRow(row.id, "sku", v)}
+                          placeholder="Select Good Life SKU"
+                          searchPlaceholder="Search SKU..."
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 gap-3">
+                        <div className="space-y-2">
+                          <Label>Qty (Box) *</Label>
+                          <Input
+                            type="number" min="0" step="0.0001"
+                            value={row.qty}
+                            onChange={e => updateSkuRow(row.id, "qty", e.target.value)}
+                            placeholder="0.0000"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Weight (MT)</Label>
+                          <div className="h-10 flex items-center px-3 bg-slate-50 border rounded text-sm font-mono text-slate-600">
+                            {row.mt ? row.mt.toFixed(4) : "0.0000"}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Rate *</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number" min="0" step="0.01"
+                              value={row.rate}
+                              onChange={e => updateSkuRow(row.id, "rate", e.target.value)}
+                              placeholder="0.00"
+                              className="min-w-0 flex-1"
+                            />
+                            {packType && (
+                              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-1 rounded border border-blue-100 whitespace-nowrap">
+                                {packType}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsProcessOpen(false)} disabled={isProcessing}>Cancel</Button>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsProcessOpen(false)} disabled={isProcessing} className="w-full sm:w-auto">Cancel</Button>
             <Button
               onClick={handleProcessSubmit}
               disabled={isProcessing}
-              className="gap-2 bg-emerald-600 hover:bg-emerald-700 min-w-[130px]"
+              className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 min-w-[130px] sm:w-auto"
             >
               <ChevronRight className="h-4 w-4" />
               {isProcessing ? "Processing..." : "Confirm Process"}
@@ -1265,7 +1467,7 @@ export default function CommitmentPunchPage() {
           PO RAISED DETAILS POPUP
       ═══════════════════════════════════════════════════════ */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="sm:max-w-[1250px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-[1250px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>PO Raised Details — {detailsRow?.commitment_no}</DialogTitle>
             <DialogDescription>
@@ -1284,7 +1486,7 @@ export default function CommitmentPunchPage() {
           ) : detailsData ? (
             <div className="space-y-4">
               {/* Summary row */}
-              <div className="flex flex-wrap gap-6 rounded-lg border border-blue-100 bg-blue-50/60 px-4 py-3 text-sm">
+              <div className="grid grid-cols-1 gap-3 rounded-lg border border-blue-100 bg-blue-50/60 px-4 py-3 text-sm sm:flex sm:flex-wrap sm:gap-6">
                 <div>
                   <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Commitment No.</p>
                   <p className="font-mono font-semibold text-blue-700 mt-0.5">{detailsRow?.commitment_no}</p>
@@ -1309,72 +1511,144 @@ export default function CommitmentPunchPage() {
               {detailsData.details?.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">No PO raised yet for this commitment.</p>
               ) : (
-                <div className="rounded-lg border overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 border-b">
-                      <tr>
-                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">#</th>
-                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Raised On</th>
-                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">DO No.</th>
-                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs text-nowrap">PO No.</th>
-                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">PO Date</th>
-                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">SKU</th>
-                        <th className="py-2 px-3 text-right font-medium text-slate-600 text-xs">Qty (Box)</th>
-                        <th className="py-2 px-3 text-right font-medium text-slate-600 text-xs">Weight (MT)</th>
-                        <th className="py-2 px-3 text-right font-medium text-slate-600 text-xs">Rate</th>
-                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Category</th>
-                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Order Type</th>
-                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Depo</th>
-                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Payment Terms</th>
-                        <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Remarks</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detailsData.details.map((d: any, idx: number) => (
-                        <tr key={d.id} className="border-b last:border-0 hover:bg-slate-50">
-                          <td className="py-2 px-3 text-xs font-bold text-slate-400">{idx + 1}</td>
-                          <td className="py-2 px-3 text-xs">
-                            {d.actual1 ? new Date(d.actual1).toLocaleDateString("en-IN") : "—"}
-                          </td>
-                          <td className="py-2 px-3 font-mono text-xs font-bold text-emerald-700">{d.order_no || "—"}</td>
-                          <td className="py-2 px-3 font-mono text-xs font-semibold text-blue-700">{d.po_no || "—"}</td>
-                          <td className="py-2 px-3 text-xs">
-                            {d.po_date ? new Date(d.po_date).toLocaleDateString("en-IN") : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-xs max-w-[160px] truncate" title={d.sku}>{d.sku || "—"}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{d.sku_quantity ?? "—"}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs font-semibold text-emerald-700">
-                            {d.sku_weight_mt ? Number(d.sku_weight_mt).toFixed(4) : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">
-                            {d.sku_rate ? `₹${d.sku_rate}` : "—"}
-                          </td>
-                          <td className="py-2 px-3 text-xs">
-                            <Badge variant="outline" className={cn(
-                              "text-[10px] px-1.5 py-0 h-4 uppercase font-bold border",
-                              d.order_category === "Stock Transfer" ? "border-purple-200 bg-purple-50 text-purple-700" : "border-blue-200 bg-blue-50 text-blue-700"
-                            )}>
-                              {d.order_category || "Sales"}
-                            </Badge>
-                          </td>
-                          <td className="py-2 px-3 text-xs">{d.order_type || "—"}</td>
-                          <td className="py-2 px-3 text-xs">{d.depo_name || "—"}</td>
-                          <td className="py-2 px-3 text-xs">{d.payment_terms || "—"}</td>
-                          <td className="py-2 px-3 text-xs max-w-[140px] truncate" title={d.remarks}>{d.remarks || "—"}</td>
+                <>
+                  <div className="hidden rounded-lg border overflow-x-auto sm:block">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 border-b">
+                        <tr>
+                          <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">#</th>
+                          <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Raised On</th>
+                          <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">DO No.</th>
+                          <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs text-nowrap">PO No.</th>
+                          <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">PO Date</th>
+                          <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">SKU</th>
+                          <th className="py-2 px-3 text-right font-medium text-slate-600 text-xs">Qty (Box)</th>
+                          <th className="py-2 px-3 text-right font-medium text-slate-600 text-xs">Weight (MT)</th>
+                          <th className="py-2 px-3 text-right font-medium text-slate-600 text-xs">Rate</th>
+                          <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Category</th>
+                          <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Order Type</th>
+                          <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Depo</th>
+                          <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Payment Terms</th>
+                          <th className="py-2 px-3 text-left font-medium text-slate-600 text-xs">Remarks</th>
                         </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-slate-50 border-t">
-                      <tr>
-                        <td colSpan={7} className="py-2 px-3 text-xs font-semibold text-slate-600 text-right">Total Weight:</td>
-                        <td className="py-2 px-3 text-right font-mono text-xs font-bold text-emerald-700">
-                          {Number(detailsData.total_processed_mt).toFixed(4)} MT
-                        </td>
-                        <td colSpan={5} />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {detailsData.details.map((d: any, idx: number) => (
+                          <tr key={d.id} className="border-b last:border-0 hover:bg-slate-50">
+                            <td className="py-2 px-3 text-xs font-bold text-slate-400">{idx + 1}</td>
+                            <td className="py-2 px-3 text-xs">
+                              {d.actual1 ? new Date(d.actual1).toLocaleDateString("en-IN") : "—"}
+                            </td>
+                            <td className="py-2 px-3 font-mono text-xs font-bold text-emerald-700">{d.order_no || "—"}</td>
+                            <td className="py-2 px-3 font-mono text-xs font-semibold text-blue-700">{d.po_no || "—"}</td>
+                            <td className="py-2 px-3 text-xs">
+                              {d.po_date ? new Date(d.po_date).toLocaleDateString("en-IN") : "—"}
+                            </td>
+                            <td className="py-2 px-3 text-xs max-w-[160px] truncate" title={d.sku}>{d.sku || "—"}</td>
+                            <td className="py-2 px-3 text-right font-mono text-xs">{d.sku_quantity ?? "—"}</td>
+                            <td className="py-2 px-3 text-right font-mono text-xs font-semibold text-emerald-700">
+                              {d.sku_weight_mt ? Number(d.sku_weight_mt).toFixed(4) : "—"}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono text-xs">
+                              {d.sku_rate ? `₹${d.sku_rate}` : "—"}
+                            </td>
+                            <td className="py-2 px-3 text-xs">
+                              <Badge variant="outline" className={cn(
+                                "text-[10px] px-1.5 py-0 h-4 uppercase font-bold border",
+                                d.order_category === "Stock Transfer" ? "border-purple-200 bg-purple-50 text-purple-700" : "border-blue-200 bg-blue-50 text-blue-700"
+                              )}>
+                                {d.order_category || "Sales"}
+                              </Badge>
+                            </td>
+                            <td className="py-2 px-3 text-xs">{d.order_type || "—"}</td>
+                            <td className="py-2 px-3 text-xs">{d.depo_name || "—"}</td>
+                            <td className="py-2 px-3 text-xs">{d.payment_terms || "—"}</td>
+                            <td className="py-2 px-3 text-xs max-w-[140px] truncate" title={d.remarks}>{d.remarks || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-50 border-t">
+                        <tr>
+                          <td colSpan={7} className="py-2 px-3 text-xs font-semibold text-slate-600 text-right">Total Weight:</td>
+                          <td className="py-2 px-3 text-right font-mono text-xs font-bold text-emerald-700">
+                            {Number(detailsData.total_processed_mt).toFixed(4)} MT
+                          </td>
+                          <td colSpan={5} />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                  <div className="space-y-3 sm:hidden">
+                  {detailsData.details.map((d: any, idx: number) => (
+                    <div key={d.id} className="rounded-lg border p-3 space-y-3 bg-white">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">DO No.</p>
+                          <p className="font-mono text-sm font-bold text-emerald-700 break-words">{d.order_no || "—"}</p>
+                        </div>
+                        <Badge variant="outline" className={cn(
+                          "text-[10px] px-1.5 py-0 uppercase font-bold border shrink-0",
+                          d.order_category === "Stock Transfer" ? "border-purple-200 bg-purple-50 text-purple-700" : "border-blue-200 bg-blue-50 text-blue-700"
+                        )}>
+                          {d.order_category || "Sales"}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-slate-400">Raised On</p>
+                          <p>{d.actual1 ? new Date(d.actual1).toLocaleDateString("en-IN") : "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-slate-400">PO No.</p>
+                          <p className="font-mono font-semibold text-blue-700 break-words">{d.po_no || "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-slate-400">PO Date</p>
+                          <p>{d.po_date ? new Date(d.po_date).toLocaleDateString("en-IN") : "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-slate-400">Weight (MT)</p>
+                          <p className="font-mono font-semibold text-emerald-700">{d.sku_weight_mt ? Number(d.sku_weight_mt).toFixed(4) : "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-slate-400">Qty (Box)</p>
+                          <p className="font-mono">{d.sku_quantity ?? "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-slate-400">Rate</p>
+                          <p className="font-mono">{d.sku_rate ? `₹${d.sku_rate}` : "—"}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase text-slate-400">SKU</p>
+                        <p className="text-xs font-medium break-words">{d.sku || "—"}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-slate-400">Order Type</p>
+                          <p>{d.order_type || "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-slate-400">Depo</p>
+                          <p>{d.depo_name || "—"}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase text-slate-400">Payment Terms</p>
+                        <p className="text-xs">{d.payment_terms || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase text-slate-400">Remarks</p>
+                        <p className="text-xs break-words">{d.remarks || "—"}</p>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="rounded-lg border bg-slate-50 p-3 text-right">
+                    <p className="text-xs font-semibold text-slate-600">Total Weight</p>
+                    <p className="font-mono text-sm font-bold text-emerald-700">{Number(detailsData.total_processed_mt).toFixed(4)} MT</p>
+                  </div>
+                  </div>
+                </>
               )}
             </div>
           ) : (
@@ -1382,7 +1656,7 @@ export default function CommitmentPunchPage() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDetailsOpen(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setIsDetailsOpen(false)} className="w-full sm:w-auto">Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

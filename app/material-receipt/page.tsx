@@ -400,14 +400,14 @@ export default function MaterialReceiptPage() {
       isHistoryLoading={isHistoryLoading}
       showDateFilters={false}
       historyFooter={
-        <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between font-bold">
-          <div className="text-xs text-slate-400 uppercase tracking-widest leading-none">
+        <div className="px-3 sm:px-6 py-4 border-t bg-slate-50/50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between font-bold">
+          <div className="text-[10px] sm:text-xs text-slate-400 uppercase tracking-widest leading-none text-center sm:text-left">
             Showing Page <span className="text-slate-900 mx-1">{historyPage}</span>
             {historyData?.pagination?.total && (
               <> of <span className="text-slate-900 mx-1">{Math.ceil(historyData.pagination.total / limit)}</span></>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <Button variant="outline" size="sm" onClick={() => setHistoryPage(p => Math.max(1, p - 1))} disabled={historyPage === 1 || isHistoryLoading} className="h-8 rounded-lg gap-1 px-3">
               <ChevronLeft className="h-4 w-4" /> Previous
             </Button>
@@ -419,11 +419,11 @@ export default function MaterialReceiptPage() {
       }
     >
       <div className="space-y-4">
-        <div className="flex justify-end gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:flex sm:justify-end">
           {selectedItems.length > 0 && (
             <Button 
               onClick={handleOpenDialog} 
-              className="bg-blue-600 hover:bg-blue-700 font-bold shadow-lg shadow-blue-200"
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 font-bold shadow-lg shadow-blue-200"
               title={isReadOnly ? "View Receipt Details" : "Confirm Receipt"}
             >
               <CheckCircle className="mr-2 h-4 w-4" />
@@ -433,7 +433,7 @@ export default function MaterialReceiptPage() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="bg-transparent border-slate-200 text-slate-600">
+              <Button variant="outline" size="sm" className="w-full sm:w-auto bg-transparent border-slate-200 text-slate-600">
                 <Settings2 className="mr-2 h-4 w-4" />
                 Columns
               </Button>
@@ -450,7 +450,97 @@ export default function MaterialReceiptPage() {
           </DropdownMenu>
         </div>
 
-        <Card className="border-none shadow-xl rounded-[2rem] overflow-hidden bg-white/50 backdrop-blur-sm">
+        <div className="md:hidden space-y-3">
+          {isPendingLoading ? (
+            [...Array(4)].map((_, i) => (
+              <Card key={i} className="p-4 rounded-2xl border border-slate-100 shadow-sm bg-white">
+                <div className="space-y-3 opacity-50">
+                  <div className="flex items-center justify-between">
+                    <div className="h-4 w-4 bg-slate-200 animate-pulse rounded" />
+                    <div className="h-5 w-24 bg-slate-200 animate-pulse rounded-full" />
+                  </div>
+                  <div className="h-4 w-36 bg-slate-200 animate-pulse rounded-full" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="h-3 w-full bg-slate-200 animate-pulse rounded-full" />
+                    <div className="h-3 w-full bg-slate-200 animate-pulse rounded-full" />
+                  </div>
+                </div>
+              </Card>
+            ))
+          ) : displayRows.length > 0 ? (
+            displayRows.map((group) => (
+              <Card key={group._rowKey} className={cn("p-4 rounded-2xl border shadow-sm bg-white transition-colors", selectedItems.includes(group._rowKey) ? "border-blue-200 bg-blue-50/40" : "border-slate-100")}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">DO Number</p>
+                    <p className="break-words text-sm font-black text-slate-900">{group.doNumber.replace(/[A-Za-z]+$/, '')}</p>
+                  </div>
+                  <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
+                </div>
+                <div className="mt-3 min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Customer</p>
+                  <p className="break-words text-xs font-black uppercase italic text-slate-800">{group.customerName}</p>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">DO Date</p>
+                    <p className="font-bold text-slate-600">{group.formattedPartySoDate}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Process ID</p>
+                    <p className="break-words font-black text-blue-600">{group.processId}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vehicle</p>
+                    <p className="break-words font-black text-slate-700">{group.vehicleNo}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Invoice</p>
+                    {group._allProducts?.[0]?.invoice_copy ? (
+                      <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="break-words font-black text-blue-600 hover:underline">
+                        {group.invoiceNo}
+                      </a>
+                    ) : (
+                      <p className="break-words font-black text-blue-800">{group.invoiceNo}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <Badge className="bg-slate-100 text-slate-600 font-black text-[10px] uppercase border-none ring-1 ring-inset ring-slate-200">{group._productCount} items</Badge>
+                  <Badge className="bg-cyan-100 text-cyan-700 font-black text-[9px] uppercase tracking-widest px-3 py-1 ring-1 ring-inset ring-cyan-200">In Transit</Badge>
+                </div>
+                <div className="mt-3 min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Order Punch Remarks</p>
+                  <p className="break-words text-xs font-bold text-slate-500">{group.orderPunchRemarks}</p>
+                </div>
+              </Card>
+            ))
+          ) : (
+            <Card className="p-10 text-center rounded-2xl border border-slate-100 bg-white text-slate-400 font-black uppercase text-[10px] tracking-[0.2em]">
+              No orders pending for receipt confirmation
+            </Card>
+          )}
+          <Card className="border border-slate-100 rounded-2xl bg-white">
+            <div className="px-3 py-4 flex flex-col gap-3 font-bold">
+              <div className="text-[10px] text-slate-400 uppercase tracking-widest leading-none text-center">
+                Showing Page <span className="text-slate-900 mx-1">{pendingPage}</span>
+                {pendingData?.pagination?.total && (
+                  <> of <span className="text-slate-900 mx-1">{Math.ceil(pendingData.pagination.total / limit)}</span></>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" size="sm" onClick={() => setPendingPage(p => Math.max(1, p - 1))} disabled={pendingPage === 1 || isPendingLoading} className="h-8 rounded-lg gap-1 px-3 border-slate-200 font-black uppercase text-[10px]">
+                  <ChevronLeft className="h-4 w-4" /> Previous
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setPendingPage(p => p + 1)} disabled={isPendingLoading || (pendingPage * limit >= (pendingData?.pagination?.total || 0))} className="h-8 rounded-lg gap-1 px-3 border-slate-200 font-black uppercase text-[10px]">
+                  Next <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <Card className="hidden md:block border-none shadow-xl rounded-[2rem] overflow-hidden bg-white/50 backdrop-blur-sm">
           <Table>
             <TableHeader className="bg-slate-50 sticky top-0 z-10">
               <TableRow>
@@ -526,14 +616,14 @@ export default function MaterialReceiptPage() {
             <TableFooter className="bg-slate-50/80 border-t border-slate-100">
               <TableRow>
                 <TableCell colSpan={10} className="p-0">
-                  <div className="px-6 py-4 flex items-center justify-between font-bold">
-                    <div className="text-xs text-slate-400 uppercase tracking-widest leading-none">
+                  <div className="px-3 sm:px-6 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between font-bold">
+                    <div className="text-[10px] sm:text-xs text-slate-400 uppercase tracking-widest leading-none text-center sm:text-left">
                       Showing Page <span className="text-slate-900 mx-1">{pendingPage}</span>
                       {pendingData?.pagination?.total && (
                         <> of <span className="text-slate-900 mx-1">{Math.ceil(pendingData.pagination.total / limit)}</span></>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
                       <Button variant="outline" size="sm" onClick={() => setPendingPage(p => Math.max(1, p - 1))} disabled={pendingPage === 1 || isPendingLoading} className="h-8 rounded-lg gap-1 px-3 border-slate-200 font-black uppercase text-[10px]">
                         <ChevronLeft className="h-4 w-4" /> Previous
                       </Button>
@@ -550,26 +640,26 @@ export default function MaterialReceiptPage() {
 
         {/* Restore Previous Design Dialog */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-[95vw] sm:max-w-[95vw] w-full max-h-[95vh] overflow-y-auto p-0 border-none rounded-[2.5rem] shadow-2xl bg-slate-50">
-            <div className="p-8 space-y-8">
-              <DialogHeader className="border-b-2 border-slate-100 pb-6 -mx-8 px-8 bg-white rounded-t-[2.5rem]">
-                <DialogTitle className="text-2xl font-black text-slate-900 tracking-tight flex items-center justify-between">
+          <DialogContent className="w-[calc(100vw-0.75rem)] max-w-[calc(100vw-0.75rem)] sm:max-w-[95vw] max-h-[95vh] overflow-x-hidden overflow-y-auto p-0 border-none rounded-2xl sm:rounded-[2.5rem] shadow-2xl bg-slate-50 [overflow-wrap:anywhere]">
+            <div className="p-3 sm:p-8 space-y-6 sm:space-y-8">
+              <DialogHeader className="border-b-2 border-slate-100 pb-4 sm:pb-6 -mx-3 sm:-mx-8 px-3 sm:px-8 bg-white rounded-t-2xl sm:rounded-t-[2.5rem]">
+                <DialogTitle className="text-base sm:text-2xl font-black text-slate-900 tracking-tight flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <span>Confirm Receipt - Invoice: <span className="text-blue-600 italic uppercase">{selectedGroup?.invoiceNo}</span></span>
-                  <span className="text-sm font-black text-slate-300 uppercase tracking-widest ml-4 ring-2 ring-slate-100 px-4 py-1.5 rounded-full italic">[{selectedGroup?.customerName}]</span>
+                  <span className="w-fit text-[10px] sm:text-sm font-black text-slate-300 uppercase tracking-widest sm:ml-4 ring-2 ring-slate-100 px-3 sm:px-4 py-1.5 rounded-full italic">[{selectedGroup?.customerName}]</span>
                 </DialogTitle>
                 <DialogDescription className="hidden" />
               </DialogHeader>
 
               {selectedGroup && (
-                <div className="space-y-10 animate-in fade-in zoom-in-95 duration-500">
+                <div className="space-y-8 sm:space-y-10 animate-in fade-in zoom-in-95 duration-500">
                   {/* Section 1: Order & Logistics Details */}
                   <div className="space-y-6">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className="h-6 w-1.5 bg-blue-600 rounded-full shadow-sm" />
-                      <h3 className="text-sm font-black uppercase tracking-[0.2em] text-blue-900">Order & Logistics Details</h3>
+                      <h3 className="min-w-0 text-xs sm:text-sm font-black uppercase tracking-[0.14em] sm:tracking-[0.2em] text-blue-900">Order & Logistics Details</h3>
                     </div>
 
-                    <Card className="p-8 border-none shadow-xl rounded-[2rem] bg-white grid grid-cols-2 md:grid-cols-4 gap-x-12 gap-y-8">
+                    <Card className="p-4 sm:p-8 border-none shadow-xl rounded-2xl sm:rounded-[2rem] bg-white grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 lg:gap-x-12 gap-y-5 sm:gap-y-8">
                       {[
                         { label: "Delivery Purpose", value: selectedGroup.deliveryPurpose },
                         { label: "Order Type", value: selectedGroup.orderType },
@@ -602,12 +692,12 @@ export default function MaterialReceiptPage() {
                         { label: "Extra Weight", value: selectedGroup.extraWeight, color: "text-[#d946ef]" },
                         { label: "Order Punch Remarks", value: selectedGroup.orderPunchRemarks, color: "text-amber-600 italic" },
                       ].map((item, idx) => (
-                        <div key={idx} className="space-y-1.5">
+                        <div key={idx} className="space-y-1.5 min-w-0">
                           <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.1em] block leading-none">{item.label}</Label>
-                          <p className={cn("text-xs font-black tracking-tight leading-none", item.color || "text-slate-800")}>{item.value || "—"}</p>
+                          <p className={cn("break-words text-xs font-black tracking-tight leading-snug", item.color || "text-slate-800")}>{item.value || "—"}</p>
                         </div>
                       ))}
-                      <div className="space-y-1.5 col-span-2">
+                      <div className="space-y-1.5 sm:col-span-2 min-w-0">
                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.1em] block leading-none">PO Copy (SO Upload)</Label>
                         {selectedGroup.uploadSo ? (
                           <a 
@@ -629,13 +719,106 @@ export default function MaterialReceiptPage() {
 
                   {/* Section 2: Products */}
                   <div className="space-y-6">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className="h-6 w-1.5 bg-blue-600 rounded-full shadow-sm" />
-                      <h3 className="text-sm font-black uppercase tracking-[0.2em] text-blue-900">Products ({selectedProducts.length}/{selectedGroup._allProducts.length} selected)</h3>
+                      <h3 className="min-w-0 text-xs sm:text-sm font-black uppercase tracking-[0.14em] sm:tracking-[0.2em] text-blue-900">Products ({selectedProducts.length}/{selectedGroup._allProducts.length} selected)</h3>
                     </div>
 
-                    <Card className="border-none shadow-xl rounded-[2rem] overflow-hidden bg-white">
-                      <Table>
+                    <Card className="border-none shadow-xl rounded-2xl sm:rounded-[2rem] overflow-hidden bg-white">
+                      <div className="md:hidden p-3 space-y-3">
+                        <div className="flex items-center justify-between gap-3 rounded-xl bg-blue-600 px-3 py-3 text-white">
+                          <span className="text-[10px] font-black uppercase tracking-widest">Select All</span>
+                          <Checkbox
+                            className="border-white/50 data-[state=checked]:bg-white data-[state=checked]:text-blue-600"
+                            checked={selectedProducts.length === selectedGroup._allProducts.length}
+                            onCheckedChange={(checked) => setSelectedProducts(checked ? selectedGroup._allProducts.map((p: any) => p._rowKey) : [])}
+                          />
+                        </div>
+                        {selectedGroup._allProducts.map((product: any) => (
+                          <Card key={product._rowKey} className={cn("p-4 rounded-2xl border shadow-sm", selectedProducts.includes(product._rowKey) ? "border-blue-200 bg-blue-50/40" : "border-slate-100 bg-white")}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Product</p>
+                                <p className="break-words text-xs font-black uppercase tracking-tighter text-slate-800">{product.productName}</p>
+                              </div>
+                              <Checkbox
+                                className="data-[state=checked]:bg-blue-600"
+                                checked={selectedProducts.includes(product._rowKey)}
+                                onCheckedChange={(checked) => setSelectedProducts(p => checked ? [...p, product._rowKey] : p.filter(k => k !== product._rowKey))}
+                              />
+                            </div>
+                            <div className="mt-4 grid grid-cols-2 gap-3">
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Order No</p>
+                                <p className="break-words text-xs font-black text-slate-500">{product.specificOrderNo}</p>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Invoice</p>
+                                <p className="break-words text-xs font-black italic text-blue-600">{product.invoiceNo}</p>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bill Amt</p>
+                                <p className="text-xs font-black text-slate-700">₹{product.billAmount}</p>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Actual Qty</p>
+                                <p className="text-xs font-black text-slate-700">{product.actualQty}</p>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Truck No</p>
+                                <p className="break-words text-xs font-black text-slate-500">{product.truckNo}</p>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Net Wt</p>
+                                <p className="text-xs font-black text-slate-700">{product.netWeight}</p>
+                              </div>
+                            </div>
+                            {receiptData.hasDamage === "yes" && (
+                              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div className="space-y-1.5">
+                                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Damage Qty</Label>
+                                  <Input
+                                    className="h-10 text-[11px] font-black border-2 border-slate-100 rounded-lg focus:border-blue-300 w-full transition-all"
+                                    type="number"
+                                    placeholder="0"
+                                    value={productDamageData[product._rowKey]?.damageQty || ""}
+                                    onChange={(e) => setProductDamageData(prev => ({ ...prev, [product._rowKey]: { ...prev[product._rowKey], damageQty: e.target.value } }))}
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Image</Label>
+                                  <label title="Max file size: 10 MB" className="cursor-pointer inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors ring-1 ring-inset ring-slate-100">
+                                    <Input
+                                      type="file"
+                                      className="hidden"
+                                      onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'damage', product._rowKey)}
+                                    />
+                                    {isUploading === `damage-${product._rowKey}` ? <Loader2 className="h-4 w-4 animate-spin text-blue-600" /> : (productDamageData[product._rowKey]?.damageImage ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Upload className="h-4 w-4 text-slate-400" />)}
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{productDamageData[product._rowKey]?.damageImage ? "Uploaded" : "Upload"}</span>
+                                  </label>
+                                </div>
+                              </div>
+                            )}
+                          </Card>
+                        ))}
+                        <div className="rounded-2xl bg-slate-50 p-4">
+                          <div className="grid grid-cols-3 gap-3 text-center">
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bill</p>
+                              <p className="break-words text-xs font-black text-blue-700">₹{totals.billAmt.toFixed(2)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Qty</p>
+                              <p className="text-xs font-black text-slate-700">{totals.actualQty}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Net Wt</p>
+                              <p className="text-xs font-black text-slate-700">{totals.netWt.toFixed(2)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <Table className="hidden md:table">
                         <TableHeader className="bg-blue-600">
                           <TableRow className="hover:bg-blue-600 border-none">
                             <TableHead className="w-12 text-center h-12">
@@ -719,17 +902,17 @@ export default function MaterialReceiptPage() {
 
                   {/* Section 3: Receipt Details */}
                   <div className="space-y-6">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className="h-6 w-1.5 bg-blue-600 rounded-full shadow-sm" />
-                      <h3 className="text-sm font-black uppercase tracking-[0.2em] text-blue-900">Receipt Details</h3>
+                      <h3 className="min-w-0 text-xs sm:text-sm font-black uppercase tracking-[0.14em] sm:tracking-[0.2em] text-blue-900">Receipt Details</h3>
                     </div>
 
-                    <Card className="p-10 border-none shadow-xl rounded-[2rem] bg-white grid grid-cols-1 md:grid-cols-2 gap-x-20 gap-y-12 relative overflow-hidden">
+                    <Card className="p-4 sm:p-10 border-none shadow-xl rounded-2xl sm:rounded-[2rem] bg-white grid grid-cols-1 md:grid-cols-2 gap-x-10 lg:gap-x-20 gap-y-6 sm:gap-y-12 relative overflow-hidden">
                       <div className="space-y-4">
                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Material Received Date <span className="text-red-500">*</span></Label>
                         <Input
                           type="date"
-                          className="h-16 border-2 border-slate-50 bg-slate-50/30 rounded-2xl px-8 font-black text-slate-700 text-lg focus:bg-white focus:border-blue-100 transition-all shadow-inner"
+                          className="h-12 sm:h-16 border-2 border-slate-50 bg-slate-50/30 rounded-2xl px-4 sm:px-8 font-black text-slate-700 text-sm sm:text-lg focus:bg-white focus:border-blue-100 transition-all shadow-inner"
                           value={receiptData.receivedDate}
                           onChange={(e) => setReceiptData({ ...receiptData, receivedDate: e.target.value })}
                         />
@@ -737,10 +920,10 @@ export default function MaterialReceiptPage() {
 
                       <div className="space-y-4">
                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Damage Status</Label>
-                        <div className="grid grid-cols-2 gap-4 h-16">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 sm:h-16">
                           <Button
                             onClick={() => setReceiptData({ ...receiptData, hasDamage: 'no' })}
-                            className={cn("h-full border-2 rounded-2xl font-black uppercase italic tracking-tighter transition-all duration-300",
+                            className={cn("h-12 sm:h-full border-2 rounded-2xl font-black uppercase italic tracking-tighter transition-all duration-300",
                               receiptData.hasDamage === 'no' ? "bg-white border-green-500 text-green-500 shadow-xl shadow-green-50" : "bg-slate-50 border-slate-50 text-slate-400 hover:bg-white hover:border-slate-100"
                             )}
                             variant="outline"
@@ -749,7 +932,7 @@ export default function MaterialReceiptPage() {
                           </Button>
                           <Button
                             onClick={() => setReceiptData({ ...receiptData, hasDamage: 'yes' })}
-                            className={cn("h-full border-2 rounded-2xl font-black uppercase italic tracking-tighter transition-all duration-300",
+                            className={cn("h-12 sm:h-full border-2 rounded-2xl font-black uppercase italic tracking-tighter transition-all duration-300",
                               receiptData.hasDamage === 'yes' ? "bg-white border-red-500 text-red-500 shadow-xl shadow-red-50" : "bg-slate-50 border-slate-50 text-slate-400 hover:bg-white hover:border-slate-100"
                             )}
                             variant="outline"
@@ -762,7 +945,7 @@ export default function MaterialReceiptPage() {
                       <div className="space-y-4">
                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Received Image (Proof)</Label>
                         <p className="text-[10px] text-slate-400 ml-1">Max file size: 10 MB</p>
-                        <Card className={cn("border-2 border-dashed rounded-3xl p-8 bg-slate-50/50 hover:bg-slate-50 transition-all cursor-pointer group flex flex-col items-center justify-center min-h-[160px]",
+                        <Card className={cn("border-2 border-dashed rounded-2xl sm:rounded-3xl p-4 sm:p-8 bg-slate-50/50 hover:bg-slate-50 transition-all cursor-pointer group flex flex-col items-center justify-center min-h-[140px] sm:min-h-[160px]",
                           receiptData.receivedProof ? "border-green-200" : "border-slate-200"
                         )}>
                           <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
@@ -770,7 +953,7 @@ export default function MaterialReceiptPage() {
                             <div className="bg-white p-4 rounded-2xl shadow-lg ring-1 ring-slate-100 mb-4 group-hover:scale-110 transition-transform">
                               <Upload className="h-6 w-6 text-blue-600" />
                             </div>
-                            <span className="text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-blue-600 transition-colors">
+                            <span className="max-w-full break-words text-center text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-blue-600 transition-colors">
                               {isUploading === 'proof' ? "UPLOADING MATERIAL PROOF..." : (receiptData.receivedProof ? `REPLACE: ${receiptData.receivedProofName}` : "Click to Upload Proof")}
                             </span>
                           </label>
@@ -780,7 +963,7 @@ export default function MaterialReceiptPage() {
                       <div className="space-y-4">
                         <Label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-1">Remarks</Label>
                         <Textarea
-                          className="bg-slate-50/30 border-2 border-slate-50 rounded-3xl p-6 font-bold text-slate-700 placeholder:text-slate-200 focus:bg-white focus:border-blue-100 transition-all h-[160px] resize-none shadow-inner shadow-slate-100"
+                          className="bg-slate-50/30 border-2 border-slate-50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 font-bold text-slate-700 placeholder:text-slate-200 focus:bg-white focus:border-blue-100 transition-all h-[140px] sm:h-[160px] resize-none shadow-inner shadow-slate-100"
                           placeholder="Enter remarks..."
                           value={receiptData.remarks}
                           onChange={(e) => setReceiptData({ ...receiptData, remarks: e.target.value })}
@@ -791,17 +974,17 @@ export default function MaterialReceiptPage() {
                 </div>
               )}
 
-              <DialogFooter className="mt-12 pt-8 border-t-2 border-slate-100 -mx-8 px-12 bg-white rounded-b-[2.5rem]">
-                <div className="flex items-center justify-between w-full">
-                  <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="h-14 px-10 font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-2xl">Cancel</Button>
+              <DialogFooter className="mt-8 sm:mt-12 pt-5 sm:pt-8 border-t-2 border-slate-100 -mx-3 sm:-mx-8 px-3 sm:px-12 bg-white rounded-b-2xl sm:rounded-b-[2.5rem]">
+                <div className="grid w-full grid-cols-1 gap-3 sm:flex sm:items-center sm:justify-between">
+                  <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="h-12 sm:h-14 w-full sm:w-auto px-6 sm:px-10 font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-2xl">Cancel</Button>
                   <Button
                     onClick={handleSubmit}
                     disabled={isProcessing || isReadOnly || !receiptData.receivedDate}
-                    className={cn("h-16 px-16 rounded-2xl shadow-2xl text-xl font-black italic tracking-tighter uppercase transition-all duration-500",
+                    className={cn("h-12 sm:h-16 w-full sm:w-auto px-6 sm:px-16 rounded-2xl shadow-2xl text-sm sm:text-xl font-black italic tracking-tighter uppercase transition-all duration-500",
                       receiptData.hasDamage === 'yes' ? "bg-red-600 hover:bg-red-700 shadow-red-100" : "bg-blue-600 hover:bg-blue-700 shadow-blue-100"
                     )}
                   >
-                    {isProcessing ? <Loader2 className="mr-3 h-6 w-6 animate-spin" /> : <CheckCircle className="mr-3 h-6 w-6" />}
+                    {isProcessing ? <Loader2 className="mr-2 sm:mr-3 h-5 w-5 sm:h-6 sm:w-6 animate-spin" /> : <CheckCircle className="mr-2 sm:mr-3 h-5 w-5 sm:h-6 sm:w-6" />}
                     Confirm Receipt
                   </Button>
                 </div>

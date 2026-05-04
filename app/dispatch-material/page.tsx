@@ -642,11 +642,34 @@ export default function DispatchMaterialPage() {
     })
   }, [filteredPendingOrders, selectedDepoTab])
 
-  const customerNames = Array.from(new Set((pendingOrders as any[]).map(order => 
-    (order.transfer === 'yes' && order.bill_company_name) 
-      ? order.bill_company_name 
+  const customerNames = Array.from(new Set((pendingOrders as any[]).map(order =>
+    (order.transfer === 'yes' && order.bill_company_name)
+      ? order.bill_company_name
       : (order.customer_name || order.customerName || "Unknown Customer")
   ))) as string[]
+
+  const buildDispatchDisplayRow = (row: any) => ({
+    orderNo: row.orderNo || row._displayDo || "—",
+    processId: row.processId || "—",
+    customerName: row.customerName || row.customer_name || "—",
+    productName: row._allProducts?.[0]?.productName || "—",
+    productCount: row._productCount || row._allProducts?.length || 0,
+    transportType: row.transportType || "—",
+    orderPunchRemarks: row.orderPunchRemarks || "—",
+    revertDispatchRemarks: row.revertDispatchRemarks || "—",
+    partySoDate: row.partySoDate || "—",
+    depoName: row.depoName || "—",
+    deliveryPurpose: row.deliveryPurpose || "—",
+    deliveryDate: row.deliveryDate || "—",
+    orderType: row.orderType || "—",
+    customerType: row.customerType || "—",
+    rate: row._allProducts?.[0]?.rate || "—",
+    approvalQty: row._allProducts?.reduce((sum: number, p: any) => sum + (Number(p.approvalQty) || 0), 0) || 0,
+    remainingQty: row._allProducts?.reduce((sum: number, p: any) => {
+      const qty = p.remainingDispatchQty !== undefined ? p.remainingDispatchQty : p.approvalQty
+      return sum + (Number(qty) || 0)
+    }, 0) || 0,
+  })
 
   return (
     <WorkflowStageShell
@@ -662,14 +685,14 @@ export default function DispatchMaterialPage() {
       isHistoryLoading={isHistoryLoading}
       showDateFilters={false}
       historyFooter={
-        <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
+        <div className="px-3 sm:px-6 py-4 border-t bg-slate-50/50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
             Showing Page <span className="text-slate-900 mx-1">{historyPage}</span>
             {historyData?.pagination?.total && (
               <> of <span className="text-slate-900 mx-1">{Math.ceil(historyData.pagination.total / limit)}</span></>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <Button
               variant="outline"
               size="sm"
@@ -692,10 +715,10 @@ export default function DispatchMaterialPage() {
         </div>
       }
     >
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-col justify-end gap-2 sm:flex-row">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="bg-transparent">
+            <Button variant="outline" className="w-full bg-transparent sm:w-auto">
               <Settings2 className="mr-2 h-4 w-4" />
               Columns
             </Button>
@@ -721,6 +744,7 @@ export default function DispatchMaterialPage() {
         <Button
           onClick={handleOpenDialog}
           disabled={selectedItems.length === 0}
+          className="w-full sm:w-auto"
         >
           {`Dispatch Selected (${selectedItems.length})`}
         </Button>
@@ -728,13 +752,13 @@ export default function DispatchMaterialPage() {
 
       {activeDepots.length > 0 && (
         <div className="mt-4 mb-2">
-          <Tabs value={selectedDepoTab} onValueChange={setSelectedDepoTab} className="w-full">
-            <TabsList className="bg-slate-100/50 p-1 h-auto flex-wrap justify-start gap-1 border border-slate-200/60 rounded-xl shadow-sm">
+          <Tabs value={selectedDepoTab} onValueChange={setSelectedDepoTab} className="w-full overflow-hidden">
+            <TabsList className="w-full bg-slate-100/50 p-1 h-auto flex overflow-x-auto justify-start gap-1 border border-slate-200/60 rounded-xl shadow-sm">
               {activeDepots.map((depo) => (
                 <TabsTrigger
                   key={depo.depot_id}
                   value={depo.depot_name}
-                  className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all"
+                  className="shrink-0 px-4 sm:px-6 py-2.5 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all"
                 >
                   {depo.depot_name}
                 </TabsTrigger>
@@ -744,8 +768,8 @@ export default function DispatchMaterialPage() {
         </div>
       )}
 
-      <Card className="border-none shadow-sm overflow-hidden overflow-auto max-h-[600px]">
-        <Table>
+      <Card className="border-none shadow-sm overflow-hidden md:max-h-[600px] md:overflow-auto">
+        <Table className="hidden md:table">
           <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
             <TableRow>
               <TableHead className="w-12 text-center">
@@ -824,7 +848,87 @@ export default function DispatchMaterialPage() {
             )}
           </TableBody>
         </Table>
-        <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between">
+        <div className="space-y-3 p-3 md:hidden">
+          {isPendingLoading && pendingOrders.length === 0 ? (
+            [...Array(5)].map((_, i) => (
+              <div key={i} className="rounded-lg border p-4 space-y-3 opacity-60">
+                <div className="h-4 w-32 bg-slate-200 animate-pulse rounded" />
+                <div className="grid grid-cols-2 gap-3">
+                  {[...Array(6)].map((__, j) => <div key={j} className="h-10 bg-slate-100 animate-pulse rounded" />)}
+                </div>
+              </div>
+            ))
+          ) : displayRows.length > 0 ? (
+            displayRows.map((row: any) => {
+              const display = buildDispatchDisplayRow(row)
+              const isSelected = selectedItems.some(i => i._rowKey === row._rowKey)
+              return (
+                <div
+                  key={row._rowKey}
+                  className={cn("rounded-lg border bg-white p-4 shadow-sm", isSelected && "border-blue-200 bg-blue-50")}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-mono text-sm font-black text-blue-700 break-all">{display.orderNo}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">{display.partySoDate}</p>
+                    </div>
+                    <Checkbox checked={isSelected} onCheckedChange={() => toggleSelectItem(row)} />
+                  </div>
+
+                  <div className="mt-3">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Customer Name</p>
+                    <p className="text-sm font-bold text-slate-900 break-words">{display.customerName}</p>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                    <div className="rounded-md bg-slate-50 p-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400">Process ID</p>
+                      <p className="mt-1 font-bold break-words">{display.processId}</p>
+                    </div>
+                    <div className="rounded-md bg-slate-50 p-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400">Products</p>
+                      <p className="mt-1 font-bold">{display.productCount} items</p>
+                    </div>
+                    <div className="rounded-md bg-slate-50 p-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400">Product</p>
+                      <p className="mt-1 font-semibold break-words">{display.productName}</p>
+                    </div>
+                    <div className="rounded-md bg-slate-50 p-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400">Transport</p>
+                      <p className="mt-1 font-semibold break-words">{display.transportType}</p>
+                    </div>
+                    <div className="rounded-md bg-slate-50 p-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400">Approval Qty</p>
+                      <p className="mt-1 font-mono font-bold">{display.approvalQty}</p>
+                    </div>
+                    <div className="rounded-md bg-slate-50 p-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400">Remaining</p>
+                      <p className="mt-1 font-mono font-bold">{display.remainingQty}</p>
+                    </div>
+                  </div>
+
+                  {display.orderPunchRemarks !== "—" && (
+                    <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs">
+                      <span className="font-black text-amber-800">Order Remarks:</span> {display.orderPunchRemarks}
+                    </div>
+                  )}
+                  {display.revertDispatchRemarks !== "—" && (
+                    <div className="mt-3 rounded-md bg-red-50 p-3 text-xs">
+                      <span className="font-black text-red-800">Revert Remarks:</span> {display.revertDispatchRemarks}
+                    </div>
+                  )}
+                  <Badge className="mt-3 bg-orange-100 text-orange-700 hover:bg-orange-100">Pending</Badge>
+                </div>
+              )
+            })
+          ) : (
+            <div className="py-10 text-center text-muted-foreground">
+              No orders pending for dispatch
+            </div>
+          )}
+        </div>
+
+        <div className="px-3 sm:px-6 py-4 border-t bg-slate-50/50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
             Showing Page <span className="text-slate-900 mx-1">{pendingPage}</span>
             {pendingData?.pagination?.totalPages && (
@@ -833,7 +937,7 @@ export default function DispatchMaterialPage() {
             <span className="ml-2 text-slate-300">|</span>
             <span className="ml-2">{pendingData?.pagination?.total || 0} item{(pendingData?.pagination?.total || 0) !== 1 ? 's' : ''} in this depot</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <Button
               variant="outline"
               size="sm"
@@ -859,9 +963,9 @@ export default function DispatchMaterialPage() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-6xl !max-w-6xl max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <DialogHeader className="border-b pb-4">
-            <DialogTitle className="text-xl font-bold text-slate-900 leading-none">
+        <DialogContent className="w-[calc(100vw-0.75rem)] max-w-[calc(100vw-0.75rem)] sm:max-w-4xl lg:max-w-6xl max-h-[95vh] overflow-x-hidden overflow-y-auto p-3 sm:p-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] [overflow-wrap:anywhere]">
+          <DialogHeader className="border-b pb-4 min-w-0">
+            <DialogTitle className="text-lg sm:text-xl font-bold text-slate-900 leading-tight break-words">
               Dispatch Planning
             </DialogTitle>
             <DialogDescription className="text-slate-500 mt-1.5">
@@ -869,17 +973,17 @@ export default function DispatchMaterialPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-8 mt-4">
-            <div className="space-y-12 mt-6">
+          <div className="space-y-6 sm:space-y-8 mt-4 min-w-0">
+            <div className="space-y-6 sm:space-y-12 mt-4 sm:mt-6 min-w-0">
               {selectedItems.map((group: any, groupIdx: number) => {
                 const custName = group.customerName || group.customer_name || "Unknown";
                 const allProducts = group._allProducts || [];
 
                 return (
-                  <div key={group._rowKey} className="space-y-6">
-                    <h2 className="text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex items-center justify-between">
-                      {custName}
-                      <Badge className="bg-blue-600 text-white ml-3 px-3 py-1 font-black">
+                  <div key={group._rowKey} className="space-y-4 sm:space-y-6 min-w-0">
+                    <h2 className="text-base sm:text-xl font-black text-blue-900 border-b-4 border-blue-100 pb-2 mt-4 uppercase tracking-tight flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="break-words">{custName}</span>
+                      <Badge className="w-fit bg-blue-600 text-white px-3 py-1 font-black sm:ml-3">
                         {group._productCount} PRODUCTS
                       </Badge>
                     </h2>
@@ -892,10 +996,10 @@ export default function DispatchMaterialPage() {
                       };
 
                       return (
-                        <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
-                          <div className="bg-blue-600 px-5 py-3 flex items-center justify-between cursor-pointer" onClick={toggleExpand}>
-                            <div className="flex items-center gap-4">
-                              <Badge className="bg-white text-blue-800 hover:bg-white px-4 py-1.5 text-base font-black tracking-tight rounded-full shadow-sm">
+                        <div key={baseDo} className="space-y-4 border-2 border-slate-100 rounded-xl sm:rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow min-w-0">
+                          <div className="bg-blue-600 px-3 sm:px-5 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between cursor-pointer" onClick={toggleExpand}>
+                            <div className="min-w-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                              <Badge className="max-w-full bg-white text-blue-800 hover:bg-white px-3 sm:px-4 py-1.5 text-xs sm:text-base font-black tracking-tight rounded-full shadow-sm whitespace-normal break-all">
                                 ORDER: {baseDo}
                               </Badge>
                               <div className="flex flex-col">
@@ -903,8 +1007,8 @@ export default function DispatchMaterialPage() {
                                 <span className="text-xs text-blue-100 font-bold leading-none">{orderDetails._products?.length || 0} Items Selected</span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <div className="text-[11px] text-blue-50 font-bold uppercase tracking-widest mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
+                            <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-start">
+                              <div className="text-[10px] sm:text-[11px] text-blue-50 font-bold uppercase tracking-widest sm:mr-2">Click to {isExpanded ? 'Hide' : 'Show'} Details</div>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/20 rounded-full">
                                 {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                               </Button>
@@ -912,9 +1016,9 @@ export default function DispatchMaterialPage() {
                           </div>
 
                           {isExpanded && (
-                            <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
-                              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            <div className="px-3 sm:px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
+                              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-inner">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Depo Name</p>
                                     <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.depoName || "—"}</p>
@@ -941,15 +1045,15 @@ export default function DispatchMaterialPage() {
                                   </div>
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Contact Person</p>
-                                    <p className="text-sm font-bold text-slate-900 truncate">{orderDetails.custContactName || "—"}</p>
+                                    <p className="text-sm font-bold text-slate-900 break-words">{orderDetails.custContactName || "—"}</p>
                                   </div>
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">WhatsApp No.</p>
                                     <p className="text-sm font-bold text-slate-900 leading-tight">{orderDetails.whatsapp || "—"}</p>
                                   </div>
-                                  <div className="col-span-2">
+                                  <div className="sm:col-span-2">
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Address</p>
-                                    <p className="text-sm font-bold text-slate-900 truncate" title={orderDetails.address}>{orderDetails.address}</p>
+                                    <p className="text-sm font-bold text-slate-900 break-words" title={orderDetails.address}>{orderDetails.address}</p>
                                   </div>
                                   <div>
                                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Payment Terms</p>
@@ -971,17 +1075,17 @@ export default function DispatchMaterialPage() {
                                       {orderDetails.creditStatus}
                                     </Badge>
                                   </div>
-                                  <div className="col-span-2 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
+                                  <div className="sm:col-span-2 bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-4">
                                     <div className="bg-amber-100 p-2 rounded-lg">
                                       <Settings2 className="h-5 w-5 text-amber-600" />
                                     </div>
                                     <div>
                                       <p className="text-[11px] text-amber-800 font-black uppercase tracking-widest mb-1 leading-none">Order Punch Remarks</p>
-                                      <p className="text-sm font-medium text-slate-700 italic leading-snug">"{group.orderPunchRemarks || "No special instructions provided."}"</p>
+                                      <p className="text-sm font-medium text-slate-700 italic leading-snug break-words">"{group.orderPunchRemarks || "No special instructions provided."}"</p>
                                     </div>
                                   </div>
                                   <div className={cn(
-                                    "col-span-2 p-4 rounded-xl border flex items-start gap-4 transition-all duration-300",
+                                    "sm:col-span-2 p-4 rounded-xl border flex items-start gap-4 transition-all duration-300",
                                     group.uploadSo 
                                       ? "bg-blue-50 border-blue-100 hover:bg-blue-100 cursor-pointer group" 
                                       : "bg-slate-50 border-slate-100 opacity-60"
@@ -1021,13 +1125,13 @@ export default function DispatchMaterialPage() {
                     })}
 
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between border-b pb-2">
-                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b pb-2">
+                        <h3 className="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2 break-words">
                           Consolidated Product List - {custName}
                         </h3>
                       </div>
-                      <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
-                        <Table>
+                      <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white min-w-0">
+                        <Table className="hidden md:table">
                           <TableHeader className="bg-slate-50">
                             <TableRow>
                               <TableHead className="w-12 text-center text-[10px] uppercase font-black text-slate-500 tracking-wider">
@@ -1232,6 +1336,198 @@ export default function DispatchMaterialPage() {
                             </TableRow>
                           </tfoot>
                         </Table>
+                        <div className="space-y-3 p-3 md:hidden">
+                          <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Products</p>
+                              <p className="text-xs font-bold text-slate-700">{allProducts.length} items</p>
+                            </div>
+                            <Checkbox
+                              checked={allProducts.length > 0 && allProducts.every((p: any) => dialogSelectedProducts.includes(p._rowKey))}
+                              onCheckedChange={(checked) => {
+                                const keys = allProducts.map((p: any) => p._rowKey);
+                                if (checked) setDialogSelectedProducts(prev => Array.from(new Set([...prev, ...keys])));
+                                else setDialogSelectedProducts(prev => prev.filter(k => !keys.includes(k)));
+                              }}
+                            />
+                          </div>
+                          {allProducts.map((prod: any) => {
+                            const rowKey = prod._rowKey;
+                            const maxLimit = prod.remainingDispatchQty !== undefined ? prod.remainingDispatchQty : prod.approvalQty;
+                            const currentDispatchQty = dispatchDetails[rowKey]?.qty !== undefined ? dispatchDetails[rowKey].qty : maxLimit;
+                            const selected = dialogSelectedProducts.includes(rowKey);
+
+                            return (
+                              <div key={rowKey} className={cn("rounded-xl border bg-white p-3 space-y-3", selected && "border-blue-200 bg-blue-50/40")}>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Product</p>
+                                    <p className="text-sm font-black text-slate-900 break-words">{prod.productName || "—"}</p>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight break-all">{prod.orderNo || "—"}</p>
+                                  </div>
+                                  <Checkbox checked={selected} onCheckedChange={() => toggleSelectDialogProduct(rowKey)} />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                  <div className="rounded-md bg-slate-50 p-2">
+                                    <p className="text-[10px] font-black uppercase text-slate-400">Rate</p>
+                                    <p className="mt-1 font-mono font-bold text-slate-700">₹{prod.rate || "—"}</p>
+                                  </div>
+                                  <div className="rounded-md bg-slate-50 p-2">
+                                    <p className="text-[10px] font-black uppercase text-slate-400">Approval</p>
+                                    <p className="mt-1 font-mono font-bold text-blue-600">{prod.approvalQty || "—"}</p>
+                                  </div>
+                                  <div className="rounded-md bg-slate-50 p-2">
+                                    <p className="text-[10px] font-black uppercase text-slate-400">Remaining</p>
+                                    <p className="mt-1 font-mono font-bold text-slate-700">{maxLimit}</p>
+                                  </div>
+                                  <div className="rounded-md bg-slate-50 p-2">
+                                    <p className="text-[10px] font-black uppercase text-slate-400">Status</p>
+                                    {custName.toLowerCase().includes("reliance") ? (
+                                      <Popover
+                                        open={openPrecloseId === prod.id}
+                                        onOpenChange={(open) => setOpenPrecloseId(open ? prod.id : null)}
+                                      >
+                                        <PopoverTrigger asChild>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="mt-1 h-7 text-[10px] font-bold text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                                          >
+                                            <XCircle className="h-3.5 w-3.5 mr-1" />
+                                            Preclose
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-48 p-3" align="end">
+                                          <div className="space-y-3">
+                                            <div className="space-y-1">
+                                              <Label className="text-[10px] uppercase font-black text-slate-500">Qty to Preclose</Label>
+                                              <Input
+                                                type="number"
+                                                placeholder="Enter quantity"
+                                                value={precloseInputs[prod.id] !== undefined ? precloseInputs[prod.id] : maxLimit.toString()}
+                                                onChange={(e) => setPrecloseInputs(prev => ({ ...prev, [prod.id]: e.target.value }))}
+                                                className="h-8 text-[11px] font-bold text-center"
+                                              />
+                                              <p className="text-[9px] text-slate-400 font-medium italic text-center">Remaining: {maxLimit}</p>
+                                            </div>
+                                            <Button
+                                              size="sm"
+                                              variant="destructive"
+                                              className="h-7 w-full text-[10px] font-black uppercase tracking-wider"
+                                              onClick={() => {
+                                                const qty = parseFloat(precloseInputs[prod.id] !== undefined ? precloseInputs[prod.id] : maxLimit.toString());
+                                                if (isNaN(qty) || qty <= 0) {
+                                                  toast({ title: "Invalid Quantity", description: "Please enter a valid number greater than 0", variant: "destructive" });
+                                                } else if (qty > maxLimit + 0.0001) {
+                                                  toast({ title: "Quantity Exceeded", description: `Cannot preclose more than ${maxLimit}`, variant: "destructive" });
+                                                } else {
+                                                  handlePreclose(prod.id, qty);
+                                                }
+                                              }}
+                                              disabled={isProcessing}
+                                            >
+                                              {isProcessing ? "Processing..." : "Confirm Preclose"}
+                                            </Button>
+                                          </div>
+                                        </PopoverContent>
+                                      </Popover>
+                                    ) : (
+                                      <p className="mt-1 font-bold text-slate-400">—</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-3">
+                                  <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase text-slate-400">Qty to Dispatch</Label>
+                                    <Input type="number" className="h-9 text-xs font-bold" value={currentDispatchQty} onChange={(e) => {
+                                      let val = Number(e.target.value);
+                                      const maxVal = Number(maxLimit);
+                                      if (val > maxVal) val = maxVal;
+                                      setDispatchDetails((prev) => ({ ...prev, [rowKey]: { ...prev[rowKey], qty: val.toString() } }));
+                                    }} />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase text-slate-400">Delivery From</Label>
+                                    <Select value={dispatchDetails[rowKey]?.deliveryFrom || "in-stock"} onValueChange={(val) => setDispatchDetails((prev) => ({ ...prev, [rowKey]: { ...prev[rowKey], deliveryFrom: val } }))}>
+                                      <SelectTrigger className="h-9 text-xs font-bold"><SelectValue placeholder="Source" /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="in-stock" className="text-xs">In Stock</SelectItem>
+                                        <SelectItem value="production" className="text-xs">Production</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase text-slate-400">Transfer</Label>
+                                    <div className="flex items-center gap-2">
+                                      <Select
+                                        value={dispatchDetails[rowKey]?.transfer || prod.transfer || "no"}
+                                        onValueChange={(val) => {
+                                          setDispatchDetails((prev) => {
+                                            const existing = prev[rowKey] || {};
+                                            const transferData = existing.transferData || {
+                                              billTo: { company: prod.bill_company_name || "", address: prod.bill_address || "" },
+                                              shipTo: { company: prod.ship_company_name || "", address: prod.ship_address || "" },
+                                              freightRate: prod.freight_rate?.toString() || ""
+                                            };
+                                            return { ...prev, [rowKey]: { ...existing, transfer: val, transferData } };
+                                          });
+                                          if (val === "yes") {
+                                            setCurrentTransferRowKey(rowKey);
+                                            setIsTransferPopupOpen(true);
+                                          }
+                                        }}
+                                      >
+                                        <SelectTrigger className="h-9 text-xs font-bold"><SelectValue placeholder="Transfer" /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="yes" className="text-xs">Yes</SelectItem>
+                                          <SelectItem value="no" className="text-xs">No</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      {(dispatchDetails[rowKey]?.transfer === "yes" || (!dispatchDetails[rowKey]?.transfer && prod.transfer === "yes")) && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 text-blue-600"
+                                          onClick={() => {
+                                            setCurrentTransferRowKey(rowKey);
+                                            setIsTransferPopupOpen(true);
+                                          }}
+                                        >
+                                          <Settings2 className="h-4 w-4" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          <div className="grid grid-cols-3 gap-2 rounded-lg border bg-slate-50 p-3 text-xs">
+                            <div>
+                              <p className="text-[9px] uppercase font-black text-slate-500">Approval</p>
+                              <p className="mt-1 font-black text-blue-700">{allProducts.reduce((sum: number, p: any) => sum + (parseFloat(p.approvalQty) || 0), 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] uppercase font-black text-slate-500">Dispatch</p>
+                              <p className="mt-1 font-black text-green-700">{allProducts.reduce((sum: number, p: any) => {
+                                const rowKey = p._rowKey;
+                                const maxLimit = p.remainingDispatchQty !== undefined ? p.remainingDispatchQty : p.approvalQty;
+                                const currentDispatchQty = dispatchDetails[rowKey]?.qty !== undefined ? dispatchDetails[rowKey].qty : maxLimit;
+                                return sum + (parseFloat(currentDispatchQty) || 0);
+                              }, 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] uppercase font-black text-slate-500">Remaining</p>
+                              <p className="mt-1 font-black text-slate-700">{allProducts.reduce((sum: number, p: any) => {
+                                const maxLimit = p.remainingDispatchQty !== undefined ? p.remainingDispatchQty : p.approvalQty;
+                                return sum + (parseFloat(maxLimit) || 0);
+                              }, 0)}</p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1240,8 +1536,8 @@ export default function DispatchMaterialPage() {
             </div>
           </div>
 
-          <DialogFooter className="mt-4 border-t pt-4 px-8 pb-8 flex flex-col gap-4 sm:flex-col w-full">
-            <div className="flex items-end gap-3 w-full">
+          <DialogFooter className="mt-4 border-t pt-4 px-1 sm:px-8 pb-4 sm:pb-8 flex flex-col gap-4 sm:flex-col w-full">
+            <div className="flex flex-col sm:flex-row sm:items-end gap-3 w-full">
               <div className="flex-1 space-y-1.5">
                 <Label className="text-[10px] font-black uppercase text-red-500 tracking-tighter ml-1">Revert Remarks <span className="text-red-500">*</span></Label>
                 <Input
@@ -1255,14 +1551,14 @@ export default function DispatchMaterialPage() {
                 variant="destructive"
                 onClick={handleRevert}
                 disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly || !revertRemarks.trim()}
-                className="font-black uppercase tracking-tight whitespace-nowrap"
+                className="w-full sm:w-auto font-black uppercase tracking-tight whitespace-normal sm:whitespace-nowrap"
               >
                 {isProcessing ? "Processing..." : `Revert to Pre-Approval (${dialogSelectedProducts.length})`}
               </Button>
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleBulkDispatch} disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly}>
+            <div className="grid grid-cols-1 gap-2 sm:flex sm:justify-end">
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="w-full sm:w-auto">Cancel</Button>
+              <Button onClick={handleBulkDispatch} disabled={isProcessing || dialogSelectedProducts.length === 0 || isReadOnly} className="w-full sm:w-auto">
                 {isProcessing ? "Processing..." : `Dispatch ${dialogSelectedProducts.length} Item(s)`}
               </Button>
             </div>
@@ -1283,7 +1579,7 @@ export default function DispatchMaterialPage() {
           isSavingTransferRef.current = false;
         }
       }}>
-        <DialogContent className="sm:max-w-4xl">
+        <DialogContent className="w-[calc(100vw-0.75rem)] max-w-[calc(100vw-0.75rem)] sm:max-w-4xl max-h-[90vh] overflow-x-hidden overflow-y-auto p-3 sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">Transfer Details</DialogTitle>
             <DialogDescription>
@@ -1291,7 +1587,7 @@ export default function DispatchMaterialPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-8 py-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-8 py-4">
             {/* Bill To Column */}
             <div className="space-y-4">
               <h3 className="font-bold text-blue-800 border-b pb-1 uppercase text-sm">Bill To</h3>
@@ -1495,7 +1791,7 @@ export default function DispatchMaterialPage() {
             </div>
           </div>
 
-          <div className="px-8 pb-4">
+          <div className="px-0 sm:px-8 pb-4">
             <div className="space-y-1.5 max-w-xs">
               <Label className="text-xs font-bold">Freight Rate <span className="text-red-500">*</span></Label>
               <Input
@@ -1534,7 +1830,7 @@ export default function DispatchMaterialPage() {
             </div>
           </div>
 
-          <DialogFooter className="mt-6 border-t pt-4">
+          <DialogFooter className="mt-6 border-t pt-4 gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => {
               if (currentTransferRowKey) {
                 setDispatchDetails(prev => ({
@@ -1543,7 +1839,7 @@ export default function DispatchMaterialPage() {
                 }));
               }
               setIsTransferPopupOpen(false);
-            }}>Cancel</Button>
+            }} className="w-full sm:w-auto">Cancel</Button>
             <Button
               onClick={() => {
                 // Validation
@@ -1555,7 +1851,7 @@ export default function DispatchMaterialPage() {
                 isSavingTransferRef.current = true;
                 setIsTransferPopupOpen(false);
               }}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="w-full bg-blue-600 hover:bg-blue-700 sm:w-auto"
             >
               OK
             </Button>

@@ -1739,7 +1739,7 @@ export default function MasterPage() {
   )
 
   return (
-    <div className="p-8 max-w-7xl mx-auto min-h-screen space-y-8 animate-in fade-in duration-700">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto min-h-screen space-y-8 animate-in fade-in duration-700">
       <PageHeader 
         title="Master Data" 
         description="Manage customers, depots, and brokers details"
@@ -1858,7 +1858,41 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="flex flex-col h-[600px]">
+              {/* Mobile card view */}
+              <div className="md:hidden">
+                {isCustomerLoading && customers.length === 0 ? (
+                  <div className="p-4 space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-2 animate-pulse"><div className="h-4 w-32 bg-slate-200 rounded" /><div className="h-3 w-48 bg-slate-200 rounded" /><div className="h-3 w-24 bg-slate-200 rounded" /></div>)}</div>
+                ) : customers.length === 0 ? (
+                  <div className="text-center py-16 text-slate-400">No customers found</div>
+                ) : (
+                  <div className="p-3 space-y-3 overflow-auto" style={{ maxHeight: 600 }}>
+                    {sortedCustomers.map(item => (
+                      <div key={item.id} className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{item.customer_name}</p>
+                            <p className="text-xs text-slate-500">{item.customer_id}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+                          <div><span className="font-medium text-slate-600">Contact: </span>{item.contact_person || "—"}</div>
+                          <div><span className="font-medium text-slate-600">Location: </span>{item.state ? `${item.state} (${item.pincode})` : "—"}</div>
+                          <div className="col-span-2"><span className="font-medium text-slate-600">Email: </span>{item.email || "—"}</div>
+                          <div><span className="font-medium text-slate-600">Phone: </span>{item.contact || "—"}</div>
+                        </div>
+                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>{item.status}</Badge>
+                      </div>
+                    ))}
+                    {isFetchingNextCustomer && <div className="flex items-center justify-center py-4 gap-2 text-slate-400 text-xs"><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce" /><span className="ml-2">Loading more customers...</span></div>}
+                  </div>
+                )}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden md:flex flex-col h-[600px]">
                 <div className="flex-1 overflow-auto rounded-b-2xl">
                   <table className="w-full caption-bottom text-sm">
                     <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
@@ -1957,7 +1991,40 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="flex flex-col h-[600px]">
+              {/* Mobile card view */}
+              <div className="md:hidden">
+                {isDepotLoading && depots.length === 0 ? (
+                  <div className="p-4 space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-2 animate-pulse"><div className="h-4 w-32 bg-slate-200 rounded" /><div className="h-3 w-48 bg-slate-200 rounded" /></div>)}</div>
+                ) : depots.length === 0 ? (
+                  <div className="text-center py-16 text-slate-400">No depots found</div>
+                ) : (
+                  <div className="p-3 space-y-3 overflow-auto" style={{ maxHeight: 600 }}>
+                    {sortedDepots.map(item => (
+                      <div key={item.depot_id} className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{item.depot_name}</p>
+                            <p className="text-xs text-slate-500">{item.depot_id}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+                          <div className="col-span-2"><span className="font-medium text-slate-600">Address: </span>{item.depot_address || "—"}</div>
+                          <div><span className="font-medium text-slate-600">State: </span>{item.state || "—"}</div>
+                          <div><span className="font-medium text-slate-600">Salesman: </span>{item.salesman_broker_name || "—"}</div>
+                        </div>
+                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>{item.status}</Badge>
+                      </div>
+                    ))}
+                    {isFetchingNextDepot && <div className="flex items-center justify-center py-4 gap-2 text-slate-400 text-xs"><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce" /><span className="ml-2">Loading more depots...</span></div>}
+                  </div>
+                )}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden md:flex flex-col h-[600px]">
                 <div className="flex-1 overflow-auto rounded-b-2xl">
                   <table className="w-full caption-bottom text-sm">
                     <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
@@ -2051,7 +2118,39 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="flex flex-col h-[600px]">
+              {/* Mobile card view */}
+              <div className="md:hidden">
+                {isBrokerLoading && brokers.length === 0 ? (
+                  <div className="p-4 space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-2 animate-pulse"><div className="h-4 w-32 bg-slate-200 rounded" /><div className="h-3 w-40 bg-slate-200 rounded" /></div>)}</div>
+                ) : brokers.length === 0 ? (
+                  <div className="text-center py-16 text-slate-400">No brokers found</div>
+                ) : (
+                  <div className="p-3 space-y-3 overflow-auto" style={{ maxHeight: 600 }}>
+                    {sortedBrokers.map(item => (
+                      <div key={item.broker_id} className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{item.salesman_name}</p>
+                            <p className="text-xs text-slate-500">{item.broker_id}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+                        <div className="text-xs text-slate-500 space-y-0.5">
+                          <div><span className="font-medium text-slate-600">Mobile: </span>{item.mobile_no || "—"}</div>
+                          <div><span className="font-medium text-slate-600">Email: </span>{item.email_id || "—"}</div>
+                        </div>
+                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>{item.status}</Badge>
+                      </div>
+                    ))}
+                    {isFetchingNextBroker && <div className="flex items-center justify-center py-4 gap-2 text-slate-400 text-xs"><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce" /><span className="ml-2">Loading more brokers...</span></div>}
+                  </div>
+                )}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden md:flex flex-col h-[600px]">
                 <div className="flex-1 overflow-auto rounded-b-2xl">
                   <table className="w-full caption-bottom text-sm">
                     <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
@@ -2144,7 +2243,39 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="flex flex-col h-[600px]">
+              {/* Mobile card view */}
+              <div className="md:hidden">
+                {isSalespersonLoading && salespersons.length === 0 ? (
+                  <div className="p-4 space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-2 animate-pulse"><div className="h-4 w-32 bg-slate-200 rounded" /><div className="h-3 w-40 bg-slate-200 rounded" /></div>)}</div>
+                ) : salespersons.length === 0 ? (
+                  <div className="text-center py-16 text-slate-400">No salespersons found</div>
+                ) : (
+                  <div className="p-3 space-y-3 overflow-auto" style={{ maxHeight: 600 }}>
+                    {sortedSalespersons.map(item => (
+                      <div key={item.broker_id} className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{item.salesman_name}</p>
+                            <p className="text-xs text-slate-500">{item.broker_id}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+                        <div className="text-xs text-slate-500 space-y-0.5">
+                          <div><span className="font-medium text-slate-600">Mobile: </span>{item.mobile_no || "—"}</div>
+                          <div><span className="font-medium text-slate-600">Email: </span>{item.email_id || "—"}</div>
+                        </div>
+                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>{item.status}</Badge>
+                      </div>
+                    ))}
+                    {isFetchingNextSalesperson && <div className="flex items-center justify-center py-4 gap-2 text-slate-400 text-xs"><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce" /><span className="ml-2">Loading more salespersons...</span></div>}
+                  </div>
+                )}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden md:flex flex-col h-[600px]">
                 <div className="flex-1 overflow-auto rounded-b-2xl">
                   <table className="w-full caption-bottom text-sm">
                     <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
@@ -2237,7 +2368,41 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="flex flex-col h-[600px]">
+              {/* Mobile card view */}
+              <div className="md:hidden">
+                {isSkuLoading && skuDetails.length === 0 ? (
+                  <div className="p-4 space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-2 animate-pulse"><div className="h-4 w-32 bg-slate-200 rounded" /><div className="h-3 w-48 bg-slate-200 rounded" /></div>)}</div>
+                ) : skuDetails.length === 0 ? (
+                  <div className="text-center py-16 text-slate-400">No SKUs found</div>
+                ) : (
+                  <div className="p-3 space-y-3 overflow-auto" style={{ maxHeight: 600 }}>
+                    {sortedSkuDetails.map(item => (
+                      <div key={item.id} className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{item.sku_name}</p>
+                            <p className="text-xs text-slate-500">{item.sku_code}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+                          <div><span className="font-medium text-slate-600">Main UOM: </span>{item.main_uom}</div>
+                          <div><span className="font-medium text-slate-600">Alt. UOM: </span>{item.alternate_uom}</div>
+                          <div><span className="font-medium text-slate-600">Pack Wt: </span>{item.packing_weight}</div>
+                          <div><span className="font-medium text-slate-600">Gross Wt: </span>{item.gross_weight}</div>
+                        </div>
+                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>{item.status}</Badge>
+                      </div>
+                    ))}
+                    {isFetchingNextSku && <div className="flex items-center justify-center py-4 gap-2 text-slate-400 text-xs"><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce" /><span className="ml-2">Loading more SKUs...</span></div>}
+                  </div>
+                )}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden md:flex flex-col h-[600px]">
                 <div className="flex-1 overflow-auto rounded-b-2xl">
                   <table className="w-full caption-bottom text-sm">
                     <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
@@ -2334,7 +2499,42 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="flex flex-col h-[600px]">
+              {/* Mobile card view */}
+              <div className="md:hidden">
+                {isSkuSellingPriceLoading && skuSellingPrices.length === 0 ? (
+                  <div className="p-4 space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-2 animate-pulse"><div className="h-4 w-40 bg-slate-200 rounded" /><div className="h-3 w-32 bg-slate-200 rounded" /></div>)}</div>
+                ) : skuSellingPrices.length === 0 ? (
+                  <div className="text-center py-16 text-slate-400">No SKU Prices found</div>
+                ) : (
+                  <div className="p-3 space-y-3 overflow-auto" style={{ maxHeight: 600 }}>
+                    {sortedSkuSellingPrices.map(item => (
+                      <div key={item.id} className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{item.packing_material}</p>
+                            <p className="text-xs text-emerald-600 font-bold">Selling: {item.selling_cost}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+                          <div><span className="font-medium text-slate-600">Weight: </span>{item.sku_weight} {item.sku_unit}</div>
+                          <div><span className="font-medium text-slate-600">Landing Cost: </span>{item.landing_cost}</div>
+                          <div><span className="font-medium text-slate-600">Pack Cost: </span>{item.packing_cost}</div>
+                          <div><span className="font-medium text-slate-600">Margin: </span>{item.margin}</div>
+                          <div><span className="font-medium text-slate-600">Net Oil(gm): </span>{item.net_oil_in_gm}</div>
+                          <div><span className="font-medium text-slate-600">VAR: </span>{item.var}</div>
+                        </div>
+                      </div>
+                    ))}
+                    {isFetchingNextSkuSellingPrice && <div className="flex items-center justify-center py-4 gap-2 text-slate-400 text-xs"><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce" /><span className="ml-2">Loading more prices...</span></div>}
+                  </div>
+                )}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden md:flex flex-col h-[600px]">
                 <div className="flex-1 overflow-auto rounded-b-2xl">
                   <table className="w-full caption-bottom text-sm">
                     <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
@@ -2445,7 +2645,47 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="flex flex-col h-[600px]">
+              {/* Mobile card view */}
+              <div className="md:hidden">
+                {isVehicleLoading && vehicles.length === 0 ? (
+                  <div className="p-4 space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-2 animate-pulse"><div className="h-4 w-32 bg-slate-200 rounded" /><div className="h-3 w-40 bg-slate-200 rounded" /></div>)}</div>
+                ) : vehicles.length === 0 ? (
+                  <div className="text-center py-16 text-slate-400">No vehicles found</div>
+                ) : (
+                  <div className="p-3 space-y-3 overflow-auto" style={{ maxHeight: 600 }}>
+                    {sortedVehicles.map(item => (
+                      <div key={item.id} className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{item.registration_no}</p>
+                            <p className="text-xs text-slate-500">{item.vehicle_master_id}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+                          <div><span className="font-medium text-slate-600">Transporter: </span>{item.transporter || "—"}</div>
+                          <div><span className="font-medium text-slate-600">Type: </span>{item.vehicle_type || "—"}</div>
+                          <div><span className="font-medium text-slate-600">RTO: </span>{item.rto || "—"}</div>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {item.road_tax_image && <Badge variant="outline" className="text-[10px] bg-blue-50 cursor-pointer" onClick={() => window.open(item.road_tax_image, '_blank')}>Tax</Badge>}
+                          {item.pollution_image && <Badge variant="outline" className="text-[10px] bg-blue-50 cursor-pointer" onClick={() => window.open(item.pollution_image, '_blank')}>Poll</Badge>}
+                          {item.insurance_image && <Badge variant="outline" className="text-[10px] bg-blue-50 cursor-pointer" onClick={() => window.open(item.insurance_image, '_blank')}>Ins</Badge>}
+                          {item.fitness_image && <Badge variant="outline" className="text-[10px] bg-blue-50 cursor-pointer" onClick={() => window.open(item.fitness_image, '_blank')}>Fit</Badge>}
+                          {item.state_permit_image && <Badge variant="outline" className="text-[10px] bg-blue-50 cursor-pointer" onClick={() => window.open(item.state_permit_image, '_blank')}>Permit</Badge>}
+                        </div>
+                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>{item.status}</Badge>
+                      </div>
+                    ))}
+                    {isFetchingNextVehicle && <div className="flex items-center justify-center py-4 gap-2 text-slate-400 text-xs"><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce" /><span className="ml-2">Loading more vehicles...</span></div>}
+                  </div>
+                )}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden md:flex flex-col h-[600px]">
                 <div className="flex-1 overflow-auto rounded-b-2xl">
                   <table className="w-full caption-bottom text-sm">
                     <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
@@ -2552,7 +2792,44 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="flex flex-col h-[600px]">
+              {/* Mobile card view */}
+              <div className="md:hidden">
+                {isDriverLoading && drivers.length === 0 ? (
+                  <div className="p-4 space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-2 animate-pulse"><div className="h-4 w-32 bg-slate-200 rounded" /><div className="h-3 w-40 bg-slate-200 rounded" /></div>)}</div>
+                ) : drivers.length === 0 ? (
+                  <div className="text-center py-16 text-slate-400">No drivers found</div>
+                ) : (
+                  <div className="p-3 space-y-3 overflow-auto" style={{ maxHeight: 600 }}>
+                    {sortedDrivers.map(item => (
+                      <div key={item.id} className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{item.driver_name}</p>
+                            <p className="text-xs text-slate-500">{item.driver_master_id}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+                          <div><span className="font-medium text-slate-600">Mobile: </span>{item.mobile_no || "—"}</div>
+                          <div><span className="font-medium text-slate-600">Licence No: </span>{item.driving_licence_no || "—"}</div>
+                          <div><span className="font-medium text-slate-600">Licence Type: </span>{item.driving_licence_type || "—"}</div>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {item.aadhaar_no && <Badge variant="outline" className="text-[10px] bg-indigo-50 border-indigo-100 text-indigo-700">Aadhaar: {item.aadhaar_no.slice(-4)}</Badge>}
+                          {item.pan_no && <Badge variant="outline" className="text-[10px] bg-slate-100">PAN: {item.pan_no}</Badge>}
+                        </div>
+                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>{item.status}</Badge>
+                      </div>
+                    ))}
+                    {isFetchingNextDriver && <div className="flex items-center justify-center py-4 gap-2 text-slate-400 text-xs"><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce" /><span className="ml-2">Loading more drivers...</span></div>}
+                  </div>
+                )}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden md:flex flex-col h-[600px]">
                 <div className="flex-1 overflow-auto rounded-b-2xl">
                   <table className="w-full caption-bottom text-sm">
                     <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
@@ -2656,7 +2933,42 @@ export default function MasterPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="flex flex-col h-[600px]">
+              {/* Mobile card view */}
+              <div className="md:hidden">
+                {isTransportLoading && transporters.length === 0 ? (
+                  <div className="p-4 space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-2 animate-pulse"><div className="h-4 w-32 bg-slate-200 rounded" /><div className="h-3 w-40 bg-slate-200 rounded" /></div>)}</div>
+                ) : transporters.length === 0 ? (
+                  <div className="text-center py-16 text-slate-400">No transporters found</div>
+                ) : (
+                  <div className="p-3 space-y-3 overflow-auto" style={{ maxHeight: 600 }}>
+                    {sortedTransporters.map(item => (
+                      <div key={item.id} className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{item.transporter_name}</p>
+                            <p className="text-xs text-slate-500">{item.transport_master_id}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+                          <div><span className="font-medium text-slate-600">Contact: </span>{item.contact_person || "—"}</div>
+                          <div><span className="font-medium text-slate-600">Phone: </span>{item.contact_number || "—"}</div>
+                          <div className="col-span-2"><span className="font-medium text-slate-600">Email: </span>{item.email_id || "—"}</div>
+                          {item.pan && <div><span className="font-medium text-slate-600">PAN: </span>{item.pan}</div>}
+                          {item.gstin && <div><span className="font-medium text-slate-600">GST: </span>{item.gstin}</div>}
+                        </div>
+                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>{item.status}</Badge>
+                      </div>
+                    ))}
+                    {isFetchingNextTransport && <div className="flex items-center justify-center py-4 gap-2 text-slate-400 text-xs"><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce" /><span className="ml-2">Loading more transporters...</span></div>}
+                  </div>
+                )}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden md:flex flex-col h-[600px]">
                 <div className="flex-1 overflow-auto rounded-b-2xl">
                   <table className="w-full caption-bottom text-sm">
                     <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
