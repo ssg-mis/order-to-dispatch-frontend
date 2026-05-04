@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useMemo } from "react"
+import { useRef, useState, useMemo } from "react"
 import { WorkflowStageShell } from "@/components/workflow/workflow-stage-shell"
 import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -8,12 +8,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
 import { gateInApi, orderApi, vehicleMasterApi } from "@/lib/api-service"
 import { useQuery } from "@tanstack/react-query"
-import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Truck, Upload, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Truck, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -24,6 +23,57 @@ function formatDate(dateStr: string) {
   } catch {
     return dateStr
   }
+}
+
+const MAX_COMPRESSED_IMAGE_BYTES = 850 * 1024
+const MAX_COMPRESSED_IMAGE_DIMENSION = 1600
+
+async function compressImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) return file
+
+  const bitmap = await createImageBitmap(file)
+  const canvas = document.createElement("canvas")
+
+  const context = canvas.getContext("2d")
+  if (!context) {
+    bitmap.close()
+    return file
+  }
+
+  const toBlob = (quality: number) =>
+    new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", quality))
+
+  let maxDimension = Math.min(MAX_COMPRESSED_IMAGE_DIMENSION, Math.max(bitmap.width, bitmap.height))
+  let blob: Blob | null = null
+
+  while (maxDimension >= 320) {
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height))
+    const width = Math.max(1, Math.round(bitmap.width * scale))
+    const height = Math.max(1, Math.round(bitmap.height * scale))
+
+    canvas.width = width
+    canvas.height = height
+    context.clearRect(0, 0, width, height)
+    context.drawImage(bitmap, 0, 0, width, height)
+
+    let quality = 0.82
+    blob = await toBlob(quality)
+
+    while (blob && blob.size > MAX_COMPRESSED_IMAGE_BYTES && quality > 0.34) {
+      quality -= 0.08
+      blob = await toBlob(quality)
+    }
+
+    if (blob && blob.size <= MAX_COMPRESSED_IMAGE_BYTES) break
+    maxDimension -= 250
+  }
+
+  bitmap.close()
+
+  if (!blob || blob.size > MAX_COMPRESSED_IMAGE_BYTES) return file
+
+  const cleanName = file.name.replace(/\.[^.]+$/, "")
+  return new File([blob], `${cleanName}.jpg`, { type: "image/jpeg", lastModified: Date.now() })
 }
 
 // ─── Camera Upload Card ──────────────────────────────────────────────────────
@@ -122,12 +172,16 @@ export default function GateInPage() {
   // Image state
   const [frontVehicleImage, setFrontVehicleImage] = useState("")
   const [frontVehicleFileName, setFrontVehicleFileName] = useState("")
+  const [frontVehicleFile, setFrontVehicleFile] = useState<File | null>(null)
   const [backVehicleImage, setBackVehicleImage] = useState("")
   const [backVehicleFileName, setBackVehicleFileName] = useState("")
+  const [backVehicleFile, setBackVehicleFile] = useState<File | null>(null)
   const [driverPhoto, setDriverPhoto] = useState("")
   const [driverPhotoFileName, setDriverPhotoFileName] = useState("")
+  const [driverPhotoFile, setDriverPhotoFile] = useState<File | null>(null)
   const [gatepassPhoto, setGatepassPhoto] = useState("")
   const [gatepassPhotoFileName, setGatepassPhotoFileName] = useState("")
+  const [gatepassPhotoFile, setGatepassPhotoFile] = useState<File | null>(null)
   const [uploadingField, setUploadingField] = useState<string | null>(null)
 
   // ── Pending ────────────────────────────────────────────────────────────────
@@ -226,12 +280,16 @@ export default function GateInPage() {
     setSelectedRecord(record)
     setFrontVehicleImage("")
     setFrontVehicleFileName("")
+    setFrontVehicleFile(null)
     setBackVehicleImage("")
     setBackVehicleFileName("")
+    setBackVehicleFile(null)
     setDriverPhoto("")
     setDriverPhotoFileName("")
+    setDriverPhotoFile(null)
     setGatepassPhoto("")
     setGatepassPhotoFileName("")
+    setGatepassPhotoFile(null)
     setVehicleData(null)
     setIsDialogOpen(true)
 
@@ -254,25 +312,47 @@ export default function GateInPage() {
     }
   }
 
-  // ── Image upload helper ────────────────────────────────────────────────────
-  const uploadImage = async (
+  // ── Image helpers ──────────────────────────────────────────────────────────
+  const selectImage = (
     file: File,
-    setUrl: (u: string) => void,
+    currentPreview: string,
+    setPreview: (u: string) => void,
     setName: (n: string) => void,
-    fieldKey: string
+    setFile: (f: File | null) => void
   ) => {
+    if (currentPreview.startsWith("blob:")) URL.revokeObjectURL(currentPreview)
+    const previewUrl = URL.createObjectURL(file)
+    setPreview(previewUrl)
+    setName(file.name)
+    setFile(file)
+  }
+
+  const clearImage = (
+    previewUrl: string,
+    setPreview: (u: string) => void,
+    setName: (n: string) => void,
+    setFile: (f: File | null) => void
+  ) => {
+    if (previewUrl.startsWith("blob:")) URL.revokeObjectURL(previewUrl)
+    setPreview("")
+    setName("")
+    setFile(null)
+  }
+
+  const uploadSelectedImage = async (file: File | null, fieldKey: string) => {
+    if (!file) return undefined
+
     setUploadingField(fieldKey)
     try {
-      const res = await orderApi.uploadFile(file)
+      const uploadFile = await compressImageForUpload(file)
+      const res = await orderApi.uploadFile(uploadFile)
       if (res.success) {
-        setUrl(res.data.url)
-        setName(file.name)
-        toast({ title: "Uploaded", description: `${file.name} uploaded successfully.` })
+        return res.data.url
       } else {
         throw new Error(res.message)
       }
     } catch (err: any) {
-      toast({ title: "Upload Failed", description: err?.message || "Failed to upload image.", variant: "destructive" })
+      throw new Error(err?.message || "Failed to upload image.")
     } finally {
       setUploadingField(null)
     }
@@ -284,13 +364,25 @@ export default function GateInPage() {
 
     setIsProcessing(true)
     try {
+      const [
+        uploadedFrontVehicleImage,
+        uploadedBackVehicleImage,
+        uploadedDriverPhoto,
+        uploadedGatepassPhoto,
+      ] = await Promise.all([
+        uploadSelectedImage(frontVehicleFile, "front"),
+        uploadSelectedImage(backVehicleFile, "back"),
+        uploadSelectedImage(driverPhotoFile, "driver"),
+        uploadSelectedImage(gatepassPhotoFile, "gatepass"),
+      ])
+
       const res = await gateInApi.submit({
         orderKey: selectedRecord.order_key,
         username: user?.username || "system",
-        frontVehicleImage: frontVehicleImage || undefined,
-        backVehicleImage: backVehicleImage || undefined,
-        driverPhoto: driverPhoto || undefined,
-        gatepassPhoto: gatepassPhoto || undefined,
+        frontVehicleImage: uploadedFrontVehicleImage,
+        backVehicleImage: uploadedBackVehicleImage,
+        driverPhoto: uploadedDriverPhoto,
+        gatepassPhoto: uploadedGatepassPhoto,
       })
 
       if (!res.success) throw new Error(res.message)
@@ -653,8 +745,8 @@ export default function GateInPage() {
                       value={frontVehicleImage}
                       fileName={frontVehicleFileName}
                       isUploading={uploadingField === "front"}
-                      onFile={f => uploadImage(f, setFrontVehicleImage, setFrontVehicleFileName, "front")}
-                      onClear={() => { setFrontVehicleImage(""); setFrontVehicleFileName("") }}
+                      onFile={f => selectImage(f, frontVehicleImage, setFrontVehicleImage, setFrontVehicleFileName, setFrontVehicleFile)}
+                      onClear={() => clearImage(frontVehicleImage, setFrontVehicleImage, setFrontVehicleFileName, setFrontVehicleFile)}
                     />
                     <ImageUploadCard
                       label="Back Vehicle Image"
@@ -662,8 +754,8 @@ export default function GateInPage() {
                       value={backVehicleImage}
                       fileName={backVehicleFileName}
                       isUploading={uploadingField === "back"}
-                      onFile={f => uploadImage(f, setBackVehicleImage, setBackVehicleFileName, "back")}
-                      onClear={() => { setBackVehicleImage(""); setBackVehicleFileName("") }}
+                      onFile={f => selectImage(f, backVehicleImage, setBackVehicleImage, setBackVehicleFileName, setBackVehicleFile)}
+                      onClear={() => clearImage(backVehicleImage, setBackVehicleImage, setBackVehicleFileName, setBackVehicleFile)}
                     />
                     <ImageUploadCard
                       label="Driver Photo"
@@ -671,8 +763,8 @@ export default function GateInPage() {
                       value={driverPhoto}
                       fileName={driverPhotoFileName}
                       isUploading={uploadingField === "driver"}
-                      onFile={f => uploadImage(f, setDriverPhoto, setDriverPhotoFileName, "driver")}
-                      onClear={() => { setDriverPhoto(""); setDriverPhotoFileName("") }}
+                      onFile={f => selectImage(f, driverPhoto, setDriverPhoto, setDriverPhotoFileName, setDriverPhotoFile)}
+                      onClear={() => clearImage(driverPhoto, setDriverPhoto, setDriverPhotoFileName, setDriverPhotoFile)}
                     />
                     <ImageUploadCard
                       label="Vehicle Gate Pass"
@@ -680,14 +772,14 @@ export default function GateInPage() {
                       value={gatepassPhoto}
                       fileName={gatepassPhotoFileName}
                       isUploading={uploadingField === "gatepass"}
-                      onFile={f => uploadImage(f, setGatepassPhoto, setGatepassPhotoFileName, "gatepass")}
-                      onClear={() => { setGatepassPhoto(""); setGatepassPhotoFileName("") }}
+                      onFile={f => selectImage(f, gatepassPhoto, setGatepassPhoto, setGatepassPhotoFileName, setGatepassPhotoFile)}
+                      onClear={() => clearImage(gatepassPhoto, setGatepassPhoto, setGatepassPhotoFileName, setGatepassPhotoFile)}
                     />
                   </div>
                   <p className="text-[11px] text-slate-400 font-medium mt-3">
                     On mobile, tapping a card opens your camera directly. On desktop, it opens the file picker.
                     All images are optional but recommended for complete gate-in records.
-                    Max file size: <span className="font-bold">20 MB</span> per image.
+                    Images are compressed and uploaded only when you confirm gate-in.
                   </p>
                 </div>
 
