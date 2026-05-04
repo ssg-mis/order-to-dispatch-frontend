@@ -136,7 +136,7 @@ function ImageUploadCard({ label, capture, value, fileName, isUploading, onFile,
       <input
         ref={inputRef}
         type="file"
-        accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif"
+        accept="image/*"
         capture={capture}
         className="hidden"
         onChange={e => {
