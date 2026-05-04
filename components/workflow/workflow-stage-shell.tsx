@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Eye, Search, Filter, RotateCcw } from "lucide-react"
+import { Eye, Search, Filter, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
@@ -145,6 +145,53 @@ export function WorkflowStageShell({
   const [selectedHistoryItem, setSelectedHistoryItem] = React.useState<any>(null)
   const [historySearch, setHistorySearch] = React.useState("")
   const [partySearchOpen, setPartySearchOpen] = React.useState(false)
+
+  // History table sorting
+  const [historySortField, setHistorySortField] = React.useState<string>("date")
+  const [historySortDir, setHistorySortDir] = React.useState<"asc" | "desc">("desc")
+
+  const handleHistorySort = (field: string) => {
+    if (historySortField === field) {
+      setHistorySortDir(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setHistorySortField(field)
+      setHistorySortDir("asc")
+    }
+  }
+
+  const HistorySortIcon = ({ field }: { field: string }) => {
+    if (historySortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-400 inline" />
+    return historySortDir === "asc"
+      ? <ArrowUp className="ml-1 h-3 w-3 text-blue-600 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 text-blue-600 inline" />
+  }
+
+  const sortedHistoryData = React.useMemo(() => {
+    if (!historyData || historyData.length === 0) return historyData
+    return [...historyData].sort((a, b) => {
+      let aVal: any = ""
+      let bVal: any = ""
+      if (historySortField === "date") {
+        aVal = new Date(a.date || "").getTime() || 0
+        bVal = new Date(b.date || "").getTime() || 0
+      } else if (historySortField === "orderNo") {
+        aVal = String(a.orderNo || "").toLowerCase()
+        bVal = String(b.orderNo || "").toLowerCase()
+      } else if (historySortField === "customerName") {
+        aVal = String(a.customerName || "").toLowerCase()
+        bVal = String(b.customerName || "").toLowerCase()
+      } else if (historySortField === "status") {
+        aVal = String(a.status || "").toLowerCase()
+        bVal = String(b.status || "").toLowerCase()
+      } else if (historySortField === "remarks") {
+        aVal = String(a.remarks || "").toLowerCase()
+        bVal = String(b.remarks || "").toLowerCase()
+      }
+      if (aVal < bVal) return historySortDir === "asc" ? -1 : 1
+      if (aVal > bVal) return historySortDir === "asc" ? 1 : -1
+      return 0
+    })
+  }, [historyData, historySortField, historySortDir])
 
   const updateFilter = (key: keyof typeof filters, value: string) => {
     const newFilters = { ...filters, [key]: value }
@@ -407,16 +454,16 @@ export function WorkflowStageShell({
                     <table className="w-full text-sm table-fixed hidden md:table">
                       <thead className="bg-muted/30 border-b text-[10px] uppercase font-black text-slate-500 tracking-wider sticky top-0 z-10 shadow-sm">
                         <tr>
-                          <th className="px-4 py-3 text-left w-[12%]">Date</th>
-                          <th className="px-4 py-3 text-left w-[18%]">Order No.</th>
-                          <th className="px-4 py-3 text-left w-[18%]">Party Name</th>
-                          <th className="px-4 py-3 text-left text-center w-[12%]">Status</th>
-                          <th className="px-4 py-3 text-left w-[25%]">{remarksColName || "Remarks"}</th>
+                          <th className="px-4 py-3 text-left w-[12%] cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handleHistorySort("date")}>Date<HistorySortIcon field="date" /></th>
+                          <th className="px-4 py-3 text-left w-[18%] cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handleHistorySort("orderNo")}>Order No.<HistorySortIcon field="orderNo" /></th>
+                          <th className="px-4 py-3 text-left w-[18%] cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handleHistorySort("customerName")}>Party Name<HistorySortIcon field="customerName" /></th>
+                          <th className="px-4 py-3 text-center w-[12%] cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handleHistorySort("status")}>Status<HistorySortIcon field="status" /></th>
+                          <th className="px-4 py-3 text-left w-[25%] cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handleHistorySort("remarks")}>{remarksColName || "Remarks"}<HistorySortIcon field="remarks" /></th>
                           <th className="px-4 py-3 text-center w-[15%]">Action</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {historyData.map((item, i) => (
+                        {sortedHistoryData.map((item, i) => (
                           <tr key={i} className="border-b hover:bg-muted/20 transition-colors">
                             <td className="px-4 py-3 text-xs">{item.date || "-"}</td>
                             <td className="px-4 py-3 font-bold text-blue-700 text-xs">{item.orderNo || "-"}</td>
@@ -454,7 +501,7 @@ export function WorkflowStageShell({
 
                     {/* Mobile Card View */}
                     <div className="grid grid-cols-1 gap-4 p-4 md:hidden">
-                      {historyData.map((item, i) => (
+                      {sortedHistoryData.map((item, i) => (
                         <Card key={i} className="p-4 border-2 border-slate-100 shadow-sm space-y-3">
                           <div className="flex justify-between items-start">
                             <div className="space-y-1">

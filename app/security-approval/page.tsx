@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Upload, X, Plus, Settings2, ShieldAlert, ShieldCheck, Truck, ChevronDown, ChevronUp, FileText } from "lucide-react"
+import { Upload, X, Plus, Settings2, ShieldAlert, ShieldCheck, Truck, ChevronDown, ChevronUp, FileText, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
@@ -29,6 +29,7 @@ import { securityGuardApprovalApi, orderApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
 import { useQuery } from "@tanstack/react-query"
 import { Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, ExternalLink } from "lucide-react"
+import { usePersistedColumns } from "@/hooks/use-persisted-columns"
 
 export default function SecurityApprovalPage() {
   const router = useRouter()
@@ -89,12 +90,10 @@ export default function SecurityApprovalPage() {
     return <p className="text-xs font-bold text-slate-700 leading-none">{formatDate(value)}</p>;
   };
 
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    "partySoDate",
-    "orderNo",
-    "customerName",
-    "status",
-  ])
+  const [visibleColumns, setVisibleColumns] = usePersistedColumns(
+    "security-approval",
+    ["partySoDate", "orderNo", "customerName", "status"]
+  )
   const [selectedItems, setSelectedItems] = useState<string[]>([])
   const [selectedGroups, setSelectedGroups] = useState<any[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
@@ -488,6 +487,40 @@ export default function SecurityApprovalPage() {
     })
   }, [filteredPendingOrders])
 
+  // ── Pending Table Sorting ─────────────────────────────────────
+  const [pendingSortField, setPendingSortField] = useState<string>("")
+  const [pendingSortDir, setPendingSortDir] = useState<"asc" | "desc">("asc")
+
+  const handlePendingSort = (field: string) => {
+    if (pendingSortField === field) {
+      setPendingSortDir(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setPendingSortField(field)
+      setPendingSortDir("asc")
+    }
+  }
+
+  const PendingSortIcon = ({ field }: { field: string }) => {
+    if (pendingSortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-400 inline" />
+    return pendingSortDir === "asc"
+      ? <ArrowUp className="ml-1 h-3 w-3 text-blue-600 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 text-blue-600 inline" />
+  }
+
+  // Sorts displayRows by any field key — dynamic columns are automatically sortable
+  const sortedDisplayRows = useMemo(() => {
+    if (!pendingSortField || displayRows.length === 0) return displayRows
+    return [...displayRows].sort((a, b) => {
+      const aVal = String((a as any)[pendingSortField] ?? "").toLowerCase()
+      const bVal = String((b as any)[pendingSortField] ?? "").toLowerCase()
+      if (aVal < bVal) return pendingSortDir === "asc" ? -1 : 1
+      if (aVal > bVal) return pendingSortDir === "asc" ? 1 : -1
+      return 0
+    })
+  }, [displayRows, pendingSortField, pendingSortDir])
+
+
+
   const toggleSelectItem = (itemKey: string) => {
     setSelectedItems(prev =>
       prev.includes(itemKey)
@@ -628,13 +661,13 @@ export default function SecurityApprovalPage() {
                     onCheckedChange={toggleSelectAll}
                   />
                 </TableHead>
-                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">DO DATE</TableHead>
-                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">DO NUMBERS</TableHead>
-                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">PROCESS ID</TableHead>
-                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider">CUSTOMER NAME</TableHead>
+                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("partySoDate")}>DO DATE<PendingSortIcon field="partySoDate" /></TableHead>
+                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("doNumber")}>DO NUMBERS<PendingSortIcon field="doNumber" /></TableHead>
+                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("processId")}>PROCESS ID<PendingSortIcon field="processId" /></TableHead>
+                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("customerName")}>CUSTOMER NAME<PendingSortIcon field="customerName" /></TableHead>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">ITEM COUNT</TableHead>
-                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">VEHICLE NO.</TableHead>
-                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">ORDER PUNCH REMARKS</TableHead>
+                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicleNo")}>VEHICLE NO.<PendingSortIcon field="vehicleNo" /></TableHead>
+                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("orderPunchRemarks")}>ORDER PUNCH REMARKS<PendingSortIcon field="orderPunchRemarks" /></TableHead>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">STATUS</TableHead>
               </TableRow>
             </TableHeader>
@@ -749,7 +782,7 @@ export default function SecurityApprovalPage() {
               </Card>
             ))
           ) : displayRows.length > 0 ? (
-            displayRows.map((group) => (
+            sortedDisplayRows.map((group) => (
               <Card key={group._rowKey} className={cn("p-4 border-2 transition-all relative overflow-hidden", selectedItems.includes(group._rowKey) ? "border-purple-500 bg-purple-50/30 shadow-lg" : "border-slate-100 bg-white shadow-sm")}>
                 <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
                 <div className="flex items-start justify-between gap-4">

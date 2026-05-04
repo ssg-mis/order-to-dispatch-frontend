@@ -15,7 +15,7 @@ import { AsyncCombobox } from "@/components/ui/async-combobox"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Settings2, ChevronDown, ChevronUp } from "lucide-react"
+import { Settings2, ChevronDown, ChevronUp, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { dispatchPlanningApi, customerApi, depotApi } from "@/lib/api-service"
@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { useQuery } from "@tanstack/react-query"
 import { Loader2, ChevronLeft, ChevronRight, XCircle, FileText, ExternalLink } from "lucide-react"
+import { usePersistedColumns } from "@/hooks/use-persisted-columns"
 
 export default function DispatchMaterialPage() {
   const router = useRouter()
@@ -113,17 +114,10 @@ export default function DispatchMaterialPage() {
     { id: "revertDispatchRemarks", label: "Revert(Dispatch-Planning) Remarks" },
   ]
 
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    "partySoDate",
-    "orderNo",
-    "processId",
-    "customerName",
-    "productName",
-    "transportType",
-    "orderPunchRemarks",
-    "revertDispatchRemarks",
-    "status",
-  ])
+  const [visibleColumns, setVisibleColumns] = usePersistedColumns(
+    "dispatch-material",
+    ["partySoDate", "orderNo", "processId", "customerName", "productName", "transportType", "orderPunchRemarks", "revertDispatchRemarks", "status"]
+  )
 
 
   // Pending query with numeric pagination
@@ -642,6 +636,40 @@ export default function DispatchMaterialPage() {
     })
   }, [filteredPendingOrders, selectedDepoTab])
 
+  // ── Pending Table Sorting ─────────────────────────────────────
+  const [pendingSortField, setPendingSortField] = useState<string>("")
+  const [pendingSortDir, setPendingSortDir] = useState<"asc" | "desc">("asc")
+
+  const handlePendingSort = (field: string) => {
+    if (pendingSortField === field) {
+      setPendingSortDir(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setPendingSortField(field)
+      setPendingSortDir("asc")
+    }
+  }
+
+  const PendingSortIcon = ({ field }: { field: string }) => {
+    if (pendingSortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-400 inline" />
+    return pendingSortDir === "asc"
+      ? <ArrowUp className="ml-1 h-3 w-3 text-blue-600 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 text-blue-600 inline" />
+  }
+
+  // Sorts displayRows by any field key — dynamic columns are automatically sortable
+  const sortedDisplayRows = useMemo(() => {
+    if (!pendingSortField || displayRows.length === 0) return displayRows
+    return [...displayRows].sort((a, b) => {
+      const aVal = String((a as any)[pendingSortField] ?? "").toLowerCase()
+      const bVal = String((b as any)[pendingSortField] ?? "").toLowerCase()
+      if (aVal < bVal) return pendingSortDir === "asc" ? -1 : 1
+      if (aVal > bVal) return pendingSortDir === "asc" ? 1 : -1
+      return 0
+    })
+  }, [displayRows, pendingSortField, pendingSortDir])
+
+
+
   const customerNames = Array.from(new Set((pendingOrders as any[]).map(order =>
     (order.transfer === 'yes' && order.bill_company_name)
       ? order.bill_company_name
@@ -780,8 +808,8 @@ export default function DispatchMaterialPage() {
                 />
               </TableHead>
               {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                <TableHead key={col.id} className="whitespace-nowrap text-center">
-                  {col.label}
+                <TableHead key={col.id} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(col.id)}>
+                  {col.label}<PendingSortIcon field={col.id} />
                 </TableHead>
               ))}
 
@@ -803,7 +831,7 @@ export default function DispatchMaterialPage() {
                 </TableRow>
               ))
             ) : displayRows.length > 0 ? (
-              displayRows.map((row: any) => {
+              sortedDisplayRows.map((row: any) => {
                 const isSelected = selectedItems.some(i => i._rowKey === row._rowKey);
 
                 return (

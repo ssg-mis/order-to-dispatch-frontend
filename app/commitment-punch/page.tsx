@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useMemo } from "react"
 import type React from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -25,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Save, Plus, Trash2, CheckCircle2, RefreshCw, ChevronRight, CalendarIcon } from "lucide-react"
+import { Save, Plus, Trash2, CheckCircle2, RefreshCw, ChevronRight, CalendarIcon, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
@@ -547,6 +547,39 @@ export default function CommitmentPunchPage() {
   // RENDER
   // ═══════════════════════════════════════════════════════════
 
+
+  // ── Pending Table Sorting ─────────────────────────────────────
+  const [pendingSortField, setPendingSortField] = useState<string>("")
+  const [pendingSortDir, setPendingSortDir] = useState<"asc" | "desc">("asc")
+
+  const handlePendingSort = (field: string) => {
+    if (pendingSortField === field) {
+      setPendingSortDir(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setPendingSortField(field)
+      setPendingSortDir("asc")
+    }
+  }
+
+  const PendingSortIcon = ({ field }: { field: string }) => {
+    if (pendingSortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-400 inline" />
+    return pendingSortDir === "asc"
+      ? <ArrowUp className="ml-1 h-3 w-3 text-blue-600 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 text-blue-600 inline" />
+  }
+
+  // Sorts pendingList by any field key
+  const sortedPendingList = useMemo(() => {
+    if (!pendingSortField || !pendingList || pendingList.length === 0) return pendingList
+    return [...pendingList].sort((a: any, b: any) => {
+      const aVal = String(a[pendingSortField] ?? "").toLowerCase()
+      const bVal = String(b[pendingSortField] ?? "").toLowerCase()
+      if (aVal < bVal) return pendingSortDir === "asc" ? -1 : 1
+      if (aVal > bVal) return pendingSortDir === "asc" ? 1 : -1
+      return 0
+    })
+  }, [pendingList, pendingSortField, pendingSortDir])
+
   return (
     <div className="p-3 sm:p-6 max-w-full space-y-4 sm:space-y-6" suppressHydrationWarning>
 
@@ -604,12 +637,12 @@ export default function CommitmentPunchPage() {
                       onCheckedChange={toggleSelectAll}
                     />
                   </TableHead>
-                  <TableHead>Commitment No.</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Customer Name</TableHead>
-                  <TableHead>Oil Type</TableHead>
-                  <TableHead className="text-right">Rate</TableHead>
-                  <TableHead className="text-right">Qty (MT)</TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("commitment_no")}>Commitment No.<PendingSortIcon field="commitment_no" /></TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("date")}>Date<PendingSortIcon field="date" /></TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("customer_name")}>Customer Name<PendingSortIcon field="customer_name" /></TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("oil_type")}>Oil Type<PendingSortIcon field="oil_type" /></TableHead>
+                  <TableHead className="text-right cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("rate")}>Rate<PendingSortIcon field="rate" /></TableHead>
+                  <TableHead className="text-right cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("qty")}>Qty (MT)<PendingSortIcon field="qty" /></TableHead>
                   <TableHead className="text-right">PO Raised (MT)</TableHead>
                   <TableHead className="text-right">Delivery Qty (MT)</TableHead>
                   <TableHead className="text-right">PO Pending Qty (MT)</TableHead>
@@ -636,7 +669,7 @@ export default function CommitmentPunchPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  pendingList.map(row => (
+                  sortedPendingList.map(row => (
                     <TableRow
                       key={row.id}
                       className={`hover:bg-slate-50 cursor-pointer transition-colors ${selectedIds.has(row.id) ? "bg-blue-50 hover:bg-blue-50" : ""}`}

@@ -15,13 +15,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Settings2, ChevronDown, ChevronUp, Truck, Weight, CheckCircle2, XCircle, FileText, ExternalLink, Printer, Download } from "lucide-react"
+import { Settings2, ChevronDown, ChevronUp, Truck, Weight, CheckCircle2, XCircle, FileText, ExternalLink, Printer, Download, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { actualDispatchApi, vehicleDetailsApi, materialLoadApi, skuApi, orderApi, depotApi, vehicleMasterApi, transportMasterApi, driverMasterApi, draftApi, gateInApi } from "@/lib/api-service"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/hooks/use-auth"
 import { useQuery } from "@tanstack/react-query"
 import { Loader2, ChevronLeft, ChevronRight } from "lucide-react"
+import { usePersistedColumns } from "@/hooks/use-persisted-columns"
 
 export default function ActualDispatchPage() {
   const router = useRouter()
@@ -315,17 +316,10 @@ export default function ActualDispatchPage() {
     { id: "revertSecurityRemarks", label: "Revert(Security-Guard) Remarks" }
   ]
 
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    "partySoDate",
-    "orderNo",
-    "processId",
-    "customerName",
-    "qtyToDispatch",
-    "deliveryFrom",
-    "orderPunchRemarks",
-    "status",
-    "revertSecurityRemarks"
-  ])
+  const [visibleColumns, setVisibleColumns] = usePersistedColumns(
+    "actual-dispatch",
+    ["partySoDate", "orderNo", "processId", "customerName", "qtyToDispatch", "deliveryFrom", "orderPunchRemarks", "status", "revertSecurityRemarks"]
+  )
 
   // Pending query with numeric pagination
   const {
@@ -737,6 +731,40 @@ export default function ActualDispatchPage() {
       return (group.depoName || "").trim().toUpperCase() === selectedDepoTab.trim().toUpperCase();
     })
   }, [filteredPendingOrders, selectedDepoTab])
+
+  // ── Pending Table Sorting ─────────────────────────────────────
+  const [pendingSortField, setPendingSortField] = useState<string>("")
+  const [pendingSortDir, setPendingSortDir] = useState<"asc" | "desc">("asc")
+
+  const handlePendingSort = (field: string) => {
+    if (pendingSortField === field) {
+      setPendingSortDir(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setPendingSortField(field)
+      setPendingSortDir("asc")
+    }
+  }
+
+  const PendingSortIcon = ({ field }: { field: string }) => {
+    if (pendingSortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-400 inline" />
+    return pendingSortDir === "asc"
+      ? <ArrowUp className="ml-1 h-3 w-3 text-blue-600 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 text-blue-600 inline" />
+  }
+
+  // Sorts displayRows by any field key — dynamic columns are automatically sortable
+  const sortedDisplayRows = useMemo(() => {
+    if (!pendingSortField || displayRows.length === 0) return displayRows
+    return [...displayRows].sort((a, b) => {
+      const aVal = String((a as any)[pendingSortField] ?? "").toLowerCase()
+      const bVal = String((b as any)[pendingSortField] ?? "").toLowerCase()
+      if (aVal < bVal) return pendingSortDir === "asc" ? -1 : 1
+      if (aVal > bVal) return pendingSortDir === "asc" ? 1 : -1
+      return 0
+    })
+  }, [displayRows, pendingSortField, pendingSortDir])
+
+
 
   const toggleSelectAll = () => {
     if (selectedOrders.length === displayRows.length) {
@@ -1683,8 +1711,8 @@ export default function ActualDispatchPage() {
                   />
                 </TableHead>
                 {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                  <TableHead key={col.id} className="whitespace-nowrap text-center">
-                    {col.label}
+                  <TableHead key={col.id} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(col.id)}>
+                    {col.label}<PendingSortIcon field={col.id} />
                   </TableHead>
                 ))}
 
@@ -1706,7 +1734,7 @@ export default function ActualDispatchPage() {
                   </TableRow>
                 ))
               ) : displayRows.length > 0 ? (
-                displayRows.map((row) => {
+                sortedDisplayRows.map((row) => {
                   const rowKey = row._rowKey;
                   return (
                     <TableRow key={rowKey} className={selectedOrders.includes(rowKey) ? "bg-blue-50/50" : ""}>

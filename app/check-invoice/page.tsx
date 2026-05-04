@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CheckCircle, Settings2, Eye, FileText, ExternalLink } from "lucide-react"
+import { CheckCircle, Settings2, Eye, FileText, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { checkInvoiceApi } from "@/lib/api-service"
@@ -35,6 +35,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { useInView } from "react-intersection-observer"
 import { Loader2 } from "lucide-react"
+import { usePersistedColumns } from "@/hooks/use-persisted-columns"
 
 export default function CheckInvoicePage() {
   const router = useRouter()
@@ -67,13 +68,10 @@ export default function CheckInvoicePage() {
     }
   };
 
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    "partySoDate",
-    "orderNo",
-    "customerName",
-    "invoiceNo",
-    "status",
-  ])
+  const [visibleColumns, setVisibleColumns] = usePersistedColumns(
+    "check-invoice",
+    ["partySoDate", "orderNo", "customerName", "invoiceNo", "status"]
+  )
 
   // Selection & Dialog State
   const [selectedItems, setSelectedItems] = useState<string[]>([])
@@ -309,6 +307,38 @@ export default function CheckInvoicePage() {
     }))
   }, [filteredPendingOrders])
 
+  // ── Pending Table Sorting ─────────────────────────────────────
+  const [pendingSortField, setPendingSortField] = useState<string>("")
+  const [pendingSortDir, setPendingSortDir] = useState<"asc" | "desc">("asc")
+
+  const handlePendingSort = (field: string) => {
+    if (pendingSortField === field) {
+      setPendingSortDir(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setPendingSortField(field)
+      setPendingSortDir("asc")
+    }
+  }
+
+  const PendingSortIcon = ({ field }: { field: string }) => {
+    if (pendingSortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-400 inline" />
+    return pendingSortDir === "asc"
+      ? <ArrowUp className="ml-1 h-3 w-3 text-blue-600 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 text-blue-600 inline" />
+  }
+
+  // Sorts displayRows by any field key — dynamic columns are automatically sortable
+  const sortedDisplayRows = useMemo(() => {
+    if (!pendingSortField || displayRows.length === 0) return displayRows
+    return [...displayRows].sort((a, b) => {
+      const aVal = String((a as any)[pendingSortField] ?? "").toLowerCase()
+      const bVal = String((b as any)[pendingSortField] ?? "").toLowerCase()
+      if (aVal < bVal) return pendingSortDir === "asc" ? -1 : 1
+      if (aVal > bVal) return pendingSortDir === "asc" ? 1 : -1
+      return 0
+    })
+  }, [displayRows, pendingSortField, pendingSortDir])
+
   const toggleSelectItem = (itemKey: string) => {
     setSelectedItems(prev =>
       prev.includes(itemKey)
@@ -541,14 +571,14 @@ export default function CheckInvoicePage() {
                 <TableHead className="w-12 text-center">
                   <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
-                <TableHead className="whitespace-nowrap text-center">DO Date</TableHead>
-                <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("partySoDate")}>DO Date<PendingSortIcon field="partySoDate" /></TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("doNumber")}>DO Number<PendingSortIcon field="doNumber" /></TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("processId")}>Process ID<PendingSortIcon field="processId" /></TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("customerName")}>Customer Name<PendingSortIcon field="customerName" /></TableHead>
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
-                {visibleColumns.includes("invoiceNo") && <TableHead className="whitespace-nowrap text-center">Invoice No.</TableHead>}
-                <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
+                {visibleColumns.includes("invoiceNo") && <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("invoiceNo")}>Invoice No.<PendingSortIcon field="invoiceNo" /></TableHead>}
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicleNo")}>Vehicle No.<PendingSortIcon field="vehicleNo" /></TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("orderPunchRemarks")}>Order Punch Remarks<PendingSortIcon field="orderPunchRemarks" /></TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -569,8 +599,8 @@ export default function CheckInvoicePage() {
                     <TableCell className="text-center py-4"><div className="h-5 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                   </TableRow>
                 ))
-              ) : displayRows.length > 0 ? (
-                displayRows.map((group) => (
+              ) : sortedDisplayRows.length > 0 ? (
+                sortedDisplayRows.map((group) => (
                   <TableRow
                     key={group._rowKey}
                     className={`${selectedItems.includes(group._rowKey) ? "bg-blue-50/50" : ""} ${group.isReverted ? "opacity-60 bg-amber-50/40" : ""}`}

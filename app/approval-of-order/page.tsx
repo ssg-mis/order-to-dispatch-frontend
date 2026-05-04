@@ -16,12 +16,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useInView } from "react-intersection-observer"
-import { ChevronLeft, ChevronRight, Settings2, CheckCircle2, Loader2, ChevronDown, ChevronUp, ChevronsUpDown, Check, CheckCircle, FileText, ExternalLink } from "lucide-react"
+import { ChevronLeft, ChevronRight, Settings2, CheckCircle2, Loader2, ChevronDown, ChevronUp, ChevronsUpDown, Check, CheckCircle, FileText, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { approvalApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
+import { usePersistedColumns } from "@/hooks/use-persisted-columns"
 
 
 export default function CommitmentReviewPage() {
@@ -81,16 +82,10 @@ export default function CommitmentReviewPage() {
     { id: "status", label: "Status" },
   ]
 
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    "partySoDate",
-    "orderNo",
-    "customerName",
-    "orderCategory",
-    "productName",
-    "rate",
-    "orderPunchRemarks",
-    "status",
-  ])
+  const [visibleColumns, setVisibleColumns] = usePersistedColumns(
+    "approval-of-order",
+    ["partySoDate", "orderNo", "customerName", "orderCategory", "productName", "rate", "orderPunchRemarks", "status"]
+  )
 
   // State for list of orders
   const [selectedOrder, setSelectedOrder] = useState<any>(null) // For the dialog interaction
@@ -658,6 +653,40 @@ export default function CommitmentReviewPage() {
     })).filter(group => group._productCount > 0)
   }, [filteredPendingOrders, history])
 
+  // ── Pending Table Sorting ─────────────────────────────────────
+  const [pendingSortField, setPendingSortField] = useState<string>("")
+  const [pendingSortDir, setPendingSortDir] = useState<"asc" | "desc">("asc")
+
+  const handlePendingSort = (field: string) => {
+    if (pendingSortField === field) {
+      setPendingSortDir(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setPendingSortField(field)
+      setPendingSortDir("asc")
+    }
+  }
+
+  const PendingSortIcon = ({ field }: { field: string }) => {
+    if (pendingSortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-400 inline" />
+    return pendingSortDir === "asc"
+      ? <ArrowUp className="ml-1 h-3 w-3 text-blue-600 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 text-blue-600 inline" />
+  }
+
+  // Sorts displayRows by any field key — dynamic columns are automatically sortable
+  const sortedDisplayRows = useMemo(() => {
+    if (!pendingSortField || displayRows.length === 0) return displayRows
+    return [...displayRows].sort((a, b) => {
+      const aVal = String((a as any)[pendingSortField] ?? "").toLowerCase()
+      const bVal = String((b as any)[pendingSortField] ?? "").toLowerCase()
+      if (aVal < bVal) return pendingSortDir === "asc" ? -1 : 1
+      if (aVal > bVal) return pendingSortDir === "asc" ? 1 : -1
+      return 0
+    })
+  }, [displayRows, pendingSortField, pendingSortDir])
+
+
+
   const buildApprovalDisplayRow = (order: any) => {
     const products = order._allProducts || []
     const firstProduct = products[0] || {}
@@ -1155,8 +1184,8 @@ export default function CommitmentReviewPage() {
                   />
                 </TableHead>
                 {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                  <TableHead key={col.id} className="whitespace-nowrap text-center">
-                    {col.label}
+                  <TableHead key={col.id} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(col.id)}>
+                    {col.label}<PendingSortIcon field={col.id} />
                   </TableHead>
                 ))}
               </TableRow>
@@ -1177,7 +1206,7 @@ export default function CommitmentReviewPage() {
                   </TableRow>
                 ))
               ) : displayRows.length > 0 ? (
-                displayRows.map((order: any) => {
+                sortedDisplayRows.map((order: any) => {
                   const row: any = buildApprovalDisplayRow(order)
 
                   return (

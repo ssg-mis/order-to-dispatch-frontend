@@ -28,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus, Check, Search, Package, Calculator, Save, Calendar, ChevronLeft, ChevronRight, FileText, ExternalLink } from "lucide-react"
+import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus, Check, Search, Package, Calculator, Save, Calendar, ChevronLeft, ChevronRight, FileText, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { skuApi, preApprovalApi, skuSellingPriceApi, varCalcApi, orderApi, skuDetailsApi, customerApi } from "@/lib/api-service"
@@ -45,6 +45,7 @@ import { AsyncCombobox } from "@/components/ui/async-combobox"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
 import { useQuery } from "@tanstack/react-query"
+import { usePersistedColumns } from "@/hooks/use-persisted-columns"
 
 
 
@@ -76,19 +77,10 @@ export default function PreApprovalPage() {
     { id: "revertPlanningRemarks", label: "Revert(Dispatch-Planning) Remarks" },
   ]
 
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    "partySoDate",
-    "soNo",
-    "customerName",
-    "deliveryPurpose",
-    "deliveryDate",
-    "oilType",
-    "ratePer15Kg",
-    "ratePerLtr",
-    "orderPunchRemarks",
-    "revertDispatchRemarks",
-    "revertPlanningRemarks"
-  ])
+  const [visibleColumns, setVisibleColumns] = usePersistedColumns(
+    "pre-approval",
+    ["partySoDate", "soNo", "customerName", "deliveryPurpose", "deliveryDate", "oilType", "ratePer15Kg", "ratePerLtr", "orderPunchRemarks", "revertDispatchRemarks", "revertPlanningRemarks"]
+  )
   const [isApproving, setIsApproving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [preApprovalData, setPreApprovalData] = useState<any>(null)
@@ -1545,6 +1537,40 @@ export default function PreApprovalPage() {
     return Object.values(grouped)
   }, [filteredPendingOrders])
 
+  // ── Pending Table Sorting ─────────────────────────────────────
+  const [pendingSortField, setPendingSortField] = useState<string>("")
+  const [pendingSortDir, setPendingSortDir] = useState<"asc" | "desc">("asc")
+
+  const handlePendingSort = (field: string) => {
+    if (pendingSortField === field) {
+      setPendingSortDir(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setPendingSortField(field)
+      setPendingSortDir("asc")
+    }
+  }
+
+  const PendingSortIcon = ({ field }: { field: string }) => {
+    if (pendingSortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-400 inline" />
+    return pendingSortDir === "asc"
+      ? <ArrowUp className="ml-1 h-3 w-3 text-blue-600 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 text-blue-600 inline" />
+  }
+
+  // Sorts displayRows by any field key — dynamic columns are automatically sortable
+  const sortedDisplayRows = useMemo(() => {
+    if (!pendingSortField || displayRows.length === 0) return displayRows
+    return [...displayRows].sort((a, b) => {
+      const aVal = String((a as any)[pendingSortField] ?? "").toLowerCase()
+      const bVal = String((b as any)[pendingSortField] ?? "").toLowerCase()
+      if (aVal < bVal) return pendingSortDir === "asc" ? -1 : 1
+      if (aVal > bVal) return pendingSortDir === "asc" ? 1 : -1
+      return 0
+    })
+  }, [displayRows, pendingSortField, pendingSortDir])
+
+
+
   const toggleSelectAll = () => {
     if (selectedRows.length === displayRows.length) {
       setSelectedRows([])
@@ -2925,8 +2951,8 @@ export default function PreApprovalPage() {
                       />
                     </TableHead>
                     {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                      <TableHead key={col.id} className="whitespace-nowrap text-center">
-                        {col.label}
+                      <TableHead key={col.id} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(col.id)}>
+                        {col.label}<PendingSortIcon field={col.id} />
                       </TableHead>
                     ))}
                   </TableRow>
@@ -2952,7 +2978,7 @@ export default function PreApprovalPage() {
                         {isPendingLoading ? "Fetching more..." : "No Data pending for Pre Approval"}
                       </TableCell>
                     </TableRow>
-                  ) : displayRows.map((rawOrder, i) => {
+                  ) : sortedDisplayRows.map((rawOrder, i) => {
                     const row = buildPendingDisplayRow(rawOrder)
 
                     return (

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Upload, CheckCircle, Settings2, ChevronUp, ChevronDown, CheckSquare, Eye, FileText, ExternalLink } from "lucide-react"
+import { Upload, CheckCircle, Settings2, ChevronUp, ChevronDown, CheckSquare, Eye, FileText, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { gateOutApi, orderApi } from "@/lib/api-service"
@@ -27,6 +27,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { useInView } from "react-intersection-observer"
 import { Loader2 } from "lucide-react"
+import { usePersistedColumns } from "@/hooks/use-persisted-columns"
 
 export default function GateOutPage() {
   const router = useRouter()
@@ -59,13 +60,10 @@ export default function GateOutPage() {
     }
   };
 
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    "partySoDate",
-    "orderNo",
-    "customerName",
-    "invoiceNo",
-    "status",
-  ])
+  const [visibleColumns, setVisibleColumns] = usePersistedColumns(
+    "gate-out",
+    ["partySoDate", "orderNo", "customerName", "invoiceNo", "status"]
+  )
 
   // Selection & Dialog State
   const [selectedItems, setSelectedItems] = useState<string[]>([])
@@ -348,6 +346,38 @@ export default function GateOutPage() {
     return result
   }, [filteredPendingOrders])
 
+  // ── Pending Table Sorting ─────────────────────────────────────
+  const [pendingSortField, setPendingSortField] = useState<string>("")
+  const [pendingSortDir, setPendingSortDir] = useState<"asc" | "desc">("asc")
+
+  const handlePendingSort = (field: string) => {
+    if (pendingSortField === field) {
+      setPendingSortDir(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setPendingSortField(field)
+      setPendingSortDir("asc")
+    }
+  }
+
+  const PendingSortIcon = ({ field }: { field: string }) => {
+    if (pendingSortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-400 inline" />
+    return pendingSortDir === "asc"
+      ? <ArrowUp className="ml-1 h-3 w-3 text-blue-600 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 text-blue-600 inline" />
+  }
+
+  // Sorts displayRows by any field key — dynamic columns are automatically sortable
+  const sortedDisplayRows = useMemo(() => {
+    if (!pendingSortField || displayRows.length === 0) return displayRows
+    return [...displayRows].sort((a, b) => {
+      const aVal = String((a as any)[pendingSortField] ?? "").toLowerCase()
+      const bVal = String((b as any)[pendingSortField] ?? "").toLowerCase()
+      if (aVal < bVal) return pendingSortDir === "asc" ? -1 : 1
+      if (aVal > bVal) return pendingSortDir === "asc" ? 1 : -1
+      return 0
+    })
+  }, [displayRows, pendingSortField, pendingSortDir])
+
   const toggleSelectItem = (itemKey: string) => {
     setSelectedItems(prev =>
       prev.includes(itemKey)
@@ -595,19 +625,19 @@ export default function GateOutPage() {
                     <TableHead className="w-10 text-center">
                       <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                     </TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-widest">DO Date</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-widest">Customer</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-widest">DO Number(s)</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-center">Actual 1</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-widest">Process ID</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-widest">Invoice No</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-widest">Vehicle No</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("partySoDate")}>DO Date<PendingSortIcon field="partySoDate" /></TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("customerName")}>Customer<PendingSortIcon field="customerName" /></TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("doNumber")}>DO Number(s)<PendingSortIcon field="doNumber" /></TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("actual1Date")}>Actual 1<PendingSortIcon field="actual1Date" /></TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("processId")}>Process ID<PendingSortIcon field="processId" /></TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("invoiceNo")}>Invoice No<PendingSortIcon field="invoiceNo" /></TableHead>
+                    <TableHead className="text-[10px] font-black uppercase tracking-widest cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicleNo")}>Vehicle No<PendingSortIcon field="vehicleNo" /></TableHead>
                     <TableHead className="text-[10px] font-black uppercase tracking-widest text-center">Items</TableHead>
                     <TableHead className="text-[10px] font-black uppercase tracking-widest text-center">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {displayRows.map((group) => (
+                  {sortedDisplayRows.map((group) => (
                     <TableRow
                       key={group._rowKey}
                       className={cn(

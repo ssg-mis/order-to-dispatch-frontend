@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Upload, Settings2, FileText, ChevronUp, ChevronDown, Plus, X, Truck, ExternalLink } from "lucide-react"
+import { Upload, Settings2, FileText, ChevronUp, ChevronDown, Plus, X, Truck, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -29,6 +29,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { useInView } from "react-intersection-observer"
 import { Loader2 } from "lucide-react"
+import { usePersistedColumns } from "@/hooks/use-persisted-columns"
 
 export default function MakeInvoicePage() {
   const router = useRouter()
@@ -82,12 +83,10 @@ export default function MakeInvoicePage() {
     return <p className="text-xs font-bold text-slate-700 leading-none">{formatDate(value)}</p>;
   };
 
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    "partySoDate",
-    "orderNo",
-    "customerName",
-    "status",
-  ])
+  const [visibleColumns, setVisibleColumns] = usePersistedColumns(
+    "make-invoice",
+    ["partySoDate", "orderNo", "customerName", "status"]
+  )
 
   // Selection & Dialog State
   const [selectedItems, setSelectedItems] = useState<string[]>([])
@@ -384,6 +383,38 @@ export default function MakeInvoicePage() {
       orderPunchRemarks: group._allProducts[0]?.order_punch_remarks || "—"
     }))
   }, [filteredPendingOrders])
+
+  // ── Pending Table Sorting ─────────────────────────────────────
+  const [pendingSortField, setPendingSortField] = useState<string>("")
+  const [pendingSortDir, setPendingSortDir] = useState<"asc" | "desc">("asc")
+
+  const handlePendingSort = (field: string) => {
+    if (pendingSortField === field) {
+      setPendingSortDir(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setPendingSortField(field)
+      setPendingSortDir("asc")
+    }
+  }
+
+  const PendingSortIcon = ({ field }: { field: string }) => {
+    if (pendingSortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-400 inline" />
+    return pendingSortDir === "asc"
+      ? <ArrowUp className="ml-1 h-3 w-3 text-blue-600 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 text-blue-600 inline" />
+  }
+
+  // Sorts displayRows by any field key — dynamic columns are automatically sortable
+  const sortedDisplayRows = useMemo(() => {
+    if (!pendingSortField || displayRows.length === 0) return displayRows
+    return [...displayRows].sort((a, b) => {
+      const aVal = String((a as any)[pendingSortField] ?? "").toLowerCase()
+      const bVal = String((b as any)[pendingSortField] ?? "").toLowerCase()
+      if (aVal < bVal) return pendingSortDir === "asc" ? -1 : 1
+      if (aVal > bVal) return pendingSortDir === "asc" ? 1 : -1
+      return 0
+    })
+  }, [displayRows, pendingSortField, pendingSortDir])
 
   const toggleSelectItem = (itemKey: string) => {
     setSelectedItems(prev =>
@@ -686,14 +717,14 @@ export default function MakeInvoicePage() {
                 <TableHead className="w-12 text-center">
                   <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
-                <TableHead className="whitespace-nowrap text-center">DO Date</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Actual 1</TableHead>
-                <TableHead className="whitespace-nowrap text-center">DO Number</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Process ID</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Customer Name</TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("partySoDate")}>DO Date<PendingSortIcon field="partySoDate" /></TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("actual1Date")}>Actual 1<PendingSortIcon field="actual1Date" /></TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("doNumber")}>DO Number<PendingSortIcon field="doNumber" /></TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("processId")}>Process ID<PendingSortIcon field="processId" /></TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("customerName")}>Customer Name<PendingSortIcon field="customerName" /></TableHead>
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Order Punch Remarks</TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicleNo")}>Vehicle No.<PendingSortIcon field="vehicleNo" /></TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("orderPunchRemarks")}>Order Punch Remarks<PendingSortIcon field="orderPunchRemarks" /></TableHead>
                 <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -713,8 +744,8 @@ export default function MakeInvoicePage() {
                     <TableCell className="text-center py-4"><div className="h-5 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                   </TableRow>
                 ))
-              ) : displayRows.length > 0 ? (
-                displayRows.map((group) => (
+              ) : sortedDisplayRows.length > 0 ? (
+                sortedDisplayRows.map((group) => (
                   <TableRow key={group._rowKey} className={selectedItems.includes(group._rowKey) ? "bg-blue-50/50" : ""}>
                     <TableCell className="text-center">
                       <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />

@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
 import { gateInApi, orderApi, vehicleMasterApi } from "@/lib/api-service"
 import { useQuery } from "@tanstack/react-query"
-import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Truck, Upload, X } from "lucide-react"
+import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Truck, Upload, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -177,6 +177,39 @@ export default function GateInPage() {
     })), [historyRecords])
 
   // ── Select helpers ─────────────────────────────────────────────────────────
+
+  // ── Pending Table Sorting ─────────────────────────────────────
+  const [pendingSortField, setPendingSortField] = useState<string>("")
+  const [pendingSortDir, setPendingSortDir] = useState<"asc" | "desc">("asc")
+
+  const handlePendingSort = (field: string) => {
+    if (pendingSortField === field) {
+      setPendingSortDir(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setPendingSortField(field)
+      setPendingSortDir("asc")
+    }
+  }
+
+  const PendingSortIcon = ({ field }: { field: string }) => {
+    if (pendingSortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-400 inline" />
+    return pendingSortDir === "asc"
+      ? <ArrowUp className="ml-1 h-3 w-3 text-blue-600 inline" />
+      : <ArrowDown className="ml-1 h-3 w-3 text-blue-600 inline" />
+  }
+
+  // Sorts pendingRecords by any field key
+  const sortedPendingRecords = useMemo(() => {
+    if (!pendingSortField || !pendingRecords || pendingRecords.length === 0) return pendingRecords
+    return [...pendingRecords].sort((a: any, b: any) => {
+      const aVal = String(a[pendingSortField] ?? "").toLowerCase()
+      const bVal = String(b[pendingSortField] ?? "").toLowerCase()
+      if (aVal < bVal) return pendingSortDir === "asc" ? -1 : 1
+      if (aVal > bVal) return pendingSortDir === "asc" ? 1 : -1
+      return 0
+    })
+  }, [pendingRecords, pendingSortField, pendingSortDir])
+
   const toggleSelectAll = () => {
     if (selectedRows.length === pendingRecords.length) setSelectedRows([])
     else setSelectedRows(pendingRecords.map((r: any) => r.order_key))
@@ -405,11 +438,11 @@ export default function GateInPage() {
                     onCheckedChange={toggleSelectAll}
                   />
                 </TableHead>
-                <TableHead className="whitespace-nowrap text-center">Order Key (DO No.)</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Vehicle No.</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Driver Name</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Saved By</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Saved At</TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("order_key")}>Order Key (DO No.)<PendingSortIcon field="order_key" /></TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicle_no")}>Vehicle No.<PendingSortIcon field="vehicle_no" /></TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("driver_name")}>Driver Name<PendingSortIcon field="driver_name" /></TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("saved_by")}>Saved By<PendingSortIcon field="saved_by" /></TableHead>
+                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("saved_at")}>Saved At<PendingSortIcon field="saved_at" /></TableHead>
                 <TableHead className="whitespace-nowrap text-center">Products</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Action</TableHead>
               </TableRow>
@@ -432,7 +465,7 @@ export default function GateInPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                pendingRecords.map((record: any) => {
+                sortedPendingRecords.map((record: any) => {
                   const draft = record.draft_data || {}
                   const productCount = draft.dialogSelectedProducts?.length ?? "—"
                   return (
