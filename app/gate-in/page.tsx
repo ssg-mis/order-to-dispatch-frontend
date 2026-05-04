@@ -741,7 +741,7 @@ export default function GateInPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <ImageUploadCard
                       label="Front Vehicle Image"
-                      capture={undefined}
+                      capture="environment"
                       value={frontVehicleImage}
                       fileName={frontVehicleFileName}
                       isUploading={uploadingField === "front"}
@@ -750,7 +750,7 @@ export default function GateInPage() {
                     />
                     <ImageUploadCard
                       label="Back Vehicle Image"
-                      capture={undefined}
+                      capture="environment"
                       value={backVehicleImage}
                       fileName={backVehicleFileName}
                       isUploading={uploadingField === "back"}
@@ -759,7 +759,7 @@ export default function GateInPage() {
                     />
                     <ImageUploadCard
                       label="Driver Photo"
-                      capture={undefined}
+                      capture="environment"
                       value={driverPhoto}
                       fileName={driverPhotoFileName}
                       isUploading={uploadingField === "driver"}
@@ -768,7 +768,7 @@ export default function GateInPage() {
                     />
                     <ImageUploadCard
                       label="Vehicle Gate Pass"
-                      capture={undefined}
+                      capture="environment"
                       value={gatepassPhoto}
                       fileName={gatepassPhotoFileName}
                       isUploading={uploadingField === "gatepass"}
