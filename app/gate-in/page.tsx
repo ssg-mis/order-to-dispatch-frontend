@@ -39,7 +39,18 @@ interface ImageUploadCardProps {
 }
 
 function ImageUploadCard({ label, capture, value, fileName, isUploading, onFile, onClear }: ImageUploadCardProps) {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
+  const [showPicker, setShowPicker] = useState(false)
+
+  const handlePick = (mode: "camera" | "gallery") => {
+    setShowPicker(false)
+    if (mode === "camera") {
+      cameraInputRef.current?.click()
+    } else {
+      galleryInputRef.current?.click()
+    }
+  }
 
   return (
     <div className="flex flex-col items-center gap-3 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-4 hover:border-blue-300 transition-colors">
@@ -64,27 +75,40 @@ function ImageUploadCard({ label, capture, value, fileName, isUploading, onFile,
           <p className="text-[10px] text-slate-500 font-semibold mt-1 text-center truncate">{fileName}</p>
         </div>
       ) : (
-        <button
-          type="button"
-          disabled={isUploading}
-          onClick={() => inputRef.current?.click()}
-          className="flex flex-col items-center gap-2 w-full h-40 justify-center rounded-xl border-2 border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors text-slate-400 hover:text-blue-500"
-        >
-          {isUploading ? (
-            <Loader2 className="h-8 w-8 animate-spin" />
-          ) : (
-            <>
-              <Camera className="h-8 w-8" />
-              <span className="text-xs font-bold">Tap to open camera</span>
-              <span className="text-[10px] font-medium text-slate-400">or choose from gallery</span>
-            </>
+        <div className="w-full space-y-2">
+          <button
+            type="button"
+            disabled={isUploading}
+            onClick={() => setShowPicker((prev) => !prev)}
+            className="flex flex-col items-center gap-2 w-full h-40 justify-center rounded-xl border-2 border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors text-slate-400 hover:text-blue-500"
+          >
+            {isUploading ? (
+              <Loader2 className="h-8 w-8 animate-spin" />
+            ) : (
+              <>
+                <Camera className="h-8 w-8" />
+                <span className="text-xs font-bold">Select upload source</span>
+                <span className="text-[10px] font-medium text-slate-400">camera or gallery</span>
+              </>
+            )}
+          </button>
+
+          {showPicker && !isUploading && (
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" variant="outline" className="h-10 text-[10px] font-black uppercase" onClick={() => handlePick("camera")}>
+                Camera
+              </Button>
+              <Button type="button" variant="outline" className="h-10 text-[10px] font-black uppercase" onClick={() => handlePick("gallery")}>
+                Gallery
+              </Button>
+            </div>
           )}
-        </button>
+        </div>
       )}
 
-      {/* Hidden file input — capture attribute opens camera on mobile */}
+      {/* Hidden file inputs */}
       <input
-        ref={inputRef}
+        ref={cameraInputRef}
         type="file"
         accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif"
         capture={capture}
@@ -92,7 +116,18 @@ function ImageUploadCard({ label, capture, value, fileName, isUploading, onFile,
         onChange={e => {
           const file = e.target.files?.[0]
           if (file) onFile(file)
-          e.target.value = "" // allow re-selecting same file
+          e.target.value = ""
+        }}
+      />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif"
+        className="hidden"
+        onChange={e => {
+          const file = e.target.files?.[0]
+          if (file) onFile(file)
+          e.target.value = ""
         }}
       />
     </div>
