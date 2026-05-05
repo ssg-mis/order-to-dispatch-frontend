@@ -29,6 +29,57 @@ import { useInView } from "react-intersection-observer"
 import { Loader2 } from "lucide-react"
 import { usePersistedColumns } from "@/hooks/use-persisted-columns"
 
+const MAX_COMPRESSED_IMAGE_BYTES = 850 * 1024
+const MAX_COMPRESSED_IMAGE_DIMENSION = 1600
+
+async function compressImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) return file
+
+  const bitmap = await createImageBitmap(file)
+  const canvas = document.createElement("canvas")
+  const context = canvas.getContext("2d")
+
+  if (!context) {
+    bitmap.close()
+    return file
+  }
+
+  const toBlob = (quality: number) =>
+    new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", quality))
+
+  let maxDimension = Math.min(MAX_COMPRESSED_IMAGE_DIMENSION, Math.max(bitmap.width, bitmap.height))
+  let blob: Blob | null = null
+
+  while (maxDimension >= 320) {
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height))
+    const width = Math.max(1, Math.round(bitmap.width * scale))
+    const height = Math.max(1, Math.round(bitmap.height * scale))
+
+    canvas.width = width
+    canvas.height = height
+    context.clearRect(0, 0, width, height)
+    context.drawImage(bitmap, 0, 0, width, height)
+
+    let quality = 0.82
+    blob = await toBlob(quality)
+
+    while (blob && blob.size > MAX_COMPRESSED_IMAGE_BYTES && quality > 0.34) {
+      quality -= 0.08
+      blob = await toBlob(quality)
+    }
+
+    if (blob && blob.size <= MAX_COMPRESSED_IMAGE_BYTES) break
+    maxDimension -= 250
+  }
+
+  bitmap.close()
+
+  if (!blob || blob.size > MAX_COMPRESSED_IMAGE_BYTES) return file
+
+  const cleanName = file.name.replace(/\.[^.]+$/, "")
+  return new File([blob], `${cleanName}.jpg`, { type: "image/jpeg", lastModified: Date.now() })
+}
+
 export default function GateOutPage() {
   const router = useRouter()
   const { toast } = useToast()
@@ -75,9 +126,9 @@ export default function GateOutPage() {
   // Gate Out Form State
   const [isUploading, setIsUploading] = useState<string | null>(null)
   const [gateOutData, setGateOutData] = useState({
-    gatePassFile: "" as string,
+    gatePassFile: null as File | null,
     gatePassFileName: "",
-    vehicleLoadedImage: "" as string,
+    vehicleLoadedImage: null as File | null,
     vehicleLoadedImageName: "",
   })
 
@@ -154,38 +205,36 @@ export default function GateOutPage() {
     }
   }, [historyInView, hasNextHistory, fetchNextHistory]);
 
-  const handleFileUpload = async (file: File, type: 'gatePass' | 'vehicleImage') => {
+  const handleFileUpload = (file: File, type: 'gatePass' | 'vehicleImage') => {
     if (!file) return;
 
+    if (type === 'gatePass') {
+      setGateOutData(p => ({
+        ...p,
+        gatePassFile: file,
+        gatePassFileName: file.name
+      }));
+    } else {
+      setGateOutData(p => ({
+        ...p,
+        vehicleLoadedImage: file,
+        vehicleLoadedImageName: file.name
+      }));
+    }
+  };
+
+  const uploadSelectedFile = async (file: File, type: 'gatePass' | 'vehicleImage') => {
     setIsUploading(type);
     try {
-      const response = await orderApi.uploadFile(file);
+      const uploadFile = await compressImageForUpload(file);
+      const response = await orderApi.uploadFile(uploadFile);
       if (response.success) {
-        if (type === 'gatePass') {
-          setGateOutData(p => ({
-            ...p,
-            gatePassFile: response.data.url,
-            gatePassFileName: file.name
-          }));
-        } else {
-          setGateOutData(p => ({
-            ...p,
-            vehicleLoadedImage: response.data.url,
-            vehicleLoadedImageName: file.name
-          }));
-        }
-        toast({
-          title: "Upload Successful",
-          description: `${file.name} uploaded successfully.`
-        });
+        return response.data.url;
       }
+      throw new Error(response.message || "Failed to upload file to S3");
     } catch (error: any) {
       console.error("Upload failed:", error);
-      toast({
-        title: "Upload Failed",
-        description: error.message || "Failed to upload file to S3",
-        variant: "destructive",
-      });
+      throw error;
     } finally {
       setIsUploading(null);
     }
@@ -427,9 +476,9 @@ export default function GateOutPage() {
 
       // Reset form
       setGateOutData({
-        gatePassFile: "",
+        gatePassFile: null,
         gatePassFileName: "",
-        vehicleLoadedImage: "",
+        vehicleLoadedImage: null,
         vehicleLoadedImageName: ""
       })
       setExpandedOrders([]) // Reset expanded state
@@ -455,18 +504,11 @@ export default function GateOutPage() {
       return
     }
 
-    // Validate Mandatory Uploads
-    if (!gateOutData.gatePassFile || !gateOutData.vehicleLoadedImage) {
-      toast({
-        title: "Validation Error",
-        description: "Please upload both Gate Pass and Vehicle Loaded Image.",
-        variant: "destructive"
-      });
-      return;
-    }
+    const selectedGatePassFile = gateOutData.gatePassFile
+    const selectedVehicleLoadedImage = gateOutData.vehicleLoadedImage
 
     // Validate Mandatory Uploads
-    if (!gateOutData.gatePassFile || !gateOutData.vehicleLoadedImage) {
+    if (!selectedGatePassFile || !selectedVehicleLoadedImage) {
       toast({
         title: "Validation Error",
         description: "Please upload both Gate Pass and Vehicle Loaded Image.",
@@ -479,11 +521,13 @@ export default function GateOutPage() {
     try {
       const successfulSubmissions: any[] = []
       const failedSubmissions: any[] = []
+      const gatePassFileUrl = await uploadSelectedFile(selectedGatePassFile, 'gatePass')
+      const vehicleLoadedImageUrl = await uploadSelectedFile(selectedVehicleLoadedImage, 'vehicleImage')
 
       for (const product of productsToSubmit) {
         const submitData = {
-          gate_pass: gateOutData.gatePassFile || "",
-          vehicle_image: gateOutData.vehicleLoadedImage || "",
+          gate_pass: gatePassFileUrl || "",
+          vehicle_image: vehicleLoadedImageUrl || "",
           username: user?.username || null // Add username for tracking
         };
 
@@ -1369,7 +1413,7 @@ export default function GateOutPage() {
                     <label htmlFor="gatepass-upload" className="cursor-pointer block">
                       <Upload className="h-6 w-6 mx-auto mb-2 text-blue-600" />
                       <p className="text-xs font-bold text-slate-700 uppercase tracking-tight break-words">
-                        {isUploading === 'gatePass' ? "UPLOADING..." : (gateOutData.gatePassFile ? `REPLACE: ${gateOutData.gatePassFileName}` : "Click to upload gate pass")}
+                        {isUploading === 'gatePass' ? "UPLOADING..." : (gateOutData.gatePassFile ? `SELECTED: ${gateOutData.gatePassFileName}` : "Click to select gate pass")}
                       </p>
                     </label>
                   </div>
@@ -1393,7 +1437,7 @@ export default function GateOutPage() {
                     <label htmlFor="vehicle-loaded-upload" className="cursor-pointer block">
                       <Upload className="h-6 w-6 mx-auto mb-2 text-violet-600" />
                       <p className="text-xs font-bold text-slate-700 uppercase tracking-tight break-words">
-                        {isUploading === 'vehicleImage' ? "UPLOADING..." : (gateOutData.vehicleLoadedImage ? `REPLACE: ${gateOutData.vehicleLoadedImageName}` : "Click to upload vehicle image")}
+                        {isUploading === 'vehicleImage' ? "UPLOADING..." : (gateOutData.vehicleLoadedImage ? `SELECTED: ${gateOutData.vehicleLoadedImageName}` : "Click to select vehicle image")}
                       </p>
                     </label>
                   </div>

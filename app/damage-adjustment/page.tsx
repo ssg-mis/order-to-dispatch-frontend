@@ -29,6 +29,57 @@ import { Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { usePersistedColumns } from "@/hooks/use-persisted-columns"
 
+const MAX_COMPRESSED_IMAGE_BYTES = 850 * 1024
+const MAX_COMPRESSED_IMAGE_DIMENSION = 1600
+
+async function compressImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) return file
+
+  const bitmap = await createImageBitmap(file)
+  const canvas = document.createElement("canvas")
+  const context = canvas.getContext("2d")
+
+  if (!context) {
+    bitmap.close()
+    return file
+  }
+
+  const toBlob = (quality: number) =>
+    new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", quality))
+
+  let maxDimension = Math.min(MAX_COMPRESSED_IMAGE_DIMENSION, Math.max(bitmap.width, bitmap.height))
+  let blob: Blob | null = null
+
+  while (maxDimension >= 320) {
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height))
+    const width = Math.max(1, Math.round(bitmap.width * scale))
+    const height = Math.max(1, Math.round(bitmap.height * scale))
+
+    canvas.width = width
+    canvas.height = height
+    context.clearRect(0, 0, width, height)
+    context.drawImage(bitmap, 0, 0, width, height)
+
+    let quality = 0.82
+    blob = await toBlob(quality)
+
+    while (blob && blob.size > MAX_COMPRESSED_IMAGE_BYTES && quality > 0.34) {
+      quality -= 0.08
+      blob = await toBlob(quality)
+    }
+
+    if (blob && blob.size <= MAX_COMPRESSED_IMAGE_BYTES) break
+    maxDimension -= 250
+  }
+
+  bitmap.close()
+
+  if (!blob || blob.size > MAX_COMPRESSED_IMAGE_BYTES) return file
+
+  const cleanName = file.name.replace(/\.[^.]+$/, "")
+  return new File([blob], `${cleanName}.jpg`, { type: "image/jpeg", lastModified: Date.now() })
+}
+
 export default function DamageAdjustmentPage() {
   const router = useRouter()
   const { toast } = useToast()
@@ -76,7 +127,7 @@ export default function DamageAdjustmentPage() {
   const [adjustmentData, setAdjustmentData] = useState({
     creditNoteDate: "",
     creditNoteNo: "",
-    creditNoteCopy: "" as string,
+    creditNoteCopy: null as File | null,
     creditNoteCopyName: "",
   })
 
@@ -153,30 +204,28 @@ export default function DamageAdjustmentPage() {
     }
   }, [historyInView, hasNextHistory, fetchNextHistory]);
 
-  const handleFileUpload = async (file: File) => {
+  const handleFileUpload = (file: File) => {
     if (!file) return;
 
+    setAdjustmentData(p => ({
+      ...p,
+      creditNoteCopy: file,
+      creditNoteCopyName: file.name
+    }));
+  };
+
+  const uploadSelectedFile = async (file: File) => {
     setIsUploading(true);
     try {
-      const response = await orderApi.uploadFile(file);
+      const uploadFile = await compressImageForUpload(file);
+      const response = await orderApi.uploadFile(uploadFile);
       if (response.success) {
-        setAdjustmentData(p => ({
-          ...p,
-          creditNoteCopy: response.data.url,
-          creditNoteCopyName: file.name
-        }));
-        toast({
-          title: "Upload Successful",
-          description: `${file.name} uploaded successfully.`
-        });
+        return response.data.url;
       }
+      throw new Error(response.message || "Failed to upload file to S3");
     } catch (error: any) {
       console.error("Upload failed:", error);
-      toast({
-        title: "Upload Failed",
-        description: error.message || "Failed to upload file to S3",
-        variant: "destructive",
-      });
+      throw error;
     } finally {
       setIsUploading(false);
     }
@@ -397,7 +446,7 @@ export default function DamageAdjustmentPage() {
       setAdjustmentData({
         creditNoteDate: "",
         creditNoteNo: "",
-        creditNoteCopy: "",
+        creditNoteCopy: null,
         creditNoteCopyName: "",
       })
 
@@ -434,6 +483,9 @@ export default function DamageAdjustmentPage() {
     try {
       const successfulSubmissions: any[] = []
       const failedSubmissions: any[] = []
+      const creditNoteCopyUrl = adjustmentData.creditNoteCopy
+        ? await uploadSelectedFile(adjustmentData.creditNoteCopy)
+        : null
 
       for (const product of productsToSubmit) {
         const submitData = {
@@ -443,7 +495,7 @@ export default function DamageAdjustmentPage() {
           credit_note_amount: 0,
           net_banalce: 0,
           status_2: "Completed",
-          credit_note_copy: adjustmentData.creditNoteCopy || null,
+          credit_note_copy: creditNoteCopyUrl,
           username: user?.username || null // Add username for tracking
         };
 
@@ -1156,7 +1208,7 @@ export default function DamageAdjustmentPage() {
                           <Upload className="h-5 w-5 mx-auto mb-1 text-blue-600" />
                           <p className="text-xs font-bold text-slate-700 uppercase tracking-tight block">
                             <span className="block break-words">
-                            {isUploading ? "UPLOADING..." : (adjustmentData.creditNoteCopyName ? `REPLACE: ${adjustmentData.creditNoteCopyName}` : "Upload Copy")}
+                            {isUploading ? "UPLOADING..." : (adjustmentData.creditNoteCopyName ? `SELECTED: ${adjustmentData.creditNoteCopyName}` : "Select Copy")}
                             </span>
                           </p>
                         </label>

@@ -31,6 +31,57 @@ import { useQuery } from "@tanstack/react-query"
 import { Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, ExternalLink } from "lucide-react"
 import { usePersistedColumns } from "@/hooks/use-persisted-columns"
 
+const MAX_COMPRESSED_IMAGE_BYTES = 850 * 1024
+const MAX_COMPRESSED_IMAGE_DIMENSION = 1600
+
+async function compressImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) return file
+
+  const bitmap = await createImageBitmap(file)
+  const canvas = document.createElement("canvas")
+  const context = canvas.getContext("2d")
+
+  if (!context) {
+    bitmap.close()
+    return file
+  }
+
+  const toBlob = (quality: number) =>
+    new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", quality))
+
+  let maxDimension = Math.min(MAX_COMPRESSED_IMAGE_DIMENSION, Math.max(bitmap.width, bitmap.height))
+  let blob: Blob | null = null
+
+  while (maxDimension >= 320) {
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height))
+    const width = Math.max(1, Math.round(bitmap.width * scale))
+    const height = Math.max(1, Math.round(bitmap.height * scale))
+
+    canvas.width = width
+    canvas.height = height
+    context.clearRect(0, 0, width, height)
+    context.drawImage(bitmap, 0, 0, width, height)
+
+    let quality = 0.82
+    blob = await toBlob(quality)
+
+    while (blob && blob.size > MAX_COMPRESSED_IMAGE_BYTES && quality > 0.34) {
+      quality -= 0.08
+      blob = await toBlob(quality)
+    }
+
+    if (blob && blob.size <= MAX_COMPRESSED_IMAGE_BYTES) break
+    maxDimension -= 250
+  }
+
+  bitmap.close()
+
+  if (!blob || blob.size > MAX_COMPRESSED_IMAGE_BYTES) return file
+
+  const cleanName = file.name.replace(/\.[^.]+$/, "")
+  return new File([blob], `${cleanName}.jpg`, { type: "image/jpeg", lastModified: Date.now() })
+}
+
 export default function SecurityApprovalPage() {
   const router = useRouter()
   const { toast } = useToast()
@@ -101,9 +152,10 @@ export default function SecurityApprovalPage() {
   const [isUploading, setIsUploading] = useState<string | null>(null)
   const [uploadData, setUploadData] = useState({
     biltyNo: "",
-    biltyImage: "" as string,
+    biltyImage: null as File | null,
     biltyImageName: "",
-    vehicleImages: [] as string[],
+    vehicleImages: [] as File[],
+    vehicleImagePreviews: [] as string[],
     vehicleImageNames: [] as string[],
     checklist: {
       mallLoad: false,
@@ -196,40 +248,39 @@ export default function SecurityApprovalPage() {
     setHistoryPage(1);
   }, [filterValues]);
 
-  const handleFileUpload = async (file: File, type: 'bilty' | 'vehicle') => {
+  const handleFileUpload = (file: File, type: 'bilty' | 'vehicle') => {
     if (!file) return;
 
-    const uploadId = type === 'bilty' ? 'bilty' : `vehicle-${Date.now()}`;
+    if (type === 'bilty') {
+      setUploadData(p => ({
+        ...p,
+        biltyImage: file,
+        biltyImageName: file.name
+      }));
+    } else {
+      setUploadData(p => ({
+        ...p,
+        vehicleImages: [...p.vehicleImages, file],
+        vehicleImagePreviews: [...p.vehicleImagePreviews, URL.createObjectURL(file)],
+        vehicleImageNames: [...p.vehicleImageNames, file.name]
+      }));
+    }
+  };
+
+  const uploadSelectedFile = async (file: File, type: 'bilty' | 'vehicle', index?: number) => {
+    const uploadId = type === 'bilty' ? 'bilty' : `vehicle-${index ?? Date.now()}`;
     setIsUploading(uploadId);
 
     try {
-      const response = await orderApi.uploadFile(file);
+      const uploadFile = await compressImageForUpload(file);
+      const response = await orderApi.uploadFile(uploadFile);
       if (response.success) {
-        if (type === 'bilty') {
-          setUploadData(p => ({
-            ...p,
-            biltyImage: response.data.url,
-            biltyImageName: file.name
-          }));
-        } else {
-          setUploadData(p => ({
-            ...p,
-            vehicleImages: [...p.vehicleImages, response.data.url],
-            vehicleImageNames: [...p.vehicleImageNames, file.name]
-          }));
-        }
-        toast({
-          title: "Upload Successful",
-          description: `${file.name} uploaded successfully.`
-        });
+        return response.data.url;
       }
+      throw new Error(response.message || "Failed to upload file to S3");
     } catch (error: any) {
       console.error("Upload failed:", error);
-      toast({
-        title: "Upload Failed",
-        description: error.message || "Failed to upload file to S3",
-        variant: "destructive",
-      });
+      throw error;
     } finally {
       setIsUploading(null);
     }
@@ -278,6 +329,12 @@ export default function SecurityApprovalPage() {
     try {
       const successfulSubmissions: any[] = []
       const failedSubmissions: any[] = []
+      const biltyImageUrl = uploadData.biltyImage
+        ? await uploadSelectedFile(uploadData.biltyImage, 'bilty')
+        : null
+      const vehicleImageUrls = await Promise.all(
+        uploadData.vehicleImages.map((file, index) => uploadSelectedFile(file, 'vehicle', index))
+      )
 
       // Submit each selected product to backend API
       for (const product of allSelectedProducts) {
@@ -287,8 +344,8 @@ export default function SecurityApprovalPage() {
           if (recordId) {
             const submitData = {
               bilty_no: uploadData.biltyNo || null,
-              bilty_image: uploadData.biltyImage || null,
-              vehicle_image_attachemrnt: uploadData.vehicleImages.length > 0 ? uploadData.vehicleImages.join(',') : null,
+              bilty_image: biltyImageUrl,
+              vehicle_image_attachemrnt: vehicleImageUrls.length > 0 ? vehicleImageUrls.join(',') : null,
               verdict_status: uploadData.verdict, // Adding verdict to API 
               username: user?.username || null, // Add username for tracking
               remarks: uploadData.verdict === 'REJECT' ? uploadData.remarks : null // Pass remarks if rejecting
@@ -325,9 +382,10 @@ export default function SecurityApprovalPage() {
         setIsDialogOpen(false);
         setUploadData({
           biltyNo: "",
-          biltyImage: "",
+          biltyImage: null,
           biltyImageName: "",
           vehicleImages: [],
+          vehicleImagePreviews: [],
           vehicleImageNames: [],
           checklist: {
             mallLoad: false,
@@ -566,9 +624,10 @@ export default function SecurityApprovalPage() {
 
       setUploadData({
         biltyNo: "",
-        biltyImage: "",
+        biltyImage: null,
         biltyImageName: "",
         vehicleImages: [],
+        vehicleImagePreviews: [],
         vehicleImageNames: [],
         checklist: {
           mallLoad: false,
@@ -1291,7 +1350,7 @@ export default function SecurityApprovalPage() {
                         }} />
                         <Label htmlFor="bilty-img" className="absolute inset-0 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center bg-white cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all">
                           <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                            {isUploading === 'bilty' ? "WAIT..." : (uploadData.biltyImage ? "FILE READY" : "SCAN COPY")}
+                            {isUploading === 'bilty' ? "WAIT..." : (uploadData.biltyImage ? "FILE SELECTED" : "SCAN COPY")}
                           </span>
                         </Label>
                       </div>
@@ -1340,15 +1399,18 @@ export default function SecurityApprovalPage() {
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Proof Images</Label>
                     <div className="grid grid-cols-3 min-[420px]:grid-cols-4 sm:flex sm:flex-wrap gap-3">
-                      {uploadData.vehicleImages.map((url, idx) => (
+                      {uploadData.vehicleImagePreviews.map((url, idx) => (
                         <div key={idx} className="aspect-square sm:w-20 sm:h-20 rounded-xl border-2 border-slate-100 overflow-hidden relative group shadow-sm">
                           <img src={url} className="w-full h-full object-cover" />
                           <button onClick={() => {
                             const images = [...uploadData.vehicleImages]
+                            const previews = [...uploadData.vehicleImagePreviews]
                             const names = [...uploadData.vehicleImageNames]
+                            URL.revokeObjectURL(previews[idx])
                             images.splice(idx, 1)
+                            previews.splice(idx, 1)
                             names.splice(idx, 1)
-                            setUploadData(p => ({ ...p, vehicleImages: images, vehicleImageNames: names }))
+                            setUploadData(p => ({ ...p, vehicleImages: images, vehicleImagePreviews: previews, vehicleImageNames: names }))
                           }} className="absolute inset-0 bg-red-600/80 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><X className="w-4 h-4" /></button>
                         </div>
                       ))}

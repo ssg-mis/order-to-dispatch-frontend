@@ -29,6 +29,57 @@ import { Loader2, ChevronLeft, ChevronRight, Settings2, CheckCircle, Upload, Fil
 import { cn } from "@/lib/utils"
 import { usePersistedColumns } from "@/hooks/use-persisted-columns"
 
+const MAX_COMPRESSED_IMAGE_BYTES = 850 * 1024
+const MAX_COMPRESSED_IMAGE_DIMENSION = 1600
+
+async function compressImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) return file
+
+  const bitmap = await createImageBitmap(file)
+  const canvas = document.createElement("canvas")
+  const context = canvas.getContext("2d")
+
+  if (!context) {
+    bitmap.close()
+    return file
+  }
+
+  const toBlob = (quality: number) =>
+    new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", quality))
+
+  let maxDimension = Math.min(MAX_COMPRESSED_IMAGE_DIMENSION, Math.max(bitmap.width, bitmap.height))
+  let blob: Blob | null = null
+
+  while (maxDimension >= 320) {
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height))
+    const width = Math.max(1, Math.round(bitmap.width * scale))
+    const height = Math.max(1, Math.round(bitmap.height * scale))
+
+    canvas.width = width
+    canvas.height = height
+    context.clearRect(0, 0, width, height)
+    context.drawImage(bitmap, 0, 0, width, height)
+
+    let quality = 0.82
+    blob = await toBlob(quality)
+
+    while (blob && blob.size > MAX_COMPRESSED_IMAGE_BYTES && quality > 0.34) {
+      quality -= 0.08
+      blob = await toBlob(quality)
+    }
+
+    if (blob && blob.size <= MAX_COMPRESSED_IMAGE_BYTES) break
+    maxDimension -= 250
+  }
+
+  bitmap.close()
+
+  if (!blob || blob.size > MAX_COMPRESSED_IMAGE_BYTES) return file
+
+  const cleanName = file.name.replace(/\.[^.]+$/, "")
+  return new File([blob], `${cleanName}.jpg`, { type: "image/jpeg", lastModified: Date.now() })
+}
+
 export default function MaterialReceiptPage() {
   const router = useRouter()
   const { user, isReadOnly } = useAuth()
@@ -78,7 +129,7 @@ export default function MaterialReceiptPage() {
   const [receiptData, setReceiptData] = useState({
     receivedDate: "",
     hasDamage: "no",
-    receivedProof: "" as string,
+    receivedProof: null as File | null,
     receivedProofName: "",
     remarks: "",
   })
@@ -86,7 +137,7 @@ export default function MaterialReceiptPage() {
   // Per-product damage data
   const [productDamageData, setProductDamageData] = useState<Record<string, {
     damageQty: string
-    damageImage: string
+    damageImage: File | null
     damageImageName: string
   }>>({})
 
@@ -139,41 +190,39 @@ export default function MaterialReceiptPage() {
     setHistoryPage(1);
   }, [filterValues.search, filterValues.partyName]);
 
-  const handleFileUpload = async (file: File, type: 'damage' | 'proof', rowKey?: string) => {
+  const handleFileUpload = (file: File, type: 'damage' | 'proof', rowKey?: string) => {
     if (!file) return;
 
+    if (type === 'damage' && rowKey) {
+      setProductDamageData(prev => ({
+        ...prev,
+        [rowKey]: {
+          ...prev[rowKey],
+          damageImage: file,
+          damageImageName: file.name
+        }
+      }))
+    } else if (type === 'proof') {
+      setReceiptData(p => ({
+        ...p,
+        receivedProof: file,
+        receivedProofName: file.name
+      }));
+    }
+  };
+
+  const uploadSelectedFile = async (file: File, type: 'damage' | 'proof', rowKey?: string) => {
     setIsUploading(rowKey ? `${type}-${rowKey}` : type);
     try {
-      const response = await orderApi.uploadFile(file);
+      const uploadFile = await compressImageForUpload(file);
+      const response = await orderApi.uploadFile(uploadFile);
       if (response.success) {
-        if (type === 'damage' && rowKey) {
-          setProductDamageData(prev => ({
-            ...prev,
-            [rowKey]: {
-              ...prev[rowKey],
-              damageImage: response.data.url,
-              damageImageName: file.name
-            }
-          }))
-        } else if (type === 'proof') {
-          setReceiptData(p => ({
-            ...p,
-            receivedProof: response.data.url,
-            receivedProofName: file.name
-          }));
-        }
-        toast({
-          title: "Upload Successful",
-          description: `${file.name} uploaded successfully.`
-        });
+        return response.data.url;
       }
+      throw new Error(response.message || "Failed to upload file to S3");
     } catch (error: any) {
       console.error("Upload failed:", error);
-      toast({
-        title: "Upload Failed",
-        description: error.message || "Failed to upload file to S3",
-        variant: "destructive",
-      });
+      throw error;
     } finally {
       setIsUploading(null);
     }
@@ -331,7 +380,7 @@ export default function MaterialReceiptPage() {
       setReceiptData({
         receivedDate: "",
         hasDamage: "no",
-        receivedProof: "",
+        receivedProof: null,
         receivedProofName: "",
         remarks: "",
       })
@@ -359,17 +408,24 @@ export default function MaterialReceiptPage() {
     setIsProcessing(true)
     try {
       const successfulSubmissions: any[] = []
+      const receivedProofUrl = receiptData.receivedProof
+        ? await uploadSelectedFile(receiptData.receivedProof, 'proof')
+        : null
+
       for (const product of productsToSubmit) {
         const pDamage = productDamageData[product._rowKey] || {};
         const isItemDamaged = receiptData.hasDamage === "yes" && (pDamage.damageQty || pDamage.damageImage);
+        const damageImageUrl = isItemDamaged && pDamage.damageImage
+          ? await uploadSelectedFile(pDamage.damageImage, 'damage', product._rowKey)
+          : null
 
         const submitData = {
           material_received_date: receiptData.receivedDate,
           damage_status: isItemDamaged ? "Damaged" : "Delivered",
-          received_image_proof: receiptData.receivedProof || null,
+          received_image_proof: receivedProofUrl,
           sku: null,
           damage_qty: isItemDamaged ? pDamage.damageQty : null,
-          damage_image: isItemDamaged ? pDamage.damageImage : null,
+          damage_image: isItemDamaged ? damageImageUrl : null,
           remarks_3: receiptData.remarks || null,
           bill_amount: product.billAmount ? parseFloat(product.billAmount) : null,
           username: user?.username || null
@@ -873,7 +929,7 @@ export default function MaterialReceiptPage() {
                                       onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'damage', product._rowKey)}
                                     />
                                     {isUploading === `damage-${product._rowKey}` ? <Loader2 className="h-4 w-4 animate-spin text-blue-600" /> : (productDamageData[product._rowKey]?.damageImage ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Upload className="h-4 w-4 text-slate-400" />)}
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{productDamageData[product._rowKey]?.damageImage ? "Uploaded" : "Upload"}</span>
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{productDamageData[product._rowKey]?.damageImage ? "Selected" : "Select"}</span>
                                   </label>
                                 </div>
                               </div>
@@ -1034,7 +1090,7 @@ export default function MaterialReceiptPage() {
                               <Upload className="h-6 w-6 text-blue-600" />
                             </div>
                             <span className="max-w-full break-words text-center text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-blue-600 transition-colors">
-                              {isUploading === 'proof' ? "UPLOADING MATERIAL PROOF..." : (receiptData.receivedProof ? `REPLACE: ${receiptData.receivedProofName}` : "Click to Upload Proof")}
+                              {isUploading === 'proof' ? "UPLOADING MATERIAL PROOF..." : (receiptData.receivedProof ? `SELECTED: ${receiptData.receivedProofName}` : "Click to Select Proof")}
                             </span>
                           </label>
                         </Card>
