@@ -50,6 +50,7 @@ interface User {
 const PAGE_ACCESS_OPTIONS = [
   "Dashboard",
   "Owner Dashboard",
+  "System Flow",
   "Commitment Punch",
   "Order Punch",
   "Pre Approval",

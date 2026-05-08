@@ -19,6 +19,7 @@ import { Settings2, ChevronDown, ChevronUp, Truck, Weight, CheckCircle2, XCircle
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { actualDispatchApi, vehicleDetailsApi, materialLoadApi, skuApi, orderApi, depotApi, vehicleMasterApi, transportMasterApi, driverMasterApi, draftApi, gateInApi } from "@/lib/api-service"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Combobox } from "@/components/ui/combobox"
 import { useAuth } from "@/hooks/use-auth"
 import { useQuery } from "@tanstack/react-query"
 import { Loader2, ChevronLeft, ChevronRight } from "lucide-react"
@@ -128,6 +129,26 @@ export default function ActualDispatchPage() {
     license_no: "",
     valid_upto: ""
   })
+
+  const vehicleOptions = useMemo(() => (
+    vehicleMaster
+      .filter(v => v.registration_no)
+      .map(v => ({ value: v.registration_no, label: v.registration_no }))
+  ), [vehicleMaster])
+
+  const driverOptions = useMemo(() => (
+    driverMaster
+      .filter(d => d.driver_name)
+      .map(d => ({ value: d.driver_name, label: d.driver_name }))
+  ), [driverMaster])
+
+  const transporterOptions = useMemo(() => ([
+    { value: "Company Vehicle", label: "Company Vehicle" },
+    { value: "Party Vehicle", label: "Party Vehicle" },
+    ...transporterMaster
+      .filter(t => t.transporter_name)
+      .map(t => ({ value: t.transporter_name, label: t.transporter_name }))
+  ]), [transporterMaster])
 
   // Date validation for vehicle documents (Min Today + 5 days)
   const minDate = useMemo(() => {
@@ -2451,7 +2472,7 @@ export default function ActualDispatchPage() {
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
                         <div className="space-y-1.5">
                           <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Vehicle Registration Number <span className="text-red-500">*</span></Label>
-                          <Select
+                          <Combobox
                             value={vehicleNumber}
                             onValueChange={(v) => {
                               setVehicleNumber(v);
@@ -2481,27 +2502,21 @@ export default function ActualDispatchPage() {
                                 setLoadData(p => ({
                                   ...p,
                                   truckNo: selectedV.registration_no || "",
-                                  transporterName: selectedV.transporter || p.transporterName,
-                                  grossWeight: selectedV.gvw || p.grossWeight,
-                                  tareWeight: selectedV.ulw || p.tareWeight
+                                  transporterName: selectedV.transporter || p.transporterName
                                 }));
                               }
                             }}
-                          >
-                            <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl px-3 sm:px-4 font-black text-sm sm:text-lg focus:border-purple-500 transition-colors uppercase bg-white shadow-sm">
-                              <SelectValue placeholder="Select Vehicle" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-[300px]">
-                              {vehicleMaster.map(v => (
-                                <SelectItem key={v.id} value={v.registration_no} className="font-bold">{v.registration_no}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            options={vehicleOptions}
+                            placeholder="Select Vehicle"
+                            searchPlaceholder="Search vehicle..."
+                            emptyText="No vehicle found."
+                            className="h-12 border-2 border-slate-200 rounded-xl px-3 sm:px-4 font-black text-sm sm:text-lg focus:border-purple-500 transition-colors uppercase bg-white shadow-sm"
+                          />
                         </div>
 
                         <div className="space-y-1.5">
                           <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Driver Name <span className="text-red-500">*</span></Label>
-                          <Select
+                          <Combobox
                             value={driverName}
                             onValueChange={(v) => {
                               setDriverName(v);
@@ -2514,16 +2529,12 @@ export default function ActualDispatchPage() {
                                 });
                               }
                             }}
-                          >
-                            <SelectTrigger className="h-12 border-2 border-slate-200 rounded-xl px-3 sm:px-4 font-black text-sm sm:text-lg focus:border-purple-500 transition-colors uppercase bg-white shadow-sm">
-                              <SelectValue placeholder="Select Driver" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-[300px]">
-                              {driverMaster.map(d => (
-                                <SelectItem key={d.id} value={d.driver_name} className="font-bold">{d.driver_name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            options={driverOptions}
+                            placeholder="Select Driver"
+                            searchPlaceholder="Search driver..."
+                            emptyText="No driver found."
+                            className="h-12 border-2 border-slate-200 rounded-xl px-3 sm:px-4 font-black text-sm sm:text-lg focus:border-purple-500 transition-colors uppercase bg-white shadow-sm"
+                          />
                         </div>
 
                         {/* Vehicle Details Badges */}
@@ -2928,7 +2939,7 @@ export default function ActualDispatchPage() {
                         </div>
                         <div className={cn("space-y-1.5 w-full transition-all duration-300", (loadData.transporterName && !['Company Vehicle', 'Party Vehicle'].includes(loadData.transporterName)) ? "col-span-1 sm:col-span-2 md:col-span-2" : "col-span-1 sm:col-span-2")}>
                           <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1 italic font-serif leading-none">Transporter <span className="text-red-500">*</span></Label>
-                          <Select
+                          <Combobox
                             value={loadData.transporterName}
                             onValueChange={(v) => {
                               const isNormal = !['Company Vehicle', 'Party Vehicle'].includes(v);
@@ -2942,19 +2953,12 @@ export default function ActualDispatchPage() {
                                 bhada: isNormal ? p.bhada : ""
                               }));
                             }}
-                          >
-                            <SelectTrigger className="h-10 border-2 border-slate-200 rounded-xl font-bold bg-white w-full shadow-sm text-blue-700">
-                              <SelectValue placeholder="Select Transporter" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-[300px]">
-                              <SelectItem value="Company Vehicle" className="font-bold text-blue-600 bg-blue-50/30">Company Vehicle</SelectItem>
-                              <SelectItem value="Party Vehicle" className="font-bold text-purple-600 bg-purple-50/30">Party Vehicle</SelectItem>
-                              <div className="h-px bg-slate-100 my-1" />
-                              {transporterMaster.map(t => (
-                                <SelectItem key={t.id} value={t.transporter_name} className="font-medium">{t.transporter_name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            options={transporterOptions}
+                            placeholder="Select Transporter"
+                            searchPlaceholder="Search transporter..."
+                            emptyText="No transporter found."
+                            className="h-10 border-2 border-slate-200 rounded-xl font-bold bg-white w-full shadow-sm text-blue-700"
+                          />
                         </div>
                       </div>
 

@@ -43,6 +43,7 @@ export default function RootLayout({
         const urlToPermission: Record<string, string> = {
           "/": "Dashboard",
           "/owner-dashboard": "Owner Dashboard",
+          "/system-flow": "System Flow",
           "/commitment-punch": "Commitment Punch",
           "/order-punch": "Order Punch",
           "/pre-approval": "Pre Approval",

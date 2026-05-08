@@ -28,6 +28,7 @@ import {
   Calendar,
   Handshake,
   Clock,
+  Workflow,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { useEffect, useState, useMemo } from "react"
@@ -50,6 +51,7 @@ import {
 const modules = [
   { title: "Dashboard", icon: LayoutDashboard, url: "/" },
   { title: "Owner Dashboard", icon: PieChart, url: "/owner-dashboard" },
+  { title: "System Flow", icon: Workflow, url: "/system-flow" },
   { title: "Commitment Punch", icon: Handshake, url: "/commitment-punch" },
   { title: "Order Punch", icon: ClipboardPen, url: "/order-punch" },
   { title: "Pre Approval", icon: BadgeCheck, url: "/pre-approval" },
