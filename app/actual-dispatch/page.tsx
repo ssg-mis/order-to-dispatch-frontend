@@ -127,6 +127,7 @@ export default function ActualDispatchPage() {
   const [driverData, setDriverData] = useState({
     contact_no: "",
     license_no: "",
+    license_type: "",
     valid_upto: ""
   })
 
@@ -859,6 +860,7 @@ export default function ActualDispatchPage() {
       setDriverData({
         contact_no: "",
         license_no: "",
+        license_type: "",
         valid_upto: ""
       })
       setLoadData({
@@ -2525,6 +2527,7 @@ export default function ActualDispatchPage() {
                                 setDriverData({
                                   contact_no: selectedD.mobile_no || "",
                                   license_no: selectedD.driving_licence_no || "",
+                                  license_type: selectedD.driving_licence_type || "",
                                   valid_upto: selectedD.valid_upto ? new Date(selectedD.valid_upto).toISOString().split('T')[0] : ""
                                 });
                               }
@@ -2572,6 +2575,10 @@ export default function ActualDispatchPage() {
                           <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
                             <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">License No</p>
                             <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{driverData.license_no || '---'}</p>
+                          </div>
+                          <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
+                            <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">License Type</p>
+                            <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{driverData.license_type || '---'}</p>
                           </div>
                           <div className="bg-white border-2 border-slate-100 rounded-xl px-3 py-1.5 shadow-sm">
                             <p className="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">Valid Upto</p>
