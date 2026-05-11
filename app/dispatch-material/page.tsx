@@ -619,7 +619,7 @@ export default function DispatchMaterialPage() {
           overallStatus: internalOrder.overall_status_of_order || internalOrder.overallStatus || "—",
           custConfirmation: internalOrder.order_confirmation_with_customer || false,
           revertDispatchRemarks: internalOrder.revert_dispatch_remarks || "—",
-          uploadSo: internalOrder.upload_so || internalOrder.uploadSo || null,
+          uploadSo: internalOrder.upload_copy || internalOrder.upload_so || internalOrder.uploadSo || null,
         }
       }
 

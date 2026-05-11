@@ -435,7 +435,8 @@ export default function ActualDispatchPage() {
         setActiveDepots(depots);
         // Set first active depot as default if nothing is selected or current selected is not in active list
         if (depots.length > 0 && !depots.some((d: any) => d.depot_name === selectedDepoTab)) {
-          setSelectedDepoTab(depots[0].depot_name);
+          const banari = depots.find((d: any) => d.depot_name.toLowerCase() === 'banari');
+          setSelectedDepoTab(banari ? banari.depot_name : depots[0].depot_name);
         }
       }
     } catch (error) {
@@ -454,7 +455,8 @@ export default function ActualDispatchPage() {
 
   useEffect(() => {
     if (availableDepots.length > 0 && (!selectedDepoTab || !availableDepots.includes(selectedDepoTab))) {
-      setSelectedDepoTab(availableDepots[0]);
+      const banari = availableDepots.find((d: string) => d.toLowerCase() === 'banari');
+      setSelectedDepoTab(banari ?? availableDepots[0]);
     }
   }, [availableDepots, selectedDepoTab]);
 
