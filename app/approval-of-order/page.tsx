@@ -622,6 +622,7 @@ export default function CommitmentReviewPage() {
           orderPunchRemarks: order.orderPunchRemarks,
           remark: order.remark,
           partySoDate: formatDate(order.partySoDate),
+          uploadSo: order.uploadSo,
           _products: []
         }
       }
@@ -736,7 +737,7 @@ export default function CommitmentReviewPage() {
       advanceAmount: orderDetails.advanceAmount || "—",
       isBroker: orderDetails.isBrokerOrder ? "YES" : "NO",
       brokerName: orderDetails.brokerName || "—",
-      uploadSo: "do_document.pdf",
+      uploadSo: orderDetails.uploadSo || null,
       orderPunchRemarks: order.orderPunchRemarks || "—",
       status: "Pending",
       products,
