@@ -370,7 +370,7 @@ export const dispatchPlanningApi = {
   /**
    * Pre-close quantity for an order
    */
-  preclose: async (id: number, data: { preclose_qty: number, username: string }): Promise<ApiResponse> => {
+  preclose: async (id: number, data: { preclose_qty: number, username: string, action: string, preclose_remarks: string }): Promise<ApiResponse> => {
     return request(`/dispatch-planning/preclose/${id}`, {
       method: 'POST',
       body: JSON.stringify(data),

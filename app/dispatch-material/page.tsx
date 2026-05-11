@@ -18,6 +18,8 @@ import { Label } from "@/components/ui/label"
 import { Settings2, ChevronDown, ChevronUp, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Textarea } from "@/components/ui/textarea"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { dispatchPlanningApi, customerApi, depotApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
@@ -73,6 +75,10 @@ export default function DispatchMaterialPage() {
   const [currentTransferRowKey, setCurrentTransferRowKey] = useState<string | null>(null)
   const [precloseInputs, setPrecloseInputs] = useState<Record<number, string>>({})
   const [openPrecloseId, setOpenPrecloseId] = useState<number | null>(null)
+  const [precloseDialogOpen, setPrecloseDialogOpen] = useState(false)
+  const [precloseDialogProduct, setPrecloseDialogProduct] = useState<any | null>(null)
+  const [precloseAction, setPrecloseAction] = useState<"commitment" | "close">("close")
+  const [precloseRemarks, setPrecloseRemarks] = useState("")
   const isSavingTransferRef = useRef(false)
 
   const PAGE_COLUMNS = [
@@ -208,9 +214,10 @@ export default function DispatchMaterialPage() {
         );
 
         setActiveDepots(depots);
-        // Set first active depot as default if nothing is selected or current selected is not in active list
+        // Set default depot: prefer Banari if user has access, otherwise first in list
         if (depots.length > 0 && !depots.some((d: any) => d.depot_name === selectedDepoTab)) {
-          setSelectedDepoTab(depots[0].depot_name);
+          const banari = depots.find((d: any) => d.depot_name.toLowerCase() === 'banari');
+          setSelectedDepoTab(banari ? banari.depot_name : depots[0].depot_name);
         }
       }
     } catch (error) {
@@ -229,7 +236,8 @@ export default function DispatchMaterialPage() {
 
   useEffect(() => {
     if (availableDepos.length > 0 && (!selectedDepoTab || !availableDepos.includes(selectedDepoTab))) {
-      setSelectedDepoTab(availableDepos[0]);
+      const banari = availableDepos.find(d => d.toLowerCase() === 'banari');
+      setSelectedDepoTab(banari ?? availableDepos[0]);
     }
   }, [availableDepos, selectedDepoTab]);
 
@@ -470,17 +478,27 @@ export default function DispatchMaterialPage() {
     }
   };
 
-  const handlePreclose = async (id: number, qty: number) => {
+  const handlePreclose = async (id: number, qty: number, action: "commitment" | "close", remarks: string) => {
+    if (!remarks.trim()) {
+      toast({ title: "Reason Required", description: "Please enter a reason for preclosing.", variant: "destructive" });
+      return;
+    }
     setIsProcessing(true);
     try {
-      const res = await dispatchPlanningApi.preclose(id, { 
-        preclose_qty: qty, 
-        username: user?.username || 'system' 
+      const res = await dispatchPlanningApi.preclose(id, {
+        preclose_qty: qty,
+        username: user?.username || 'system',
+        action,
+        preclose_remarks: remarks.trim()
       });
       if (res.success) {
         toast({ title: "Success", description: `Successfully preclosed ${qty} items.` });
+        setPrecloseDialogOpen(false);
+        setPrecloseDialogProduct(null);
+        setPrecloseRemarks("");
+        setPrecloseAction("close");
         setOpenPrecloseId(null);
-        
+
         // Clear local details for this row if any
         setDispatchDetails(prev => {
           const next = { ...prev };
@@ -1277,59 +1295,22 @@ export default function DispatchMaterialPage() {
                                   <TableCell className="text-[10px] font-bold text-slate-500 p-2 text-center">{maxLimit}</TableCell>
                                   <TableCell className="p-2 text-center text-[10px] font-bold text-slate-500">
                                     {custName.toLowerCase().includes("reliance") ? (
-                                      <Popover 
-                                        open={openPrecloseId === prod.id} 
-                                        onOpenChange={(open) => setOpenPrecloseId(open ? prod.id : null)}
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 text-[10px] font-bold text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                                        onClick={() => {
+                                          setPrecloseDialogProduct({ ...prod, maxLimit });
+                                          setPrecloseInputs(prev => ({ ...prev, [prod.id]: maxLimit.toString() }));
+                                          setPrecloseAction("close");
+                                          setPrecloseRemarks("");
+                                          setPrecloseDialogOpen(true);
+                                        }}
                                       >
-                                        <PopoverTrigger asChild>
-                                          <Button 
-                                            variant="outline" 
-                                            size="sm" 
-                                            className="h-7 text-[10px] font-bold text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
-                                          >
-                                            <XCircle className="h-3.5 w-3.5 mr-1" />
-                                            Preclose
-                                          </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-48 p-3" align="end">
-                                          <div className="space-y-3">
-                                            <div className="space-y-1">
-                                              <Label className="text-[10px] uppercase font-black text-slate-500">Qty to Preclose</Label>
-                                              <Input 
-                                                type="number" 
-                                                placeholder="Enter quantity"
-                                                value={precloseInputs[prod.id] !== undefined ? precloseInputs[prod.id] : maxLimit.toString()}
-                                                onChange={(e) => setPrecloseInputs(prev => ({ ...prev, [prod.id]: e.target.value }))}
-                                                className="h-8 text-[11px] font-bold text-center"
-                                              />
-                                              <p className="text-[9px] text-slate-400 font-medium italic text-center">Remaining: {maxLimit}</p>
-                                            </div>
-                                            <div className="flex justify-center pt-1">
-                                              <Button 
-                                                size="sm" 
-                                                variant="destructive" 
-                                                className="h-7 w-full text-[10px] font-black uppercase tracking-wider"
-                                                onClick={() => {
-                                                  const qty = parseFloat(precloseInputs[prod.id] !== undefined ? precloseInputs[prod.id] : maxLimit.toString());
-                                                  if (isNaN(qty) || qty <= 0) {
-                                                    toast({ title: "Invalid Quantity", description: "Please enter a valid number greater than 0", variant: "destructive" });
-                                                  } else if (qty > maxLimit + 0.0001) {
-                                                    toast({ title: "Quantity Exceeded", description: `Cannot preclose more than ${maxLimit}`, variant: "destructive" });
-                                                  } else {
-                                                    handlePreclose(prod.id, qty);
-                                                  }
-                                                }}
-                                                disabled={isProcessing}
-                                              >
-                                                {isProcessing ? "Processing..." : "Confirm Preclose"}
-                                              </Button>
-                                            </div>
-                                          </div>
-                                        </PopoverContent>
-                                      </Popover>
-                                    ) : (
-                                      "—"
-                                    )}
+                                        <XCircle className="h-3.5 w-3.5 mr-1" />
+                                        Preclose
+                                      </Button>
+                                    ) : "—"}
                                   </TableCell>
                                  </TableRow>
                               );
@@ -1415,61 +1396,26 @@ export default function DispatchMaterialPage() {
                                     <p className="text-[10px] font-black uppercase text-slate-400">Remaining</p>
                                     <p className="mt-1 font-mono font-bold text-slate-700">{maxLimit}</p>
                                   </div>
-                                  <div className="rounded-md bg-slate-50 p-2">
-                                    <p className="text-[10px] font-black uppercase text-slate-400">Status</p>
-                                    {custName.toLowerCase().includes("reliance") ? (
-                                      <Popover
-                                        open={openPrecloseId === prod.id}
-                                        onOpenChange={(open) => setOpenPrecloseId(open ? prod.id : null)}
+                                  {custName.toLowerCase().includes("reliance") && (
+                                    <div className="rounded-md bg-slate-50 p-2">
+                                      <p className="text-[10px] font-black uppercase text-slate-400">Preclose</p>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="mt-1 h-7 text-[10px] font-bold text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                                        onClick={() => {
+                                          setPrecloseDialogProduct({ ...prod, maxLimit });
+                                          setPrecloseInputs(prev => ({ ...prev, [prod.id]: maxLimit.toString() }));
+                                          setPrecloseAction("close");
+                                          setPrecloseRemarks("");
+                                          setPrecloseDialogOpen(true);
+                                        }}
                                       >
-                                        <PopoverTrigger asChild>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="mt-1 h-7 text-[10px] font-bold text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
-                                          >
-                                            <XCircle className="h-3.5 w-3.5 mr-1" />
-                                            Preclose
-                                          </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-48 p-3" align="end">
-                                          <div className="space-y-3">
-                                            <div className="space-y-1">
-                                              <Label className="text-[10px] uppercase font-black text-slate-500">Qty to Preclose</Label>
-                                              <Input
-                                                type="number"
-                                                placeholder="Enter quantity"
-                                                value={precloseInputs[prod.id] !== undefined ? precloseInputs[prod.id] : maxLimit.toString()}
-                                                onChange={(e) => setPrecloseInputs(prev => ({ ...prev, [prod.id]: e.target.value }))}
-                                                className="h-8 text-[11px] font-bold text-center"
-                                              />
-                                              <p className="text-[9px] text-slate-400 font-medium italic text-center">Remaining: {maxLimit}</p>
-                                            </div>
-                                            <Button
-                                              size="sm"
-                                              variant="destructive"
-                                              className="h-7 w-full text-[10px] font-black uppercase tracking-wider"
-                                              onClick={() => {
-                                                const qty = parseFloat(precloseInputs[prod.id] !== undefined ? precloseInputs[prod.id] : maxLimit.toString());
-                                                if (isNaN(qty) || qty <= 0) {
-                                                  toast({ title: "Invalid Quantity", description: "Please enter a valid number greater than 0", variant: "destructive" });
-                                                } else if (qty > maxLimit + 0.0001) {
-                                                  toast({ title: "Quantity Exceeded", description: `Cannot preclose more than ${maxLimit}`, variant: "destructive" });
-                                                } else {
-                                                  handlePreclose(prod.id, qty);
-                                                }
-                                              }}
-                                              disabled={isProcessing}
-                                            >
-                                              {isProcessing ? "Processing..." : "Confirm Preclose"}
-                                            </Button>
-                                          </div>
-                                        </PopoverContent>
-                                      </Popover>
-                                    ) : (
-                                      <p className="mt-1 font-bold text-slate-400">—</p>
-                                    )}
-                                  </div>
+                                        <XCircle className="h-3.5 w-3.5 mr-1" />
+                                        Preclose
+                                      </Button>
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-3">
@@ -1888,6 +1834,106 @@ export default function DispatchMaterialPage() {
               className="w-full bg-blue-600 hover:bg-blue-700 sm:w-auto"
             >
               OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Preclose Dialog */}
+      <Dialog open={precloseDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setPrecloseDialogOpen(false);
+          setPrecloseDialogProduct(null);
+          setPrecloseRemarks("");
+          setPrecloseAction("close");
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-black uppercase tracking-wider text-slate-700">Pre-Close Order</DialogTitle>
+            <DialogDescription className="text-[11px] text-slate-500">
+              {precloseDialogProduct?.productName || ""} &mdash; Remaining: {precloseDialogProduct?.maxLimit}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase font-black text-slate-500">Qty to Preclose</Label>
+              <Input
+                type="number"
+                placeholder="Enter quantity"
+                value={precloseDialogProduct ? (precloseInputs[precloseDialogProduct.id] !== undefined ? precloseInputs[precloseDialogProduct.id] : String(precloseDialogProduct.maxLimit)) : ""}
+                onChange={(e) => {
+                  if (!precloseDialogProduct) return;
+                  setPrecloseInputs(prev => ({ ...prev, [precloseDialogProduct.id]: e.target.value }));
+                }}
+                className="h-9 text-sm font-bold text-center"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-black text-slate-500">Action</Label>
+              <RadioGroup
+                value={precloseAction}
+                onValueChange={(val) => setPrecloseAction(val as "commitment" | "close")}
+                className="space-y-2"
+              >
+                <div className="flex items-center space-x-2 rounded-lg border p-3 cursor-pointer hover:bg-slate-50">
+                  <RadioGroupItem value="commitment" id="action-commitment" />
+                  <Label htmlFor="action-commitment" className="text-xs font-bold text-slate-700 cursor-pointer">
+                    Transfer to Commitment <span className="font-normal text-slate-500">(Qty will be added back to commitment)</span>
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2 rounded-lg border p-3 cursor-pointer hover:bg-slate-50">
+                  <RadioGroupItem value="close" id="action-close" />
+                  <Label htmlFor="action-close" className="text-xs font-bold text-slate-700 cursor-pointer">
+                    Close <span className="font-normal text-slate-500">(Qty will not be transferred anywhere)</span>
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase font-black text-slate-500">Reason <span className="text-red-500">*</span></Label>
+              <Textarea
+                placeholder="Enter reason for preclosing..."
+                value={precloseRemarks}
+                onChange={(e) => setPrecloseRemarks(e.target.value)}
+                className="text-xs font-medium resize-none"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPrecloseDialogOpen(false);
+                setPrecloseDialogProduct(null);
+                setPrecloseRemarks("");
+                setPrecloseAction("close");
+              }}
+              disabled={isProcessing}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={isProcessing}
+              onClick={() => {
+                if (!precloseDialogProduct) return;
+                const maxLimit = precloseDialogProduct.maxLimit;
+                const qty = parseFloat(precloseInputs[precloseDialogProduct.id] !== undefined ? precloseInputs[precloseDialogProduct.id] : String(maxLimit));
+                if (isNaN(qty) || qty <= 0) {
+                  toast({ title: "Invalid Quantity", description: "Please enter a valid number greater than 0", variant: "destructive" });
+                  return;
+                }
+                if (qty > maxLimit + 0.0001) {
+                  toast({ title: "Quantity Exceeded", description: `Cannot preclose more than ${maxLimit}`, variant: "destructive" });
+                  return;
+                }
+                handlePreclose(precloseDialogProduct.id, qty, precloseAction, precloseRemarks);
+              }}
+            >
+              {isProcessing ? "Processing..." : "Confirm Preclose"}
             </Button>
           </DialogFooter>
         </DialogContent>
