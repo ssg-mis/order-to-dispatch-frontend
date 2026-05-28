@@ -27,9 +27,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ColumnToggleContent } from "@/components/ui/column-toggle-content"
 import { Badge } from "@/components/ui/badge"
 import { Settings2, Loader2, ChevronDown, ChevronUp, Trash2, Plus, Check, Search, Package, Calculator, Save, Calendar, ChevronLeft, ChevronRight, FileText, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { saveWorkflowHistory } from "@/lib/storage-utils"
 import { skuApi, preApprovalApi, skuSellingPriceApi, varCalcApi, orderApi, skuDetailsApi, customerApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
@@ -46,12 +47,15 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
 import { useQuery } from "@tanstack/react-query"
 import { usePersistedColumns } from "@/hooks/use-persisted-columns"
+import { useColumnOrder } from "@/hooks/use-column-order"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { ColumnDragProvider } from "@/components/ui/column-drag-provider"
 
 
 
 export default function PreApprovalPage() {
   const { toast } = useToast()
-  const { isReadOnly, user } = useAuth()
+  const { isReadOnly, user, isAdmin, isFeatureEnabled } = useAuth()
   const router = useRouter()
   const PAGE_COLUMNS = [
     { id: "partySoDate", label: "DO Date" },
@@ -96,6 +100,14 @@ export default function PreApprovalPage() {
     "pre-approval",
     ["partySoDate", "soNo", "customerName", "deliveryPurpose", "deliveryDate", "oilType", "ratePer15Kg", "ratePerLtr", "orderPunchRemarks", "revertDispatchRemarks", "revertPlanningRemarks"]
   )
+  const [columnOrder, setColumnOrder] = useColumnOrder("pre-approval", PAGE_COLUMNS.map(c => c.id))
+  const orderedVisibleCols = columnOrder
+    .map(id => PAGE_COLUMNS.find(c => c.id === id))
+    .filter((col): col is typeof PAGE_COLUMNS[0] => !!col && visibleColumns.includes(col.id))
+  const handleColumnReorder = useCallback((newVisibleOrder: string[]) => {
+    const hiddenCols = columnOrder.filter(id => !visibleColumns.includes(id))
+    setColumnOrder([...newVisibleOrder, ...hiddenCols])
+  }, [columnOrder, visibleColumns, setColumnOrder])
   const [isApproving, setIsApproving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [preApprovalData, setPreApprovalData] = useState<any>(null)
@@ -2934,21 +2946,8 @@ export default function PreApprovalPage() {
                 Columns
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-62.5 max-h-100 overflow-y-auto">
-              <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {PAGE_COLUMNS.map((col) => (
-                <DropdownMenuCheckboxItem
-                  key={col.id}
-                  className="capitalize"
-                  checked={visibleColumns.includes(col.id)}
-                  onCheckedChange={(checked) => {
-                    setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
-                  }}
-                >
-                  {col.label}
-                </DropdownMenuCheckboxItem>
-              ))}
+            <DropdownMenuContent align="end" className="w-[250px]">
+              <ColumnToggleContent columns={PAGE_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -2965,11 +2964,13 @@ export default function PreApprovalPage() {
                         onCheckedChange={toggleSelectAll}
                       />
                     </TableHead>
-                    {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                      <TableHead key={col.id} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(col.id)}>
-                        {col.label}<PendingSortIcon field={col.id} />
-                      </TableHead>
-                    ))}
+                    <ColumnDragProvider columnIds={orderedVisibleCols.map(c => c.id)} onReorder={handleColumnReorder} disabled={!isAdmin && !isFeatureEnabled('can_reorder_columns')}>
+                      {orderedVisibleCols.map((col) => (
+                        <SortableTableHead key={col.id} id={col.id} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(col.id)}>
+                          {col.label}<PendingSortIcon field={col.id} />
+                        </SortableTableHead>
+                      ))}
+                    </ColumnDragProvider>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2977,7 +2978,7 @@ export default function PreApprovalPage() {
                     [...Array(5)].map((_, i) => (
                       <TableRow key={i} className="opacity-40 border-b border-slate-50">
                         <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
-                        {PAGE_COLUMNS.filter(col => visibleColumns.includes(col.id)).map(col => (
+                        {orderedVisibleCols.map(col => (
                           <TableCell key={col.id} className="py-4">
                             <div className={cn(
                               "h-3 bg-slate-200 animate-pulse rounded-full mx-auto",
@@ -3004,7 +3005,7 @@ export default function PreApprovalPage() {
                             onCheckedChange={() => toggleSelectRow(rawOrder._rowKey)}
                           />
                         </TableCell>
-                        {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                        {orderedVisibleCols.map((col) => (
                           <TableCell key={col.id} className="whitespace-nowrap text-center">
                             {row[col.id as keyof typeof row]}
                           </TableCell>

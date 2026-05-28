@@ -13,6 +13,7 @@ interface User {
   role: string
   page_access: string[] | PageAccessMap | null
   depo_access: Record<string, string[]> | null
+  features?: Record<string, boolean>
 }
 
 // URL path → page name mapping (matches PAGE_ACCESS_OPTIONS in settings)
@@ -165,6 +166,10 @@ export function useAuth() {
   const isReadOnly = user?.role === 'pc' || getPageAccess(currentPageName) === 'view_only'
   const isAdmin = user?.role === 'admin'
 
+  const isFeatureEnabled = (feature: string): boolean => {
+    return user?.features?.[feature] === true
+  }
+
   return {
     user,
     isAuthenticated,
@@ -174,5 +179,6 @@ export function useAuth() {
     role: user?.role,
     getPageAccess,
     currentPageName,
+    isFeatureEnabled,
   }
 }

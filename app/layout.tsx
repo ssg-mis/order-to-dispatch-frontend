@@ -27,6 +27,16 @@ export default function RootLayout({
   const isLoginPage = pathname === "/login"
 
   useEffect(() => {
+    const preventNumberScroll = (e: WheelEvent) => {
+      if ((e.target as HTMLElement).closest('input[type="number"]')) {
+        e.preventDefault()
+      }
+    }
+    document.addEventListener("wheel", preventNumberScroll, { passive: false })
+    return () => document.removeEventListener("wheel", preventNumberScroll)
+  }, [])
+
+  useEffect(() => {
     const userStr = localStorage.getItem("user")
     const isAuthenticated = localStorage.getItem("isAuthenticated") === "true"
     

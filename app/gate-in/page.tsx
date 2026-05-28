@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, useMemo } from "react"
+import { useRef, useState, useMemo, useCallback } from "react"
 import { WorkflowStageShell } from "@/components/workflow/workflow-stage-shell"
 import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -13,6 +13,10 @@ import { useAuth } from "@/hooks/use-auth"
 import { gateInApi, orderApi, vehicleMasterApi } from "@/lib/api-service"
 import { useQuery } from "@tanstack/react-query"
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Truck, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { usePersistedColumns } from "@/hooks/use-persisted-columns"
+import { useColumnOrder } from "@/hooks/use-column-order"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { ColumnDragProvider } from "@/components/ui/column-drag-provider"
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -149,11 +153,21 @@ function ImageUploadCard({ label, capture, value, fileName, isUploading, onFile,
   )
 }
 
+const PAGE_COLUMNS = [
+  { id: "order_key",   label: "Order Key (DO No.)" },
+  { id: "vehicle_no",  label: "Vehicle No." },
+  { id: "driver_name", label: "Driver Name" },
+  { id: "saved_by",    label: "Saved By" },
+  { id: "saved_at",    label: "Saved At" },
+  { id: "products",    label: "Products" },
+] as const
+type ColId = typeof PAGE_COLUMNS[number]["id"]
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function GateInPage() {
   const { toast } = useToast()
-  const { isReadOnly, user } = useAuth()
+  const { isReadOnly, user, isAdmin, isFeatureEnabled } = useAuth()
 
   const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
   const [pendingPage, setPendingPage] = useState(1)
@@ -263,6 +277,48 @@ export default function GateInPage() {
       return 0
     })
   }, [pendingRecords, pendingSortField, pendingSortDir])
+
+  const [visibleColumns] = usePersistedColumns("gate-in", PAGE_COLUMNS.map(c => c.id))
+  const [columnOrder, setColumnOrder] = useColumnOrder("gate-in", PAGE_COLUMNS.map(c => c.id))
+  const orderedVisibleCols = useMemo(() =>
+    columnOrder
+      .map(id => PAGE_COLUMNS.find(c => c.id === id))
+      .filter((c): c is typeof PAGE_COLUMNS[number] => !!c && visibleColumns.includes(c.id as ColId)),
+    [columnOrder, visibleColumns]
+  )
+  const handleColumnReorder = useCallback((newVisibleOrder: string[]) => {
+    const hiddenCols = columnOrder.filter(id => !visibleColumns.includes(id as ColId))
+    setColumnOrder([...newVisibleOrder, ...hiddenCols])
+  }, [columnOrder, visibleColumns, setColumnOrder])
+
+  const COL_SORT_FIELD: Partial<Record<ColId, string>> = {
+    order_key:   "order_key",
+    vehicle_no:  "vehicle_no",
+    driver_name: "driver_name",
+    saved_by:    "saved_by",
+    saved_at:    "saved_at",
+  }
+
+  const renderCell = (record: any, colId: ColId) => {
+    const draft = record.draft_data || {}
+    const productCount = draft.dialogSelectedProducts?.length ?? "—"
+    switch (colId) {
+      case "order_key":
+        return <TableCell key={colId} className="text-center font-black text-blue-700 text-sm">{record.order_key}</TableCell>
+      case "vehicle_no":
+        return <TableCell key={colId} className="text-center font-semibold text-slate-700">{draft.vehicleNumber || "—"}</TableCell>
+      case "driver_name":
+        return <TableCell key={colId} className="text-center font-bold text-slate-700 italic">{draft.driverName || "—"}</TableCell>
+      case "saved_by":
+        return <TableCell key={colId} className="text-center text-slate-600 text-sm">{record.username}</TableCell>
+      case "saved_at":
+        return <TableCell key={colId} className="text-center text-slate-500 text-xs">{formatDate(record.saved_at)}</TableCell>
+      case "products":
+        return <TableCell key={colId} className="text-center"><Badge variant="outline" className="text-xs font-bold">{productCount} item(s)</Badge></TableCell>
+      default:
+        return null
+    }
+  }
 
   const toggleSelectAll = () => {
     if (selectedRows.length === pendingRecords.length) setSelectedRows([])
@@ -530,12 +586,21 @@ export default function GateInPage() {
                     onCheckedChange={toggleSelectAll}
                   />
                 </TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("order_key")}>Order Key (DO No.)<PendingSortIcon field="order_key" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicle_no")}>Vehicle No.<PendingSortIcon field="vehicle_no" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("driver_name")}>Driver Name<PendingSortIcon field="driver_name" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("saved_by")}>Saved By<PendingSortIcon field="saved_by" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("saved_at")}>Saved At<PendingSortIcon field="saved_at" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center">Products</TableHead>
+                <ColumnDragProvider columnIds={orderedVisibleCols.map(c => c.id)} onReorder={handleColumnReorder} disabled={!isAdmin && !isFeatureEnabled('can_reorder_columns')}>
+                  {orderedVisibleCols.map(col => {
+                    const sf = COL_SORT_FIELD[col.id]
+                    return (
+                      <SortableTableHead
+                        key={col.id}
+                        id={col.id}
+                        className={`whitespace-nowrap text-center${sf ? " cursor-pointer select-none hover:text-blue-600 transition-colors" : ""}`}
+                        onClick={sf ? () => handlePendingSort(sf) : undefined}
+                      >
+                        {col.label}{sf && <PendingSortIcon field={sf} />}
+                      </SortableTableHead>
+                    )
+                  })}
+                </ColumnDragProvider>
                 <TableHead className="whitespace-nowrap text-center">Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -543,7 +608,7 @@ export default function GateInPage() {
               {isPendingLoading && pendingRecords.length === 0 ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i} className="opacity-40">
-                    {[...Array(7)].map((_, j) => (
+                    {[...Array(orderedVisibleCols.length + 2)].map((_, j) => (
                       <TableCell key={j} className="py-4">
                         <div className="h-4 w-full bg-slate-200 animate-pulse rounded" />
                       </TableCell>
@@ -552,14 +617,12 @@ export default function GateInPage() {
                 ))
               ) : pendingRecords.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-16 text-slate-400 font-semibold text-sm">
+                  <TableCell colSpan={orderedVisibleCols.length + 2} className="text-center py-16 text-slate-400 font-semibold text-sm">
                     No pending gate-ins. Orders saved as draft in Actual Dispatch will appear here.
                   </TableCell>
                 </TableRow>
               ) : (
                 sortedPendingRecords.map((record: any) => {
-                  const draft = record.draft_data || {}
-                  const productCount = draft.dialogSelectedProducts?.length ?? "—"
                   return (
                     <TableRow
                       key={record.order_key}
@@ -571,14 +634,7 @@ export default function GateInPage() {
                           onCheckedChange={() => toggleRow(record.order_key)}
                         />
                       </TableCell>
-                      <TableCell className="text-center font-black text-blue-700 text-sm">{record.order_key}</TableCell>
-                      <TableCell className="text-center font-semibold text-slate-700">{draft.vehicleNumber || "—"}</TableCell>
-                      <TableCell className="text-center font-bold text-slate-700 italic">{draft.driverName || "—"}</TableCell>
-                      <TableCell className="text-center text-slate-600 text-sm">{record.username}</TableCell>
-                      <TableCell className="text-center text-slate-500 text-xs">{formatDate(record.saved_at)}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className="text-xs font-bold">{productCount} item(s)</Badge>
-                      </TableCell>
+                      {orderedVisibleCols.map(col => renderCell(record, col.id))}
                       <TableCell className="text-center">
                         <Button
                           size="sm"

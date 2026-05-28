@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { WorkflowStageShell } from "@/components/workflow/workflow-stage-shell"
@@ -25,11 +25,15 @@ import { Upload, X, Plus, Settings2, ShieldAlert, ShieldCheck, Truck, ChevronDow
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
+import { ColumnToggleContent } from "@/components/ui/column-toggle-content"
 import { securityGuardApprovalApi, orderApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
 import { useQuery } from "@tanstack/react-query"
 import { Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, ExternalLink } from "lucide-react"
 import { usePersistedColumns } from "@/hooks/use-persisted-columns"
+import { useColumnOrder } from "@/hooks/use-column-order"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { ColumnDragProvider } from "@/components/ui/column-drag-provider"
 
 const MAX_COMPRESSED_IMAGE_BYTES = 850 * 1024
 const MAX_COMPRESSED_IMAGE_DIMENSION = 1600
@@ -82,10 +86,21 @@ async function compressImageForUpload(file: File): Promise<File> {
   return new File([blob], `${cleanName}.jpg`, { type: "image/jpeg", lastModified: Date.now() })
 }
 
+const PAGE_COLUMNS = [
+  { id: "partySoDate",       label: "DO DATE" },
+  { id: "doNumber",          label: "DO NUMBERS" },
+  { id: "processId",         label: "PROCESS ID" },
+  { id: "customerName",      label: "CUSTOMER NAME" },
+  { id: "itemCount",         label: "ITEM COUNT" },
+  { id: "vehicleNo",         label: "VEHICLE NO." },
+  { id: "orderPunchRemarks", label: "ORDER PUNCH REMARKS" },
+] as const
+type ColId = typeof PAGE_COLUMNS[number]["id"]
+
 export default function SecurityApprovalPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isReadOnly, user } = useAuth()
+  const { isReadOnly, user, isAdmin, isFeatureEnabled } = useAuth()
   const [confirmDetails, setConfirmDetails] = useState<Record<string, { qty: string }>>({})
   const [expandedOrders, setExpandedOrders] = useState<string[]>([])
   const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
@@ -122,13 +137,13 @@ export default function SecurityApprovalPage() {
 
   const renderDocumentLink = (value: string) => {
     if (!value || value === "—") return <p className="text-[10px] font-black text-slate-400 leading-none">NOT UPLOADED</p>;
-    
+
     // Check if it's a URL
     if (String(value).startsWith('http')) {
       return (
-        <a 
-          href={value} 
-          target="_blank" 
+        <a
+          href={value}
+          target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 px-3 py-1 bg-violet-50 text-violet-700 rounded-lg hover:bg-violet-100 transition-all border border-violet-200 w-fit group shadow-sm mt-0.5"
         >
@@ -137,8 +152,21 @@ export default function SecurityApprovalPage() {
         </a>
       );
     }
-    
+
     return <p className="text-xs font-bold text-slate-700 leading-none">{formatDate(value)}</p>;
+  };
+
+  const renderPartyDetailLink = (docUrl: string | null | undefined, expiryDate: string | null | undefined) => {
+    const formattedDate = formatDate(expiryDate ?? '');
+    if (docUrl && String(docUrl).startsWith('http')) {
+      return (
+        <a href={docUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline transition-all">
+          {formattedDate !== "—" ? formattedDate : "View Document"}
+        </a>
+      );
+    }
+    if (formattedDate !== "—") return <span className="text-xs font-bold text-slate-700">{formattedDate}</span>;
+    return <span className="text-[10px] text-slate-400">—</span>;
   };
 
   const [visibleColumns, setVisibleColumns] = usePersistedColumns(
@@ -577,6 +605,65 @@ export default function SecurityApprovalPage() {
     })
   }, [displayRows, pendingSortField, pendingSortDir])
 
+  const [columnOrder, setColumnOrder] = useColumnOrder("security-approval", PAGE_COLUMNS.map(c => c.id))
+  const orderedVisibleCols = useMemo(() =>
+    columnOrder
+      .map(id => PAGE_COLUMNS.find(c => c.id === id))
+      .filter((c): c is typeof PAGE_COLUMNS[number] => !!c),
+    [columnOrder]
+  )
+  const handleColumnReorder = useCallback((newOrder: string[]) => {
+    const coreInNewOrder = newOrder.filter(id => PAGE_COLUMNS.some(c => c.id === id))
+    const hiddenCols = columnOrder.filter(id => !coreInNewOrder.includes(id))
+    setColumnOrder([...coreInNewOrder, ...hiddenCols])
+  }, [columnOrder, setColumnOrder])
+
+  const COL_SORT_FIELD: Partial<Record<ColId, string>> = {
+    partySoDate:       "partySoDate",
+    doNumber:          "doNumber",
+    processId:         "processId",
+    customerName:      "customerName",
+    vehicleNo:         "vehicleNo",
+    orderPunchRemarks: "orderPunchRemarks",
+  }
+  const CENTER_COLS: ColId[] = ["itemCount", "vehicleNo", "orderPunchRemarks"]
+
+  const renderCoreCell = (group: any, colId: ColId) => {
+    switch (colId) {
+      case "partySoDate":
+        return <TableCell key={colId} className="p-4 text-center text-xs font-medium">{group.partySoDate}</TableCell>
+      case "doNumber":
+        return (
+          <TableCell key={colId} className="p-4">
+            <div className="flex flex-wrap gap-1 max-w-sm">
+              {group.doNumber.split(", ").map((doNum: string) => (
+                <Badge key={doNum} variant="outline" className="bg-white text-purple-700 border-purple-200 font-bold text-[10px]">{doNum}</Badge>
+              ))}
+            </div>
+          </TableCell>
+        )
+      case "processId":
+        return <TableCell key={colId} className="p-4"><span className="text-xs font-bold text-slate-600">{group.processId}</span></TableCell>
+      case "customerName":
+        return <TableCell key={colId} className="p-4 font-black text-slate-700 uppercase tracking-tighter italic">{group.customerName}</TableCell>
+      case "itemCount":
+        return (
+          <TableCell key={colId} className="text-center p-4">
+            <div className="flex flex-col items-center">
+              <span className="font-black text-lg text-slate-800">{group._productCount}</span>
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Products</span>
+            </div>
+          </TableCell>
+        )
+      case "vehicleNo":
+        return <TableCell key={colId} className="text-center p-4"><span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span></TableCell>
+      case "orderPunchRemarks":
+        return <TableCell key={colId} className="text-center p-4"><span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span></TableCell>
+      default:
+        return null
+    }
+  }
+
   const getDynamicColumnValue = (group: any, colId: string) => {
     const directValue = group?.[colId]
     if (directValue !== undefined && directValue !== null && directValue !== "") return directValue
@@ -698,19 +785,8 @@ export default function SecurityApprovalPage() {
                 Columns
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-62.5 max-h-100 overflow-y-auto">
-              {ALL_COLUMNS.map((col) => (
-                <DropdownMenuCheckboxItem
-                  key={col.id}
-                  className="capitalize"
-                  checked={visibleColumns.includes(col.id)}
-                  onCheckedChange={(checked) => {
-                    setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
-                  }}
-                >
-                  {col.label}
-                </DropdownMenuCheckboxItem>
-              ))}
+            <DropdownMenuContent align="end" className="w-[250px]">
+              <ColumnToggleContent columns={ALL_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -734,23 +810,31 @@ export default function SecurityApprovalPage() {
                     onCheckedChange={toggleSelectAll}
                   />
                 </TableHead>
-                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("partySoDate")}>DO DATE<PendingSortIcon field="partySoDate" /></TableHead>
-                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("doNumber")}>DO NUMBERS<PendingSortIcon field="doNumber" /></TableHead>
-                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("processId")}>PROCESS ID<PendingSortIcon field="processId" /></TableHead>
-                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("customerName")}>CUSTOMER NAME<PendingSortIcon field="customerName" /></TableHead>
-                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">ITEM COUNT</TableHead>
-                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicleNo")}>VEHICLE NO.<PendingSortIcon field="vehicleNo" /></TableHead>
-                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("orderPunchRemarks")}>ORDER PUNCH REMARKS<PendingSortIcon field="orderPunchRemarks" /></TableHead>
-                {visibleColumns.filter(colId => !['partySoDate', 'doNumber', 'customerName', 'vehicleNo', 'processId', 'status', 'orderPunchRemarks'].includes(colId)).map(colId => {
-                  const col = ALL_COLUMNS.find(c => c.id === colId)
-                  if (!col) return null
-                  return (
-                    <TableHead key={colId} className="text-[10px] uppercase font-black text-slate-500 tracking-wider cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(colId)}>
-                      {col.label}
-                      <PendingSortIcon field={colId} />
-                    </TableHead>
-                  )
-                })}
+                <ColumnDragProvider columnIds={[...orderedVisibleCols.map(c => c.id), ...visibleColumns.filter(colId => !['partySoDate', 'doNumber', 'customerName', 'vehicleNo', 'processId', 'status', 'orderPunchRemarks'].includes(colId))]} onReorder={handleColumnReorder} disabled={!isAdmin && !isFeatureEnabled('can_reorder_columns')}>
+                  {orderedVisibleCols.map(col => {
+                    const sf = COL_SORT_FIELD[col.id]
+                    return (
+                      <SortableTableHead
+                        key={col.id}
+                        id={col.id}
+                        className={`text-[10px] uppercase font-black text-slate-500 tracking-wider whitespace-nowrap${sf ? " cursor-pointer select-none hover:text-blue-600 transition-colors" : ""}${CENTER_COLS.includes(col.id) ? " text-center" : ""}`}
+                        onClick={sf ? () => handlePendingSort(sf) : undefined}
+                      >
+                        {col.label}{sf && <PendingSortIcon field={sf} />}
+                      </SortableTableHead>
+                    )
+                  })}
+                  {visibleColumns.filter(colId => !['partySoDate', 'doNumber', 'customerName', 'vehicleNo', 'processId', 'status', 'orderPunchRemarks'].includes(colId)).map(colId => {
+                    const col = ALL_COLUMNS.find(c => c.id === colId)
+                    if (!col) return null
+                    return (
+                      <SortableTableHead key={colId} id={colId} className="text-[10px] uppercase font-black text-slate-500 tracking-wider cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(colId)}>
+                        {col.label}
+                        <PendingSortIcon field={colId} />
+                      </SortableTableHead>
+                    )
+                  })}
+                </ColumnDragProvider>
                 <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-center">STATUS</TableHead>
               </TableRow>
             </TableHeader>
@@ -775,30 +859,7 @@ export default function SecurityApprovalPage() {
                     <TableCell className="text-center p-4">
                       <Checkbox disabled={group.isDisabled} checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                     </TableCell>
-                    <TableCell className="p-4 text-center text-xs font-medium">{group.partySoDate}</TableCell>
-                    <TableCell className="p-4">
-                      <div className="flex flex-wrap gap-1 max-w-sm">
-                        {group.doNumber.split(", ").map((doNum: string) => (
-                          <Badge key={doNum} variant="outline" className="bg-white text-purple-700 border-purple-200 font-bold text-[10px]">{doNum}</Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="p-4">
-                      <span className="text-xs font-bold text-slate-600">{group.processId}</span>
-                    </TableCell>
-                    <TableCell className="p-4 font-black text-slate-700 uppercase tracking-tighter italic">{group.customerName}</TableCell>
-                    <TableCell className="text-center p-4">
-                      <div className="flex flex-col items-center">
-                        <span className="font-black text-lg text-slate-800">{group._productCount}</span>
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Products</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center p-4">
-                      <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
-                    </TableCell>
-                    <TableCell className="text-center p-4">
-                      <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
-                    </TableCell>
+                    {orderedVisibleCols.map(col => renderCoreCell(group, col.id))}
                     {visibleColumns.filter(colId => !['partySoDate', 'doNumber', 'customerName', 'vehicleNo', 'processId', 'status', 'orderPunchRemarks'].includes(colId)).map(colId => {
                       const col = ALL_COLUMNS.find(c => c.id === colId)
                       if (!col) return null
@@ -819,7 +880,7 @@ export default function SecurityApprovalPage() {
                 ))
               ) : (
                   <TableRow>
-                  <TableCell colSpan={9 + visibleColumns.filter(colId => !['partySoDate', 'doNumber', 'customerName', 'vehicleNo', 'processId', 'status', 'orderPunchRemarks'].includes(colId)).length} className="text-center py-20">
+                  <TableCell colSpan={orderedVisibleCols.length + 2 + visibleColumns.filter(colId => !['partySoDate', 'doNumber', 'customerName', 'vehicleNo', 'processId', 'status', 'orderPunchRemarks'].includes(colId)).length} className="text-center py-20">
                     <div className="flex flex-col items-center gap-2">
                       <ShieldAlert className="w-12 h-12 text-slate-200" />
                       <p className="text-slate-400 font-black uppercase tracking-widest text-xs">No vehicles pending for security check</p>
@@ -1094,32 +1155,42 @@ export default function SecurityApprovalPage() {
                                       <p className="text-xs font-black text-blue-700 uppercase">{firstProd.truck_no || firstProd.truckNo || "—"}</p>
                                     </div>
                                     <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Bilty No</p>
+                                      <p className="text-xs font-black text-blue-600">{firstProd.bilty_no || firstProd.biltyNo || "—"}</p>
+                                    </div>
+                                    <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Transporter</p>
                                       <p className="text-xs font-bold text-slate-700 leading-tight break-words">{firstProd.transporter_name || "—"}</p>
                                     </div>
                                     <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Audit Status</p>
+                                      <Badge variant="outline" className={cn("text-[9px] font-black px-2 py-0.5 uppercase", firstProd.check_status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-orange-50 text-orange-700 border-orange-200')}>
+                                        {firstProd.check_status || "Pending"}
+                                      </Badge>
+                                    </div>
+                                    <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Fitness</p>
-                                      {renderDocumentLink(firstProd.fitness)}
+                                      {renderPartyDetailLink(firstProd.fitness, firstProd.fitness_end_date)}
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Insurance</p>
-                                      {renderDocumentLink(firstProd.insurance)}
+                                      {renderPartyDetailLink(firstProd.insurance, firstProd.insurance_end_date)}
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Pollution</p>
-                                      {renderDocumentLink(firstProd.polution)}
+                                      {renderPartyDetailLink(firstProd.polution, firstProd.pollution_end_date)}
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Tax Copy</p>
-                                      {renderDocumentLink(firstProd.tax_copy)}
+                                      {renderPartyDetailLink(firstProd.tax_copy, firstProd.tax_end_date)}
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 1</p>
-                                      {renderDocumentLink(firstProd.permit1)}
+                                      {renderPartyDetailLink(firstProd.permit1, firstProd.permit1_end_date)}
                                     </div>
                                     <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 2</p>
-                                      {renderDocumentLink(firstProd.permit2_out_state)}
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 2 (Out State)</p>
+                                      {renderPartyDetailLink(firstProd.permit2_out_state, firstProd.permit2_end_date)}
                                     </div>
                                   </div>
 
@@ -1133,20 +1204,28 @@ export default function SecurityApprovalPage() {
                                     </div>
                                     
                                     <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Type</p>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Vehicle Type</p>
                                       <p className="text-xs font-bold text-slate-900">{firstProd.vehicle_type || "—"}</p>
                                     </div>
                                     <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Passing Wt</p>
-                                      <p className="text-xs font-bold text-slate-900">{firstProd.passing_weight || "—"}</p>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">RTO</p>
+                                      <p className="text-xs font-bold text-slate-900">{firstProd.rto || "—"}</p>
                                     </div>
                                     <div>
-                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">GVW / ULW</p>
-                                      <p className="text-xs font-bold text-slate-900">{firstProd.gvw || "0"} / {firstProd.ulw || "0"}</p>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Passing Weight</p>
+                                      <p className="text-xs font-bold text-slate-900">{firstProd.passing_weight || "—"}</p>
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Road Tax</p>
                                       <p className="text-xs font-bold text-slate-900">{firstProd.road_tax || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">GVW</p>
+                                      <p className="text-xs font-bold text-slate-900">{firstProd.gvw || "—"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">ULW</p>
+                                      <p className="text-xs font-bold text-slate-900">{firstProd.ulw || "—"}</p>
                                     </div>
 
                                     <div className="sm:col-span-2 xl:col-span-4 flex items-center gap-2 mb-[-8px] mt-2">

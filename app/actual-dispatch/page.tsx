@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState, useMemo } from "react"
+import React, { useEffect, useState, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { WorkflowStageShell } from "@/components/workflow/workflow-stage-shell"
@@ -24,11 +24,14 @@ import { useAuth } from "@/hooks/use-auth"
 import { useQuery } from "@tanstack/react-query"
 import { Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { usePersistedColumns } from "@/hooks/use-persisted-columns"
+import { useColumnOrder } from "@/hooks/use-column-order"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { ColumnDragProvider } from "@/components/ui/column-drag-provider"
 
 export default function ActualDispatchPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isReadOnly, user } = useAuth()
+  const { isReadOnly, user, isAdmin, isFeatureEnabled } = useAuth()
   const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
   const [pendingPage, setPendingPage] = useState(1)
   const [historyPage, setHistoryPage] = useState(1)
@@ -339,6 +342,14 @@ export default function ActualDispatchPage() {
     "actual-dispatch",
     ["partySoDate", "orderNo", "processId", "customerName", "qtyToDispatch", "deliveryFrom", "orderPunchRemarks", "status", "revertSecurityRemarks"]
   )
+  const [columnOrder, setColumnOrder] = useColumnOrder("actual-dispatch", PAGE_COLUMNS.map(c => c.id))
+  const orderedVisibleCols = columnOrder
+    .map(id => PAGE_COLUMNS.find(c => c.id === id))
+    .filter((col): col is typeof PAGE_COLUMNS[0] => !!col && visibleColumns.includes(col.id))
+  const handleColumnReorder = useCallback((newVisibleOrder: string[]) => {
+    const hiddenCols = columnOrder.filter(id => !visibleColumns.includes(id))
+    setColumnOrder([...newVisibleOrder, ...hiddenCols])
+  }, [columnOrder, visibleColumns, setColumnOrder])
 
   // Pending query with numeric pagination
   const {
@@ -432,11 +443,17 @@ export default function ActualDispatchPage() {
           allowedDepos.some(ad => ad.toLowerCase() === d.depot_name.toLowerCase())
         );
 
-        setActiveDepots(depots);
-        // Set first active depot as default if nothing is selected or current selected is not in active list
-        if (depots.length > 0 && !depots.some((d: any) => d.depot_name === selectedDepoTab)) {
-          const banari = depots.find((d: any) => d.depot_name.toLowerCase() === 'banari');
-          setSelectedDepoTab(banari ? banari.depot_name : depots[0].depot_name);
+        const sortedDepots = [...depots].sort((a, b) => {
+          const aIsBanari = a.depot_name.toLowerCase() === 'banari'
+          const bIsBanari = b.depot_name.toLowerCase() === 'banari'
+          if (aIsBanari && !bIsBanari) return -1
+          if (!aIsBanari && bIsBanari) return 1
+          return a.depot_name.localeCompare(b.depot_name)
+        })
+        setActiveDepots(sortedDepots);
+        if (sortedDepots.length > 0 && !sortedDepots.some((d: any) => d.depot_name === selectedDepoTab)) {
+          const banari = sortedDepots.find((d: any) => d.depot_name.toLowerCase() === 'banari');
+          setSelectedDepoTab(banari ? banari.depot_name : sortedDepots[0].depot_name);
         }
       }
     } catch (error) {
@@ -1732,11 +1749,13 @@ export default function ActualDispatchPage() {
                     onCheckedChange={toggleSelectAll}
                   />
                 </TableHead>
-                {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                  <TableHead key={col.id} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(col.id)}>
-                    {col.label}<PendingSortIcon field={col.id} />
-                  </TableHead>
-                ))}
+                <ColumnDragProvider columnIds={orderedVisibleCols.map(c => c.id)} onReorder={handleColumnReorder} disabled={!isAdmin && !isFeatureEnabled('can_reorder_columns')}>
+                  {orderedVisibleCols.map((col) => (
+                    <SortableTableHead key={col.id} id={col.id} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(col.id)}>
+                      {col.label}<PendingSortIcon field={col.id} />
+                    </SortableTableHead>
+                  ))}
+                </ColumnDragProvider>
 
               </TableRow>
             </TableHeader>
@@ -1745,7 +1764,7 @@ export default function ActualDispatchPage() {
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i} className="opacity-40 border-b border-slate-50">
                     <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
-                    {PAGE_COLUMNS.filter(col => visibleColumns.includes(col.id)).map(col => (
+                    {orderedVisibleCols.map(col => (
                       <TableCell key={col.id} className="py-4">
                         <div className={cn(
                           "h-3 bg-slate-200 animate-pulse rounded-full mx-auto",
@@ -1766,7 +1785,7 @@ export default function ActualDispatchPage() {
                           onCheckedChange={() => toggleSelectOrder(rowKey)}
                         />
                       </TableCell>
-                      {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                      {orderedVisibleCols.map((col) => (
                         <TableCell key={col.id} className="whitespace-nowrap text-center">
                           {col.id === "status" ? (
                             <div className="flex justify-center flex-col items-center gap-1">
@@ -1854,8 +1873,7 @@ export default function ActualDispatchPage() {
 
                       {/* Dynamic columns selected by user */}
                       <div className="grid grid-cols-1 gap-y-3 pt-2">
-                        {PAGE_COLUMNS.filter(col =>
-                          visibleColumns.includes(col.id) &&
+                        {orderedVisibleCols.filter(col =>
                           !['orderNo', 'partySoDate', 'status', 'customerName', 'qtyToDispatch'].includes(col.id)
                         ).map(col => {
                           let val = row[col.id as keyof typeof row] || "—";

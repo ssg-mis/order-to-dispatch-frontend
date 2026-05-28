@@ -29,6 +29,7 @@ import {
   Handshake,
   Clock,
   Workflow,
+  Warehouse,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { useEffect, useState, useMemo } from "react"
@@ -69,6 +70,7 @@ const modules = [
   { title: "Settings", icon: Settings2, url: "/settings" },
   { title: "Set Turn Around Time", icon: Clock, url: "/set-turn-around-time" },
   { title: "Master", icon: BookMarked, url: "/master" },
+  { title: "Inventory", icon: Warehouse, url: "/inventory" },
   { title: "Reports", icon: BarChart2, url: "/reports" },
 ]
 

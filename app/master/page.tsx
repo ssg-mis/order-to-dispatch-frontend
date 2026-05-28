@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
+import { matchesSearch } from "@/lib/search-utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,12 +13,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { customerApi, depotApi, brokerApi, skuDetailsApi, commonApi, skuSellingPriceApi, varCalcApi, salespersonApi, vehicleMasterApi, driverMasterApi, transportMasterApi, orderApi } from "@/lib/api-service"
-import { useInfiniteQuery } from "@tanstack/react-query"
+import { customerApi, depotApi, brokerApi, skuDetailsApi, commonApi, skuSellingPriceApi, varCalcApi, salespersonApi, vehicleMasterApi, driverMasterApi, transportMasterApi, orderApi, inventoryApi } from "@/lib/api-service"
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { useInView } from "react-intersection-observer"
 
 import { useAuth } from "@/hooks/use-auth"
-import {   UserPlus, UserMinus, Search, RefreshCw, FileText, Download, Filter, ArrowUpDown, ArrowUp, ArrowDown, Package, Warehouse, Briefcase, Plus, Loader2, Save, Trash2, Edit2, AlertCircle, CheckCircle2, MoreVertical, X, Settings, Layers, Calendar, Clock, MapPin, Phone, Mail, User, Users, Info, Check, Eye, Trash, LayoutGrid, ChevronRight, ChevronDown, List, Upload, EyeOff, Layout, Truck, Pencil, UserCircle,
+import {   UserPlus, UserMinus, Search, RefreshCw, FileText, Download, Filter, ArrowUpDown, ArrowUp, ArrowDown, Package, Warehouse, Briefcase, Plus, Loader2, Save, Trash2, Edit2, AlertCircle, CheckCircle2, MoreVertical, X, Settings, Calendar, Clock, MapPin, Phone, Mail, User, Users, Info, Check, Eye, Trash, LayoutGrid, ChevronRight, ChevronDown, List, Upload, EyeOff, Layout, Truck, Pencil, UserCircle,
 } from 'lucide-react'
 import { PageHeader } from "@/components/page-header"
 import {
@@ -96,6 +97,7 @@ interface SkuDetail {
   sku_weight: number | string
   packing_weight: number | string
   gross_weight: number | string
+  tag_name: string
 }
 
 interface SkuSellingPrice {
@@ -155,6 +157,7 @@ interface Driver {
   aadhaar_no: string
   pan_no: string
   aadhaar_upload: string
+  dl_upload: string
 }
 
 interface Transport {
@@ -182,6 +185,7 @@ export default function MasterPage() {
   const [activeTab, setActiveTab] = useState("customers")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+  const [openingStockByDepot, setOpeningStockByDepot] = useState<Record<string, string>>({})
 
   const { ref: customerEndRef, inView: customerInView } = useInView()
   const { ref: depotEndRef, inView: depotInView } = useInView()
@@ -191,7 +195,6 @@ export default function MasterPage() {
   const { ref: driverEndRef, inView: driverInView } = useInView()
   const { ref: skuEndRef, inView: skuInView } = useInView()
   const { ref: skuSellingPriceEndRef, inView: skuSellingPriceInView } = useInView()
-
   // --- Queries ---
 
   // Customers
@@ -235,6 +238,20 @@ export default function MasterPage() {
       return currentCount < (lastPage.pagination?.total || 0) ? allPages.length + 1 : undefined
     }
   })
+
+  // All active depots for SKU form (not filtered by searchTerm)
+  const { data: allActiveDepotsData } = useQuery({
+    queryKey: ["all-active-depots"],
+    queryFn: async () => {
+      const res = await depotApi.getAll({ page: 1, limit: 1000, all: "true" })
+      return res.success ? (res.data.depots || []) : []
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const activeDepots = useMemo(
+    () => (allActiveDepotsData || []).filter((d: Depot) => d.status === 'Active'),
+    [allActiveDepotsData]
+  )
 
   // Brokers
   const {
@@ -424,7 +441,6 @@ export default function MasterPage() {
   const [skuSellingPriceSort, setSkuSellingPriceSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'packing_material', dir: 'asc' })
   const [driverSort, setDriverSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'driver_name', dir: 'asc' })
   const [transportSort, setTransportSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'transporter_name', dir: 'asc' })
-
   // Dialog states
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -512,7 +528,8 @@ export default function MasterPage() {
     pincode: "",
     aadhaar_no: "",
     pan_no: "",
-    aadhaar_upload: ""
+    aadhaar_upload: "",
+    dl_upload: ""
   })
 
   const [transportForm, setTransportForm] = useState<Partial<Transport>>({
@@ -544,7 +561,8 @@ export default function MasterPage() {
     weight_difference: "",
     sku_weight: "",
     packing_weight: "",
-    gross_weight: ""
+    gross_weight: "",
+    tag_name: ""
   })
 
   const [skuSellingPriceForm, setSkuSellingPrice] = useState<Partial<SkuSellingPrice>>({
@@ -690,6 +708,7 @@ export default function MasterPage() {
       gstin: ""
     })
     setEditingItem(null)
+    setOpeningStockByDepot({})
   }
 
   const handleCreateOrUpdate = async () => {
@@ -725,6 +744,19 @@ export default function MasterPage() {
           res = await skuDetailsApi.update(editingItem.id, skuDetailsForm)
         } else {
           res = await skuDetailsApi.create(skuDetailsForm)
+        }
+        if (res?.success && skuDetailsForm.sku_name) {
+          await Promise.allSettled(
+            Object.entries(openingStockByDepot)
+              .filter(([_, qty]) => qty !== '')
+              .map(([depotName, qty]) =>
+                inventoryApi.upsertOpeningQty({
+                  depo_name: depotName,
+                  product_name: skuDetailsForm.sku_name as string,
+                  opening_qty: parseInt(qty) || 0,
+                })
+              )
+          )
         }
       } else if (activeTab === "sku_selling_price") {
         if (editingItem) {
@@ -892,7 +924,7 @@ export default function MasterPage() {
     }
   }
 
-  const openEditDialog = (item: any) => {
+  const openEditDialog = async (item: any) => {
     setEditingItem(item)
     if (activeTab === "customers") {
       setCustomerForm({ ...item })
@@ -904,6 +936,19 @@ export default function MasterPage() {
       setSalespersonForm({ ...item })
     } else if (activeTab === "sku_details") {
       setSkuDetailsForm({ ...item })
+      setOpeningStockByDepot({})
+      try {
+        const res = await inventoryApi.getData()
+        if (res.success) {
+          const stockMap: Record<string, string> = {}
+          res.data
+            .filter((row: any) => row.product_name?.toLowerCase() === item.sku_name?.toLowerCase())
+            .forEach((row: any) => {
+              if (row.opening_qty) stockMap[row.depot_name] = String(row.opening_qty)
+            })
+          setOpeningStockByDepot(stockMap)
+        }
+      } catch (_) {}
     } else if (activeTab === "sku_selling_price") {
       setSkuSellingPrice({ ...item })
     } else if (activeTab === "vehicle_master") {
@@ -918,52 +963,53 @@ export default function MasterPage() {
 
   // --- Filter Logic ---
 
-  const filteredCustomers = customers.filter(c => 
-    c?.customer_name?.toLowerCase()?.includes(searchTerm.toLowerCase()) || 
-    c?.customer_id?.toLowerCase()?.includes(searchTerm.toLowerCase())
+  const filteredCustomers = customers.filter(c =>
+    matchesSearch(c?.customer_name, searchTerm) ||
+    matchesSearch(c?.customer_id, searchTerm)
   )
 
-  const filteredDepots = depots.filter(d => 
-    d?.depot_name?.toLowerCase()?.includes(searchTerm.toLowerCase()) || 
-    d?.depot_id?.toLowerCase()?.includes(searchTerm.toLowerCase())
+  const filteredDepots = depots.filter(d =>
+    matchesSearch(d?.depot_name, searchTerm) ||
+    matchesSearch(d?.depot_id, searchTerm)
   )
 
-  const filteredBrokers = brokers.filter(b => 
-    b?.salesman_name?.toLowerCase()?.includes(searchTerm.toLowerCase()) || 
-    b?.broker_id?.toLowerCase()?.includes(searchTerm.toLowerCase())
+  const filteredBrokers = brokers.filter(b =>
+    matchesSearch(b?.salesman_name, searchTerm) ||
+    matchesSearch(b?.broker_id, searchTerm)
   )
 
-  const filteredSkuDetails = skuDetails.filter(s => 
-    s?.sku_name?.toLowerCase()?.includes(searchTerm.toLowerCase()) || 
-    s?.sku_code?.toLowerCase()?.includes(searchTerm.toLowerCase())
+  const filteredSkuDetails = skuDetails.filter(s =>
+    matchesSearch(s?.sku_name, searchTerm) ||
+    matchesSearch(s?.sku_code, searchTerm)
   )
 
-  const filteredSalespersons = salespersons.filter(s => 
-    s?.salesman_name?.toLowerCase()?.includes(searchTerm.toLowerCase()) || 
-    s?.broker_id?.toLowerCase()?.includes(searchTerm.toLowerCase())
+  const filteredSalespersons = salespersons.filter(s =>
+    matchesSearch(s?.salesman_name, searchTerm) ||
+    matchesSearch(s?.broker_id, searchTerm)
   )
 
   const filteredSkuSellingPrices = skuSellingPrices.filter(s =>
-    s?.packing_material?.toLowerCase()?.includes(searchTerm.toLowerCase())
+    matchesSearch(s?.packing_material, searchTerm)
   )
+
   const filteredVehicles = vehicles.filter(v =>
-    v?.registration_no?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
-    v?.vehicle_master_id?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
-    v?.transporter?.toLowerCase()?.includes(searchTerm.toLowerCase())
+    matchesSearch(v?.registration_no, searchTerm) ||
+    matchesSearch(v?.vehicle_master_id, searchTerm) ||
+    matchesSearch(v?.transporter, searchTerm)
   )
 
   const filteredDrivers = drivers.filter(dr =>
-    dr?.driver_name?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
-    dr?.driver_master_id?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
-    dr?.mobile_no?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
-    dr?.driving_licence_no?.toLowerCase()?.includes(searchTerm.toLowerCase())
+    matchesSearch(dr?.driver_name, searchTerm) ||
+    matchesSearch(dr?.driver_master_id, searchTerm) ||
+    matchesSearch(dr?.mobile_no, searchTerm) ||
+    matchesSearch(dr?.driving_licence_no, searchTerm)
   )
 
   const filteredTransporters = transporters.filter(t =>
-    t?.transporter_name?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
-    t?.transport_master_id?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
-    t?.contact_person?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
-    t?.contact_number?.toLowerCase()?.includes(searchTerm.toLowerCase())
+    matchesSearch(t?.transporter_name, searchTerm) ||
+    matchesSearch(t?.transport_master_id, searchTerm) ||
+    matchesSearch(t?.contact_person, searchTerm) ||
+    matchesSearch(t?.contact_number, searchTerm)
   )
 
   // --- Sort helpers ---
@@ -1220,55 +1266,67 @@ export default function MasterPage() {
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="main_uom">Main UOM</Label>
-          <Input id="main_uom" value={skuDetailsForm.main_uom} onChange={e => setSkuDetailsForm({...skuDetailsForm, main_uom: e.target.value})} placeholder="e.g. Box" />
+          <Label htmlFor="tag_name">Tags</Label>
+          <Select value={skuDetailsForm.tag_name || ""} onValueChange={val => setSkuDetailsForm({...skuDetailsForm, tag_name: val})}>
+            <SelectTrigger id="tag_name"><SelectValue placeholder="Select" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Yes">Yes</SelectItem>
+              <SelectItem value="No">No</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="main_uom">Main UOM</Label>
+          <Input id="main_uom" value={skuDetailsForm.main_uom} onChange={e => setSkuDetailsForm({...skuDetailsForm, main_uom: e.target.value})} placeholder="e.g. Box" />
+        </div>
         <div className="space-y-2">
           <Label htmlFor="alternate_uom">Alternate UOM</Label>
           <Input id="alternate_uom" value={skuDetailsForm.alternate_uom} onChange={e => setSkuDetailsForm({...skuDetailsForm, alternate_uom: e.target.value})} placeholder="e.g. Pcs" />
         </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="nos_per_main_uom">Nos per Main UOM</Label>
           <Input id="nos_per_main_uom" type="number" value={skuDetailsForm.nos_per_main_uom} onChange={e => setSkuDetailsForm({...skuDetailsForm, nos_per_main_uom: e.target.value})} placeholder="0" />
         </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="units">Units</Label>
           <Input id="units" value={skuDetailsForm.units} onChange={e => setSkuDetailsForm({...skuDetailsForm, units: e.target.value})} placeholder="e.g. Kg" />
         </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="oil_filling_per_unit">Oil Filling per Unit</Label>
           <Input id="oil_filling_per_unit" type="number" value={skuDetailsForm.oil_filling_per_unit} onChange={e => setSkuDetailsForm({...skuDetailsForm, oil_filling_per_unit: e.target.value})} placeholder="0.00" />
         </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="filling_units">Filling Units</Label>
           <Input id="filling_units" value={skuDetailsForm.filling_units} onChange={e => setSkuDetailsForm({...skuDetailsForm, filling_units: e.target.value})} placeholder="e.g. Ltr" />
         </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="converted_kg">Converted Kg</Label>
           <Input id="converted_kg" type="number" value={skuDetailsForm.converted_kg} onChange={e => setSkuDetailsForm({...skuDetailsForm, converted_kg: e.target.value})} placeholder="0.00" />
         </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="packing_weight_per_main_unit">Packing Weight/Main Unit</Label>
           <Input id="packing_weight_per_main_unit" type="number" value={skuDetailsForm.packing_weight_per_main_unit} onChange={e => setSkuDetailsForm({...skuDetailsForm, packing_weight_per_main_unit: e.target.value})} placeholder="0.00" />
         </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="weight_difference">Weight Difference</Label>
           <Input id="weight_difference" type="number" value={skuDetailsForm.weight_difference} onChange={e => setSkuDetailsForm({...skuDetailsForm, weight_difference: e.target.value})} placeholder="0.00" />
         </div>
-      </div>
-      <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label htmlFor="sku_weight">SKU Weight</Label>
           <Input id="sku_weight" type="number" value={skuDetailsForm.sku_weight} onChange={e => setSkuDetailsForm({...skuDetailsForm, sku_weight: e.target.value})} placeholder="0.00" />
         </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="packing_weight">Packing Weight</Label>
           <Input id="packing_weight" type="number" value={skuDetailsForm.packing_weight} onChange={e => setSkuDetailsForm({...skuDetailsForm, packing_weight: e.target.value})} placeholder="0.00" />
@@ -1278,6 +1336,44 @@ export default function MasterPage() {
           <Input id="gross_weight" type="number" value={skuDetailsForm.gross_weight} onChange={e => setSkuDetailsForm({...skuDetailsForm, gross_weight: e.target.value})} placeholder="0.00" />
         </div>
       </div>
+
+      {activeDepots.length > 0 && (
+        <>
+          <Separator />
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <Warehouse className="h-4 w-4" />
+                  Opening Stock by Depot
+                </Label>
+                <p className="text-xs text-slate-500 mt-0.5 ml-6">(wef date 01/04/2026)</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Opening Qty</p>
+                <p className="text-sm font-bold text-blue-700">
+                  {Object.values(openingStockByDepot).reduce((sum, v) => sum + (parseFloat(v as string) || 0), 0)}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {activeDepots.map((depot: any) => (
+                <div key={depot.depot_id} className="flex items-center gap-3 px-1">
+                  <span className="flex-1 text-sm text-slate-700">{depot.depot_name}</span>
+                  <Input
+                    type="number"
+                    className="w-28 text-right"
+                    placeholder="0"
+                    min="0"
+                    value={openingStockByDepot[depot.depot_name] ?? ''}
+                    onChange={e => setOpeningStockByDepot(prev => ({ ...prev, [depot.depot_name]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 
@@ -1632,6 +1728,15 @@ export default function MasterPage() {
         </div>
       </div>
 
+      <div className="space-y-2">
+        <Label>Driving Licence Upload</Label>
+        <div className="flex gap-2 items-center">
+          <Input type="file" onChange={e => handleFileUpload(e, 'dl_upload')} className="flex-1" />
+          {driverForm.dl_upload && <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Uploaded</Badge>}
+        </div>
+        <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
+      </div>
+
       <Separator className="my-2" />
 
       <div className="grid grid-cols-2 gap-4">
@@ -1767,7 +1872,7 @@ export default function MasterPage() {
               else if (activeTab === "sku_selling_price") refetchSkuSellingPrice()
               else if (activeTab === "vehicle_master") refetchVehicle()
               else if (activeTab === "driver_master") refetchDriver()
-            }} 
+            }}
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''} md:mr-2`} />
             <span className="hidden md:inline">Refresh</span>
@@ -2875,6 +2980,7 @@ export default function MasterPage() {
                                 <div className="flex flex-wrap gap-1">
                                   {item.aadhaar_no && <Badge variant="outline" className="text-[10px] bg-indigo-50 border-indigo-100 text-indigo-700">Aadhaar: {item.aadhaar_no.slice(-4)}</Badge>}
                                   {item.aadhaar_upload && <Badge variant="outline" className="text-[10px] bg-blue-50 cursor-pointer" onClick={() => window.open(item.aadhaar_upload, '_blank')}>View Art</Badge>}
+                                  {item.dl_upload && <Badge variant="outline" className="text-[10px] bg-amber-50 border-amber-200 text-amber-700 cursor-pointer" onClick={() => window.open(item.dl_upload, '_blank')}>View DL</Badge>}
                                   {item.pan_no && <Badge variant="outline" className="text-[10px] bg-slate-100">PAN: {item.pan_no}</Badge>}
                                 </div>
                               </TableCell>
@@ -3057,6 +3163,7 @@ export default function MasterPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
       </Tabs>
 
       {/* Delete Confirmation Dialog */}

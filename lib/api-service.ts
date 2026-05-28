@@ -1463,6 +1463,28 @@ export const salespersonApi = {
 };
 
 /**
+ * Tag API
+ */
+export const tagApi = {
+  getAll: async (params?: any): Promise<ApiResponse> => {
+    const queryString = params ? '?' + new URLSearchParams(params as any).toString() : '';
+    return request(`/tags${queryString}`);
+  },
+  getById: async (id: number): Promise<ApiResponse> => {
+    return request(`/tags/${id}`);
+  },
+  create: async (data: any): Promise<ApiResponse> => {
+    return request('/tags', { method: 'POST', body: JSON.stringify(data) });
+  },
+  update: async (id: number, data: any): Promise<ApiResponse> => {
+    return request(`/tags/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  delete: async (id: number): Promise<ApiResponse> => {
+    return request(`/tags/${id}`, { method: 'DELETE' });
+  },
+};
+
+/**
  * Dashboard API
  */
 export const dashboardApi = {
@@ -1522,6 +1544,12 @@ export const reportsApi = {
       : '';
     return request(`${API_ENDPOINTS.reports.get}${queryString}`);
   },
+  getDispatchReport: async (params?: any): Promise<ApiResponse> => {
+    const queryString = params
+      ? '?' + new URLSearchParams(params as any).toString()
+      : '';
+    return request(`${API_ENDPOINTS.reports.dispatchReport}${queryString}`);
+  },
 };
 
 // ============================================================
@@ -1556,6 +1584,27 @@ export const commitmentPunchApi = {
 
   getDetails: async (id: number): Promise<ApiResponse> =>
     request(`/commitment-punch/${id}/details`),
+};
+
+/**
+ * Inventory API
+ */
+export const inventoryApi = {
+  getData: async (): Promise<ApiResponse> => {
+    return request('/inventory/data');
+  },
+
+  upsertOpeningQty: async (data: { depo_name: string; product_name: string; opening_qty: number }): Promise<ApiResponse> => {
+    return request('/inventory/opening-qty', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getDetail: async (depot_name: string, product_name: string, type: string): Promise<ApiResponse> => {
+    const params = new URLSearchParams({ depot_name, product_name, type });
+    return request(`/inventory/detail?${params}`);
+  },
 };
 
 export default {

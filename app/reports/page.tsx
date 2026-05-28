@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 import { reportsApi } from "@/lib/api-service"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ExportPdfModal } from "@/components/export-pdf-modal"
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api/v1"
 
@@ -73,9 +74,6 @@ function downloadExcel(data: any[], filename: string) {
   downloadCSV(data, filename)
 }
 
-function downloadPDF() {
-  window.print()
-}
 
 // ─── Main Report Page ──────────────────────────────────────────────────────
 export default function ReportsPage() {
@@ -222,10 +220,7 @@ export default function ReportsPage() {
             }}>
             <FileText className="h-3.5 w-3.5" /> Excel
           </Button>
-          <Button variant="outline" size="sm" className="rounded-xl text-xs font-bold gap-1.5 hover:bg-rose-50 hover:border-rose-400 hover:text-rose-700 transition-colors"
-            onClick={downloadPDF}>
-            <FileText className="h-3.5 w-3.5" /> PDF
-          </Button>
+          <ExportPdfModal />
           <Button size="sm" className="rounded-xl text-xs font-bold gap-1.5" style={{ background: "oklch(0.42 0.18 265)" }}
             onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />

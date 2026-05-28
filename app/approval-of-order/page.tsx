@@ -11,9 +11,10 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useToast } from "@/hooks/use-toast"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { ColumnToggleContent } from "@/components/ui/column-toggle-content"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useInView } from "react-intersection-observer"
 import { ChevronLeft, ChevronRight, Settings2, CheckCircle2, Loader2, ChevronDown, ChevronUp, ChevronsUpDown, Check, CheckCircle, FileText, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
@@ -23,12 +24,15 @@ import { approvalApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { usePersistedColumns } from "@/hooks/use-persisted-columns"
+import { useColumnOrder } from "@/hooks/use-column-order"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { ColumnDragProvider } from "@/components/ui/column-drag-provider"
 
 
 export default function CommitmentReviewPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isReadOnly, user } = useAuth()
+  const { isReadOnly, user, isAdmin, isFeatureEnabled } = useAuth()
   const [isConfirming, setIsConfirming] = useState(false)
 
   const formatDate = (dateStr: string) => {
@@ -93,6 +97,14 @@ export default function CommitmentReviewPage() {
     "approval-of-order",
     ["partySoDate", "orderNo", "customerName", "orderCategory", "productName", "rate", "orderPunchRemarks", "status"]
   )
+  const [columnOrder, setColumnOrder] = useColumnOrder("approval-of-order", PAGE_COLUMNS.map(c => c.id))
+  const orderedVisibleCols = columnOrder
+    .map(id => PAGE_COLUMNS.find(c => c.id === id))
+    .filter((col): col is typeof PAGE_COLUMNS[0] => !!col && visibleColumns.includes(col.id))
+  const handleColumnReorder = useCallback((newVisibleOrder: string[]) => {
+    const hiddenCols = columnOrder.filter(id => !visibleColumns.includes(id))
+    setColumnOrder([...newVisibleOrder, ...hiddenCols])
+  }, [columnOrder, visibleColumns, setColumnOrder])
 
   // State for list of orders
   const [selectedOrder, setSelectedOrder] = useState<any>(null) // For the dialog interaction
@@ -1162,21 +1174,8 @@ export default function CommitmentReviewPage() {
                 Columns
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-62.5 max-h-100 overflow-y-auto">
-              <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {PAGE_COLUMNS.map((col) => (
-                <DropdownMenuCheckboxItem
-                  key={col.id}
-                  className="capitalize"
-                  checked={visibleColumns.includes(col.id)}
-                  onCheckedChange={(checked) => {
-                    setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
-                  }}
-                >
-                  {col.label}
-                </DropdownMenuCheckboxItem>
-              ))}
+            <DropdownMenuContent align="end" className="w-[250px]">
+              <ColumnToggleContent columns={PAGE_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -1191,11 +1190,13 @@ export default function CommitmentReviewPage() {
                     onCheckedChange={toggleSelectAll}
                   />
                 </TableHead>
-                {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
-                  <TableHead key={col.id} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(col.id)}>
-                    {col.label}<PendingSortIcon field={col.id} />
-                  </TableHead>
-                ))}
+                <ColumnDragProvider columnIds={orderedVisibleCols.map(c => c.id)} onReorder={handleColumnReorder} disabled={!isAdmin && !isFeatureEnabled('can_reorder_columns')}>
+                  {orderedVisibleCols.map((col) => (
+                    <SortableTableHead key={col.id} id={col.id} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(col.id)}>
+                      {col.label}<PendingSortIcon field={col.id} />
+                    </SortableTableHead>
+                  ))}
+                </ColumnDragProvider>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1203,7 +1204,7 @@ export default function CommitmentReviewPage() {
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i} className="opacity-40 border-b border-slate-50">
                     <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
-                    {PAGE_COLUMNS.filter(col => visibleColumns.includes(col.id)).map(col => (
+                    {orderedVisibleCols.map(col => (
                       <TableCell key={col.id} className="py-4">
                         <div className={cn(
                           "h-3 bg-slate-200 animate-pulse rounded-full mx-auto",
@@ -1228,7 +1229,7 @@ export default function CommitmentReviewPage() {
                           onCheckedChange={() => toggleSelectItem(order)}
                         />
                       </TableCell>
-                      {PAGE_COLUMNS.filter((col) => visibleColumns.includes(col.id)).map((col) => (
+                      {orderedVisibleCols.map((col) => (
                         <TableCell key={col.id} className={cn(
                           "whitespace-nowrap text-center text-xs",
                           col.id === 'orderNo' ? "text-blue-700 font-bold" : "text-slate-600"

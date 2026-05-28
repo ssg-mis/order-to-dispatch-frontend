@@ -43,6 +43,7 @@ interface User {
   role: string
   page_access: string[] | PageAccessMap | null
   depo_access: Record<string, string[]> | null
+  features: Record<string, boolean> | null
   created_at: string
   updated_at: string
 }
@@ -70,6 +71,7 @@ const PAGE_ACCESS_OPTIONS = [
   "Settings",
   "Set Turn Around Time",
   "Master",
+  "Inventory",
   "Reports"
 ]
 
@@ -101,7 +103,8 @@ export default function SettingsPage() {
     status: "active",
     role: "user",
     page_access: {} as PageAccessMap,
-    depo_access: {} as Record<string, string[]>
+    depo_access: {} as Record<string, string[]>,
+    features: {} as Record<string, boolean>
   })
 
   const [depots, setDepots] = useState<any[]>([])
@@ -221,7 +224,8 @@ export default function SettingsPage() {
       status: "active",
       role: "user",
       page_access: {},
-      depo_access: {}
+      depo_access: {},
+      features: {}
     })
     setShowPassword(false)
   }
@@ -373,6 +377,12 @@ export default function SettingsPage() {
       }
     })
 
+    // Normalize features
+    let normalizedFeatures: Record<string, boolean> = {}
+    if (user.features && typeof user.features === 'object' && !Array.isArray(user.features)) {
+      normalizedFeatures = user.features as Record<string, boolean>
+    }
+
     setFormData({
       username: user.username,
       password: "",
@@ -381,7 +391,8 @@ export default function SettingsPage() {
       status: user.status,
       role: user.role,
       page_access: pa,
-      depo_access: normalizedDepoAccess
+      depo_access: normalizedDepoAccess,
+      features: normalizedFeatures
     })
     setIsEditDialogOpen(true)
   }
@@ -479,7 +490,7 @@ export default function SettingsPage() {
               Add User
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[600px] max-h-[90dvh] flex flex-col">
             <DialogHeader>
               <DialogTitle>Add New User</DialogTitle>
               <DialogDescription>
@@ -487,7 +498,7 @@ export default function SettingsPage() {
               </DialogDescription>
             </DialogHeader>
             {/* Inline form content to prevent re-mount on state change */}
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 overflow-y-auto flex-1 px-1">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="add-username">Username *</Label>
@@ -633,7 +644,7 @@ export default function SettingsPage() {
                           </div>
                         )}
                       </div>
-                      {isPageEnabled(page) && (page === 'Dispatch Planning' || page === 'Actual Dispatch') && (
+                      {isPageEnabled(page) && (page === 'Dispatch Planning' || page === 'Actual Dispatch' || page === 'Order Punch') && (
                         <div className="mt-2 ml-6 p-2 bg-slate-50 rounded-md border border-slate-100 space-y-2">
                           <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Select Accessible Locations</Label>
                           {isDepotsLoading ? (
@@ -658,6 +669,24 @@ export default function SettingsPage() {
                       )}
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Label>Features</Label>
+              <div className="border rounded-lg p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="add-feature-can_reorder_columns"
+                    checked={!!formData.features.can_reorder_columns}
+                    onCheckedChange={(checked) =>
+                      setFormData(prev => ({ ...prev, features: { ...prev.features, can_reorder_columns: !!checked } }))
+                    }
+                  />
+                  <Label htmlFor="add-feature-can_reorder_columns" className="text-sm cursor-pointer font-normal">
+                    Can reorder columns
+                  </Label>
                 </div>
               </div>
             </div>
@@ -1000,7 +1029,7 @@ export default function SettingsPage() {
           setSelectedUser(null)
         }
       }}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90dvh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
             <DialogDescription>
@@ -1008,7 +1037,7 @@ export default function SettingsPage() {
             </DialogDescription>
           </DialogHeader>
           {/* Inline form content to prevent re-mount on state change */}
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 overflow-y-auto flex-1 px-1">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-username">Username *</Label>
@@ -1154,7 +1183,7 @@ export default function SettingsPage() {
                         </div>
                       )}
                     </div>
-                    {isPageEnabled(page) && (page === 'Dispatch Planning' || page === 'Actual Dispatch') && (
+                    {isPageEnabled(page) && (page === 'Dispatch Planning' || page === 'Actual Dispatch' || page === 'Order Punch') && (
                       <div className="mt-2 ml-6 p-2 bg-slate-50 rounded-md border border-slate-100 space-y-2">
                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Select Accessible Locations</Label>
                         {isDepotsLoading ? (
@@ -1179,6 +1208,24 @@ export default function SettingsPage() {
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Label>Features</Label>
+              <div className="border rounded-lg p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="edit-feature-can_reorder_columns"
+                    checked={!!formData.features.can_reorder_columns}
+                    onCheckedChange={(checked) =>
+                      setFormData(prev => ({ ...prev, features: { ...prev.features, can_reorder_columns: !!checked } }))
+                    }
+                  />
+                  <Label htmlFor="edit-feature-can_reorder_columns" className="text-sm cursor-pointer font-normal">
+                    Can reorder columns
+                  </Label>
+                </div>
               </div>
             </div>
           </div>

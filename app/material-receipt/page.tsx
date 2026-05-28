@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { WorkflowStageShell } from "@/components/workflow/workflow-stage-shell"
@@ -22,12 +22,16 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
+import { ColumnToggleContent } from "@/components/ui/column-toggle-content"
 import { confirmMaterialReceiptApi, orderApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
 import { useQuery } from "@tanstack/react-query"
 import { Loader2, ChevronLeft, ChevronRight, Settings2, CheckCircle, Upload, FileText, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { usePersistedColumns } from "@/hooks/use-persisted-columns"
+import { useColumnOrder } from "@/hooks/use-column-order"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { ColumnDragProvider } from "@/components/ui/column-drag-provider"
 
 const MAX_COMPRESSED_IMAGE_BYTES = 850 * 1024
 const MAX_COMPRESSED_IMAGE_DIMENSION = 1600
@@ -80,9 +84,21 @@ async function compressImageForUpload(file: File): Promise<File> {
   return new File([blob], `${cleanName}.jpg`, { type: "image/jpeg", lastModified: Date.now() })
 }
 
+const PAGE_COLUMNS = [
+  { id: "partySoDate",       label: "DO Date" },
+  { id: "doNumber",          label: "DO Number" },
+  { id: "processId",         label: "Process ID" },
+  { id: "customerName",      label: "Customer Name" },
+  { id: "products",          label: "Products" },
+  { id: "invoiceNo",         label: "Invoice No." },
+  { id: "vehicleNo",         label: "Vehicle No." },
+  { id: "orderPunchRemarks", label: "Order Punch Remarks" },
+] as const
+type ColId = typeof PAGE_COLUMNS[number]["id"]
+
 export default function MaterialReceiptPage() {
   const router = useRouter()
-  const { user, isReadOnly } = useAuth()
+  const { user, isReadOnly, isAdmin, isFeatureEnabled } = useAuth()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
   const [pendingPage, setPendingPage] = useState(1);
@@ -259,6 +275,7 @@ export default function MaterialReceiptPage() {
           advanceAmount: order.advance_amount || 0,
           paymentTerms: order.payment_terms || "—",
           partySoDate: order.party_so_date,
+          partyCredit: order.party_credit_status || "—",
           invoiceDate: order.invoice_date,
           biltyNo: order.bilty_no || "—",
           rstNo: order.rst_no || "—",
@@ -354,6 +371,70 @@ export default function MaterialReceiptPage() {
       return 0
     })
   }, [displayRows, pendingSortField, pendingSortDir])
+
+  const [columnOrder, setColumnOrder] = useColumnOrder("material-receipt", PAGE_COLUMNS.map(c => c.id))
+  const orderedVisibleCols = useMemo(() =>
+    columnOrder
+      .map(id => PAGE_COLUMNS.find(c => c.id === id))
+      .filter((c): c is typeof PAGE_COLUMNS[number] => {
+        if (!c) return false
+        if (c.id === "invoiceNo") return visibleColumns.includes("invoiceNo")
+        return true
+      }),
+    [columnOrder, visibleColumns]
+  )
+  const handleColumnReorder = useCallback((newVisibleOrder: string[]) => {
+    const coreInNewOrder = newVisibleOrder.filter(id => PAGE_COLUMNS.some(c => c.id === id))
+    const hiddenCols = columnOrder.filter(id => !coreInNewOrder.includes(id))
+    setColumnOrder([...coreInNewOrder, ...hiddenCols])
+  }, [columnOrder, setColumnOrder])
+
+  const COL_SORT_FIELD: Partial<Record<ColId, string>> = {
+    partySoDate:       "partySoDate",
+    doNumber:          "doNumber",
+    processId:         "processId",
+    customerName:      "customerName",
+    invoiceNo:         "invoiceNo",
+    vehicleNo:         "vehicleNo",
+    orderPunchRemarks: "orderPunchRemarks",
+  }
+
+  const renderCoreCell = (group: any, colId: ColId) => {
+    switch (colId) {
+      case "partySoDate":
+        return <TableCell key={colId} className="text-center text-xs font-bold text-slate-600">{group.formattedPartySoDate}</TableCell>
+      case "doNumber":
+        return <TableCell key={colId} className="text-center text-xs font-black text-slate-900 leading-none">{group.doNumber.replace(/[A-Za-z]+$/, '')}</TableCell>
+      case "processId":
+        return <TableCell key={colId} className="text-center text-xs font-black text-blue-600 leading-none">{group.processId}</TableCell>
+      case "customerName":
+        return <TableCell key={colId} className="text-center text-xs font-black text-slate-800 uppercase italic tracking-tighter">{group.customerName}</TableCell>
+      case "products":
+        return (
+          <TableCell key={colId} className="text-center">
+            <Badge className="bg-slate-100 text-slate-600 font-black text-[10px] uppercase border-none ring-1 ring-inset ring-slate-200">{group._productCount} items</Badge>
+          </TableCell>
+        )
+      case "invoiceNo":
+        return (
+          <TableCell key={colId} className="text-center text-xs font-black text-blue-800">
+            {group._allProducts?.[0]?.invoice_copy ? (
+              <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-bold">
+                {group.invoiceNo}
+              </a>
+            ) : (
+              group.invoiceNo
+            )}
+          </TableCell>
+        )
+      case "vehicleNo":
+        return <TableCell key={colId} className="text-center"><span className="text-xs font-black text-slate-700 tracking-tighter">{group.vehicleNo}</span></TableCell>
+      case "orderPunchRemarks":
+        return <TableCell key={colId} className="text-center"><span className="text-xs text-slate-500 font-bold truncate max-w-[150px] block mx-auto">{group.orderPunchRemarks}</span></TableCell>
+      default:
+        return null
+    }
+  }
 
   const toggleSelectItem = (itemKey: string) => {
     setSelectedItems(prev =>
@@ -544,14 +625,8 @@ export default function MaterialReceiptPage() {
                 Columns
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[250px] max-h-[400px] overflow-y-auto">
-              <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {ALL_COLUMNS.map((col) => (
-                <DropdownMenuCheckboxItem key={col.id} className="capitalize" checked={visibleColumns.includes(col.id)} onCheckedChange={(checked) => setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))}>
-                  {col.label}
-                </DropdownMenuCheckboxItem>
-              ))}
+            <DropdownMenuContent align="end" className="w-[250px]">
+              <ColumnToggleContent columns={ALL_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -667,23 +742,30 @@ export default function MaterialReceiptPage() {
                 <TableHead className="w-12 text-center">
                   <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("partySoDate")}>DO Date<PendingSortIcon field="partySoDate" /></TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("doNumber")}>DO Number<PendingSortIcon field="doNumber" /></TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("processId")}>Process ID<PendingSortIcon field="processId" /></TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("customerName")}>Customer Name<PendingSortIcon field="customerName" /></TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Products</TableHead>
-                {visibleColumns.includes("invoiceNo") && <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("invoiceNo")}>Invoice No.<PendingSortIcon field="invoiceNo" /></TableHead>}
-                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicleNo")}>Vehicle No.<PendingSortIcon field="vehicleNo" /></TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("orderPunchRemarks")}>Order Punch Remarks<PendingSortIcon field="orderPunchRemarks" /></TableHead>
-                {dynamicColumns.map((colId) => {
-                  const col = ALL_COLUMNS.find((c) => c.id === colId)
-                  if (!col) return null
-                  return (
-                    <TableHead key={colId} className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(colId)}>
-                      {col.label}<PendingSortIcon field={colId} />
-                    </TableHead>
-                  )
-                })}
+                <ColumnDragProvider columnIds={[...orderedVisibleCols.map(c => c.id), ...dynamicColumns]} onReorder={handleColumnReorder} disabled={!isAdmin && !isFeatureEnabled('can_reorder_columns')}>
+                  {orderedVisibleCols.map(col => {
+                    const sf = COL_SORT_FIELD[col.id]
+                    return (
+                      <SortableTableHead
+                        key={col.id}
+                        id={col.id}
+                        className={`text-[10px] font-black uppercase tracking-widest text-slate-400 text-center whitespace-nowrap${sf ? " cursor-pointer select-none hover:text-blue-600 transition-colors" : ""}`}
+                        onClick={sf ? () => handlePendingSort(sf) : undefined}
+                      >
+                        {col.label}{sf && <PendingSortIcon field={sf} />}
+                      </SortableTableHead>
+                    )
+                  })}
+                  {dynamicColumns.map((colId) => {
+                    const col = ALL_COLUMNS.find((c) => c.id === colId)
+                    if (!col) return null
+                    return (
+                      <SortableTableHead key={colId} id={colId} className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(colId)}>
+                        {col.label}<PendingSortIcon field={colId} />
+                      </SortableTableHead>
+                    )
+                  })}
+                </ColumnDragProvider>
                 <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -709,26 +791,7 @@ export default function MaterialReceiptPage() {
                     <TableCell className="text-center p-4">
                       <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                     </TableCell>
-                    <TableCell className="text-center text-xs font-bold text-slate-600">{group.formattedPartySoDate}</TableCell>
-                    <TableCell className="text-center text-xs font-black text-slate-900 leading-none">{group.doNumber.replace(/[A-Za-z]+$/, '')}</TableCell>
-                    <TableCell className="text-center text-xs font-black text-blue-600 leading-none">{group.processId}</TableCell>
-                    <TableCell className="text-center text-xs font-black text-slate-800 uppercase italic tracking-tighter">{group.customerName}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge className="bg-slate-100 text-slate-600 font-black text-[10px] uppercase border-none ring-1 ring-inset ring-slate-200">{group._productCount} items</Badge>
-                    </TableCell>
-                    {visibleColumns.includes("invoiceNo") && (
-                      <TableCell className="text-center text-xs font-black text-blue-800">
-                        {group._allProducts?.[0]?.invoice_copy ? (
-                          <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-bold">
-                            {group.invoiceNo}
-                          </a>
-                        ) : (
-                          group.invoiceNo
-                        )}
-                      </TableCell>
-                    )}
-                    <TableCell className="text-center"><span className="text-xs font-black text-slate-700 tracking-tighter">{group.vehicleNo}</span></TableCell>
-                    <TableCell className="text-center"><span className="text-xs text-slate-500 font-bold truncate max-w-[150px] block mx-auto">{group.orderPunchRemarks}</span></TableCell>
+                    {orderedVisibleCols.map(col => renderCoreCell(group, col.id))}
                     {dynamicColumns.map((colId) => (
                       <TableCell key={colId} className="text-center text-xs font-medium text-slate-700">
                         {String(getDynamicColumnValue(group, colId))}
@@ -741,7 +804,7 @@ export default function MaterialReceiptPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10 + dynamicColumns.length} className="text-center py-20 text-slate-400 font-black uppercase text-[10px] tracking-[0.3em] bg-slate-50/50">
+                  <TableCell colSpan={orderedVisibleCols.length + 2 + dynamicColumns.length} className="text-center py-20 text-slate-400 font-black uppercase text-[10px] tracking-[0.3em] bg-slate-50/50">
                     No orders pending for receipt confirmation
                   </TableCell>
                 </TableRow>
@@ -749,7 +812,7 @@ export default function MaterialReceiptPage() {
             </TableBody>
             <TableFooter className="bg-slate-50/80 border-t border-slate-100">
               <TableRow>
-                <TableCell colSpan={10} className="p-0">
+                <TableCell colSpan={orderedVisibleCols.length + 2 + dynamicColumns.length} className="p-0">
                   <div className="px-3 sm:px-6 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between font-bold">
                     <div className="text-[10px] sm:text-xs text-slate-400 uppercase tracking-widest leading-none text-center sm:text-left">
                       Showing Page <span className="text-slate-900 mx-1">{pendingPage}</span>
@@ -806,6 +869,7 @@ export default function MaterialReceiptPage() {
                         { label: "Start / End Date", value: `${formatDate(selectedGroup.startDate)} / ${formatDate(selectedGroup.endDate)}`, color: "text-blue-600" },
                         { label: "DO Date", value: formatDate(selectedGroup.partySoDate), color: "text-blue-600" },
                         { label: "Broker / Advance", value: `${(selectedGroup.isOrderThrough === "Direct" || (selectedGroup.isOrderThrough === "—" && !selectedGroup.isBroker)) ? "No" : selectedGroup.brokerName} / ₹${selectedGroup.advanceAmount}`, color: "text-blue-600" },
+                        { label: "Credit Status", value: selectedGroup.partyCredit, color: selectedGroup.partyCredit === "Good" ? "text-green-700" : "text-red-600" },
                         { label: "Invoice No / Date", value: `${selectedGroup.invoiceNo} / ${formatDate(selectedGroup.invoiceDate)}`, color: "text-blue-600" },
                         { label: "Bilty No", value: selectedGroup.biltyNo },
                         { label: "Truck No", value: selectedGroup.truckNo, color: "text-blue-600" },

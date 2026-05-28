@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
 import type React from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -29,6 +30,25 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
+const INDIAN_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
+  "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
+  "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
+  "Delhi", "Jammu and Kashmir", "Ladakh", "Chandigarh", "Puducherry",
+  "Andaman and Nicobar Islands", "Dadra and Nagar Haveli", "Daman and Diu", "Lakshadweep",
+]
+
+function extractState(addr: string): string | null {
+  if (!addr) return null
+  const lower = addr.toLowerCase()
+  for (const s of INDIAN_STATES) {
+    if (lower.includes(s.toLowerCase())) return s
+  }
+  return null
+}
+
 type ProductItem = {
   id: string
   productName: string
@@ -40,6 +60,8 @@ type ProductItem = {
   ratePer15Kg: string
   ratePerLtr: string
   oilType: string
+  skuWeight: string
+  nosPerMainUom: string
 }
 
 type PreApprovalProduct = {
@@ -51,7 +73,7 @@ type PreApprovalProduct = {
 
 export default function OrderPunchPage() {
   const { toast } = useToast()
-  const { isReadOnly, user } = useAuth()
+  const { isReadOnly, user, isLoading: isAuthLoading } = useAuth()
   const router = useRouter()
 
   // New state for customers
@@ -64,6 +86,7 @@ export default function OrderPunchPage() {
 
   // New state for SKUs
   const [skus, setSkus] = useState<any[]>([])
+  const skuRegistryRef = useRef<Record<string, any>>({})
   const [isLoadingSkus, setIsLoadingSkus] = useState(false)
 
   // New state for Brokers
@@ -124,8 +147,8 @@ export default function OrderPunchPage() {
       setIsLoadingSkus(true)
       const response = await skuDetailsApi.getAll()
       if (response.success) {
-        // Correctly extract skuDetails array from paginated response
         const skuData = response.data.skuDetails || (Array.isArray(response.data) ? response.data : [])
+        skuData.forEach((s: any) => { if (s.sku_name) skuRegistryRef.current[s.sku_name] = s })
         setSkus(skuData)
       }
     } catch (error) {
@@ -185,10 +208,10 @@ export default function OrderPunchPage() {
   }
 
   const [products, setProducts] = useState<ProductItem[]>([
-    { id: "1", productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "", oilType: "" },
+    { id: "1", productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "", oilType: "", skuWeight: "", nosPerMainUom: "" },
   ])
   const [customerType, setCustomerType] = useState<string>("existing")
-  const [depoName, setDepoName] = useState<string>("Banari")
+  const [depoName, setDepoName] = useState<string>("")
   const [isBrokerOrder, setIsBrokerOrder] = useState<string>("Broker")
   const [orderPurpose, setOrderPurpose] = useState<string>("week-on-week")
   const [orderType, setOrderType] = useState<string>("regular")
@@ -244,6 +267,11 @@ export default function OrderPunchPage() {
     fetchBrokers()
     fetchSalespersons()
   }, [])
+
+  useEffect(() => {
+    const allowedDepos = user?.depo_access?.['Order Punch'] || []
+    setDepoName(allowedDepos.length > 0 ? allowedDepos[0] : "Banari")
+  }, [user])
 
   // Customer Auto-fill Effect
   useEffect(() => {
@@ -449,7 +477,7 @@ export default function OrderPunchPage() {
         customer_contact_person_name: contactPerson || null,
         customer_contact_person_whatsapp_no: whatsappNo || null,
         customer_address: customerAddress || null,
-        customer_delivery_address: deliveryAddress || null,
+        customer_delivery_address: (sameAsCustomerAddress ? customerAddress : deliveryAddress) || null,
         depo_name: depoName || null,
         payment_terms: paymentTerms || null,
         advance_payment_to_be_taken: advancePaymentTaken === "YES",
@@ -603,7 +631,7 @@ export default function OrderPunchPage() {
   const addProduct = () => {
     setProducts([
       ...products,
-      { id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "", oilType: "" },
+      { id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "", oilType: "", skuWeight: "", nosPerMainUom: "" },
     ])
   }
 
@@ -623,8 +651,8 @@ export default function OrderPunchPage() {
   }
 
   // Handle product selection and auto-fill UOM fields
-  const handleProductSelect = (productId: string, skuName: string) => {
-    const selectedSku = skus.find((sku) => sku.sku_name === skuName)
+  const handleProductSelect = (productId: string, skuName: string, skuData?: any) => {
+    const selectedSku = skuData || skuRegistryRef.current[skuName] || skus.find((sku) => sku.sku_name === skuName)
 
     if (selectedSku) {
       setProducts((prevProducts) =>
@@ -635,11 +663,12 @@ export default function OrderPunchPage() {
             productName: selectedSku.sku_name,
             uom: selectedSku.main_uom || "",
             altUom: selectedSku.alternate_uom || "",
+            skuWeight: selectedSku.sku_weight != null ? String(selectedSku.sku_weight) : "",
+            nosPerMainUom: selectedSku.nos_per_main_uom != null ? String(selectedSku.nos_per_main_uom) : "",
           };
         })
       );
     } else {
-      // If no SKU found, just update the product name
       updateProduct(productId, "productName", skuName)
     }
   }
@@ -711,7 +740,8 @@ export default function OrderPunchPage() {
   const resetForm = () => {
     setCustomerType("existing")
     setOrderCategory("Sales")
-    setDepoName("Banari")
+    const allowedDepos = user?.depo_access?.['Order Punch'] || []
+    setDepoName(allowedDepos.length > 0 ? allowedDepos[0] : "Banari")
     setIsBrokerOrder("Broker")
     setOrderPurpose("week-on-week")
     setOrderType("regular")
@@ -742,8 +772,46 @@ export default function OrderPunchPage() {
     setSoFile(null)
     const fileInput = document.getElementById("soFile") as HTMLInputElement
     if (fileInput) fileInput.value = ""
-    setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "", oilType: "" }])
+    setProducts([{ id: Math.random().toString(36).substr(2, 9), productName: "", uom: "", orderQty: "", altUom: "", altQty: "", rate: "", ratePer15Kg: "", ratePerLtr: "", oilType: "", skuWeight: "", nosPerMainUom: "" }])
   }
+
+  const billingSearchTerm = `Shri Shyam Oil Extractions Pvt Ltd ${depoName}`
+  const { data: billingRes } = useQuery({
+    queryKey: ['billing-customer-state', billingSearchTerm],
+    queryFn: () => customerApi.getAll({ search: billingSearchTerm, all: "true" }),
+    enabled: !!depoName,
+    staleTime: 10 * 60 * 1000,
+  })
+  const billingCustomers: any[] = billingRes?.data?.customers || []
+  const billingCustomer = billingCustomers.find((c: any) =>
+    c.customer_name?.toLowerCase().includes("shri shyam oil extractions")
+  )
+  const billingState = billingCustomer?.state || ""
+
+  const shippingState = extractState(customerAddress || "") || ""
+
+  console.log("[GST DEBUG] depoName:", depoName, "| billingCustomer:", billingCustomer?.customer_name, "| billingState:", billingState, "| shippingState:", shippingState)
+
+  const totalTaxable = products.reduce((sum, p) => {
+    const rate = parseFloat(p.rate) || 0
+    const nos = parseFloat(p.nosPerMainUom) || 0
+    const qty = parseFloat(p.orderQty) || 0
+    const rateWoGst = parseFloat(((rate * nos) / 1.05).toFixed(2))
+    return sum + (rateWoGst * qty)
+  }, 0)
+  let gstType = "same"
+  let orderCgst = 0, orderSgst = 0, orderIgst = 0
+  if (!billingState || !shippingState) {
+    gstType = "no_address"
+  } else if (billingState === shippingState) {
+    gstType = "same"
+    orderCgst = Math.round(totalTaxable * 0.025 * 100) / 100
+    orderSgst = orderCgst
+  } else {
+    gstType = "different"
+    orderIgst = Math.round(totalTaxable * 0.05 * 100) / 100
+  }
+  console.log("[GST DEBUG] gstType:", gstType, "| CGST:", orderCgst, "| SGST:", orderSgst, "| IGST:", orderIgst)
 
   return (
     <div className="p-6 max-w-full space-y-6" suppressHydrationWarning>
@@ -1075,29 +1143,40 @@ export default function OrderPunchPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="depoName">Depo Name</Label>
-                <AsyncCombobox
-                  placeholder="Select Depo"
-                  searchPlaceholder="Search depots..."
-                  value={depoName}
-                  onValueChange={setDepoName}
-                  onSelectOption={(opt: any) => {
-                    if (opt.original) {
-                      setDepots(prev => {
-                        const exists = prev.find(d => d.depot_id === opt.original.depot_id);
-                        return exists ? prev : [...prev, opt.original];
-                      });
-                    }
-                  }}
-                  fetchOptions={async (search: string, page: number) => {
-                    const res = await depotApi.getAll({ search, page, limit: 20 });
-                    const list = res.data.depots || [];
-                    return {
-                      options: list.map((d: any) => ({ value: d.depot_name, label: d.depot_name, original: d })),
-                      hasMore: (list.length + (page - 1) * 20) < (res.data.pagination?.total || 0)
-                    };
-                  }}
-                  className="w-full"
-                />
+                {isAuthLoading ? (
+                  <div className="h-9 w-full rounded-md border border-input bg-muted animate-pulse" />
+                ) : (
+                  <AsyncCombobox
+                    placeholder="Select Depo"
+                    searchPlaceholder="Search depots..."
+                    value={depoName}
+                    onValueChange={setDepoName}
+                    onSelectOption={(opt: any) => {
+                      if (opt.original) {
+                        setDepots(prev => {
+                          const exists = prev.find(d => d.depot_id === opt.original.depot_id);
+                          return exists ? prev : [...prev, opt.original];
+                        });
+                      }
+                    }}
+                    fetchOptions={async (search: string, page: number) => {
+                      const res = await depotApi.getAll({ search, page, limit: 20 });
+                      let list = res.data.depots || [];
+                      const fetchedCount = list.length;
+                      const allowedDepos = user?.depo_access?.['Order Punch'] || [];
+                      if (allowedDepos.length > 0) {
+                        list = list.filter((d: any) =>
+                          allowedDepos.some((ad: string) => ad.toLowerCase() === d.depot_name.toLowerCase())
+                        );
+                      }
+                      return {
+                        options: list.map((d: any) => ({ value: d.depot_name, label: d.depot_name, original: d })),
+                        hasMore: (fetchedCount + (page - 1) * 20) < (res.data.pagination?.total || 0)
+                      };
+                    }}
+                    className="w-full"
+                  />
+                )}
               </div>
 
               <div className="space-y-2">
@@ -1235,7 +1314,7 @@ export default function OrderPunchPage() {
                         <div className="absolute top-2 left-4 text-[10px] font-bold text-blue-500/80 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest">
                           Product {idx + 1}
                         </div>
-                        <div className="grid grid-cols-2 gap-4 flex-1 md:grid-cols-11">
+                        <div className="grid grid-cols-2 gap-4 flex-1 md:grid-cols-13">
                           <div className={`space-y-1.5 col-span-2 md:col-span-5`}>
                             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Name</Label>
                             <AsyncCombobox
@@ -1245,10 +1324,12 @@ export default function OrderPunchPage() {
                               onValueChange={(val) => handleProductSelect(product.id, val)}
                               onSelectOption={(opt: any) => {
                                 if (opt.original) {
+                                  if (opt.original.sku_name) skuRegistryRef.current[opt.original.sku_name] = opt.original
                                   setSkus(prev => {
                                     const exists = prev.find(s => s.sku_id === opt.original.sku_id);
                                     return exists ? prev : [...prev, opt.original];
                                   });
+                                  handleProductSelect(product.id, opt.original.sku_name, opt.original)
                                 }
                               }}
                               fetchOptions={async (search: string, page: number) => {
@@ -1317,6 +1398,20 @@ export default function OrderPunchPage() {
                             />
                           </div>
 
+                          <div className="space-y-1.5 col-span-2 md:col-span-2">
+                            <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">Taxable Amount</Label>
+                            <Input
+                              readOnly
+                              value={(() => {
+                                const rate = parseFloat(product.rate) || 0;
+                                const nos = parseFloat(product.nosPerMainUom) || 0;
+                                const qty = parseFloat(product.orderQty) || 0;
+                                const rateWoGst = parseFloat(((rate * nos) / 1.05).toFixed(2));
+                                return `₹${(rateWoGst * qty).toFixed(2)}`;
+                              })()}
+                              className="bg-background h-11 min-w-[120px] border-slate-200 font-semibold text-blue-600 text-base px-3"
+                            />
+                          </div>
 
 
                         </div>
@@ -1348,6 +1443,81 @@ export default function OrderPunchPage() {
                         <Plus className="h-4 w-4" /> Add Product
                       </Button>
                     </div>
+                    {products.length > 0 && (
+                      <div className="flex items-center justify-between px-4 py-3 bg-blue-50 border border-blue-100 rounded-lg">
+                        <div className="space-y-0.5">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total Order Weight</p>
+                          <p className="text-sm font-bold text-blue-700">
+                            {products.reduce((sum, p) => sum + (parseFloat(p.skuWeight) || 0) * (parseFloat(p.orderQty) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg
+                          </p>
+                        </div>
+                        <div className="space-y-0.5">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total Order Qty</p>
+                          <p className="text-sm font-bold text-blue-700">
+                            {products.reduce((sum, p) => sum + (parseFloat(p.orderQty) || 0), 0).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="space-y-0.5">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total Taxable Amount</p>
+                          <p className="text-sm font-bold text-blue-700">
+                            ₹{products.reduce((sum, p) => {
+                              const rate = parseFloat(p.rate) || 0;
+                              const nos = parseFloat(p.nosPerMainUom) || 0;
+                              const qty = parseFloat(p.orderQty) || 0;
+                              const rateWoGst = parseFloat(((rate * nos) / 1.05).toFixed(2));
+                              return sum + (rateWoGst * qty);
+                            }, 0).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {products.length > 0 && (
+                      <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
+                        <div className="px-4 py-2 bg-slate-50 border-b border-slate-200">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">GST Breakdown (Indicative)</p>
+                        </div>
+                        <div className="p-4 max-w-sm ml-auto space-y-2">
+                          {gstType === "no_address" && (
+                            <p className="text-[10px] text-amber-600 font-semibold">Add billing &amp; delivery address to calculate GST</p>
+                          )}
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-black uppercase text-slate-500 text-[10px]">CGST (2.5%)</span>
+                            <span className="font-mono font-bold text-slate-700">{gstType === "same" ? `₹${orderCgst.toFixed(2)}` : "—"}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-black uppercase text-slate-500 text-[10px]">SGST (2.5%)</span>
+                            <span className="font-mono font-bold text-slate-700">{gstType === "same" ? `₹${orderSgst.toFixed(2)}` : "—"}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-black uppercase text-slate-500 text-[10px]">IGST (5%)</span>
+                            <span className="font-mono font-bold text-slate-700">{gstType === "different" ? `₹${orderIgst.toFixed(2)}` : "—"}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-black uppercase text-slate-500 text-[10px]">Round Off</span>
+                            <span className="font-mono font-bold text-slate-500">
+                              {(() => {
+                                const totalRoundOff = products.reduce((sum, p) => {
+                                  const rate = parseFloat(p.rate) || 0
+                                  const nos = parseFloat(p.nosPerMainUom) || 0
+                                  const qty = parseFloat(p.orderQty) || 0
+                                  const exact = (rate * nos) / 1.05
+                                  const rounded = parseFloat(exact.toFixed(2))
+                                  return sum + (rounded - exact) * qty
+                                }, 0)
+                                if (totalRoundOff === 0) return "—"
+                                return `${totalRoundOff > 0 ? "+" : ""}₹${totalRoundOff.toFixed(2)}`
+                              })()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center border-t border-slate-200 pt-2">
+                            <span className="font-black uppercase text-slate-800 text-[11px]">Total Order Value</span>
+                            <span className="font-mono font-black text-blue-700 text-sm">
+                              ₹{(totalTaxable + orderCgst + orderSgst + orderIgst).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

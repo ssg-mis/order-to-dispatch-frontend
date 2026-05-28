@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { WorkflowStageShell } from "@/components/workflow/workflow-stage-shell"
@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Upload, CheckCircle, Settings2, FileText, IndianRupee, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
+import { ColumnToggleContent } from "@/components/ui/column-toggle-content"
 import { damageAdjustmentApi, orderApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
 import { useInfiniteQuery } from "@tanstack/react-query"
@@ -28,6 +29,9 @@ import { useInView } from "react-intersection-observer"
 import { Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { usePersistedColumns } from "@/hooks/use-persisted-columns"
+import { useColumnOrder } from "@/hooks/use-column-order"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { ColumnDragProvider } from "@/components/ui/column-drag-provider"
 
 const MAX_COMPRESSED_IMAGE_BYTES = 850 * 1024
 const MAX_COMPRESSED_IMAGE_DIMENSION = 1600
@@ -83,7 +87,7 @@ async function compressImageForUpload(file: File): Promise<File> {
 export default function DamageAdjustmentPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isReadOnly, user } = useAuth()
+  const { isReadOnly, user, isAdmin, isFeatureEnabled } = useAuth()
   const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
   const { ref: pendingEndRef, inView: pendingInView } = useInView()
   const { ref: historyEndRef, inView: historyInView } = useInView()
@@ -115,6 +119,16 @@ export default function DamageAdjustmentPage() {
     "damage-adjustment",
     ["partySoDate", "orderNo", "customerName", "invoiceNo", "status"]
   )
+  const DMG_STD_IDS = ["partySoDate", "orderNo", "processid", "customerName", "invoiceNo", "vehicleNo", "orderPunchRemarks", "status", "products"]
+  const [columnOrder, setColumnOrder] = useColumnOrder("damage-adjustment", DMG_STD_IDS)
+  // "products" is always visible (not user-toggleable), so bypass the visibleColumns filter for it
+  const ALWAYS_VISIBLE_DMG = new Set(["products"])
+  const orderedVisibleStd = columnOrder.filter(id => ALWAYS_VISIBLE_DMG.has(id) || visibleColumns.includes(id))
+  const handleColumnReorder = useCallback((newVisibleOrder: string[]) => {
+    const coreInNewOrder = newVisibleOrder.filter(id => DMG_STD_IDS.includes(id))
+    const hiddenCols = columnOrder.filter(id => !coreInNewOrder.includes(id))
+    setColumnOrder([...coreInNewOrder, ...hiddenCols])
+  }, [columnOrder, setColumnOrder])
 
   // Selection & Dialog State
   const [selectedItems, setSelectedItems] = useState<string[]>([])
@@ -295,6 +309,7 @@ export default function DamageAdjustmentPage() {
           advanceAmount: order.advance_amount || 0,
           paymentTerms: order.payment_terms || "—",
           partySoDate: order.party_so_date ? new Date(order.party_so_date).toLocaleDateString("en-IN") : "—",
+          partyCredit: order.party_credit_status || "—",
 
           // Additional Details for Header (as requested)
           invoiceDate: order.invoice_date ? new Date(order.invoice_date).toLocaleDateString("en-IN") : "—",
@@ -356,7 +371,9 @@ export default function DamageAdjustmentPage() {
     return Object.values(grouped).map(g => ({
       ...g,
       partySoDate: formatDate(g._allProducts[0]?.party_so_date),
-      processId: g._allProducts[0]?.processid || "—",
+      processid: g._allProducts[0]?.processid || "—",
+      processId: g._allProducts[0]?.processid || "—", // Keep processId for safety
+      orderNo: g.doNumber,
       vehicleNo: (g._allProducts[0]?.truckNo || "—").toUpperCase(),
       orderPunchRemarks: g._allProducts[0]?.order_punch_remarks || "—",
       uploadSo: g._allProducts[0]?.upload_so || g._allProducts[0]?.uploadSo || null,
@@ -395,9 +412,8 @@ export default function DamageAdjustmentPage() {
     })
   }, [displayRows, pendingSortField, pendingSortDir])
 
-  const dynamicColumns = visibleColumns.filter(
-    (colId) => !["partySoDate", "doNumber", "processId", "customerName", "productCount", "productName", "vehicleNo", "orderPunchRemarks", "status", "invoiceNo"].includes(colId)
-  )
+  const FIXED_COLUMN_IDS = ["partySoDate", "orderNo", "processid", "customerName", "productCount", "productName", "vehicleNo", "orderPunchRemarks", "status", "invoiceNo", "products"]
+  const dynamicColumns = visibleColumns.filter((colId) => !FIXED_COLUMN_IDS.includes(colId))
 
   const getDynamicColumnValue = (group: any, colId: string) => {
     const directValue = group?.[colId]
@@ -608,21 +624,8 @@ export default function DamageAdjustmentPage() {
                 Columns
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[250px] max-h-[400px] overflow-y-auto">
-              <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {ALL_COLUMNS.map((col) => (
-                <DropdownMenuCheckboxItem
-                  key={col.id}
-                  className="capitalize"
-                  checked={visibleColumns.includes(col.id)}
-                  onCheckedChange={(checked) => {
-                    setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
-                  }}
-                >
-                  {col.label}
-                </DropdownMenuCheckboxItem>
-              ))}
+            <DropdownMenuContent align="end" className="w-[250px]">
+              <ColumnToggleContent columns={ALL_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -650,40 +653,54 @@ export default function DamageAdjustmentPage() {
               <Card key={group._rowKey} className={cn("p-4 rounded-2xl border bg-white shadow-sm", selectedItems.includes(group._rowKey) ? "border-blue-200 bg-blue-50/40" : "border-slate-100")}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">DO Number</p>
-                    <p className="break-words text-sm font-black text-slate-900">{group.doNumber}</p>
+                    {visibleColumns.includes("orderNo") && (
+                      <>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">DO Number</p>
+                        <p className="break-words text-sm font-black text-slate-900">{group.doNumber}</p>
+                      </>
+                    )}
                   </div>
                   <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                 </div>
 
-                <div className="mt-3 min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Customer</p>
-                  <p className="break-words text-xs font-bold text-slate-700">{group.customerName}</p>
-                </div>
+                {visibleColumns.includes("customerName") && (
+                  <div className="mt-3 min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Customer</p>
+                    <p className="break-words text-xs font-bold text-slate-700">{group.customerName}</p>
+                  </div>
+                )}
 
                 <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">DO Date</p>
-                    <p className="font-medium text-slate-700">{group.partySoDate}</p>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Process ID</p>
-                    <p className="break-words font-medium text-slate-700">{group.processId}</p>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Invoice</p>
-                    {group._allProducts?.[0]?.invoice_copy ? (
-                      <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="break-words font-bold text-blue-600 hover:underline">
-                        {group.invoiceNo}
-                      </a>
-                    ) : (
-                      <p className="break-words font-medium text-slate-700">{group.invoiceNo}</p>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vehicle</p>
-                    <p className="break-words font-bold text-slate-700">{group.vehicleNo}</p>
-                  </div>
+                  {visibleColumns.includes("partySoDate") && (
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">DO Date</p>
+                      <p className="font-medium text-slate-700">{group.partySoDate}</p>
+                    </div>
+                  )}
+                  {visibleColumns.includes("processid") && (
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Process ID</p>
+                      <p className="break-words font-medium text-slate-700">{group.processId}</p>
+                    </div>
+                  )}
+                  {visibleColumns.includes("invoiceNo") && (
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Invoice</p>
+                      {group._allProducts?.[0]?.invoice_copy ? (
+                        <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="break-words font-bold text-blue-600 hover:underline">
+                          {group.invoiceNo}
+                        </a>
+                      ) : (
+                        <p className="break-words font-medium text-slate-700">{group.invoiceNo}</p>
+                      )}
+                    </div>
+                  )}
+                  {visibleColumns.includes("vehicleNo") && (
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vehicle</p>
+                      <p className="break-words font-bold text-slate-700">{group.vehicleNo}</p>
+                    </div>
+                  )}
                 </div>
 
                 {dynamicColumns.length > 0 && (
@@ -704,25 +721,15 @@ export default function DamageAdjustmentPage() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Badge variant="secondary">{group._productCount} items</Badge>
                   <Badge className="bg-red-100 text-red-700">{group._allProducts.filter((p: any) => p.damageStatus === "Damaged").length} damaged</Badge>
-                  <Badge className="bg-red-100 text-red-700">Pending Adjustment</Badge>
+                  {visibleColumns.includes("status") && (
+                    <Badge className="bg-red-100 text-red-700">Pending Adjustment</Badge>
+                  )}
                 </div>
 
-                <div className="mt-3 min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Order Punch Remarks</p>
-                  <p className="break-words text-xs font-medium text-slate-600">{group.orderPunchRemarks}</p>
-                </div>
-                {dynamicColumns.length > 0 && (
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                    {dynamicColumns.map((colId) => {
-                      const col = ALL_COLUMNS.find((c) => c.id === colId)
-                      if (!col) return null
-                      return (
-                        <div key={colId} className="min-w-0">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{col.label}</p>
-                          <p className="break-words font-bold text-slate-700">{String(getDynamicColumnValue(group, colId))}</p>
-                        </div>
-                      )
-                    })}
+                {visibleColumns.includes("orderPunchRemarks") && (
+                  <div className="mt-3 min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Order Punch Remarks</p>
+                    <p className="break-words text-xs font-medium text-slate-600">{group.orderPunchRemarks}</p>
                   </div>
                 )}
               </Card>
@@ -750,25 +757,31 @@ export default function DamageAdjustmentPage() {
                 <TableHead className="w-12 text-center">
                   <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("partySoDate")}>DO Date<PendingSortIcon field="partySoDate" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("doNumber")}>DO Number<PendingSortIcon field="doNumber" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("processId")}>Process ID<PendingSortIcon field="processId" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("customerName")}>Customer Name<PendingSortIcon field="customerName" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center">Products</TableHead>
-                {visibleColumns.includes("invoiceNo") && <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("invoiceNo")}>Invoice No.<PendingSortIcon field="invoiceNo" /></TableHead>}
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicleNo")}>Vehicle No.<PendingSortIcon field="vehicleNo" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("orderPunchRemarks")}>Order Punch Remarks<PendingSortIcon field="orderPunchRemarks" /></TableHead>
-                {dynamicColumns.map((colId) => {
-                  const col = ALL_COLUMNS.find((c) => c.id === colId)
-                  if (!col) return null
-                  return (
-                    <TableHead key={colId} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(colId)}>
-                      {col.label}<PendingSortIcon field={colId} />
-                    </TableHead>
-                  )
-                })}
+                <ColumnDragProvider columnIds={[...orderedVisibleStd, ...dynamicColumns]} onReorder={handleColumnReorder} disabled={!isAdmin && !isFeatureEnabled('can_reorder_columns')}>
+                  {orderedVisibleStd.map(id => {
+                    const cls = "whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors"
+                    if (id === "partySoDate") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("partySoDate")}>DO Date<PendingSortIcon field="partySoDate" /></SortableTableHead>
+                    if (id === "orderNo") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("orderNo")}>DO Number<PendingSortIcon field="orderNo" /></SortableTableHead>
+                    if (id === "processid") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("processid")}>Process ID<PendingSortIcon field="processid" /></SortableTableHead>
+                    if (id === "customerName") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("customerName")}>Customer Name<PendingSortIcon field="customerName" /></SortableTableHead>
+                    if (id === "invoiceNo") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("invoiceNo")}>Invoice No.<PendingSortIcon field="invoiceNo" /></SortableTableHead>
+                    if (id === "vehicleNo") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("vehicleNo")}>Vehicle No.<PendingSortIcon field="vehicleNo" /></SortableTableHead>
+                    if (id === "orderPunchRemarks") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("orderPunchRemarks")}>Order Punch Remarks<PendingSortIcon field="orderPunchRemarks" /></SortableTableHead>
+                    if (id === "status") return <SortableTableHead key={id} id={id} className="whitespace-nowrap text-center">Status</SortableTableHead>
+                    if (id === "products") return <SortableTableHead key={id} id={id} className="whitespace-nowrap text-center">Products</SortableTableHead>
+                    return null
+                  })}
+                  {dynamicColumns.map((colId) => {
+                    const col = ALL_COLUMNS.find((c) => c.id === colId)
+                    if (!col) return null
+                    return (
+                      <SortableTableHead key={colId} id={colId} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(colId)}>
+                        {col.label}<PendingSortIcon field={colId} />
+                      </SortableTableHead>
+                    )
+                  })}
+                </ColumnDragProvider>
                 <TableHead className="whitespace-nowrap text-center">Damage Info</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -776,19 +789,15 @@ export default function DamageAdjustmentPage() {
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i} className="opacity-40 border-b border-slate-50">
                     <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-40 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-16 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    {visibleColumns.includes("invoiceNo") && <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>}
-                    <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-32 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    {orderedVisibleStd.map(id => (
+                      <TableCell key={id} className="text-center py-4">
+                        <div className={cn("h-3 bg-slate-200 animate-pulse rounded-full mx-auto", id === "status" ? "h-5 w-24" : id === "products" ? "w-16" : id === "customerName" ? "w-40" : id === "orderPunchRemarks" ? "w-32" : id === "orderNo" || id === "invoiceNo" || id === "vehicleNo" ? "w-24" : "w-20")} />
+                      </TableCell>
+                    ))}
                     {dynamicColumns.map((colId) => (
                       <TableCell key={colId} className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                     ))}
                     <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-5 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
                   </TableRow>
                 ))
               ) : displayRows.length > 0 ? (
@@ -797,49 +806,46 @@ export default function DamageAdjustmentPage() {
                     <TableCell className="text-center">
                       <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                     </TableCell>
-                    <TableCell className="text-center text-xs font-medium">{group.partySoDate}</TableCell>
-                    <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
-                    <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
-                    <TableCell className="text-center text-xs">{group.customerName}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="secondary">{group._productCount} items</Badge>
-                    </TableCell>
-                    {visibleColumns.includes("invoiceNo") && (
-                      <TableCell className="text-center text-xs font-medium">
-                        {group._allProducts?.[0]?.invoice_copy ? (
-                          <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-bold">
-                            {group.invoiceNo}
-                          </a>
-                        ) : (
-                          group.invoiceNo
-                        )}
-                      </TableCell>
-                    )}
-                    <TableCell className="text-center">
-                      <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {/* Show summary of damage if available in first product or count */}
-                      <div className="text-xs text-red-600 font-medium">
-                        {group._allProducts.filter((p: any) => p.damageStatus === "Damaged").length} damaged items
-                      </div>
-                    </TableCell>
+                    {orderedVisibleStd.map(id => {
+                      if (id === "partySoDate") return <TableCell key={id} className="text-center text-xs font-medium">{group.partySoDate}</TableCell>
+                      if (id === "orderNo") return <TableCell key={id} className="text-center text-xs font-medium">{group.doNumber}</TableCell>
+                      if (id === "processid") return <TableCell key={id} className="text-center text-xs font-medium">{group.processId}</TableCell>
+                      if (id === "customerName") return <TableCell key={id} className="text-center text-xs">{group.customerName}</TableCell>
+                      if (id === "invoiceNo") return (
+                        <TableCell key={id} className="text-center text-xs font-medium">
+                          {group._allProducts?.[0]?.invoice_copy ? (
+                            <a href={group._allProducts[0].invoice_copy} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-bold">{group.invoiceNo}</a>
+                          ) : group.invoiceNo}
+                        </TableCell>
+                      )
+                      if (id === "vehicleNo") return <TableCell key={id} className="text-center"><span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span></TableCell>
+                      if (id === "orderPunchRemarks") return <TableCell key={id} className="text-center"><span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span></TableCell>
+                      if (id === "status") return <TableCell key={id} className="text-center"><Badge className="bg-red-100 text-red-700">Pending Adjustment</Badge></TableCell>
+                      if (id === "products") return (
+                        <TableCell key={id} className="text-center">
+                          <Badge variant="secondary">{group._productCount} items</Badge>
+                        </TableCell>
+                      )
+                      return null
+                    })}
                     {dynamicColumns.map((colId) => (
                       <TableCell key={colId} className="text-center text-xs font-medium text-slate-700">
                         {String(getDynamicColumnValue(group, colId))}
                       </TableCell>
                     ))}
                     <TableCell className="text-center">
-                      <Badge className="bg-red-100 text-red-700">Pending Adjustment</Badge>
+                      <div className="text-xs text-red-600 font-medium">
+                        {group._allProducts.filter((p: any) => p.damageStatus === "Damaged").length} damaged items
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={11 + dynamicColumns.length} className="text-center py-8 text-muted-foreground">
+                  <TableCell
+                    colSpan={2 + orderedVisibleStd.length + dynamicColumns.length}
+                    className="text-center py-8 text-muted-foreground"
+                  >
                     No pending damage adjustments
                   </TableCell>
                 </TableRow>
@@ -882,12 +888,8 @@ export default function DamageAdjustmentPage() {
                       <p className="font-medium break-words">{selectedGroup.orderType}</p>
                     </div>
                     <div className="min-w-0">
-                      <Label className="text-xs text-muted-foreground">Start Date</Label>
-                      <p className="font-medium break-words">{selectedGroup.startDate}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <Label className="text-xs text-muted-foreground">End Date</Label>
-                      <p className="font-medium break-words">{selectedGroup.endDate}</p>
+                      <Label className="text-xs text-muted-foreground">Start Date / End Date</Label>
+                      <p className="font-medium break-words">{selectedGroup.startDate} / {selectedGroup.endDate}</p>
                     </div>
                     <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Delivery Date</Label>
@@ -903,31 +905,6 @@ export default function DamageAdjustmentPage() {
                     </div>
                     <div className="min-w-0">
                       <Label className="text-xs text-muted-foreground">Contact Person</Label>
-                      <p className="font-medium break-words">{selectedGroup.contactPerson}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <Label className="text-xs text-muted-foreground">Customer Address</Label>
-                      <p className="font-medium break-words" title={selectedGroup.customerAddress}>{selectedGroup.customerAddress}</p>
-                    </div>
-
-                    <div className="min-w-0">
-                      <Label className="text-xs text-muted-foreground">Delivery Purpose</Label>
-                      <p className="font-medium break-words">{selectedGroup.deliveryPurpose}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <Label className="text-xs text-muted-foreground">Start / End Date</Label>
-                      <p className="font-medium break-words">{selectedGroup.startDate} / {selectedGroup.endDate}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <Label className="text-xs text-muted-foreground">DO Date</Label>
-                      <p className="font-medium break-words">{selectedGroup.partySoDate}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <Label className="text-xs text-muted-foreground">Transport Type</Label>
-                      <p className="font-medium text-purple-600 break-words">{selectedGroup.transportType}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <Label className="text-xs text-muted-foreground">Contact Person</Label>
                       <p className="font-medium break-words">{selectedGroup.contactPerson} ({selectedGroup.contactWhatsapp})</p>
                     </div>
                     <div className="min-w-0">
@@ -935,7 +912,11 @@ export default function DamageAdjustmentPage() {
                       <p className="font-medium text-blue-600 break-words">{selectedGroup.brokerName} / ₹{selectedGroup.advanceAmount}</p>
                     </div>
                     <div className="min-w-0">
-                      <Label className="text-xs text-muted-foreground">Address</Label>
+                      <Label className="text-xs text-muted-foreground">Credit Status</Label>
+                      <p className={cn("font-black break-words", selectedGroup.partyCredit === "Good" ? "text-green-700" : "text-red-600")}>{selectedGroup.partyCredit || "—"}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <Label className="text-xs text-muted-foreground">Customer Address</Label>
                       <p className="font-medium break-words" title={selectedGroup.customerAddress}>{selectedGroup.customerAddress}</p>
                     </div>
                     <div className="min-w-0">

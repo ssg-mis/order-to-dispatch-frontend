@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
+import { matchesSearch } from "@/lib/search-utils"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { WorkflowStageShell } from "@/components/workflow/workflow-stage-shell"
@@ -23,18 +24,132 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
-import { makeInvoiceApi, orderApi } from "@/lib/api-service"
+import { ColumnToggleContent } from "@/components/ui/column-toggle-content"
+import { makeInvoiceApi, orderApi, skuDetailsApi, customerApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
-import { useInfiniteQuery } from "@tanstack/react-query"
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { useInView } from "react-intersection-observer"
 import { Loader2 } from "lucide-react"
 import { usePersistedColumns } from "@/hooks/use-persisted-columns"
+import { useColumnOrder } from "@/hooks/use-column-order"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { ColumnDragProvider } from "@/components/ui/column-drag-provider"
+
+const INDIAN_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
+  "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
+  "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
+  "Delhi", "Jammu and Kashmir", "Ladakh", "Chandigarh", "Puducherry",
+  "Andaman and Nicobar Islands", "Dadra and Nagar Haveli", "Daman and Diu", "Lakshadweep",
+]
+
+function extractState(addr: string): string | null {
+  if (!addr) return null
+  const lower = addr.toLowerCase()
+  for (const s of INDIAN_STATES) {
+    if (lower.includes(s.toLowerCase())) return s
+  }
+  return null
+}
+
+function InvoiceSummary({ selectedGroups, selectedProducts, productCdData }: {
+  selectedGroups: any[]
+  selectedProducts: string[]
+  productCdData: Record<string, { isCd: string; cdAmount: string }>
+}) {
+  const selProds = selectedGroups.flatMap((g) => g._allProducts)
+    .filter((p) => selectedProducts.includes(p._rowKey))
+
+  const firstProd = selProds[0]
+  const firstGroup = selectedGroups[0]
+  const firstOrderDetails: any = Object.values(firstGroup?._ordersMap || {})[0] || {}
+  const depoName = (firstOrderDetails?.depoName && firstOrderDetails.depoName !== "—")
+    ? firstOrderDetails.depoName
+    : (firstProd?.depo_name || "")
+  const shippingAddr = firstProd?.customer_address || ""
+
+  const shippingState = extractState(shippingAddr) || ""
+
+  const billingSearchTerm = depoName ? `Shri Shyam ${depoName}` : "Shri Shyam"
+  const { data: billingRes } = useQuery({
+    queryKey: ['billing-customer-state', billingSearchTerm],
+    queryFn: () => customerApi.getAll({ search: billingSearchTerm, all: "true" }),
+    enabled: true,
+    staleTime: 10 * 60 * 1000,
+  })
+  const billingCustomers: any[] = billingRes?.data?.customers || []
+  const billingCustomer = billingCustomers.find((c: any) =>
+    c.customer_name?.toLowerCase().includes("shri shyam")
+  )
+  const billingState = billingCustomer?.state || ""
+
+  const totalTaxable = selProds.reduce((sum, p) => {
+    const rate = Number(p.rate) || 0
+    const cd = productCdData[p.id]?.isCd === "yes" ? parseFloat(productCdData[p.id]?.cdAmount || "0") : 0
+    const rateWoGst = parseFloat(((rate - cd) / 1.05).toFixed(2))
+    return sum + (rateWoGst * (parseFloat(p.qtyToDispatch) || 0))
+  }, 0)
+
+  const missingBilling = !billingState
+  const missingShipping = !shippingState
+  let gstType = "same"
+  let cgst = Math.round(totalTaxable * 0.025 * 100) / 100
+  let sgst = cgst
+  let igst = 0
+
+  if (missingBilling || missingShipping) {
+    gstType = "no_address"
+  } else if (billingState === shippingState) {
+    gstType = "same"
+  } else {
+    gstType = "different"
+    cgst = 0
+    sgst = 0
+    igst = Math.round(totalTaxable * 0.05 * 100) / 100
+  }
+
+  const rawTotal = totalTaxable + cgst + sgst + igst
+  const roundOff = rawTotal - Math.floor(rawTotal)
+  const invoiceTotal = Math.floor(rawTotal)
+
+  return (
+    <div className="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-hidden">
+      <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">GST Breakdown</p>
+      </div>
+      <div className="p-4 max-w-sm ml-auto space-y-2">
+        <div className="flex justify-between items-center text-xs">
+          <span className="font-black uppercase text-slate-500 text-[10px]">CGST (2.5%)</span>
+          <span className="font-mono font-bold text-slate-700">{gstType !== "different" ? `₹${cgst.toFixed(2)}` : "—"}</span>
+        </div>
+        <div className="flex justify-between items-center text-xs">
+          <span className="font-black uppercase text-slate-500 text-[10px]">SGST (2.5%)</span>
+          <span className="font-mono font-bold text-slate-700">{gstType !== "different" ? `₹${sgst.toFixed(2)}` : "—"}</span>
+        </div>
+        <div className="flex justify-between items-center text-xs">
+          <span className="font-black uppercase text-slate-500 text-[10px]">IGST (5%)</span>
+          <span className="font-mono font-bold text-slate-700">{gstType === "different" ? `₹${igst.toFixed(2)}` : "—"}</span>
+        </div>
+        <div className="flex justify-between items-center text-xs">
+          <span className="font-black uppercase text-slate-500 text-[10px]">Round Off</span>
+          <span className="font-mono font-bold text-slate-500">{roundOff > 0 ? `-₹${roundOff.toFixed(2)}` : "—"}</span>
+        </div>
+        <div className="flex justify-between items-center border-t border-slate-200 pt-2">
+          <span className="font-black uppercase text-slate-800 text-[11px]">Total Invoice Amount</span>
+          <span className="font-mono font-black text-blue-700 text-sm">₹{invoiceTotal.toFixed(2)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function MakeInvoicePage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isReadOnly, user } = useAuth()
+  const { isReadOnly, user, isAdmin, isFeatureEnabled } = useAuth()
   const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
   const { ref: pendingEndRef, inView: pendingInView } = useInView()
   const { ref: historyEndRef, inView: historyInView } = useInView()
@@ -83,10 +198,68 @@ export default function MakeInvoicePage() {
     return <p className="text-xs font-bold text-slate-700 leading-none">{formatDate(value)}</p>;
   };
 
+  const renderPartyDetailLink = (docUrl: string | null | undefined, expiryDate: string | null | undefined) => {
+    const formattedDate = formatDate(expiryDate ?? '');
+
+    if (docUrl && String(docUrl).startsWith('http')) {
+      return (
+        <a 
+          href={docUrl} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-xs font-bold text-blue-600 hover:text-blue-800 underline transition-all"
+        >
+          {formattedDate !== "—" ? formattedDate : "View Document"}
+        </a>
+      );
+    }
+
+    if (formattedDate !== "—") {
+      return <span className="text-xs font-bold text-slate-700">{formattedDate}</span>;
+    }
+
+    return <span className="text-[10px] text-slate-400">—</span>;
+  };
+
   const [visibleColumns, setVisibleColumns] = usePersistedColumns(
     "make-invoice",
-    ["partySoDate", "orderNo", "customerName", "status"]
+    ["partySoDate", "actual1Date", "orderNo", "processid", "customerName", "vehicleNo", "orderPunchRemarks", "status"]
   )
+  const MAKE_INV_STD_IDS = ["partySoDate", "actual1Date", "orderNo", "processid", "customerName", "vehicleNo", "orderPunchRemarks", "status", "products"]
+  // Include all ALL_COLUMNS after standard IDs so every toggleable column participates in drag ordering
+  const [columnOrder, setColumnOrder] = useColumnOrder("make-invoice", [...MAKE_INV_STD_IDS, ...ALL_COLUMNS.map(c => c.id).filter(id => !MAKE_INV_STD_IDS.includes(id))])
+  // "products" is always visible (not user-toggleable); everything else follows visibleColumns
+  const ALWAYS_VISIBLE_MAKE_INV = new Set(["products"])
+  const orderedVisible = columnOrder.filter(id => ALWAYS_VISIBLE_MAKE_INV.has(id) || visibleColumns.includes(id))
+  // Dynamic columns for mobile card view (visible columns not in the standard set)
+  const dynamicColumns = visibleColumns.filter(id => !MAKE_INV_STD_IDS.includes(id))
+  const handleColumnReorder = useCallback((newVisibleOrder: string[]) => {
+    const newOrderSet = new Set(newVisibleOrder)
+    const hiddenCols = columnOrder.filter(id => !newOrderSet.has(id))
+    setColumnOrder([...newVisibleOrder, ...hiddenCols])
+  }, [columnOrder, setColumnOrder])
+
+  // SKU weight lookup
+  const { data: skuDetailsData } = useQuery({
+    queryKey: ["sku-details-all"],
+    queryFn: async () => {
+      const res = await skuDetailsApi.getAll({ all: "true" })
+      return res.success ? res.data?.skuDetails ?? [] : []
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const skuWeightMap = useMemo(() => {
+    const map = new Map<string, string>()
+    if (Array.isArray(skuDetailsData)) {
+      for (const sku of skuDetailsData) {
+        if (sku.sku_name) {
+          const weight = sku.sku_weight ?? ""
+          map.set(sku.sku_name.trim().toLowerCase(), weight ? String(weight) : "—")
+        }
+      }
+    }
+    return map
+  }, [skuDetailsData])
 
   // Selection & Dialog State
   const [selectedItems, setSelectedItems] = useState<string[]>([])
@@ -241,17 +414,11 @@ export default function MakeInvoicePage() {
 
     // Search filter (Matches DO No, Customer Name, and Vehicle No)
     if (filterValues.search) {
-      const search = filterValues.search.toLowerCase().trim()
-      const orderNo = String(order.so_no || "").toLowerCase()
       const partyEntry = (order.transfer === 'yes' && order.bill_company_name) ? order.bill_company_name : (order.party_name || order.partyName || "");
-      const customerName = String(partyEntry).toLowerCase()
-      const vehicleNo = String(order.truck_no || "").toLowerCase()
-      
-      const searchMatches = 
-        orderNo.includes(search) || 
-        customerName.includes(search) || 
-        vehicleNo.includes(search);
-        
+      const searchMatches =
+        matchesSearch(order.so_no, filterValues.search) ||
+        matchesSearch(partyEntry, filterValues.search) ||
+        matchesSearch(order.truck_no, filterValues.search);
       if (!searchMatches) matches = false
     }
 
@@ -633,9 +800,6 @@ export default function MakeInvoicePage() {
     amount: group._allProducts?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0,
   })
 
-  const dynamicColumns = visibleColumns.filter(
-    (colId) => !["partySoDate", "actual1Date", "doNumber", "processId", "customerName", "vehicleNo", "orderPunchRemarks", "status", "invoiceNo"].includes(colId)
-  )
 
   const getDynamicColumnValue = (group: any, colId: string) => {
     const directValue = group?.[colId]
@@ -710,21 +874,8 @@ export default function MakeInvoicePage() {
                 Columns
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[250px] max-h-[400px] overflow-y-auto">
-              <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {ALL_COLUMNS.map((col) => (
-                <DropdownMenuCheckboxItem
-                  key={col.id}
-                  className="capitalize"
-                  checked={visibleColumns.includes(col.id)}
-                  onCheckedChange={(checked) => {
-                    setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
-                  }}
-                >
-                  {col.label}
-                </DropdownMenuCheckboxItem>
-              ))}
+            <DropdownMenuContent align="end" className="w-[250px]">
+              <ColumnToggleContent columns={ALL_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -737,24 +888,23 @@ export default function MakeInvoicePage() {
                 <TableHead className="w-12 text-center">
                   <Checkbox checked={displayRows.length > 0 && selectedItems.length === displayRows.length} onCheckedChange={toggleSelectAll} />
                 </TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("partySoDate")}>DO Date<PendingSortIcon field="partySoDate" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("actual1Date")}>Actual 1<PendingSortIcon field="actual1Date" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("doNumber")}>DO Number<PendingSortIcon field="doNumber" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("processId")}>Process ID<PendingSortIcon field="processId" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("customerName")}>Customer Name<PendingSortIcon field="customerName" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center">Products</TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("vehicleNo")}>Vehicle No.<PendingSortIcon field="vehicleNo" /></TableHead>
-                <TableHead className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("orderPunchRemarks")}>Order Punch Remarks<PendingSortIcon field="orderPunchRemarks" /></TableHead>
-                {dynamicColumns.map((colId) => {
-                  const col = ALL_COLUMNS.find((c) => c.id === colId)
-                  if (!col) return null
-                  return (
-                    <TableHead key={colId} className="whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort(colId)}>
-                      {col.label}<PendingSortIcon field={colId} />
-                    </TableHead>
-                  )
-                })}
-                <TableHead className="whitespace-nowrap text-center">Status</TableHead>
+                <ColumnDragProvider columnIds={orderedVisible} onReorder={handleColumnReorder} disabled={!isAdmin && !isFeatureEnabled('can_reorder_columns')}>
+                  {orderedVisible.map(id => {
+                    const cls = "whitespace-nowrap text-center cursor-pointer select-none hover:text-blue-600 transition-colors"
+                    if (id === "partySoDate") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("partySoDate")}>DO Date<PendingSortIcon field="partySoDate" /></SortableTableHead>
+                    if (id === "actual1Date") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("actual1Date")}>Actual 1<PendingSortIcon field="actual1Date" /></SortableTableHead>
+                    if (id === "orderNo") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("doNumber")}>DO Number<PendingSortIcon field="doNumber" /></SortableTableHead>
+                    if (id === "processid") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("processId")}>Process ID<PendingSortIcon field="processId" /></SortableTableHead>
+                    if (id === "customerName") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("customerName")}>Customer Name<PendingSortIcon field="customerName" /></SortableTableHead>
+                    if (id === "vehicleNo") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("vehicleNo")}>Vehicle No.<PendingSortIcon field="vehicleNo" /></SortableTableHead>
+                    if (id === "orderPunchRemarks") return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort("orderPunchRemarks")}>Order Punch Remarks<PendingSortIcon field="orderPunchRemarks" /></SortableTableHead>
+                    if (id === "status") return <SortableTableHead key={id} id={id} className="whitespace-nowrap text-center">Status</SortableTableHead>
+                    if (id === "products") return <SortableTableHead key={id} id={id} className="whitespace-nowrap text-center">Products</SortableTableHead>
+                    const dynCol = ALL_COLUMNS.find(c => c.id === id)
+                    if (dynCol) return <SortableTableHead key={id} id={id} className={cls} onClick={() => handlePendingSort(id)}>{dynCol.label}<PendingSortIcon field={id} /></SortableTableHead>
+                    return null
+                  })}
+                </ColumnDragProvider>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -762,15 +912,11 @@ export default function MakeInvoicePage() {
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i} className="opacity-40 border-b border-slate-50">
                     <TableCell className="text-center py-4"><div className="h-4 w-4 bg-slate-200 animate-pulse rounded mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-20 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-40 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-32 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-16 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-3 w-32 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
-                    <TableCell className="text-center py-4"><div className="h-5 w-24 bg-slate-200 animate-pulse rounded-full mx-auto" /></TableCell>
+                    {orderedVisible.map(id => (
+                      <TableCell key={id} className="text-center py-4">
+                        <div className={cn("h-3 bg-slate-200 animate-pulse rounded-full mx-auto", id === "status" ? "h-5 w-24" : id === "products" ? "w-32" : id === "customerName" ? "w-40" : id === "orderPunchRemarks" ? "w-32" : id === "orderNo" || id === "processid" ? "w-24" : "w-20")} />
+                      </TableCell>
+                    ))}
                   </TableRow>
                 ))
               ) : sortedDisplayRows.length > 0 ? (
@@ -779,35 +925,29 @@ export default function MakeInvoicePage() {
                     <TableCell className="text-center">
                       <Checkbox checked={selectedItems.includes(group._rowKey)} onCheckedChange={() => toggleSelectItem(group._rowKey)} />
                     </TableCell>
-                    <TableCell className="text-center text-xs font-medium">{group.partySoDate}</TableCell>
-                    <TableCell className="text-center text-xs font-medium text-blue-700">{formatDate(group._allProducts[0]?.lrc_actual_1 || group._allProducts[0]?.actual_1)}</TableCell>
-                    <TableCell className="text-center text-xs font-medium">{group.doNumber}</TableCell>
-                    <TableCell className="text-center text-xs font-medium">{group.processId}</TableCell>
-                    <TableCell className="text-center text-xs">{group.customerName}</TableCell>
-                    <TableCell className="text-center">
-                      <span className="text-[10px] font-black text-slate-700 uppercase leading-tight block max-w-[150px] mx-auto">
-                        {group._allProducts[0]?.productName || "—"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span>
-                    </TableCell>
-                    {dynamicColumns.map((colId) => (
-                      <TableCell key={colId} className="text-center text-xs font-medium text-slate-700">
-                        {String(getDynamicColumnValue(group, colId))}
-                      </TableCell>
-                    ))}
-                    <TableCell className="text-center">
-                      <Badge className="bg-cyan-100 text-cyan-700">Pending Invoice</Badge>
-                    </TableCell>
+                    {orderedVisible.map(id => {
+                      if (id === "partySoDate") return <TableCell key={id} className="text-center text-xs font-medium">{group.partySoDate}</TableCell>
+                      if (id === "actual1Date") return <TableCell key={id} className="text-center text-xs font-medium text-blue-700">{formatDate(group._allProducts[0]?.lrc_actual_1 || group._allProducts[0]?.actual_1)}</TableCell>
+                      if (id === "orderNo") return <TableCell key={id} className="text-center text-xs font-medium">{group.doNumber}</TableCell>
+                      if (id === "processid") return <TableCell key={id} className="text-center text-xs font-medium">{group.processId}</TableCell>
+                      if (id === "customerName") return <TableCell key={id} className="text-center text-xs">{group.customerName}</TableCell>
+                      if (id === "vehicleNo") return <TableCell key={id} className="text-center"><span className="text-xs font-bold text-slate-700">{group.vehicleNo}</span></TableCell>
+                      if (id === "orderPunchRemarks") return <TableCell key={id} className="text-center"><span className="text-xs text-slate-600 font-medium">{group.orderPunchRemarks}</span></TableCell>
+                      if (id === "status") return <TableCell key={id} className="text-center"><Badge className="bg-cyan-100 text-cyan-700">Pending Invoice</Badge></TableCell>
+                      if (id === "products") return (
+                        <TableCell key={id} className="text-center">
+                          <span className="text-[10px] font-black text-slate-700 uppercase leading-tight block max-w-[150px] mx-auto">
+                            {group._allProducts[0]?.productName || "—"}
+                          </span>
+                        </TableCell>
+                      )
+                      return <TableCell key={id} className="text-center text-xs font-medium text-slate-700">{String(getDynamicColumnValue(group, id))}</TableCell>
+                    })}
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10 + dynamicColumns.length} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={1 + orderedVisible.length} className="text-center py-8 text-muted-foreground">
                     No orders pending for invoice creation
                   </TableCell>
                 </TableRow>
@@ -1113,51 +1253,27 @@ export default function MakeInvoicePage() {
                                     {/* Security Audit Info */}
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Fitness</p>
-                                      {firstProd.fitness ? (
-                                        <a href={firstProd.fitness} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
-                                          {firstProd.fitness_end_date ? new Date(firstProd.fitness_end_date).toLocaleDateString("en-GB") : "View Document"}
-                                        </a>
-                                      ) : <span className="text-[10px] text-slate-400">—</span>}
+                                      {renderPartyDetailLink(firstProd.fitness, firstProd.fitness_end_date)}
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Insurance</p>
-                                      {firstProd.insurance ? (
-                                        <a href={firstProd.insurance} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
-                                          {firstProd.insurance_end_date ? new Date(firstProd.insurance_end_date).toLocaleDateString("en-GB") : "View Document"}
-                                        </a>
-                                      ) : <span className="text-[10px] text-slate-400">—</span>}
+                                      {renderPartyDetailLink(firstProd.insurance, firstProd.insurance_end_date)}
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Pollution</p>
-                                      {firstProd.polution ? (
-                                        <a href={firstProd.polution} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
-                                          {firstProd.pollution_end_date ? new Date(firstProd.pollution_end_date).toLocaleDateString("en-GB") : "View Document"}
-                                        </a>
-                                      ) : <span className="text-[10px] text-slate-400">—</span>}
+                                      {renderPartyDetailLink(firstProd.polution, firstProd.pollution_end_date)}
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Tax Copy</p>
-                                      {firstProd.tax_copy ? (
-                                        <a href={firstProd.tax_copy} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
-                                          {firstProd.tax_end_date ? new Date(firstProd.tax_end_date).toLocaleDateString("en-GB") : "View Document"}
-                                        </a>
-                                      ) : <span className="text-[10px] text-slate-400">—</span>}
+                                      {renderPartyDetailLink(firstProd.tax_copy, firstProd.tax_end_date)}
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 1</p>
-                                      {firstProd.permit1 ? (
-                                        <a href={firstProd.permit1} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
-                                          {firstProd.permit1_end_date ? new Date(firstProd.permit1_end_date).toLocaleDateString("en-GB") : "View Document"}
-                                        </a>
-                                      ) : <span className="text-[10px] text-slate-400">—</span>}
+                                      {renderPartyDetailLink(firstProd.permit1, firstProd.permit1_end_date)}
                                     </div>
                                     <div>
                                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1 leading-none">Permit 2 (Out State)</p>
-                                      {firstProd.permit2_out_state ? (
-                                        <a href={firstProd.permit2_out_state} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:text-blue-800 underline">
-                                          {firstProd.permit2_end_date ? new Date(firstProd.permit2_end_date).toLocaleDateString("en-GB") : "View Document"}
-                                        </a>
-                                      ) : <span className="text-[10px] text-slate-400">—</span>}
+                                      {renderPartyDetailLink(firstProd.permit2_out_state, firstProd.permit2_end_date)}
                                     </div>
 
                                     <div className="md:col-span-4 h-px bg-slate-200 my-1" />
@@ -1221,13 +1337,13 @@ export default function MakeInvoicePage() {
                           />
                         </TableHead>
                         <TableHead className="text-[10px] uppercase font-black h-10">PRODUCT INFO</TableHead>
-                        <TableHead className="text-[10px] uppercase font-black text-center h-10">ACTUAL QTY DISPATCH</TableHead>
-                        <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE</TableHead>
-                        <TableHead className="text-[10px] uppercase font-black text-center h-10">BASE AMOUNT</TableHead>
-                        <TableHead className="text-[10px] uppercase font-black text-center h-10">VEHICLE NUMBER</TableHead>
-                        <TableHead className="text-[10px] uppercase font-black text-center h-10">STATUS</TableHead>
                         <TableHead className="text-[10px] uppercase font-black text-center h-10">IS CD</TableHead>
                         <TableHead className="text-[10px] uppercase font-black text-center h-10">CD AMOUNT</TableHead>
+                        <TableHead className="text-[10px] uppercase font-black text-center h-10">WEIGHT(KGS)</TableHead>
+                        <TableHead className="text-[10px] uppercase font-black text-center h-10">ACTUAL QTY DISPATCH</TableHead>
+                        <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE (INC. WITH TAXES)</TableHead>
+                        <TableHead className="text-[10px] uppercase font-black text-center h-10">RATE</TableHead>
+                        <TableHead className="text-[10px] uppercase font-black text-center h-10">TAXABLE AMOUNT</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1248,11 +1364,50 @@ export default function MakeInvoicePage() {
                           <TableCell className="p-2">
                             <div className="flex flex-col">
                               <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{product.productName}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{product.specificOrderNo}</span>
-                                <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest">{product.party_name || product.partyName}</span>
-                              </div>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1 leading-none">{product.specificOrderNo}</span>
+                              <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest mt-1 leading-none">{product.party_name || product.partyName}</span>
                             </div>
+                          </TableCell>
+                          <TableCell className="text-center p-2">
+                            <Select
+                              value={productCdData[product.id]?.isCd || "no"}
+                              onValueChange={(val) => setProductCdData(prev => ({
+                                ...prev,
+                                [product.id]: { ...(prev[product.id] || { cdAmount: "0" }), isCd: val }
+                              }))}
+                            >
+                              <SelectTrigger className="h-8 text-[10px] font-bold">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="no">No</SelectItem>
+                                <SelectItem value="yes">Yes</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell className="text-center p-2">
+                            {productCdData[product.id]?.isCd === 'yes' && (
+                              <Input
+                                type="number"
+                                className="h-8 text-[10px] font-bold w-20 mx-auto"
+                                value={productCdData[product.id]?.cdAmount || ""}
+                                onChange={(e) => setProductCdData(prev => ({
+                                  ...prev,
+                                  [product.id]: { ...(prev[product.id] || { isCd: "yes" }), cdAmount: e.target.value }
+                                }))}
+                                placeholder="Amount"
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
+                            {(() => {
+                              const skuWtStr = skuWeightMap.get(product.productName?.trim().toLowerCase());
+                              const skuWt = parseFloat(skuWtStr || "") || 0;
+                              const qty = parseFloat(product.qtyToDispatch) || 0;
+                              const totalWt = skuWt * qty;
+                              if (!totalWt) return "—";
+                              return totalWt.toFixed(4);
+                            })()}
                           </TableCell>
                           <TableCell className="text-center p-2">
                             <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-black text-xs px-3">
@@ -1286,49 +1441,19 @@ export default function MakeInvoicePage() {
                               const originalRate = Number(product.rate) || 0;
                               const cdAmt = productCdData[product.id]?.isCd === 'yes' ? parseFloat(productCdData[product.id]?.cdAmount || '0') : 0;
                               const adjustedRate = originalRate - cdAmt;
-                              const qty = parseFloat(product.qtyToDispatch) || 0;
-                              const adjustedAmount = adjustedRate * qty;
-                              return adjustedAmount ? `₹${adjustedAmount.toFixed(2)}` : "—";
+                              return adjustedRate ? `₹${(adjustedRate / 1.05).toFixed(2)}` : "—";
                             })()}
                           </TableCell>
-                          <TableCell className="text-center p-2">
-                            <div className="flex items-center justify-center gap-1.5 font-bold text-slate-700 text-xs">
-                              {(product.truckNo || "—").toUpperCase()}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center p-2">
-                            <Badge className="bg-green-100 text-green-700 border-green-200 font-black text-[9px] uppercase">Ready for Invoice</Badge>
-                          </TableCell>
-                          <TableCell className="text-center p-2">
-                            <Select
-                              value={productCdData[product.id]?.isCd || "no"}
-                              onValueChange={(val) => setProductCdData(prev => ({
-                                ...prev,
-                                [product.id]: { ...(prev[product.id] || { cdAmount: "0" }), isCd: val }
-                              }))}
-                            >
-                              <SelectTrigger className="h-8 text-[10px] font-bold">
-                                <SelectValue placeholder="Select" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="no">No</SelectItem>
-                                <SelectItem value="yes">Yes</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell className="text-center p-2">
-                            {productCdData[product.id]?.isCd === 'yes' && (
-                              <Input
-                                type="number"
-                                className="h-8 text-[10px] font-bold w-20 mx-auto"
-                                value={productCdData[product.id]?.cdAmount || ""}
-                                onChange={(e) => setProductCdData(prev => ({
-                                  ...prev,
-                                  [product.id]: { ...(prev[product.id] || { isCd: "yes" }), cdAmount: e.target.value }
-                                }))}
-                                placeholder="Amount"
-                              />
-                            )}
+                          <TableCell className="text-center p-2 text-xs font-bold text-slate-700">
+                            {(() => {
+                              const originalRate = Number(product.rate) || 0;
+                              const cdAmt = productCdData[product.id]?.isCd === 'yes' ? parseFloat(productCdData[product.id]?.cdAmount || '0') : 0;
+                              const adjustedRate = originalRate - cdAmt;
+                              const rateWoGst = parseFloat((adjustedRate / 1.05).toFixed(2));
+                              const qty = parseFloat(product.qtyToDispatch) || 0;
+                              const taxableAmount = rateWoGst * qty;
+                              return taxableAmount ? `₹${taxableAmount.toFixed(2)}` : "—";
+                            })()}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1337,11 +1462,29 @@ export default function MakeInvoicePage() {
                       <TableRow className="bg-slate-50 font-black h-12 border-t-2 border-slate-200">
                         <TableCell />
                         <TableCell className="text-[10px] uppercase font-black text-slate-900">Total Selection</TableCell>
+                        <TableCell />
+                        <TableCell />
+                        <TableCell className="text-center">
+                          <Badge className="bg-blue-600 text-white font-black text-xs px-3">
+                            {(() => {
+                              const totalSelectedWt = selectedGroups.flatMap(g => g._allProducts)
+                                .filter(p => selectedProducts.includes(p._rowKey))
+                                .reduce((sum, p) => {
+                                  const skuWtStr = skuWeightMap.get(p.productName?.trim().toLowerCase());
+                                  const skuWt = parseFloat(skuWtStr || "") || 0;
+                                  const qty = parseFloat(p.qtyToDispatch) || 0;
+                                  return sum + (skuWt * qty);
+                                }, 0);
+                              return totalSelectedWt.toFixed(4);
+                            })()}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-center">
                           <Badge className="bg-blue-600 text-white font-black text-xs px-3">
                             {selectedGroups.flatMap(g => g._allProducts).filter(p => selectedProducts.includes(p._rowKey)).reduce((sum, p) => sum + (parseFloat(p.qtyToDispatch) || 0), 0)}
                           </Badge>
                         </TableCell>
+                        <TableCell />
                         <TableCell />
                         <TableCell className="text-center text-xs text-blue-700 font-black">
                           ₹{selectedGroups.flatMap(g => g._allProducts)
@@ -1350,11 +1493,11 @@ export default function MakeInvoicePage() {
                               const originalRate = Number(p.rate) || 0;
                               const cdAmt = productCdData[p.id]?.isCd === 'yes' ? parseFloat(productCdData[p.id]?.cdAmount || '0') : 0;
                               const adjustedRate = originalRate - cdAmt;
+                              const rateWoGst = parseFloat((adjustedRate / 1.05).toFixed(2));
                               const qty = parseFloat(p.qtyToDispatch) || 0;
-                              return sum + (adjustedRate * qty);
+                              return sum + (rateWoGst * qty);
                             }, 0).toFixed(2)}
                         </TableCell>
-                        <TableCell colSpan={4} />
                       </TableRow>
                     </TableBody>
                   </Table>
@@ -1381,8 +1524,9 @@ export default function MakeInvoicePage() {
                       const originalRate = Number(product.rate) || 0
                       const cdAmt = productCdData[product.id]?.isCd === 'yes' ? parseFloat(productCdData[product.id]?.cdAmount || '0') : 0
                       const adjustedRate = originalRate - cdAmt
+                      const rateWoGst = parseFloat((adjustedRate / 1.05).toFixed(2))
                       const qty = parseFloat(product.qtyToDispatch) || 0
-                      const adjustedAmount = adjustedRate * qty
+                      const taxableAmount = rateWoGst * qty
 
                       return (
                         <div key={product._rowKey} className={cn("rounded-xl border bg-white p-3 space-y-3", selected && "border-blue-200 bg-blue-50/40")}>
@@ -1409,11 +1553,25 @@ export default function MakeInvoicePage() {
 
                           <div className="grid grid-cols-2 gap-3 text-xs">
                             <div className="rounded-md bg-slate-50 p-2">
+                              <p className="text-[10px] font-black uppercase text-slate-400">Weight(KGS)</p>
+                              <p className="mt-1 font-mono font-bold text-slate-700">
+                                {(() => {
+                                  const skuWtStr = skuWeightMap.get(product.productName?.trim().toLowerCase());
+                                  const skuWt = parseFloat(skuWtStr || "") || 0;
+                                  const qty = parseFloat(product.qtyToDispatch) || 0;
+                                  const totalWt = skuWt * qty;
+                                  if (!totalWt) return "—";
+                                  const totalWtStr = totalWt.toFixed(4);
+                                  return totalWtStr.endsWith(".0000") ? totalWtStr.slice(0, -5) : totalWtStr;
+                                })()}
+                              </p>
+                            </div>
+                            <div className="rounded-md bg-slate-50 p-2">
                               <p className="text-[10px] font-black uppercase text-slate-400">Actual Qty</p>
                               <p className="mt-1 font-mono font-bold text-blue-700">{product.qtyToDispatch || "0"}</p>
                             </div>
                             <div className="rounded-md bg-slate-50 p-2">
-                              <p className="text-[10px] font-black uppercase text-slate-400">Rate</p>
+                              <p className="text-[10px] font-black uppercase text-slate-400">Rate (Inc. with taxes)</p>
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <p className="mt-1 cursor-pointer font-mono font-bold text-slate-700">
@@ -1431,12 +1589,14 @@ export default function MakeInvoicePage() {
                               </Popover>
                             </div>
                             <div className="rounded-md bg-slate-50 p-2">
-                              <p className="text-[10px] font-black uppercase text-slate-400">Base Amount</p>
-                              <p className="mt-1 font-mono font-bold text-slate-700">{adjustedAmount ? `₹${adjustedAmount.toFixed(2)}` : "—"}</p>
+                              <p className="text-[10px] font-black uppercase text-slate-400">Rate</p>
+                              <p className="mt-1 font-mono font-bold text-slate-700">
+                                {adjustedRate ? `₹${(adjustedRate / 1.05).toFixed(2)}` : "—"}
+                              </p>
                             </div>
                             <div className="rounded-md bg-slate-50 p-2">
-                              <p className="text-[10px] font-black uppercase text-slate-400">Vehicle</p>
-                              <p className="mt-1 font-bold break-words">{(product.truckNo || "—").toUpperCase()}</p>
+                              <p className="text-[10px] font-black uppercase text-slate-400">Total Taxable Amount</p>
+                              <p className="mt-1 font-mono font-bold text-slate-700">{taxableAmount ? `₹${taxableAmount.toFixed(2)}` : "—"}</p>
                             </div>
                           </div>
 
@@ -1476,11 +1636,10 @@ export default function MakeInvoicePage() {
                             )}
                           </div>
 
-                          <Badge className="bg-green-100 text-green-700 border-green-200 font-black text-[9px] uppercase hover:bg-green-100">Ready for Invoice</Badge>
                         </div>
                       )
                     })}
-                    <div className="grid grid-cols-2 gap-3 rounded-lg border bg-slate-50 p-3 text-xs">
+                    <div className="grid grid-cols-3 gap-3 rounded-lg border bg-slate-50 p-3 text-xs">
                       <div>
                         <p className="text-[9px] uppercase font-black text-slate-500">Total Qty</p>
                         <p className="mt-1 font-black text-blue-700">
@@ -1488,9 +1647,26 @@ export default function MakeInvoicePage() {
                         </p>
                       </div>
                       <div>
+                        <p className="text-[9px] uppercase font-black text-slate-500">Total Weight</p>
+                        <p className="mt-1 font-black text-blue-700">
+                          {(() => {
+                            const totalSelectedWt = selectedGroups.flatMap(g => g._allProducts)
+                              .filter(p => selectedProducts.includes(p._rowKey))
+                              .reduce((sum, p) => {
+                                const skuWtStr = skuWeightMap.get(p.productName?.trim().toLowerCase());
+                                const skuWt = parseFloat(skuWtStr || "") || 0;
+                                const qty = parseFloat(p.qtyToDispatch) || 0;
+                                return sum + (skuWt * qty);
+                              }, 0);
+                            const totalWtStr = totalSelectedWt.toFixed(4);
+                            return totalWtStr.endsWith(".0000") ? totalWtStr.slice(0, -5) : totalWtStr;
+                          })()}
+                        </p>
+                      </div>
+                      <div>
                         <p className="text-[9px] uppercase font-black text-slate-500">Total Amount</p>
                         <p className="mt-1 font-black text-blue-700">
-                          ₹{selectedGroups.flatMap(g => g._allProducts)
+                          ₹{Math.round(selectedGroups.flatMap(g => g._allProducts)
                             .filter(p => selectedProducts.includes(p._rowKey))
                             .reduce((sum, p) => {
                               const originalRate = Number(p.rate) || 0;
@@ -1498,12 +1674,20 @@ export default function MakeInvoicePage() {
                               const adjustedRate = originalRate - cdAmt;
                               const qty = parseFloat(p.qtyToDispatch) || 0;
                               return sum + (adjustedRate * qty);
-                            }, 0).toFixed(2)}
+                            }, 0))}
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
+
+                {/* GST & Invoice Summary */}
+                <InvoiceSummary
+                  selectedGroups={selectedGroups}
+                  selectedProducts={selectedProducts}
+                  productCdData={productCdData}
+                />
+
                 {/* 3. Invoice Form */}
                 <div className="space-y-6 border rounded-lg p-4 sm:p-6 bg-white shadow-sm">
                   <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
@@ -1515,6 +1699,7 @@ export default function MakeInvoicePage() {
                     <div className="space-y-2">
                       <Label>Invoice Number <span className="text-red-500">*</span></Label>
                       <Input
+                        className="h-10"
                         value={invoiceData.invoiceNo}
                         onChange={(e) => setInvoiceData({ ...invoiceData, invoiceNo: e.target.value })}
                         placeholder="Enter Invoice No"
@@ -1522,9 +1707,11 @@ export default function MakeInvoicePage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Upload Invoice Copy <span className="text-red-500">*</span></Label>
-                      <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Upload Invoice Copy <span className="text-red-500">*</span></Label>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Max 20 MB</span>
+                      </div>
+                      <div className="relative flex items-center">
                         <Input
                           type="file"
                           id="invoice-file"
@@ -1539,11 +1726,18 @@ export default function MakeInvoicePage() {
                         <Button
                           type="button"
                           variant="outline"
-                          className="w-full justify-start text-xs h-9"
+                          className="w-full justify-between text-xs h-10 border-dashed hover:border-blue-500 hover:bg-blue-50/20 transition-all"
                           onClick={() => document.getElementById('invoice-file')?.click()}
                         >
-                          <Upload className="h-4 w-4 mr-2" />
-                          {invoiceData.invoiceFileName || 'Choose File'}
+                          <span className="flex items-center gap-2 text-slate-500 truncate">
+                            <Upload className="h-4 w-4 text-slate-400" />
+                            {invoiceData.invoiceFileName || 'Select Invoice Document'}
+                          </span>
+                          {invoiceData.invoiceFileName && (
+                            <span className="text-[9px] text-blue-700 font-black bg-blue-100 px-2 py-0.5 rounded-full ml-2 shrink-0 uppercase tracking-tight">
+                              Selected
+                            </span>
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -1552,6 +1746,7 @@ export default function MakeInvoicePage() {
                       <Label>Invoice Date <span className="text-red-500">*</span></Label>
                       <Input
                         type="date"
+                        className="h-10"
                         value={invoiceData.invoiceDate}
                         onChange={(e) => setInvoiceData({ ...invoiceData, invoiceDate: e.target.value })}
                       />

@@ -1,6 +1,8 @@
 "use client"
 
 import { Suspense, useState, useEffect } from "react"
+import { matchesSearch } from "@/lib/search-utils"
+import { formatToIST } from "@/lib/date-utils"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -22,15 +24,12 @@ function HistoryContent() {
 
   const filteredLogs = historyLogs.filter(
     (log) =>
-      log.orderNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.processedBy?.toLowerCase().includes(searchTerm.toLowerCase()),
+      matchesSearch(log.orderNo, searchTerm) ||
+      matchesSearch(log.customerName, searchTerm) ||
+      matchesSearch(log.processedBy, searchTerm),
   )
 
-  const formatDate = (isoString: string) => {
-    const date = new Date(isoString)
-    return date.toLocaleString()
-  }
+  const formatDate = (isoString: string) => formatToIST(isoString)
 
   const handleViewDetails = (index: number) => {
     router.push(`/commitment-entry?index=${index}`)

@@ -23,6 +23,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AsyncCombobox } from "@/components/ui/async-combobox"
 import { customerApi } from "@/lib/api-service"
 import { cn } from "@/lib/utils"
+import { ISTDateTime } from "@/components/ui/ist-datetime"
+import { isTimestamp } from "@/lib/date-utils"
 import { Check, ChevronsUpDown } from "lucide-react"
 import {
   Command,
@@ -218,6 +220,7 @@ export function WorkflowStageShell({
         </a>
       )
     }
+    if (isTimestamp(value)) return <ISTDateTime value={value} />
     return String(value)
   }
 

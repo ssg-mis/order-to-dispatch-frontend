@@ -30,6 +30,10 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
 import { customerApi, commitmentPunchApi, brokerApi, salespersonApi, skuDetailsApi, depotApi } from "@/lib/api-service"
+import { usePersistedColumns } from "@/hooks/use-persisted-columns"
+import { useColumnOrder } from "@/hooks/use-column-order"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { ColumnDragProvider } from "@/components/ui/column-drag-provider"
 import { AsyncCombobox } from "@/components/ui/async-combobox"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -77,13 +81,27 @@ type SkuRow = {
 const OIL_TYPES = ["Palm Oil", "Soya Oil", "Rice Oil"]
 const TRANSPORT_TYPES = ["Self", "Party", "Company", "Ex-Depot"]
 
+const PAGE_COLUMNS = [
+  { id: "commitment_no",  label: "Commitment No." },
+  { id: "commitment_date", label: "Date" },
+  { id: "party_name",    label: "Customer Name" },
+  { id: "oil_type",      label: "Oil Type" },
+  { id: "rate",          label: "Rate" },
+  { id: "quantity",      label: "Qty (MT)" },
+  { id: "processed_qty", label: "PO Raised (MT)" },
+  { id: "delivery_qty",  label: "Delivery Qty (MT)" },
+  { id: "po_pending_qty", label: "PO Pending Qty (MT)" },
+  { id: "remaining_qty", label: "Commitment Pending (MT)" },
+] as const
+type ColId = typeof PAGE_COLUMNS[number]["id"]
+
 // ═══════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ═══════════════════════════════════════════════════════════════
 
 export default function CommitmentPunchPage() {
   const { toast } = useToast()
-  const { user } = useAuth()
+  const { user, isAdmin, isFeatureEnabled } = useAuth()
 
   // ── Pending table state ─────────────────────────────────────
   const [pendingList, setPendingList] = useState<PendingCommitment[]>([])
@@ -273,17 +291,16 @@ export default function CommitmentPunchPage() {
     } catch { return { options: [], hasMore: false } }
   }, [])
 
-  // Fetch SKU options — only show "Good Life" SKUs (client-side filtered)
+  // Fetch SKU options — only show SKUs with tag = "Yes"
   const fetchSkuOptions = useCallback(async (search: string, _page: number) => {
     try {
-      // Pass search="Good Life" when no user search, so initial load shows Good Life SKUs
-      const res = await skuDetailsApi.getAll({ search: search || "Good Life", limit: 100 })
+      const res = await skuDetailsApi.getAll({ search: search || "", limit: 100 })
       const items = res.success
         ? (res.data.skuDetails || res.data.skus || res.data.sku_details || (Array.isArray(res.data) ? res.data : []))
         : []
-      // Client-side filter: only keep items whose sku_name contains "Good Life"
+      // Only show SKUs with tag_name = "Yes"
       const goodLifeItems = items.filter((s: any) =>
-        (s.sku_name || s.name || "").toLowerCase().includes("good life")
+        (s.tag_name || "").toLowerCase() === "yes"
       )
       const seen = new Set<string>()
       const newlyFetched: Record<string, any> = {}
@@ -580,6 +597,67 @@ export default function CommitmentPunchPage() {
     })
   }, [pendingList, pendingSortField, pendingSortDir])
 
+  const [visibleColumns] = usePersistedColumns("commitment-punch", PAGE_COLUMNS.map(c => c.id))
+  const [columnOrder, setColumnOrder] = useColumnOrder("commitment-punch", PAGE_COLUMNS.map(c => c.id))
+  const orderedVisibleCols = useMemo(() =>
+    columnOrder
+      .map(id => PAGE_COLUMNS.find(c => c.id === id))
+      .filter((c): c is typeof PAGE_COLUMNS[number] => !!c && visibleColumns.includes(c.id as ColId)),
+    [columnOrder, visibleColumns]
+  )
+  const handleColumnReorder = useCallback((newVisibleOrder: string[]) => {
+    const hiddenCols = columnOrder.filter(id => !visibleColumns.includes(id as ColId))
+    setColumnOrder([...newVisibleOrder, ...hiddenCols])
+  }, [columnOrder, visibleColumns, setColumnOrder])
+
+  // Sort-field mapping: column id → pending sort key
+  const COL_SORT_FIELD: Partial<Record<ColId, string>> = {
+    commitment_no:   "commitment_no",
+    commitment_date: "date",
+    party_name:      "customer_name",
+    oil_type:        "oil_type",
+    rate:            "rate",
+    quantity:        "qty",
+  }
+  const RIGHT_ALIGN_COLS: ColId[] = ["rate", "quantity", "processed_qty", "delivery_qty", "po_pending_qty", "remaining_qty"]
+
+  const renderCell = (row: PendingCommitment, colId: ColId) => {
+    switch (colId) {
+      case "commitment_no":
+        return <TableCell key={colId} className="font-mono font-semibold text-blue-700">{row.commitment_no}</TableCell>
+      case "commitment_date":
+        return <TableCell key={colId}>{row.commitment_date ? new Date(row.commitment_date).toLocaleDateString("en-IN") : "—"}</TableCell>
+      case "party_name":
+        return <TableCell key={colId} className="font-medium">{row.party_name}</TableCell>
+      case "oil_type":
+        return <TableCell key={colId}><Badge variant="outline" className="text-xs">{row.oil_type || "—"}</Badge></TableCell>
+      case "rate":
+        return <TableCell key={colId} className="text-right font-mono">₹{row.rate ?? "—"}</TableCell>
+      case "quantity":
+        return <TableCell key={colId} className="text-right font-mono">{row.quantity ?? "—"}</TableCell>
+      case "processed_qty":
+        return (
+          <TableCell key={colId} className="text-right font-mono text-blue-600 font-semibold">
+            {Number(row.processed_qty || 0) > 0 ? (
+              <button onClick={(e) => openDetails(row, e)} className="text-blue-600 underline hover:text-blue-800 font-semibold font-mono cursor-pointer bg-transparent border-none p-0">
+                {Number(row.processed_qty || 0).toFixed(4)}
+              </button>
+            ) : (
+              <span className="text-slate-400">0.0000</span>
+            )}
+          </TableCell>
+        )
+      case "delivery_qty":
+        return <TableCell key={colId} className="text-right font-mono text-purple-600 font-semibold">{Number(row.delivery_qty || 0).toFixed(4)}</TableCell>
+      case "po_pending_qty":
+        return <TableCell key={colId} className="text-right font-mono text-amber-600 font-semibold">{Number(row.po_pending_qty || 0).toFixed(4)}</TableCell>
+      case "remaining_qty":
+        return <TableCell key={colId} className="text-right font-mono text-emerald-600 font-bold">{Number(row.remaining_qty ?? row.quantity).toFixed(4)}</TableCell>
+      default:
+        return null
+    }
+  }
+
   return (
     <div className="p-3 sm:p-6 max-w-full space-y-4 sm:space-y-6" suppressHydrationWarning>
 
@@ -637,30 +715,36 @@ export default function CommitmentPunchPage() {
                       onCheckedChange={toggleSelectAll}
                     />
                   </TableHead>
-                  <TableHead className="cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("commitment_no")}>Commitment No.<PendingSortIcon field="commitment_no" /></TableHead>
-                  <TableHead className="cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("date")}>Date<PendingSortIcon field="date" /></TableHead>
-                  <TableHead className="cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("customer_name")}>Customer Name<PendingSortIcon field="customer_name" /></TableHead>
-                  <TableHead className="cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("oil_type")}>Oil Type<PendingSortIcon field="oil_type" /></TableHead>
-                  <TableHead className="text-right cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("rate")}>Rate<PendingSortIcon field="rate" /></TableHead>
-                  <TableHead className="text-right cursor-pointer select-none hover:text-blue-600 transition-colors" onClick={() => handlePendingSort("qty")}>Qty (MT)<PendingSortIcon field="qty" /></TableHead>
-                  <TableHead className="text-right">PO Raised (MT)</TableHead>
-                  <TableHead className="text-right">Delivery Qty (MT)</TableHead>
-                  <TableHead className="text-right">PO Pending Qty (MT)</TableHead>
-                  <TableHead className="text-right">Commitment Pending (MT)</TableHead>
+                  <ColumnDragProvider columnIds={orderedVisibleCols.map(c => c.id)} onReorder={handleColumnReorder} disabled={!isAdmin && !isFeatureEnabled('can_reorder_columns')}>
+                    {orderedVisibleCols.map(col => {
+                      const sf = COL_SORT_FIELD[col.id]
+                      const isRight = RIGHT_ALIGN_COLS.includes(col.id)
+                      return (
+                        <SortableTableHead
+                          key={col.id}
+                          id={col.id}
+                          className={`whitespace-nowrap${sf ? " cursor-pointer select-none hover:text-blue-600 transition-colors" : ""}${isRight ? " text-right" : ""}`}
+                          onClick={sf ? () => handlePendingSort(sf) : undefined}
+                        >
+                          {col.label}{sf && <PendingSortIcon field={sf} />}
+                        </SortableTableHead>
+                      )
+                    })}
+                  </ColumnDragProvider>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoadingPending ? (
                   [...Array(4)].map((_, i) => (
                     <TableRow key={i} className="opacity-40">
-                      {[...Array(11)].map((__, j) => (
+                      {[...Array(orderedVisibleCols.length + 1)].map((__, j) => (
                         <TableCell key={j}><div className="h-4 w-full bg-slate-200 animate-pulse rounded" /></TableCell>
                       ))}
                     </TableRow>
                   ))
                 ) : pendingList.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-16 text-muted-foreground">
+                    <TableCell colSpan={orderedVisibleCols.length + 1} className="text-center py-16 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <CheckCircle2 className="h-10 w-10 text-slate-300" />
                         <p className="font-medium">No pending commitments</p>
@@ -681,33 +765,7 @@ export default function CommitmentPunchPage() {
                           onCheckedChange={() => toggleSelect(row.id)}
                         />
                       </TableCell>
-                      <TableCell className="font-mono font-semibold text-blue-700">{row.commitment_no}</TableCell>
-                      <TableCell>{row.commitment_date ? new Date(row.commitment_date).toLocaleDateString("en-IN") : "—"}</TableCell>
-                      <TableCell className="font-medium">{row.party_name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">{row.oil_type || "—"}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-mono">₹{row.rate ?? "—"}</TableCell>
-                      <TableCell className="text-right font-mono">{row.quantity ?? "—"}</TableCell>
-                      <TableCell className="text-right font-mono text-blue-600 font-semibold">
-                        {Number(row.processed_qty || 0) > 0 ? (
-                          <button
-                            onClick={(e) => openDetails(row, e)}
-                            className="text-blue-600 underline hover:text-blue-800 font-semibold font-mono cursor-pointer bg-transparent border-none p-0"
-                          >
-                            {Number(row.processed_qty || 0).toFixed(4)}
-                          </button>
-                        ) : (
-                          <span className="text-slate-400">0.0000</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-purple-600 font-semibold">
-                        {Number(row.delivery_qty || 0).toFixed(4)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-amber-600 font-semibold">
-                        {Number(row.po_pending_qty || 0).toFixed(4)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-emerald-600 font-bold">{Number(row.remaining_qty ?? row.quantity).toFixed(4)}</TableCell>
+                      {orderedVisibleCols.map(col => renderCell(row, col.id))}
                     </TableRow>
                   ))
                 )}
@@ -1313,7 +1371,7 @@ export default function CommitmentPunchPage() {
             {/* ── SKU Rows ── */}
             <div className="space-y-3">
               <div className="flex flex-col gap-2 border-b pb-2 sm:flex-row sm:items-center sm:justify-between sm:pb-1">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">SKU Details <span className="text-slate-400 font-normal normal-case">(Good Life only)</span></p>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">SKU Details</p>
                 <Button type="button" variant="outline" size="sm" onClick={addSkuRow} className="w-full gap-1 h-8 text-xs sm:h-7 sm:w-auto">
                   <Plus className="h-3 w-3" /> Add Sku
                 </Button>

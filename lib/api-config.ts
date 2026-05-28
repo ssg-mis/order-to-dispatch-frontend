@@ -67,5 +67,6 @@ export const API_ENDPOINTS = {
   // Reports Endpoints
   reports: {
     get: '/reports',
+    dispatchReport: '/reports/dispatch-report',
   },
 };
