@@ -1,13 +1,14 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { FileDown, Download, Loader2, ChevronDown, ChevronRight } from "lucide-react"
-import { reportsApi } from "@/lib/api-service"
+import { FileDown, Download, Loader2, ChevronDown, ChevronRight, Trash2 } from "lucide-react"
+import { reportsApi, userApi } from "@/lib/api-service"
+import { useAuth } from "@/hooks/use-auth"
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -250,6 +251,7 @@ function generateCsv(rows: any[], selectedKeys: string[]): void {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ExportPdfModal() {
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
 
   const [fromDate, setFromDate] = useState("")
@@ -262,6 +264,69 @@ export function ExportPdfModal() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // ── Format presets ────────────────────────────────────────────────────────
+  const [formats, setFormats] = useState<Record<string, string[]>>({})
+  const [activeFormat, setActiveFormat] = useState("")
+  const [newFormatName, setNewFormatName] = useState("")
+  const [savingFormat, setSavingFormat] = useState(false)
+
+  useEffect(() => {
+    if (!open || !user?.id) return
+    userApi.getCsvFormats(user.id).then(res => {
+      if (res.success) setFormats(res.data || {})
+    }).catch(() => {})
+  }, [open, user?.id])
+
+  const handleSelectFormat = (name: string) => {
+    setActiveFormat(name)
+    if (name && formats[name]) setSelected(new Set(formats[name]))
+  }
+
+  const handleAddFormat = async () => {
+    const name = newFormatName.trim()
+    if (!name || !user?.id) return
+    const next = { ...formats, [name]: Array.from(selected) }
+    setSavingFormat(true)
+    try {
+      const res = await userApi.saveCsvFormats(user.id, next)
+      if (res.success) {
+        setFormats(next)
+        setActiveFormat(name)
+        setNewFormatName("")
+      }
+    } finally {
+      setSavingFormat(false)
+    }
+  }
+
+  const handleUpdateFormat = async () => {
+    if (!activeFormat || !user?.id) return
+    const next = { ...formats, [activeFormat]: Array.from(selected) }
+    setSavingFormat(true)
+    try {
+      const res = await userApi.saveCsvFormats(user.id, next)
+      if (res.success) setFormats(next)
+    } finally {
+      setSavingFormat(false)
+    }
+  }
+
+  const handleDeleteFormat = async () => {
+    if (!activeFormat || !user?.id) return
+    const next = { ...formats }
+    delete next[activeFormat]
+    setSavingFormat(true)
+    try {
+      const res = await userApi.saveCsvFormats(user.id, next)
+      if (res.success) {
+        setFormats(next)
+        setActiveFormat("")
+      }
+    } finally {
+      setSavingFormat(false)
+    }
+  }
 
   const toggleCol = (key: string) => {
     setSelected(prev => {
@@ -355,6 +420,61 @@ export function ExportPdfModal() {
 
         <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="px-6 py-4 space-y-5">
+
+            {/* Format presets */}
+            <div>
+              <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Export Format</div>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <select
+                    value={activeFormat}
+                    onChange={e => handleSelectFormat(e.target.value)}
+                    className="h-8 text-xs rounded-lg border border-slate-200 bg-slate-50 px-2 flex-1 min-w-0 text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  >
+                    <option value="">— None (custom selection) —</option>
+                    {Object.keys(formats).map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                  {activeFormat && (
+                    <>
+                      <Button
+                        size="sm" variant="outline"
+                        className="h-8 text-xs rounded-lg shrink-0"
+                        onClick={handleUpdateFormat}
+                        disabled={savingFormat}
+                      >
+                        {savingFormat ? <Loader2 className="h-3 w-3 animate-spin" /> : "Update"}
+                      </Button>
+                      <button
+                        onClick={handleDeleteFormat}
+                        disabled={savingFormat}
+                        className="flex items-center justify-center h-8 w-8 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors shrink-0 disabled:opacity-40"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="New format name (e.g. Raj, MIS, Sales)…"
+                    value={newFormatName}
+                    onChange={e => setNewFormatName(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleAddFormat()}
+                    className="h-8 text-xs rounded-lg border-slate-200 bg-slate-50 flex-1"
+                  />
+                  <Button
+                    size="sm" variant="outline"
+                    className="h-8 text-xs rounded-lg shrink-0"
+                    onClick={handleAddFormat}
+                    disabled={!newFormatName.trim() || savingFormat}
+                  >
+                    {savingFormat ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save as New"}
+                  </Button>
+                </div>
+              </div>
+            </div>
 
             {/* Filters */}
             <div>

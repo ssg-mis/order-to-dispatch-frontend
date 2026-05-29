@@ -962,6 +962,23 @@ export const userApi = {
   getPageAccessOptions: async (): Promise<ApiResponse> => {
     return request('/users/page-access-options');
   },
+
+  /**
+   * Get CSV export format presets for a user
+   */
+  getCsvFormats: async (id: number): Promise<ApiResponse> => {
+    return request(`/users/${id}/csv-formats`);
+  },
+
+  /**
+   * Save CSV export format presets for a user
+   */
+  saveCsvFormats: async (id: number, formats: Record<string, string[]>): Promise<ApiResponse> => {
+    return request(`/users/${id}/csv-formats`, {
+      method: 'PUT',
+      body: JSON.stringify({ formats }),
+    });
+  },
 };
 
 /**
