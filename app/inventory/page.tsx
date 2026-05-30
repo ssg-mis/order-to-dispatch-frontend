@@ -256,9 +256,9 @@ export default function InventoryPage() {
         {/* Divider */}
         <div className="h-6 w-px bg-slate-200" />
 
-        {/* SKU Wise toggle */}
+        {/* Depo Wise toggle */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-slate-500 whitespace-nowrap">SKU Wise</span>
+          <span className="text-xs font-medium text-slate-500 whitespace-nowrap">Depo Wise</span>
           <button
             onClick={handleSkuWiseToggle}
             className={cn(
@@ -268,7 +268,7 @@ export default function InventoryPage() {
                 : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
             )}
           >
-            {skuWiseMode ? "On" : "Off"}
+            {skuWiseMode ? "Off" : "On"}
           </button>
         </div>
 
@@ -305,7 +305,7 @@ export default function InventoryPage() {
           )}
           {skuWiseMode && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 border border-amber-200">
-              SKU Wise
+              Depo Wise
               <button onClick={() => setSkuWiseMode(false)} className="ml-0.5 hover:text-amber-900">
                 <X className="h-3 w-3" />
               </button>
