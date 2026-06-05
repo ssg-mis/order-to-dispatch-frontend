@@ -1275,7 +1275,6 @@ export default function ActualDispatchPage() {
       toast({ title: "No Items Selected", description: "Please select at least one order group to save a draft.", variant: "destructive" });
       return;
     }
-    const orderKey = selectedGroups[0]._rowKey;
     const draftData = {
       vehicleNumber,
       vehicleData,
@@ -1284,16 +1283,23 @@ export default function ActualDispatchPage() {
       dialogSelectedProducts,
       driverName,
       driverData,
-      totalPackingWeight: totalPackingWeightFromSku
+      totalPackingWeight: totalPackingWeightFromSku,
+      combinedGroupKeys: selectedGroups.map((g: any) => g._rowKey),
     };
 
     setIsSavingDraft(true);
     try {
-      const res = await draftApi.save(user.username, orderKey, draftData);
-      if (res.success) {
+      // Save the same combined draft data under every selected group's key so
+      // each order's draft is up to date, and any pre-existing individual drafts
+      // are updated rather than left stale.
+      const results = await Promise.all(
+        selectedGroups.map((g: any) => draftApi.save(user.username, g._rowKey, draftData))
+      );
+      const allSuccess = results.every((r: any) => r.success);
+      if (allSuccess) {
         toast({ title: "Draft Saved", description: "Your progress has been saved. You can resume later." });
       } else {
-        toast({ title: "Save Failed", description: res.message || "Could not save draft.", variant: "destructive" });
+        toast({ title: "Save Failed", description: "Could not save draft.", variant: "destructive" });
       }
     } catch (error: any) {
       toast({ title: "Save Failed", description: error?.message || "Could not save draft.", variant: "destructive" });
@@ -1531,10 +1537,13 @@ export default function ActualDispatchPage() {
           description: `${successfulDispatches.length} item(s) processed through all stages successfully.`,
         });
 
-        // Clean up draft from DB after successful submission
+        // Clean up drafts for all selected groups after successful submission
         if (user?.username && selectedGroups.length > 0) {
-          const orderKey = selectedGroups[0]._rowKey;
-          try { await draftApi.delete(user.username, orderKey); } catch { /* non-critical */ }
+          await Promise.all(
+            selectedGroups.map((g: any) =>
+              draftApi.delete(user.username, g._rowKey).catch(() => {})
+            )
+          );
         }
 
         setSelectedOrders([]);
@@ -1688,28 +1697,30 @@ export default function ActualDispatchPage() {
     >
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-end gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="bg-transparent h-9 text-xs">
-                <Settings2 className="mr-2 h-4 w-4" />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-62.5 max-h-100 overflow-y-auto">
-              {PAGE_COLUMNS.map((col) => (
-                <DropdownMenuCheckboxItem
-                  key={col.id}
-                  className="capitalize"
-                  checked={visibleColumns.includes(col.id)}
-                  onCheckedChange={(checked) => {
-                    setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
-                  }}
-                >
-                  {col.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {(isAdmin || isFeatureEnabled('can_toggle_columns')) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="bg-transparent h-9 text-xs">
+                  <Settings2 className="mr-2 h-4 w-4" />
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-62.5 max-h-100 overflow-y-auto">
+                {PAGE_COLUMNS.map((col) => (
+                  <DropdownMenuCheckboxItem
+                    key={col.id}
+                    className="capitalize"
+                    checked={visibleColumns.includes(col.id)}
+                    onCheckedChange={(checked) => {
+                      setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
+                    }}
+                  >
+                    {col.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <Button
             onClick={() => handleOpenDialog()}
             disabled={selectedOrders.length === 0}

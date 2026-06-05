@@ -41,6 +41,7 @@ type InventoryRow = {
   sales: number
   opening_qty: number
   opening_qty_updated_at: string | null
+  production_qty: number
 }
 
 export default function InventoryPage() {
@@ -125,10 +126,11 @@ export default function InventoryPage() {
     if (skuWiseMode) {
       const productMap = new Map<string, any>()
       ;(rawData || []).forEach((r) => {
-        const openingQty = Number(r.opening_qty) || 0
-        const stockIn  = Number(r.stock_in)  || 0
-        const stockOut = Number(r.stock_out) || 0
-        const sales    = Number(r.sales)     || 0
+        const openingQty   = Number(r.opening_qty)    || 0
+        const productionQt = Number(r.production_qty) || 0
+        const stockIn      = Number(r.stock_in)       || 0
+        const stockOut     = Number(r.stock_out)      || 0
+        const sales        = Number(r.sales)          || 0
         if (!productMap.has(r.product_name)) {
           productMap.set(r.product_name, {
             key: `sku-wise|||${r.product_name}`,
@@ -141,12 +143,13 @@ export default function InventoryPage() {
         }
         const entry = productMap.get(r.product_name)!
         entry.openingQty += openingQty
+        entry.production += productionQt
         entry.stockIn    += stockIn
         entry.stockOut   += stockOut
         entry.sales      += sales
       })
       return Array.from(productMap.values())
-        .map((e) => ({ ...e, closingStock: e.openingQty + e.stockIn - e.stockOut - e.sales }))
+        .map((e) => ({ ...e, closingStock: e.openingQty + e.production + e.stockIn - e.stockOut - e.sales }))
         .sort((a, b) => a.product_name.localeCompare(b.product_name))
     }
 
@@ -159,17 +162,19 @@ export default function InventoryPage() {
       })
       .map((row) => {
         const key          = `${row.depot_name}|||${row.product_name}`
-        const openingQty   = Number(row.opening_qty) || 0
-        const stockIn      = Number(row.stock_in)  || 0
-        const stockOut     = Number(row.stock_out) || 0
-        const sales        = Number(row.sales)     || 0
-        const closingStock = openingQty + stockIn - stockOut - sales
-        return { ...row, key, openingQty, production: 0, stockIn, stockOut, sales, closingStock, _skuWise: false }
+        const openingQty   = Number(row.opening_qty)    || 0
+        const production   = Number(row.production_qty) || 0
+        const stockIn      = Number(row.stock_in)       || 0
+        const stockOut     = Number(row.stock_out)      || 0
+        const sales        = Number(row.sales)          || 0
+        const closingStock = openingQty + production + stockIn - stockOut - sales
+        return { ...row, key, openingQty, production, stockIn, stockOut, sales, closingStock, _skuWise: false }
       })
   }, [rawData, selectedDepo, selectedProduct, skuWiseMode])
 
   const totals = useMemo(() => ({
     openingQty: rows.reduce((s, r) => s + r.openingQty, 0),
+    production: rows.reduce((s, r) => s + r.production, 0),
     stockIn: rows.reduce((s, r) => s + r.stockIn, 0),
     stockOut: rows.reduce((s, r) => s + r.stockOut, 0),
     sales: rows.reduce((s, r) => s + r.sales, 0),
@@ -418,8 +423,10 @@ export default function InventoryPage() {
                       </TableCell>
 
                       {/* Production */}
-                      <TableCell className="text-center text-sm text-slate-400">
-                        0
+                      <TableCell className="text-center">
+                        <span className={cn("text-sm font-medium", row.production > 0 ? "text-violet-700" : "text-slate-400")}>
+                          {row.production}
+                        </span>
                       </TableCell>
 
                       {/* Sales */}

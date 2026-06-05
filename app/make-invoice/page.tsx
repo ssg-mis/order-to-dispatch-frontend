@@ -867,17 +867,19 @@ export default function MakeInvoicePage() {
             Create Invoice ({selectedItems.length})
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="w-full bg-transparent sm:w-auto">
-                <Settings2 className="mr-2 h-4 w-4" />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[250px]">
-              <ColumnToggleContent columns={ALL_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {(isAdmin || isFeatureEnabled('can_toggle_columns')) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="w-full bg-transparent sm:w-auto">
+                  <Settings2 className="mr-2 h-4 w-4" />
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[250px]">
+                <ColumnToggleContent columns={ALL_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {/* Main Table (Grouped) */}

@@ -18,7 +18,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { useInView } from "react-intersection-observer"
 
 import { useAuth } from "@/hooks/use-auth"
-import {   UserPlus, UserMinus, Search, RefreshCw, FileText, Download, Filter, ArrowUpDown, ArrowUp, ArrowDown, Package, Warehouse, Briefcase, Plus, Loader2, Save, Trash2, Edit2, AlertCircle, CheckCircle2, MoreVertical, X, Settings, Calendar, Clock, MapPin, Phone, Mail, User, Users, Info, Check, Eye, Trash, LayoutGrid, ChevronRight, ChevronDown, List, Upload, EyeOff, Layout, Truck, Pencil, UserCircle,
+import {   UserPlus, UserMinus, Search, RefreshCw, FileText, Download, Filter, ArrowUpDown, ArrowUp, ArrowDown, Package, Warehouse, Briefcase, Plus, Loader2, Save, Trash2, Edit2, AlertCircle, CheckCircle2, MoreVertical, X, Settings, Calendar, Clock, MapPin, Phone, Mail, User, Users, Info, Check, Eye, Trash, LayoutGrid, ChevronRight, ChevronDown, List, Upload, EyeOff, Layout, Truck, Pencil, UserCircle, Factory,
 } from 'lucide-react'
 import { PageHeader } from "@/components/page-header"
 import {
@@ -186,8 +186,7 @@ export default function MasterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [openingStockByDepot, setOpeningStockByDepot] = useState<Record<string, string>>({})
-
-  const { ref: customerEndRef, inView: customerInView } = useInView()
+const { ref: customerEndRef, inView: customerInView } = useInView()
   const { ref: depotEndRef, inView: depotInView } = useInView()
   const { ref: brokerEndRef, inView: brokerInView } = useInView()
   const { ref: salespersonEndRef, inView: salespersonInView } = useInView()
@@ -429,7 +428,6 @@ export default function MasterPage() {
   }, [driverInView, hasNextDriver, isFetchingNextDriver, fetchNextDriver])
 
   const isLoading = isCustomerLoading || isDepotLoading || isBrokerLoading || isSalespersonLoading || isSkuLoading || isSkuSellingPriceLoading || isVehicleLoading || isDriverLoading || isTransportLoading
-
 
   // Sort states
   const [customerSort, setCustomerSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'customer_id', dir: 'asc' })
@@ -1372,6 +1370,7 @@ export default function MasterPage() {
               ))}
             </div>
           </div>
+
         </>
       )}
     </div>

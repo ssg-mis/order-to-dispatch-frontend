@@ -229,11 +229,11 @@ export default function GateOutPage() {
 
   const [visibleColumns, setVisibleColumns] = usePersistedColumns(
     "gate-out",
-    ["partySoDate", "orderNo", "customerName", "invoiceNo", "status"]
+    ["partySoDate", "orderNo", "customerName", "invoiceNo", "status", "products"]
   )
-  const GATE_OUT_STD_IDS = ["partySoDate", "customerName", "orderNo", "actual1Date", "processid", "invoiceNo", "vehicleNo", "orderPunchRemarks", "status", "products"]
+  const GATE_OUT_STD_IDS = ["partySoDate", "customerName", "orderNo", "actual1Date", "processid", "invoiceNo", "vehicleNo", "orderPunchRemarks", "status"]
   const [columnOrder, setColumnOrder] = useColumnOrder("gate-out", [...GATE_OUT_STD_IDS, ...ALL_COLUMNS.map(c => c.id).filter(id => !GATE_OUT_STD_IDS.includes(id))])
-  const ALWAYS_VISIBLE_GATE_OUT = new Set(["products"])
+  const ALWAYS_VISIBLE_GATE_OUT = new Set<string>([])
   const orderedVisible = columnOrder.filter(id => ALWAYS_VISIBLE_GATE_OUT.has(id) || visibleColumns.includes(id))
   const dynamicColumns = visibleColumns.filter(id => !GATE_OUT_STD_IDS.includes(id))
   const handleColumnReorder = useCallback((newVisibleOrder: string[]) => {
@@ -764,17 +764,19 @@ export default function GateOutPage() {
             Complete Gate Out ({selectedItems.length})
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="bg-transparent">
-                <Settings2 className="mr-2 h-4 w-4" />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[250px]">
-              <ColumnToggleContent columns={ALL_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {(isAdmin || isFeatureEnabled('can_toggle_columns')) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="bg-transparent">
+                  <Settings2 className="mr-2 h-4 w-4" />
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[250px]">
+                <ColumnToggleContent columns={ALL_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {/* Main Card View (Grouped) */}

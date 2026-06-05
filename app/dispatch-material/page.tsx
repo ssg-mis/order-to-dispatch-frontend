@@ -787,17 +787,19 @@ export default function DispatchMaterialPage() {
       }
     >
       <div className="flex flex-col justify-end gap-2 sm:flex-row">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full bg-transparent sm:w-auto">
-              <Settings2 className="mr-2 h-4 w-4" />
-              Columns
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[250px]">
-            <ColumnToggleContent columns={PAGE_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {(isAdmin || isFeatureEnabled('can_toggle_columns')) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="w-full bg-transparent sm:w-auto">
+                <Settings2 className="mr-2 h-4 w-4" />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[250px]">
+              <ColumnToggleContent columns={PAGE_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         <Button
           onClick={handleOpenDialog}

@@ -695,6 +695,23 @@ export default function GateInPage() {
                 {/* ── Order & Draft Details ── */}
                 <div className="bg-slate-50 rounded-2xl border border-slate-200 p-6">
                   <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-4">Order Details (from Draft)</h3>
+
+                  {/* Combined load banner — shown when multiple orders share this vehicle */}
+                  {(() => {
+                    const keys: string[] = selectedRecord?.draft_data?.combinedGroupKeys || []
+                    if (keys.length <= 1) return null
+                    return (
+                      <div className="mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 flex flex-wrap gap-2 items-center">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">Combined Load — All DO Nos.</span>
+                        {keys.map((k: string) => (
+                          <span key={k} className={`text-xs font-bold px-2 py-0.5 rounded-md ${k === selectedRecord.order_key ? "bg-amber-400 text-white" : "bg-white border border-amber-300 text-amber-800"}`}>
+                            {k}
+                          </span>
+                        ))}
+                      </div>
+                    )
+                  })()}
+
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
                       { label: "DO No.", value: selectedRecord.order_key },

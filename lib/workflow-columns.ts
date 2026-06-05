@@ -1,4 +1,5 @@
 export const ALL_WORKFLOW_COLUMNS = [
+  { id: "products", label: "Items" },
   { id: "orderNo", label: "DO Number" },
   { id: "actual1Date", label: "Actual 1 Date" },
   { id: "orderPunchRemarks", label: "Order Punch Remarks" },

@@ -617,17 +617,19 @@ export default function DamageAdjustmentPage() {
             Process Adjustment ({selectedItems.length})
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="w-full sm:w-auto bg-transparent">
-                <Settings2 className="mr-2 h-4 w-4" />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[250px]">
-              <ColumnToggleContent columns={ALL_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {(isAdmin || isFeatureEnabled('can_toggle_columns')) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="w-full sm:w-auto bg-transparent">
+                  <Settings2 className="mr-2 h-4 w-4" />
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[250px]">
+                <ColumnToggleContent columns={ALL_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {/* Mobile Card View */}

@@ -30,7 +30,7 @@ import { useAuth } from "@/hooks/use-auth"
 export default function MaterialLoadPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isReadOnly } = useAuth()
+  const { isReadOnly, isAdmin, isFeatureEnabled } = useAuth()
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
   const [historyOrders, setHistoryOrders] = useState<any[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -412,17 +412,19 @@ export default function MaterialLoadPage() {
             Load Material ({selectedItems.length})
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="bg-transparent">
-                <Settings2 className="mr-2 h-4 w-4" />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[250px]">
-              <ColumnToggleContent columns={ALL_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {(isAdmin || isFeatureEnabled('can_toggle_columns')) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="bg-transparent">
+                  <Settings2 className="mr-2 h-4 w-4" />
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[250px]">
+                <ColumnToggleContent columns={ALL_COLUMNS} visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         <Card className="border-none shadow-sm overflow-auto max-h-[600px]">

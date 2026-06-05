@@ -1624,6 +1624,21 @@ export const inventoryApi = {
   },
 };
 
+/**
+ * Production API
+ */
+export const productionApi = {
+  getByDate: async (date: string): Promise<ApiResponse> => {
+    return request(`/production?date=${date}`);
+  },
+  bulkUpsert: async (data: { date: string; items: { sku_name: string; qty: number }[] }): Promise<ApiResponse> => {
+    return request('/production/bulk', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 export default {
   dashboard: dashboardApi,
   reports: reportsApi,

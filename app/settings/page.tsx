@@ -70,6 +70,7 @@ const PAGE_ACCESS_OPTIONS = [
   "Variable Parameters",
   "Settings",
   "Set Turn Around Time",
+  "Production",
   "Master",
   "Inventory",
   "Reports"
@@ -688,6 +689,18 @@ export default function SettingsPage() {
                     Can reorder columns
                   </Label>
                 </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="add-feature-can_toggle_columns"
+                    checked={!!formData.features.can_toggle_columns}
+                    onCheckedChange={(checked) =>
+                      setFormData(prev => ({ ...prev, features: { ...prev.features, can_toggle_columns: !!checked } }))
+                    }
+                  />
+                  <Label htmlFor="add-feature-can_toggle_columns" className="text-sm cursor-pointer font-normal">
+                    Can toggle columns
+                  </Label>
+                </div>
               </div>
             </div>
             <DialogFooter>
@@ -1224,6 +1237,18 @@ export default function SettingsPage() {
                   />
                   <Label htmlFor="edit-feature-can_reorder_columns" className="text-sm cursor-pointer font-normal">
                     Can reorder columns
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="edit-feature-can_toggle_columns"
+                    checked={!!formData.features.can_toggle_columns}
+                    onCheckedChange={(checked) =>
+                      setFormData(prev => ({ ...prev, features: { ...prev.features, can_toggle_columns: !!checked } }))
+                    }
+                  />
+                  <Label htmlFor="edit-feature-can_toggle_columns" className="text-sm cursor-pointer font-normal">
+                    Can toggle columns
                   </Label>
                 </div>
               </div>
