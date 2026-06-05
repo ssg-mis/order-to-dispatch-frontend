@@ -136,7 +136,7 @@ export default function ActualDispatchPage() {
 
   const vehicleOptions = useMemo(() => (
     vehicleMaster
-      .filter(v => v.registration_no)
+      .filter(v => v.registration_no && v.status === 'Active')
       .map(v => ({ value: v.registration_no, label: v.registration_no }))
   ), [vehicleMaster])
 
