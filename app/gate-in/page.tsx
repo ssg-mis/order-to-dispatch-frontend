@@ -12,7 +12,8 @@ import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
 import { gateInApi, orderApi, vehicleMasterApi } from "@/lib/api-service"
 import { useQuery } from "@tanstack/react-query"
-import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Truck, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Truck, X, ArrowUpDown, ArrowUp, ArrowDown, Settings2 } from "lucide-react"
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu"
 import { usePersistedColumns } from "@/hooks/use-persisted-columns"
 import { useColumnOrder } from "@/hooks/use-column-order"
 import { SortableTableHead } from "@/components/ui/sortable-table-head"
@@ -278,7 +279,7 @@ export default function GateInPage() {
     })
   }, [pendingRecords, pendingSortField, pendingSortDir])
 
-  const [visibleColumns] = usePersistedColumns("gate-in", PAGE_COLUMNS.map(c => c.id))
+  const [visibleColumns, setVisibleColumns] = usePersistedColumns("gate-in", PAGE_COLUMNS.map(c => c.id))
   const [columnOrder, setColumnOrder] = useColumnOrder("gate-in", PAGE_COLUMNS.map(c => c.id))
   const orderedVisibleCols = useMemo(() =>
     columnOrder
@@ -500,6 +501,32 @@ export default function GateInPage() {
       }
     >
       <div className="space-y-4">
+        {(isAdmin || isFeatureEnabled('can_toggle_columns')) && (
+          <div className="flex justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="bg-transparent h-9 text-xs">
+                  <Settings2 className="mr-2 h-4 w-4" />
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-62.5 max-h-100 overflow-y-auto">
+                {PAGE_COLUMNS.map((col) => (
+                  <DropdownMenuCheckboxItem
+                    key={col.id}
+                    className="capitalize"
+                    checked={visibleColumns.includes(col.id)}
+                    onCheckedChange={(checked) => {
+                      setVisibleColumns((prev) => (checked ? [...prev, col.id] : prev.filter((id) => id !== col.id)))
+                    }}
+                  >
+                    {col.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
         {/* Pending cards for mobile */}
         <div className="md:hidden space-y-3">
           {isPendingLoading && pendingRecords.length === 0 ? (

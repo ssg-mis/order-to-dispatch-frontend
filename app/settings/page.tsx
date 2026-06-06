@@ -645,7 +645,7 @@ export default function SettingsPage() {
                           </div>
                         )}
                       </div>
-                      {isPageEnabled(page) && (page === 'Dispatch Planning' || page === 'Actual Dispatch' || page === 'Order Punch') && (
+                      {isPageEnabled(page) && (page === 'Dispatch Planning' || page === 'Actual Dispatch' || page === 'Order Punch' || page === 'Inventory') && (
                         <div className="mt-2 ml-6 p-2 bg-slate-50 rounded-md border border-slate-100 space-y-2">
                           <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Select Accessible Locations</Label>
                           {isDepotsLoading ? (
@@ -1196,7 +1196,7 @@ export default function SettingsPage() {
                         </div>
                       )}
                     </div>
-                    {isPageEnabled(page) && (page === 'Dispatch Planning' || page === 'Actual Dispatch' || page === 'Order Punch') && (
+                    {isPageEnabled(page) && (page === 'Dispatch Planning' || page === 'Actual Dispatch' || page === 'Order Punch' || page === 'Inventory') && (
                       <div className="mt-2 ml-6 p-2 bg-slate-50 rounded-md border border-slate-100 space-y-2">
                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Select Accessible Locations</Label>
                         {isDepotsLoading ? (

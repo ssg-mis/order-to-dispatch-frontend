@@ -85,18 +85,27 @@ export default function InventoryPage() {
     staleTime: 30_000,
   })
 
+  // Filter raw data to only depots the user has access to (strict deny-by-default, same as Dispatch Planning)
+  const filteredRawData = useMemo(() => {
+    const allowed = user?.depo_access?.['Inventory'] || []
+    if (allowed.length === 0) return []
+    return (rawData || []).filter(r =>
+      allowed.some(d => d.toLowerCase() === r.depot_name.toLowerCase())
+    )
+  }, [rawData, user?.depo_access])
+
   // Unique depot options
   const depoOptions = useMemo(() =>
-    Array.from(new Set((rawData || []).map((r) => r.depot_name))).sort()
-  , [rawData])
+    Array.from(new Set(filteredRawData.map((r) => r.depot_name))).sort()
+  , [filteredRawData])
 
   // Product options — scoped to selected depot (for the Depo/Product filters)
   const productOptions = useMemo(() => {
     const source = selectedDepo === "all"
-      ? (rawData || [])
-      : (rawData || []).filter((r) => r.depot_name === selectedDepo)
+      ? filteredRawData
+      : filteredRawData.filter((r) => r.depot_name === selectedDepo)
     return Array.from(new Set(source.map((r) => r.product_name))).sort()
-  }, [rawData, selectedDepo])
+  }, [filteredRawData, selectedDepo])
 
   // Reset product filter when depot changes and selected product no longer exists
   useEffect(() => {
@@ -125,7 +134,7 @@ export default function InventoryPage() {
     // ── SKU Wise mode: one row per unique product, totals across all depots ──
     if (skuWiseMode) {
       const productMap = new Map<string, any>()
-      ;(rawData || []).forEach((r) => {
+      ;filteredRawData.forEach((r) => {
         const openingQty   = Number(r.opening_qty)    || 0
         const productionQt = Number(r.production_qty) || 0
         const stockIn      = Number(r.stock_in)       || 0
@@ -154,7 +163,7 @@ export default function InventoryPage() {
     }
 
     // ── Normal mode: depo + product filters ──
-    return (rawData || [])
+    return filteredRawData
       .filter((row) => {
         if (selectedDepo    !== "all" && row.depot_name    !== selectedDepo)    return false
         if (selectedProduct !== "all" && row.product_name  !== selectedProduct) return false
@@ -170,7 +179,7 @@ export default function InventoryPage() {
         const closingStock = openingQty + production + stockIn - stockOut - sales
         return { ...row, key, openingQty, production, stockIn, stockOut, sales, closingStock, _skuWise: false }
       })
-  }, [rawData, selectedDepo, selectedProduct, skuWiseMode])
+  }, [filteredRawData, selectedDepo, selectedProduct, skuWiseMode])
 
   const totals = useMemo(() => ({
     openingQty: rows.reduce((s, r) => s + r.openingQty, 0),

@@ -142,7 +142,7 @@ export default function ActualDispatchPage() {
 
   const driverOptions = useMemo(() => (
     driverMaster
-      .filter(d => d.driver_name)
+      .filter(d => d.driver_name && d.status === 'Active')
       .map(d => ({ value: d.driver_name, label: d.driver_name }))
   ), [driverMaster])
 
