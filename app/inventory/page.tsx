@@ -94,10 +94,10 @@ export default function InventoryPage() {
     )
   }, [rawData, user?.depo_access])
 
-  // Unique depot options
+  // Unique depot options — derived from allowed access list so all granted depots appear even if they have no data
   const depoOptions = useMemo(() =>
-    Array.from(new Set(filteredRawData.map((r) => r.depot_name))).sort()
-  , [filteredRawData])
+    [...(user?.depo_access?.['Inventory'] || [])].sort()
+  , [user?.depo_access])
 
   // Product options — scoped to selected depot (for the Depo/Product filters)
   const productOptions = useMemo(() => {

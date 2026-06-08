@@ -178,6 +178,7 @@ export default function GateInPage() {
   const [selectedRows, setSelectedRows] = useState<string[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<any>(null)
+  const [selectedGroupKeys, setSelectedGroupKeys] = useState<string[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
 
   // Vehicle master state
@@ -279,6 +280,20 @@ export default function GateInPage() {
     })
   }, [pendingRecords, pendingSortField, pendingSortDir])
 
+  const groupedPendingRecords = useMemo(() => {
+    const groups = new Map<string, { vehicleNumber: string; date: string; records: any[] }>()
+    for (const record of sortedPendingRecords) {
+      const vehicleNo = record.draft_data?.vehicleNumber || "—"
+      const dateOnly = record.saved_at
+        ? new Date(record.saved_at).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })
+        : "—"
+      const key = `${vehicleNo}|${dateOnly}`
+      if (!groups.has(key)) groups.set(key, { vehicleNumber: vehicleNo, date: dateOnly, records: [] })
+      groups.get(key)!.records.push(record)
+    }
+    return Array.from(groups.values())
+  }, [sortedPendingRecords])
+
   const [visibleColumns, setVisibleColumns] = usePersistedColumns("gate-in", PAGE_COLUMNS.map(c => c.id))
   const [columnOrder, setColumnOrder] = useColumnOrder("gate-in", PAGE_COLUMNS.map(c => c.id))
   const orderedVisibleCols = useMemo(() =>
@@ -300,27 +315,6 @@ export default function GateInPage() {
     saved_at:    "saved_at",
   }
 
-  const renderCell = (record: any, colId: ColId) => {
-    const draft = record.draft_data || {}
-    const productCount = draft.dialogSelectedProducts?.length ?? "—"
-    switch (colId) {
-      case "order_key":
-        return <TableCell key={colId} className="text-center font-black text-blue-700 text-sm">{record.order_key}</TableCell>
-      case "vehicle_no":
-        return <TableCell key={colId} className="text-center font-semibold text-slate-700">{draft.vehicleNumber || "—"}</TableCell>
-      case "driver_name":
-        return <TableCell key={colId} className="text-center font-bold text-slate-700 italic">{draft.driverName || "—"}</TableCell>
-      case "saved_by":
-        return <TableCell key={colId} className="text-center text-slate-600 text-sm">{record.username}</TableCell>
-      case "saved_at":
-        return <TableCell key={colId} className="text-center text-slate-500 text-xs">{formatDate(record.saved_at)}</TableCell>
-      case "products":
-        return <TableCell key={colId} className="text-center"><Badge variant="outline" className="text-xs font-bold">{productCount} item(s)</Badge></TableCell>
-      default:
-        return null
-    }
-  }
-
   const toggleSelectAll = () => {
     if (selectedRows.length === pendingRecords.length) setSelectedRows([])
     else setSelectedRows(pendingRecords.map((r: any) => r.order_key))
@@ -333,8 +327,9 @@ export default function GateInPage() {
   }
 
   // ── Open dialog ────────────────────────────────────────────────────────────
-  const handleOpenDialog = (record: any) => {
+  const handleOpenDialog = (record: any, groupKeys: string[] = [record.order_key]) => {
     setSelectedRecord(record)
+    setSelectedGroupKeys(groupKeys)
     setFrontVehicleImage("")
     setFrontVehicleFileName("")
     setFrontVehicleFile(null)
@@ -544,24 +539,28 @@ export default function GateInPage() {
               No pending gate-ins. Orders saved as draft in Actual Dispatch will appear here.
             </Card>
           ) : (
-            pendingRecords.map((record: any) => {
-              const draft = record.draft_data || {}
-              const productCount = draft.dialogSelectedProducts?.length ?? "—"
-              const isSelected = selectedRows.includes(record.order_key)
-
+            groupedPendingRecords.map(group => {
+              const first = group.records[0]
+              const draft = first.draft_data || {}
+              const totalProducts = first.draft_data?.dialogSelectedProducts?.length || 0
+              const orderKeys = group.records.map((r: any) => r.order_key)
+              const allSelected = orderKeys.every(k => selectedRows.includes(k))
               return (
                 <Card
-                  key={record.order_key}
-                  className={`border-slate-200 p-4 shadow-sm ${isSelected ? "bg-blue-50 border-blue-200" : "bg-white"}`}
+                  key={orderKeys.join(",")}
+                  className={`border-slate-200 p-4 shadow-sm ${allSelected ? "bg-blue-50 border-blue-200" : "bg-white"}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Order Key</div>
-                      <div className="mt-1 truncate text-base font-black text-blue-700">{record.order_key}</div>
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Order Key(s)</div>
+                      <div className="mt-1 font-black text-blue-700">{orderKeys.join(", ")}</div>
                     </div>
                     <Checkbox
-                      checked={isSelected}
-                      onCheckedChange={() => toggleRow(record.order_key)}
+                      checked={allSelected}
+                      onCheckedChange={() => {
+                        if (allSelected) setSelectedRows(prev => prev.filter(k => !orderKeys.includes(k)))
+                        else setSelectedRows(prev => [...new Set([...prev, ...orderKeys])])
+                      }}
                       className="mt-1"
                     />
                   </div>
@@ -577,20 +576,20 @@ export default function GateInPage() {
                     </div>
                     <div className="min-w-0">
                       <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saved By</div>
-                      <div className="mt-1 truncate font-medium text-slate-600">{record.username || "—"}</div>
+                      <div className="mt-1 truncate font-medium text-slate-600">{first.username || "—"}</div>
                     </div>
                     <div className="min-w-0">
-                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saved At</div>
-                      <div className="mt-1 truncate text-xs font-medium text-slate-500">{formatDate(record.saved_at)}</div>
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Date</div>
+                      <div className="mt-1 truncate text-xs font-medium text-slate-500">{group.date}</div>
                     </div>
                   </div>
 
                   <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                    <Badge variant="outline" className="text-xs font-bold">{productCount} item(s)</Badge>
+                    <Badge variant="outline" className="text-xs font-bold">{totalProducts} item(s)</Badge>
                     <Button
                       size="sm"
                       disabled={isReadOnly}
-                      onClick={() => handleOpenDialog(record)}
+                      onClick={() => handleOpenDialog(first, group.records.map((r: any) => r.order_key))}
                       className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm"
                     >
                       Gate In
@@ -649,24 +648,49 @@ export default function GateInPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                sortedPendingRecords.map((record: any) => {
+                groupedPendingRecords.map(group => {
+                  const first = group.records[0]
+                  const draft = first.draft_data || {}
+                  const totalProducts = first.draft_data?.dialogSelectedProducts?.length || 0
+                  const orderKeys = group.records.map((r: any) => r.order_key)
+                  const allSelected = orderKeys.every(k => selectedRows.includes(k))
                   return (
                     <TableRow
-                      key={record.order_key}
-                      className={`transition-colors cursor-pointer hover:bg-blue-50/50 ${selectedRows.includes(record.order_key) ? "bg-blue-50" : ""}`}
+                      key={orderKeys.join(",")}
+                      className={`transition-colors cursor-pointer hover:bg-blue-50/50 ${allSelected ? "bg-blue-50" : ""}`}
                     >
                       <TableCell className="text-center">
                         <Checkbox
-                          checked={selectedRows.includes(record.order_key)}
-                          onCheckedChange={() => toggleRow(record.order_key)}
+                          checked={allSelected}
+                          onCheckedChange={() => {
+                            if (allSelected) setSelectedRows(prev => prev.filter(k => !orderKeys.includes(k)))
+                            else setSelectedRows(prev => [...new Set([...prev, ...orderKeys])])
+                          }}
                         />
                       </TableCell>
-                      {orderedVisibleCols.map(col => renderCell(record, col.id))}
+                      {orderedVisibleCols.map(col => {
+                        switch (col.id) {
+                          case "order_key":
+                            return <TableCell key={col.id} className="text-center font-black text-blue-700 text-sm">{orderKeys.join(", ")}</TableCell>
+                          case "vehicle_no":
+                            return <TableCell key={col.id} className="text-center font-semibold text-slate-700">{draft.vehicleNumber || "—"}</TableCell>
+                          case "driver_name":
+                            return <TableCell key={col.id} className="text-center font-bold text-slate-700 italic">{draft.driverName || "—"}</TableCell>
+                          case "saved_by":
+                            return <TableCell key={col.id} className="text-center text-slate-600 text-sm">{first.username}</TableCell>
+                          case "saved_at":
+                            return <TableCell key={col.id} className="text-center text-slate-500 text-xs">{group.date}</TableCell>
+                          case "products":
+                            return <TableCell key={col.id} className="text-center"><Badge variant="outline" className="text-xs font-bold">{totalProducts} item(s)</Badge></TableCell>
+                          default:
+                            return null
+                        }
+                      })}
                       <TableCell className="text-center">
                         <Button
                           size="sm"
                           disabled={isReadOnly}
-                          onClick={() => handleOpenDialog(record)}
+                          onClick={() => handleOpenDialog(first, group.records.map((r: any) => r.order_key))}
                           className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm"
                         >
                           Gate In
@@ -709,7 +733,7 @@ export default function GateInPage() {
             <DialogHeader className="border-b pb-6 mb-6">
               <DialogTitle className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
                 <Truck className="h-7 w-7 text-blue-600" />
-                Gate In — {selectedRecord?.order_key}
+                Gate In — {selectedGroupKeys.join(", ")}
               </DialogTitle>
               <DialogDescription className="text-slate-500 font-medium text-base mt-2">
                 Upload vehicle photos for this order. Saved draft details are shown below.
