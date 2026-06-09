@@ -36,11 +36,10 @@ export default function LoginPage() {
       const response = await userApi.login(credentials)
       
       if (response.success && response.data) {
-        // Store user data and authenticated status
-        const { token, ...userData } = response.data
+        // Store user metadata for UI (token is in HTTP-only cookie set by the server)
+        const { token: _token, ...userData } = response.data
         localStorage.setItem("user", JSON.stringify(userData))
         localStorage.setItem("isAuthenticated", "true")
-        if (token) localStorage.setItem("token", token)
         
         toast({
           title: "Login Successful",

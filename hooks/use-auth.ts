@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { usePathname } from "next/navigation"
 import { userApi } from "@/lib/api-service"
+import { API_CONFIG } from "@/lib/api-config"
 
 // page_access can be old format (string[]) or new format ({ pageName: 'view_only' | 'modify' })
 type PageAccessMap = Record<string, 'view_only' | 'modify'>
@@ -79,7 +80,9 @@ export function useAuth() {
     return () => window.removeEventListener("storage", checkAuth)
   }, [checkAuth])
 
-  // Re-fetch fresh user data from server on every navigation
+  // Re-fetch fresh user data from server on every navigation.
+  // Uses raw fetch (not api-service request()) so a 401 here doesn't
+  // trigger the global auto-logout — session expiry is handled explicitly below.
   useEffect(() => {
     const refreshUser = async () => {
       try {
@@ -90,16 +93,29 @@ export function useAuth() {
         const currentUser = JSON.parse(userStr)
         if (!currentUser?.id) return
 
-        const response = await userApi.getById(currentUser.id)
-        if (response.success && response.data) {
-          const freshUser = response.data
+        const res = await fetch(`${API_CONFIG.baseURL}/users/${currentUser.id}`, {
+          credentials: "include",
+        })
+
+        if (res.status === 401) {
+          // Session truly expired — clean up and redirect
+          localStorage.removeItem("user")
+          localStorage.removeItem("isAuthenticated")
+          window.location.href = "/login"
+          return
+        }
+
+        if (!res.ok) return // transient error — silent fail, keep user logged in
+
+        const data = await res.json()
+        if (data.success && data.data) {
+          const freshUser = data.data
           freshUser.depo_access = normalizeDepoAccess(freshUser.depo_access)
-          // Update localStorage with fresh data from server
           localStorage.setItem("user", JSON.stringify(freshUser))
           setUser(freshUser)
         }
       } catch (error) {
-        // Silent fail — don't break the app if refresh fails
+        // Network error — silent fail, keep user logged in
         console.warn("Failed to refresh user data:", error)
       }
     }
