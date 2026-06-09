@@ -16,6 +16,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/hooks/use-auth"
+import { dashboardApi } from "@/lib/api-service"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -85,13 +86,12 @@ export default function Dashboard() {
     setIsMounted(true)
     const load = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1'}/dashboard/overview`)
-        if (res.ok) {
-          const r = await res.json()
-          if (r.success) setBackendData(r.data)
+        const response = await dashboardApi.getOverview()
+        if (response.success && response.data) {
+          setBackendData(response.data)
         }
       } catch (e) {
-        console.error(e)
+        console.error("Failed to load dashboard overview:", e)
       } finally {
         setIsLoading(false)
       }

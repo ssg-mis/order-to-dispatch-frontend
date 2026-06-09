@@ -34,6 +34,7 @@ import {
 import { usePathname } from "next/navigation"
 import { useEffect, useState, useMemo } from "react"
 import { useToast } from "@/hooks/use-toast"
+import { userApi } from "@/lib/api-service"
 
 import {
   Sidebar,
@@ -233,10 +234,17 @@ export function AppSidebar() {
               tooltip="Logout"
               className="h-9 rounded-lg font-medium transition-all duration-200"
               style={{ color: "oklch(0.62 0.12 25)" }}
-              onClick={() => {
-                localStorage.removeItem('user')
-                localStorage.removeItem('isAuthenticated')
-                window.location.href = '/login'
+              onClick={async () => {
+                try {
+                  await userApi.logout()
+                } catch (e) {
+                  console.error("Failed to call logout api:", e)
+                } finally {
+                  localStorage.removeItem('user')
+                  localStorage.removeItem('isAuthenticated')
+                  localStorage.removeItem('token')
+                  window.location.href = '/login'
+                }
               }}
             >
               <LogOut className="h-4 w-4" />

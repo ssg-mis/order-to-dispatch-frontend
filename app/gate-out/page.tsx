@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { FileUploadField } from "@/components/file-upload-field"
 import { Upload, CheckCircle, Settings2, ChevronUp, ChevronDown, CheckSquare, Eye, FileText, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
@@ -1564,51 +1565,29 @@ export default function GateOutPage() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
                 <div className="space-y-2">
-                  <Label>Upload Gate Pass <span className="text-red-500">*</span></Label>
-                  <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
-                  <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-slate-50 transition-colors bg-blue-50/20">
-                    <Input
-                      type="file"
-                      accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
-                      onChange={(e) => {
-                        if (e.target.files?.[0]) {
-                          handleFileUpload(e.target.files[0], 'gatePass')
-                        }
-                      }}
-                      className="hidden"
-                      id="gatepass-upload"
-                    />
-                    <label htmlFor="gatepass-upload" className="cursor-pointer block">
-                      <Upload className="h-6 w-6 mx-auto mb-2 text-blue-600" />
-                      <p className="text-xs font-bold text-slate-700 uppercase tracking-tight break-words">
-                        {isUploading === 'gatePass' ? "UPLOADING..." : (gateOutData.gatePassFile ? `SELECTED: ${gateOutData.gatePassFileName}` : "Click to select gate pass")}
-                      </p>
-                    </label>
-                  </div>
+                  <FileUploadField
+                    label={<>Upload Gate Pass <span className="text-red-500">*</span></>}
+                    accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                    fileName={gateOutData.gatePassFileName}
+                    variant="dropzone"
+                    helperText="Max file size: 20 MB"
+                    uploading={isUploading === 'gatePass'}
+                    buttonText="Click to select gate pass"
+                    onFilesSelected={(files) => files[0] && handleFileUpload(files[0], 'gatePass')}
+                  />
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Upload Vehicle Loaded Image <span className="text-red-500">*</span></Label>
-                  <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
-                  <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-slate-50 transition-colors bg-violet-50/20">
-                    <Input
-                      type="file"
-                      accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
-                      onChange={(e) => {
-                        if (e.target.files?.[0]) {
-                          handleFileUpload(e.target.files[0], 'vehicleImage')
-                        }
-                      }}
-                      className="hidden"
-                      id="vehicle-loaded-upload"
-                    />
-                    <label htmlFor="vehicle-loaded-upload" className="cursor-pointer block">
-                      <Upload className="h-6 w-6 mx-auto mb-2 text-violet-600" />
-                      <p className="text-xs font-bold text-slate-700 uppercase tracking-tight break-words">
-                        {isUploading === 'vehicleImage' ? "UPLOADING..." : (gateOutData.vehicleLoadedImage ? `SELECTED: ${gateOutData.vehicleLoadedImageName}` : "Click to select vehicle image")}
-                      </p>
-                    </label>
-                  </div>
+                  <FileUploadField
+                    label={<>Upload Vehicle Loaded Image <span className="text-red-500">*</span></>}
+                    accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                    fileName={gateOutData.vehicleLoadedImageName}
+                    variant="dropzone"
+                    helperText="Max file size: 20 MB"
+                    uploading={isUploading === 'vehicleImage'}
+                    buttonText="Click to select vehicle image"
+                    onFilesSelected={(files) => files[0] && handleFileUpload(files[0], 'vehicleImage')}
+                  />
                 </div>
               </div>
             </div>

@@ -64,6 +64,16 @@ export interface CreateOrderResponse {
 }
 
 /**
+ * Active master tab context — set by the Master page so the backend
+ * middleware can enforce tab-level permissions. Null when outside the master page.
+ */
+let _masterTabContext: string | null = null;
+
+export function setMasterTabContext(tab: string | null): void {
+  _masterTabContext = tab;
+}
+
+/**
  * Make HTTP request
  */
 async function request<T = any>(
@@ -76,6 +86,12 @@ async function request<T = any>(
     ...options.headers,
   };
 
+  // Inject master tab context so backend can enforce tab-level permissions.
+  // Only present for master-page requests; workflow pages never set this.
+  if (_masterTabContext) {
+    headers['X-Master-Tab'] = _masterTabContext;
+  }
+
   // Only set Content-Type to application/json if not FormData
   if (!(options.body instanceof FormData) && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
@@ -83,6 +99,7 @@ async function request<T = any>(
 
   const config: RequestInit = {
     ...options,
+    credentials: 'include',
     headers,
   };
 
@@ -90,12 +107,25 @@ async function request<T = any>(
     const response = await fetch(url, config);
     const data = await response.json();
 
+    // Token expired or invalid — force logout
+    if (response.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('user');
+        localStorage.removeItem('isAuthenticated');
+        window.location.href = '/login';
+      }
+      throw data;
+    }
+
     if (!response.ok) {
       throw data;
     }
 
     return data;
   } catch (error: any) {
+    if (error?.message !== undefined && !error?.success) {
+      // Already formatted API error — rethrow as-is
+    }
     console.error('API Error:', error);
     throw error;
   }
@@ -909,18 +939,7 @@ export const userApi = {
     return request(`/users/${id}`);
   },
 
-  /**
-   * Create new user
-   */
-  create: async (userData: {
-    username: string;
-    password: string;
-    email: string;
-    phone_no?: string;
-    status?: string;
-    role: string;
-    page_access?: string[];
-  }): Promise<ApiResponse> => {
+  create: async (userData: any): Promise<ApiResponse> => {
     return request('/users', {
       method: 'POST',
       body: JSON.stringify(userData),
@@ -946,13 +965,19 @@ export const userApi = {
     });
   },
 
-  /**
-   * Login user
-   */
   login: async (credentials: { username: string; password: string }): Promise<ApiResponse> => {
     return request('/users/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
+    });
+  },
+
+  /**
+   * Logout user
+   */
+  logout: async (): Promise<ApiResponse> => {
+    return request('/users/logout', {
+      method: 'POST',
     });
   },
 
@@ -1037,6 +1062,17 @@ export const customerApi = {
       method: 'DELETE',
     });
   },
+
+  getPending: async (): Promise<ApiResponse> => {
+    return request('/customers/pending');
+  },
+
+  review: async (id: number, data: { action: string; reason?: string }): Promise<ApiResponse> => {
+    return request(`/customers/${id}/approval`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 /**
@@ -1063,6 +1099,13 @@ export const skuApi = {
    */
   getById: async (id: number): Promise<ApiResponse> => {
     return request(`/skus/${id}`);
+  },
+
+  /**
+   * Get SKU rate by name
+   */
+  getRateByName: async (skuName: string): Promise<any> => {
+    return request(`/skus/rate/${encodeURIComponent(skuName)}`);
   },
 
   /**
@@ -1125,10 +1168,10 @@ export const depotApi = {
    * Delete depot
    */
   delete: async (id: string): Promise<ApiResponse> => {
-    return request(`/depots/${id}`, {
-      method: 'DELETE',
-    });
+    return request(`/depots/${id}`, { method: 'DELETE' });
   },
+  getPending: async (): Promise<ApiResponse> => request('/depots/pending'),
+  review: async (id: string, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/depots/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 export const processStageApi = {
@@ -1207,10 +1250,10 @@ export const brokerApi = {
    * Delete broker
    */
   delete: async (id: string): Promise<ApiResponse> => {
-    return request(`/brokers/${id}`, {
-      method: 'DELETE',
-    });
+    return request(`/brokers/${id}`, { method: 'DELETE' });
   },
+  getPending: async (): Promise<ApiResponse> => request('/brokers/pending'),
+  review: async (id: string, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/brokers/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 /**
@@ -1243,10 +1286,10 @@ export const skuDetailsApi = {
   },
 
   delete: async (id: number): Promise<ApiResponse> => {
-    return request(`/sku-details/${id}`, {
-      method: 'DELETE',
-    });
+    return request(`/sku-details/${id}`, { method: 'DELETE' });
   },
+  getPending: async (): Promise<ApiResponse> => request('/sku-details/pending'),
+  review: async (id: number, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/sku-details/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 /**
@@ -1332,10 +1375,10 @@ export const vehicleMasterApi = {
   },
 
   delete: async (id: string | number): Promise<ApiResponse> => {
-    return request(`/vehicle-master/${id}`, {
-      method: 'DELETE',
-    });
+    return request(`/vehicle-master/${id}`, { method: 'DELETE' });
   },
+  getPending: async (): Promise<ApiResponse> => request('/vehicle-master/pending'),
+  review: async (id: string | number, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/vehicle-master/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 /**
@@ -1368,10 +1411,10 @@ export const driverMasterApi = {
   },
 
   delete: async (id: string | number): Promise<ApiResponse> => {
-    return request(`/driver-master/${id}`, {
-      method: 'DELETE',
-    });
+    return request(`/driver-master/${id}`, { method: 'DELETE' });
   },
+  getPending: async (): Promise<ApiResponse> => request('/driver-master/pending'),
+  review: async (id: string | number, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/driver-master/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 /**
@@ -1404,10 +1447,10 @@ export const transportMasterApi = {
   },
 
   delete: async (id: string | number): Promise<ApiResponse> => {
-    return request(`/transport-master/${id}`, {
-      method: 'DELETE',
-    });
+    return request(`/transport-master/${id}`, { method: 'DELETE' });
   },
+  getPending: async (): Promise<ApiResponse> => request('/transport-master/pending'),
+  review: async (id: string | number, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/transport-master/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 
@@ -1473,10 +1516,10 @@ export const salespersonApi = {
   },
 
   delete: async (id: string): Promise<ApiResponse> => {
-    return request(`/salespersons/${id}`, {
-      method: 'DELETE',
-    });
+    return request(`/salespersons/${id}`, { method: 'DELETE' });
   },
+  getPending: async (): Promise<ApiResponse> => request('/salespersons/pending'),
+  review: async (id: string, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/salespersons/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 /**

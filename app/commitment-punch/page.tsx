@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { FileUploadField } from "@/components/file-upload-field"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -1322,18 +1323,14 @@ export default function CommitmentPunchPage() {
 
               {/* Upload SO Copy */}
               <div className="space-y-2">
-                <Label htmlFor="p-uploadCopy">Upload SO Copy</Label>
-                <Input
-                  id="p-uploadCopy"
-                  type="file"
+                <FileUploadField
+                  label="Upload SO Copy"
                   accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
-                  onChange={e => setProcessUploadCopy(e.target.files?.[0] || null)}
-                  className="cursor-pointer"
+                  fileName={processUploadCopy?.name || ""}
+                  helperText="Max file size: 20 MB"
+                  buttonText="Select SO Copy"
+                  onFilesSelected={(files) => setProcessUploadCopy(files[0] || null)}
                 />
-                <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
-                {processUploadCopy && (
-                  <p className="text-xs text-emerald-600">✅ {processUploadCopy.name}</p>
-                )}
               </div>
 
               {/* Remarks */}

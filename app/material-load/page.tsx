@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
+import { FileUploadField } from "@/components/file-upload-field"
 import {
   Dialog,
   DialogContent,
@@ -776,14 +777,24 @@ export default function MaterialLoadPage() {
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Weightment Slip Copy</Label>
-                        <Input type="file" className="bg-white cursor-pointer" />
-                        <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
+                        <FileUploadField
+                          label={<span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Weightment Slip Copy</span>}
+                          accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                          value={loadData.weightmentSlip || null}
+                          helperText="Max file size: 20 MB"
+                          buttonText={loadData.weightmentSlip ? "REPLACE" : "UPLOAD"}
+                          onFilesSelected={(files) => setLoadData(prev => ({ ...prev, weightmentSlip: files[0] ? URL.createObjectURL(files[0]) : "" }))}
+                        />
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Vehicle No. Plate Image</Label>
-                        <Input type="file" className="bg-white cursor-pointer" />
-                        <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
+                        <FileUploadField
+                          label={<span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Vehicle No. Plate Image</span>}
+                          accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                          value={loadData.vehicleNoPlateImage || null}
+                          helperText="Max file size: 20 MB"
+                          buttonText={loadData.vehicleNoPlateImage ? "REPLACE" : "UPLOAD"}
+                          onFilesSelected={(files) => setLoadData(prev => ({ ...prev, vehicleNoPlateImage: files[0] ? URL.createObjectURL(files[0]) : "" }))}
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Check Status</Label>

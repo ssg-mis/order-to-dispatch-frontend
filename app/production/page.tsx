@@ -99,7 +99,6 @@ export default function ProductionPage() {
       <PageHeader
         title="Production"
         description="Record daily boxes produced per SKU"
-        icon={<Factory className="h-6 w-6" />}
       />
 
       <Card className="shadow-xl border-none rounded-2xl bg-white">

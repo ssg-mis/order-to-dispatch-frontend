@@ -19,13 +19,14 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { FileUploadField } from "@/components/file-upload-field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Settings2, Truck } from "lucide-react"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
 import { ColumnToggleContent } from "@/components/ui/column-toggle-content"
 import { Checkbox } from "@/components/ui/checkbox"
-import { vehicleDetailsApi } from "@/lib/api-service"
+import { orderApi, vehicleDetailsApi } from "@/lib/api-service"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function VehicleDetailsPage() {
@@ -51,6 +52,7 @@ export default function VehicleDetailsPage() {
     permit1: "",
     permit2_out_state: "",
   })
+  const [isUploading, setIsUploading] = useState<string | null>(null)
 
   const [history, setHistory] = useState<any[]>([])
   const [selectedItems, setSelectedItems] = useState<string[]>([])
@@ -228,6 +230,23 @@ export default function VehicleDetailsPage() {
       setSelectedProducts(targetGroup._allProducts.map((p: any) => p._rowKey)) // Select all by default
       setVehicleNumber("") // Reset
       setIsDialogOpen(true)
+    }
+  }
+
+  const uploadVehicleDocument = async (field: keyof typeof vehicleData, file: File) => {
+    if (!file) return
+
+    setIsUploading(String(field))
+    try {
+      const response = await orderApi.uploadFile(file)
+      if (response.success) {
+        setVehicleData(prev => ({
+          ...prev,
+          [field]: response.data.url,
+        }))
+      }
+    } finally {
+      setIsUploading(null)
     }
   }
 
@@ -598,10 +617,42 @@ export default function VehicleDetailsPage() {
                 <div>
                   <h4 className="text-sm font-medium mb-3 text-muted-foreground">Vehicle Documents</h4>
                   <div className="grid grid-cols-2 gap-4 text-xs">
-                    <div className="space-y-1"><Label>Fitness Copy</Label><Input type="file" className="h-8 text-[10px]" /><p className="text-[10px] text-slate-400">Max 20 MB</p></div>
-                    <div className="space-y-1"><Label>Insurance</Label><Input type="file" className="h-8 text-[10px]" /><p className="text-[10px] text-slate-400">Max 20 MB</p></div>
-                    <div className="space-y-1"><Label>Tax Copy</Label><Input type="file" className="h-8 text-[10px]" /><p className="text-[10px] text-slate-400">Max 20 MB</p></div>
-                    <div className="space-y-1"><Label>Pollution Check</Label><Input type="file" className="h-8 text-[10px]" /><p className="text-[10px] text-slate-400">Max 20 MB</p></div>
+                    <FileUploadField
+                      label="Fitness Copy"
+                      accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                      value={vehicleData.fitness || null}
+                      helperText="Max 20 MB"
+                      buttonText={vehicleData.fitness ? "REPLACE" : "UPLOAD"}
+                      uploading={isUploading === "fitness"}
+                      onFilesSelected={(files) => files[0] && uploadVehicleDocument("fitness", files[0])}
+                    />
+                    <FileUploadField
+                      label="Insurance"
+                      accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                      value={vehicleData.insurance || null}
+                      helperText="Max 20 MB"
+                      buttonText={vehicleData.insurance ? "REPLACE" : "UPLOAD"}
+                      uploading={isUploading === "insurance"}
+                      onFilesSelected={(files) => files[0] && uploadVehicleDocument("insurance", files[0])}
+                    />
+                    <FileUploadField
+                      label="Tax Copy"
+                      accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                      value={vehicleData.tax_copy || null}
+                      helperText="Max 20 MB"
+                      buttonText={vehicleData.tax_copy ? "REPLACE" : "UPLOAD"}
+                      uploading={isUploading === "tax_copy"}
+                      onFilesSelected={(files) => files[0] && uploadVehicleDocument("tax_copy", files[0])}
+                    />
+                    <FileUploadField
+                      label="Pollution Check"
+                      accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                      value={vehicleData.polution || null}
+                      helperText="Max 20 MB"
+                      buttonText={vehicleData.polution ? "REPLACE" : "UPLOAD"}
+                      uploading={isUploading === "polution"}
+                      onFilesSelected={(files) => files[0] && uploadVehicleDocument("polution", files[0])}
+                    />
                   </div>
                 </div>
 

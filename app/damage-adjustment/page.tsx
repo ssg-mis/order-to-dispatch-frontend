@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { FileUploadField } from "@/components/file-upload-field"
 import { Upload, CheckCircle, Settings2, FileText, IndianRupee, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ALL_WORKFLOW_COLUMNS as ALL_COLUMNS } from "@/lib/workflow-columns"
@@ -1173,29 +1174,16 @@ export default function DamageAdjustmentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Upload CN Copy</Label>
-                      <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
-                      <div className="border-2 border-dashed rounded-lg p-3 text-center hover:bg-slate-50 transition-colors bg-blue-50/20">
-                        <Input
-                          type="file"
-                          accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
-                          onChange={(e) => {
-                            if (e.target.files?.[0]) {
-                              handleFileUpload(e.target.files[0])
-                            }
-                          }}
-                          className="hidden"
-                          id="cn-upload"
-                        />
-                        <label htmlFor="cn-upload" className="cursor-pointer block">
-                          <Upload className="h-5 w-5 mx-auto mb-1 text-blue-600" />
-                          <p className="text-xs font-bold text-slate-700 uppercase tracking-tight block">
-                            <span className="block break-words">
-                            {isUploading ? "UPLOADING..." : (adjustmentData.creditNoteCopyName ? `SELECTED: ${adjustmentData.creditNoteCopyName}` : "Select Copy")}
-                            </span>
-                          </p>
-                        </label>
-                      </div>
+                      <FileUploadField
+                        label="Upload CN Copy"
+                        accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                        fileName={adjustmentData.creditNoteCopyName}
+                        variant="dropzone"
+                        helperText="Max file size: 20 MB"
+                        uploading={isUploading}
+                        buttonText="Select Copy"
+                        onFilesSelected={(files) => files[0] && handleFileUpload(files[0])}
+                      />
                     </div>
                   </div>
                 </div>

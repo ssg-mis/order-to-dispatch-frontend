@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { FileUploadField } from "@/components/file-upload-field"
 import { Upload, X, Plus, Settings2, ShieldAlert, ShieldCheck, Truck, ChevronDown, ChevronUp, FileText, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -1424,17 +1425,16 @@ export default function SecurityApprovalPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Bilty Image</Label>
-                      <div className="relative h-12 md:h-14">
-                        <Input type="file" className="hidden" id="bilty-img" onChange={(e) => {
-                          if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'bilty')
-                        }} />
-                        <Label htmlFor="bilty-img" className="absolute inset-0 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center bg-white cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all">
-                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                            {isUploading === 'bilty' ? "WAIT..." : (uploadData.biltyImage ? "FILE SELECTED" : "SCAN COPY")}
-                          </span>
-                        </Label>
-                      </div>
+                      <FileUploadField
+                        label={<span className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Bilty Image</span>}
+                        accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                        fileName={uploadData.biltyImageName}
+                        variant="dropzone"
+                        helperText="Max file size: 20 MB"
+                        uploading={isUploading === 'bilty'}
+                        buttonText="SCAN COPY"
+                        onFilesSelected={(files) => files[0] && handleFileUpload(files[0], 'bilty')}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Security Verdict</Label>
@@ -1478,32 +1478,29 @@ export default function SecurityApprovalPage() {
                   </div>
 
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Proof Images</Label>
-                    <div className="grid grid-cols-3 min-[420px]:grid-cols-4 sm:flex sm:flex-wrap gap-3">
-                      {uploadData.vehicleImagePreviews.map((url, idx) => (
-                        <div key={idx} className="aspect-square sm:w-20 sm:h-20 rounded-xl border-2 border-slate-100 overflow-hidden relative group shadow-sm">
-                          <img src={url} className="w-full h-full object-cover" />
-                          <button onClick={() => {
-                            const images = [...uploadData.vehicleImages]
-                            const previews = [...uploadData.vehicleImagePreviews]
-                            const names = [...uploadData.vehicleImageNames]
-                            URL.revokeObjectURL(previews[idx])
-                            images.splice(idx, 1)
-                            previews.splice(idx, 1)
-                            names.splice(idx, 1)
-                            setUploadData(p => ({ ...p, vehicleImages: images, vehicleImagePreviews: previews, vehicleImageNames: names }))
-                          }} className="absolute inset-0 bg-red-600/80 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><X className="w-4 h-4" /></button>
-                        </div>
-                      ))}
-                      <label className="aspect-square sm:w-20 sm:h-20 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center bg-white cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-all">
-                        {isUploading?.startsWith('vehicle') ? <Loader2 className="w-5 h-5 animate-spin text-blue-500" /> : <Plus className="w-6 h-6 text-slate-200" />}
-                        <input type="file" multiple className="hidden" onChange={(e) => {
-                          if (e.target.files) {
-                            Array.from(e.target.files).forEach(file => handleFileUpload(file, 'vehicle'))
-                          }
-                        }} />
-                      </label>
-                    </div>
+                    <FileUploadField
+                      label={<span className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Proof Images</span>}
+                      accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif"
+                      multiple
+                      value={uploadData.vehicleImagePreviews}
+                      fileName={uploadData.vehicleImageNames}
+                      variant="dropzone"
+                      helperText="Max file size: 20 MB"
+                      uploading={isUploading?.startsWith('vehicle')}
+                      buttonText="Add vehicle images"
+                      previewClassName="grid grid-cols-3 min-[420px]:grid-cols-4 sm:grid-cols-5"
+                      onFilesSelected={(files) => files.forEach((file) => handleFileUpload(file, 'vehicle'))}
+                      onRemove={(idx) => {
+                        const images = [...uploadData.vehicleImages]
+                        const previews = [...uploadData.vehicleImagePreviews]
+                        const names = [...uploadData.vehicleImageNames]
+                        URL.revokeObjectURL(previews[idx])
+                        images.splice(idx, 1)
+                        previews.splice(idx, 1)
+                        names.splice(idx, 1)
+                        setUploadData(p => ({ ...p, vehicleImages: images, vehicleImagePreviews: previews, vehicleImageNames: names }))
+                      }}
+                    />
                   </div>
                 </div>
               </div>

@@ -76,13 +76,30 @@ const PAGE_ACCESS_OPTIONS = [
   "Reports"
 ]
 
+const MASTER_TABS = [
+  { key: "customers", label: "Customers" },
+  { key: "depots", label: "Depots" },
+  { key: "brokers", label: "Brokers" },
+  { key: "salespersons", label: "Salespersons" },
+  { key: "sku_details", label: "SKU Details" },
+  { key: "sku_selling_price", label: "SKU Pricing" },
+  { key: "vehicle_master", label: "Vehicles" },
+  { key: "driver_master", label: "Drivers" },
+  { key: "transport_master", label: "Transporters" },
+]
 
-const ROLES = ["admin", "user", "guard", "pc"]
+
 const STATUSES = ["active", "inactive"]
 
 export default function SettingsPage() {
   const { toast } = useToast()
-  const { isReadOnly } = useAuth()
+  const { isReadOnly, user: currentUser } = useAuth()
+  const currentUserRole = currentUser?.role ?? ''
+  const isSuperAdmin = currentUserRole === 'super_admin'
+
+  const availableRoles = isSuperAdmin
+    ? ["super_admin", "admin", "user", "guard", "pc"]
+    : ["user", "guard", "pc"]
   const [searchQuery, setSearchQuery] = useState("")
   const [sortField, setSortField] = useState<string>("id")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
@@ -105,7 +122,8 @@ export default function SettingsPage() {
     role: "user",
     page_access: {} as PageAccessMap,
     depo_access: {} as Record<string, string[]>,
-    features: {} as Record<string, boolean>
+    features: {} as Record<string, boolean>,
+    master_tab_access: {} as Record<string, boolean>
   })
 
   const [depots, setDepots] = useState<any[]>([])
@@ -197,6 +215,13 @@ export default function SettingsPage() {
       )
       : [...users]
 
+    // Admin can only see/manage non-admin, non-super_admin users (excluding themselves)
+    if (!isSuperAdmin) {
+      filtered = filtered.filter(u =>
+        u.role !== 'admin' && u.role !== 'super_admin' && u.id !== currentUser?.id
+      )
+    }
+
     filtered.sort((a, b) => {
       let aVal: any = (a as any)[sortField] ?? ""
       let bVal: any = (b as any)[sortField] ?? ""
@@ -226,7 +251,8 @@ export default function SettingsPage() {
       role: "user",
       page_access: {},
       depo_access: {},
-      features: {}
+      features: {},
+      master_tab_access: {}
     })
     setShowPassword(false)
   }
@@ -244,7 +270,8 @@ export default function SettingsPage() {
 
     setIsSubmitting(true)
     try {
-      const response = await userApi.create({ ...formData, page_access: formData.page_access as any })
+      const featuresPayload = { ...formData.features, master_tabs: formData.master_tab_access }
+      const response = await userApi.create({ ...formData, page_access: formData.page_access as any, features: featuresPayload })
       if (response.success) {
         toast({
           title: "Success",
@@ -271,9 +298,11 @@ export default function SettingsPage() {
 
     setIsSubmitting(true)
     try {
+      const featuresPayload = { ...formData.features, master_tabs: formData.master_tab_access }
       const updateData = {
         ...formData,
         page_access: formData.page_access as any,
+        features: featuresPayload,
         password: formData.password === "••••••••" ? undefined : formData.password
       }
 
@@ -378,10 +407,23 @@ export default function SettingsPage() {
       }
     })
 
-    // Normalize features
+    // Normalize features — extract master_tabs separately
     let normalizedFeatures: Record<string, boolean> = {}
+    let masterTabAccess: Record<string, boolean> = {}
+    const hasMasterAccess = Array.isArray(pageAccessParsed)
+      ? pageAccessParsed.includes("Master")
+      : !!(pageAccessParsed && typeof pageAccessParsed === 'object' && pageAccessParsed["Master"]);
+
     if (user.features && typeof user.features === 'object' && !Array.isArray(user.features)) {
-      normalizedFeatures = user.features as Record<string, boolean>
+      const { master_tabs, ...restFeatures } = user.features as any
+      normalizedFeatures = restFeatures as Record<string, boolean>
+      if (master_tabs && typeof master_tabs === 'object') {
+        masterTabAccess = master_tabs as Record<string, boolean>
+      } else if (hasMasterAccess) {
+        MASTER_TABS.forEach(t => { masterTabAccess[t.key] = true })
+      }
+    } else if (hasMasterAccess) {
+      MASTER_TABS.forEach(t => { masterTabAccess[t.key] = true })
     }
 
     setFormData({
@@ -393,7 +435,8 @@ export default function SettingsPage() {
       role: user.role,
       page_access: pa,
       depo_access: normalizedDepoAccess,
-      features: normalizedFeatures
+      features: normalizedFeatures,
+      master_tab_access: masterTabAccess
     })
     setIsEditDialogOpen(true)
   }
@@ -449,6 +492,22 @@ export default function SettingsPage() {
   // Deselect all pages
   const deselectAllPages = () => {
     setFormData(prev => ({ ...prev, page_access: {} }))
+  }
+
+  // Master tab access helpers
+  const toggleMasterTab = (key: string) => {
+    setFormData(prev => ({
+      ...prev,
+      master_tab_access: { ...prev.master_tab_access, [key]: !prev.master_tab_access[key] }
+    }))
+  }
+  const selectAllMasterTabs = () => {
+    const all: Record<string, boolean> = {}
+    MASTER_TABS.forEach(t => { all[t.key] = true })
+    setFormData(prev => ({ ...prev, master_tab_access: all }))
+  }
+  const deselectAllMasterTabs = () => {
+    setFormData(prev => ({ ...prev, master_tab_access: {} }))
   }
 
   // Helper: is a page enabled in the form
@@ -566,9 +625,9 @@ export default function SettingsPage() {
                       <SelectValue placeholder="Select role" />
                     </SelectTrigger>
                     <SelectContent>
-                      {ROLES.map((role) => (
+                      {availableRoles.map((role) => (
                         <SelectItem key={role} value={role}>
-                          {role.charAt(0).toUpperCase() + role.slice(1)}
+                          {role === 'super_admin' ? 'Super Admin' : role.charAt(0).toUpperCase() + role.slice(1)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -672,6 +731,30 @@ export default function SettingsPage() {
                   ))}
                 </div>
               </div>
+              {isPageEnabled('Master') && (
+                <div className="space-y-3 border rounded-xl p-4 bg-slate-50/50 mt-1">
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <Label className="text-sm font-bold text-slate-800">Accessible Master Tabs</Label>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={selectAllMasterTabs} className="text-xs text-blue-600 hover:underline">All</button>
+                      <span className="text-xs text-slate-300">|</span>
+                      <button type="button" onClick={deselectAllMasterTabs} className="text-xs text-blue-600 hover:underline">None</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {MASTER_TABS.map(tab => (
+                      <div key={tab.key} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`add-master-${tab.key}`}
+                          checked={!!formData.master_tab_access[tab.key]}
+                          onCheckedChange={() => toggleMasterTab(tab.key)}
+                        />
+                        <Label htmlFor={`add-master-${tab.key}`} className="text-xs font-normal cursor-pointer text-slate-700">{tab.label}</Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -813,7 +896,7 @@ export default function SettingsPage() {
                         </Badge>
                         <Badge
                           variant="outline"
-                          className={user.role === "admin" ? "border-blue-500 text-blue-600 bg-blue-50" : "border-slate-300"}
+                          className={user.role === "super_admin" ? "border-purple-500 text-purple-700 bg-purple-50" : user.role === "admin" ? "border-blue-500 text-blue-600 bg-blue-50" : "border-slate-300"}
                         >
                           <Shield className="h-3 w-3 mr-1" />
                           {user.role}
@@ -946,7 +1029,7 @@ export default function SettingsPage() {
                       <td className="text-center p-2 align-middle whitespace-nowrap">
                         <Badge
                           variant="outline"
-                          className={user.role === "admin" ? "border-blue-500 text-blue-600 bg-blue-50" : "border-slate-300"}
+                          className={user.role === "super_admin" ? "border-purple-500 text-purple-700 bg-purple-50" : user.role === "admin" ? "border-blue-500 text-blue-600 bg-blue-50" : "border-slate-300"}
                         >
                           <Shield className="h-3 w-3 mr-1" />
                           {user.role}
@@ -1117,9 +1200,9 @@ export default function SettingsPage() {
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>
-                    {ROLES.map((role) => (
+                    {availableRoles.map((role) => (
                       <SelectItem key={role} value={role}>
-                        {role.charAt(0).toUpperCase() + role.slice(1)}
+                        {role === 'super_admin' ? 'Super Admin' : role.charAt(0).toUpperCase() + role.slice(1)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1223,6 +1306,30 @@ export default function SettingsPage() {
                 ))}
               </div>
             </div>
+            {isPageEnabled('Master') && (
+              <div className="space-y-3 border rounded-xl p-4 bg-slate-50/50 mt-1">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <Label className="text-sm font-bold text-slate-800">Accessible Master Tabs</Label>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={selectAllMasterTabs} className="text-xs text-blue-600 hover:underline">All</button>
+                    <span className="text-xs text-slate-300">|</span>
+                    <button type="button" onClick={deselectAllMasterTabs} className="text-xs text-blue-600 hover:underline">None</button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {MASTER_TABS.map(tab => (
+                    <div key={tab.key} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`edit-master-${tab.key}`}
+                        checked={!!formData.master_tab_access[tab.key]}
+                        onCheckedChange={() => toggleMasterTab(tab.key)}
+                      />
+                      <Label htmlFor={`edit-master-${tab.key}`} className="text-xs font-normal cursor-pointer text-slate-700">{tab.label}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3">
               <Label>Features</Label>

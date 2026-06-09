@@ -1320,11 +1320,12 @@ export default function PreApprovalPage() {
       rateValue = calculatedRateResult.calculatedRate;
     } else {
       console.log("✗ No calculated rate found, fetching from database...");
-      // Fallback: fetch stored rate from database
+      // Fallback: fetch stored rate from database using central api-service
       try {
-        const response = await fetch(`/api/v1/skus/rate/${encodeURIComponent(skuForRate)}`);
-        const data = await response.json();
-        rateValue = data.success && data.rate ? data.rate.toString() : "";
+        const response = await skuApi.getRateByName(skuForRate);
+        rateValue = response.success && (response.rate !== undefined ? response.rate : response.data?.rate)
+          ? (response.rate !== undefined ? response.rate : response.data?.rate).toString()
+          : "";
       } catch (error) {
         console.error("Failed to fetch rate for SKU:", error);
       }

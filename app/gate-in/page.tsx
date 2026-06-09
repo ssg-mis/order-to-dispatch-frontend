@@ -619,7 +619,7 @@ export default function GateInPage() {
                       <SortableTableHead
                         key={col.id}
                         id={col.id}
-                        className={`whitespace-nowrap text-center${sf ? " cursor-pointer select-none hover:text-blue-600 transition-colors" : ""}`}
+                        className={`text-[10px] uppercase font-black text-slate-500 tracking-wider whitespace-nowrap text-center${sf ? " cursor-pointer select-none hover:text-blue-600 transition-colors" : ""}`}
                         onClick={sf ? () => handlePendingSort(sf) : undefined}
                       >
                         {col.label}{sf && <PendingSortIcon field={sf} />}
@@ -627,7 +627,9 @@ export default function GateInPage() {
                     )
                   })}
                 </ColumnDragProvider>
-                <TableHead className="whitespace-nowrap text-center">Action</TableHead>
+                <TableHead className="text-[10px] uppercase font-black text-slate-500 tracking-wider text-right pr-6 whitespace-nowrap">
+                  Action
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -686,7 +688,7 @@ export default function GateInPage() {
                             return null
                         }
                       })}
-                      <TableCell className="text-center">
+                      <TableCell className="text-right pr-6">
                         <Button
                           size="sm"
                           disabled={isReadOnly}

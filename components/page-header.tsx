@@ -16,16 +16,16 @@ export function PageHeader({ title, description, children }: PageHeaderProps) {
   const { user } = useAuth()
   
   return (
-    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-6">
-      <div className="flex items-center gap-4 flex-1 min-w-0">
+    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4 mb-4 md:pb-5 md:mb-5">
+      <div className="flex items-center gap-4 flex-1">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="h-6 hidden sm:block" />
-        <div className="min-w-0 mr-4">
-          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 truncate">
+        <div className="mr-4">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-black tracking-tight text-slate-900">
             {title}
           </h1>
           {description && (
-            <p className="text-xs md:text-sm text-slate-500 font-medium mt-1 truncate">
+            <p className="text-[11px] sm:text-xs md:text-sm text-slate-500 font-medium mt-0.5">
               {description}
             </p>
           )}

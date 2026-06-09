@@ -7,6 +7,7 @@ import type React from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { FileUploadField } from "@/components/file-upload-field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
@@ -1634,9 +1635,18 @@ export default function OrderPunchPage() {
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="soFile">Upload SO Copy</Label>
-                <Input id="soFile" type="file" className="cursor-pointer" onChange={handleFileChange} />
-                <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
+                <FileUploadField
+                  label="Upload SO Copy"
+                  accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                  fileName={soFile?.name || ""}
+                  helperText="Max file size: 20 MB"
+                  buttonText="Select SO Copy"
+                  onFilesSelected={(files) => {
+                    if (files[0]) {
+                      setSoFile(files[0])
+                    }
+                  }}
+                />
               </div>
 
               <div className="space-y-2 md:col-span-2">

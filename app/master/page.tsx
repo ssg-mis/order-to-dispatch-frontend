@@ -12,8 +12,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { FileUploadField } from "@/components/file-upload-field"
 import { useToast } from "@/hooks/use-toast"
-import { customerApi, depotApi, brokerApi, skuDetailsApi, commonApi, skuSellingPriceApi, varCalcApi, salespersonApi, vehicleMasterApi, driverMasterApi, transportMasterApi, orderApi, inventoryApi } from "@/lib/api-service"
+import { customerApi, depotApi, brokerApi, skuDetailsApi, commonApi, skuSellingPriceApi, varCalcApi, salespersonApi, vehicleMasterApi, driverMasterApi, transportMasterApi, orderApi, inventoryApi, setMasterTabContext } from "@/lib/api-service"
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { useInView } from "react-intersection-observer"
 
@@ -179,10 +180,38 @@ interface Transport {
 
 const STATUS_OPTIONS = ["Active", "Inactive"]
 
+const ALL_MASTER_TABS = [
+  "customers", "depots", "brokers", "salespersons",
+  "sku_details", "sku_selling_price", "vehicle_master", "driver_master", "transport_master"
+]
+
 export default function MasterPage() {
   const { toast } = useToast()
-  const { isReadOnly } = useAuth()
+  const { isReadOnly, user } = useAuth()
   const [activeTab, setActiveTab] = useState("customers")
+
+  const visibleTabs = useMemo(() => {
+    if (!user || user.role === 'super_admin') return ALL_MASTER_TABS
+    const masterTabsConfig = (user.features as any)?.master_tabs
+    if (!masterTabsConfig || typeof masterTabsConfig !== 'object') return ALL_MASTER_TABS
+    return ALL_MASTER_TABS.filter(tab => masterTabsConfig[tab] === true)
+  }, [user])
+
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.includes(activeTab)) {
+      setActiveTab(visibleTabs[0])
+    }
+  }, [visibleTabs, activeTab])
+
+  // Sync active tab with backend header context so API calls carry X-Master-Tab
+  useEffect(() => {
+    setMasterTabContext(activeTab)
+    setCustomerSubTab('active'); setDepotSubTab('active'); setBrokerSubTab('active')
+    setSalespersonSubTab('active'); setSkuSubTab('active'); setVehicleSubTab('active')
+    setDriverSubTab('active'); setTransportSubTab('active')
+    return () => { setMasterTabContext(null) }
+  }, [activeTab])
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [openingStockByDepot, setOpeningStockByDepot] = useState<Record<string, string>>({})
@@ -217,6 +246,34 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
     }
   })
 
+  const { data: pendingCustomersData, refetch: refetchPendingCustomers } = useQuery({
+    queryKey: ['pending-customers'],
+    queryFn: async () => {
+      const res = await customerApi.getPending()
+      return res.success ? (res.data as any[]) : []
+    },
+    enabled: (user?.role === 'admin' || user?.role === 'super_admin') && activeTab === 'customers',
+  })
+  const pendingCustomers: any[] = pendingCustomersData || []
+
+  const isAdminOrSuper = user?.role === 'admin' || user?.role === 'super_admin'
+
+  const { data: pendingDepotsData, refetch: refetchPendingDepots } = useQuery({ queryKey: ['pending-depots'], queryFn: async () => { const res = await depotApi.getPending(); return res.success ? (res.data as any[]) : [] }, enabled: isAdminOrSuper && activeTab === 'depots' })
+  const { data: pendingBrokersData, refetch: refetchPendingBrokers } = useQuery({ queryKey: ['pending-brokers'], queryFn: async () => { const res = await brokerApi.getPending(); return res.success ? (res.data as any[]) : [] }, enabled: isAdminOrSuper && activeTab === 'brokers' })
+  const { data: pendingSalespersonsData, refetch: refetchPendingSalespersons } = useQuery({ queryKey: ['pending-salespersons'], queryFn: async () => { const res = await salespersonApi.getPending(); return res.success ? (res.data as any[]) : [] }, enabled: isAdminOrSuper && activeTab === 'salespersons' })
+  const { data: pendingSkuData, refetch: refetchPendingSku } = useQuery({ queryKey: ['pending-sku-details'], queryFn: async () => { const res = await skuDetailsApi.getPending(); return res.success ? (res.data as any[]) : [] }, enabled: isAdminOrSuper && activeTab === 'sku_details' })
+  const { data: pendingVehiclesData, refetch: refetchPendingVehicles } = useQuery({ queryKey: ['pending-vehicles'], queryFn: async () => { const res = await vehicleMasterApi.getPending(); return res.success ? (res.data as any[]) : [] }, enabled: isAdminOrSuper && activeTab === 'vehicle_master' })
+  const { data: pendingDriversData, refetch: refetchPendingDrivers } = useQuery({ queryKey: ['pending-drivers'], queryFn: async () => { const res = await driverMasterApi.getPending(); return res.success ? (res.data as any[]) : [] }, enabled: isAdminOrSuper && activeTab === 'driver_master' })
+  const { data: pendingTransportData, refetch: refetchPendingTransport } = useQuery({ queryKey: ['pending-transport'], queryFn: async () => { const res = await transportMasterApi.getPending(); return res.success ? (res.data as any[]) : [] }, enabled: isAdminOrSuper && activeTab === 'transport_master' })
+
+  const pendingDepots: any[] = pendingDepotsData || []
+  const pendingBrokers: any[] = pendingBrokersData || []
+  const pendingSalespersons: any[] = pendingSalespersonsData || []
+  const pendingSkus: any[] = pendingSkuData || []
+  const pendingVehicles: any[] = pendingVehiclesData || []
+  const pendingDrivers: any[] = pendingDriversData || []
+  const pendingTransporters: any[] = pendingTransportData || []
+
   // Depots
   const {
     data: depotData,
@@ -250,6 +307,32 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
   const activeDepots = useMemo(
     () => (allActiveDepotsData || []).filter((d: Depot) => d.status === 'Active'),
     [allActiveDepotsData]
+  )
+
+  // All active transporters for Vehicle form (not filtered by searchTerm)
+  const { data: allActiveTransportersData } = useQuery({
+    queryKey: ["all-active-transporters"],
+    queryFn: async () => {
+      const res = await transportMasterApi.getAll({ page: 1, limit: 1000, all: "true" })
+      return res.success ? (res.data.transporters || []) : []
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const activeTransporters = useMemo(
+    () => (allActiveTransportersData || []).filter((t: any) => t.status === 'Active'),
+    [allActiveTransportersData]
+  )
+  const sortedVehicleTransporters = useMemo(
+    () => {
+      const names = activeTransporters
+        .map((t: any) => t.transporter_name?.trim())
+        .filter((name: string | undefined): name is string => Boolean(name))
+
+      return Array.from(new Set(names)).sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: "base", numeric: true })
+      )
+    },
+    [activeTransporters]
   )
 
   // Brokers
@@ -444,6 +527,17 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<any | null>(null)
   const [deletingItem, setDeletingItem] = useState<any | null>(null)
+  const [customerSubTab, setCustomerSubTab] = useState<'active' | 'pending'>('active')
+  const [depotSubTab, setDepotSubTab] = useState<'active' | 'pending'>('active')
+  const [brokerSubTab, setBrokerSubTab] = useState<'active' | 'pending'>('active')
+  const [salespersonSubTab, setSalespersonSubTab] = useState<'active' | 'pending'>('active')
+  const [skuSubTab, setSkuSubTab] = useState<'active' | 'pending'>('active')
+  const [vehicleSubTab, setVehicleSubTab] = useState<'active' | 'pending'>('active')
+  const [driverSubTab, setDriverSubTab] = useState<'active' | 'pending'>('active')
+  const [transportSubTab, setTransportSubTab] = useState<'active' | 'pending'>('active')
+  const [rejectDialogContext, setRejectDialogContext] = useState<{ tab: string; id: any } | null>(null)
+  const [rejectionReason, setRejectionReason] = useState("")
+  const [isReviewing, setIsReviewing] = useState(false)
 
   // Form states
   const [customerForm, setCustomerForm] = useState<Partial<Customer>>({
@@ -783,7 +877,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
       }
 
       if (res?.success) {
-        toast({ title: "Success", description: editingItem ? "Updated successfully" : "Created successfully" })
+        toast({ title: "Success", description: res.message || (editingItem ? "Updated successfully" : "Created successfully") })
         setIsDialogOpen(false)
         resetForms()
         // Refetch appropriate query
@@ -856,6 +950,38 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
       })
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleReviewRecord = async (tab: string, id: any, action: 'approve' | 'reject', reason?: string) => {
+    setIsReviewing(true)
+    try {
+      let res: any
+      if (tab === 'customers') res = await customerApi.review(id, { action, reason })
+      else if (tab === 'depots') res = await depotApi.review(id, { action, reason })
+      else if (tab === 'brokers') res = await brokerApi.review(id, { action, reason })
+      else if (tab === 'salespersons') res = await salespersonApi.review(id, { action, reason })
+      else if (tab === 'sku_details') res = await skuDetailsApi.review(id, { action, reason })
+      else if (tab === 'vehicle_master') res = await vehicleMasterApi.review(id, { action, reason })
+      else if (tab === 'driver_master') res = await driverMasterApi.review(id, { action, reason })
+      else if (tab === 'transport_master') res = await transportMasterApi.review(id, { action, reason })
+      if (res?.success) {
+        toast({ title: "Success", description: res.message || `Record ${action}d successfully` })
+        if (tab === 'customers') { refetchPendingCustomers(); refetchCustomer() }
+        else if (tab === 'depots') { refetchPendingDepots(); refetchDepot() }
+        else if (tab === 'brokers') { refetchPendingBrokers(); refetchBroker() }
+        else if (tab === 'salespersons') { refetchPendingSalespersons(); refetchSalesperson() }
+        else if (tab === 'sku_details') { refetchPendingSku(); refetchSku() }
+        else if (tab === 'vehicle_master') { refetchPendingVehicles(); refetchVehicle() }
+        else if (tab === 'driver_master') { refetchPendingDrivers(); refetchDriver() }
+        else if (tab === 'transport_master') { refetchPendingTransport(); refetchTransport() }
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Failed to review record", variant: "destructive" })
+    } finally {
+      setIsReviewing(false)
+      setRejectDialogContext(null)
+      setRejectionReason("")
     }
   }
 
@@ -1049,10 +1175,8 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
   const sortedTransporters = sortData(filteredTransporters, transportSort.col, transportSort.dir)
 
   // --- Shared Helpers ---
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    
+  const handleFileUpload = async (file: File, field: string) => {
+
     try {
       const res = await orderApi.uploadFile(file)
       if (res.success) {
@@ -1529,12 +1653,12 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
           <div className="space-y-2">
             <Label>Transporter</Label>
             <Select value={vehicleForm.transporter} onValueChange={val => setVehicleForm({...vehicleForm, transporter: val})}>
-              <SelectTrigger><SelectValue placeholder="Select transporter" /></SelectTrigger>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select transporter" className="truncate" />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Company Vehicle">Company Vehicle</SelectItem>
-                <SelectItem value="Party Vehicle">Party Vehicle</SelectItem>
-                {transporters.map((t: any) => (
-                  <SelectItem key={t.transporter_master_id || t.transporter_name} value={t.transporter_name}>{t.transporter_name}</SelectItem>
+                {sortedVehicleTransporters.map((name) => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1565,12 +1689,14 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
             <Input type="date" value={vehicleForm.road_tax?.split('T')[0] || ''} onChange={e => setVehicleForm({...vehicleForm, road_tax: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>Road Tax Image</Label>
-            <div className="flex gap-2 items-center">
-              <Input type="file" onChange={e => handleFileUpload(e, 'road_tax_image')} className="flex-1" />
-              {vehicleForm.road_tax_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
-            </div>
-            <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
+            <FileUploadField
+              label="Road Tax Image"
+              accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif"
+              value={vehicleForm.road_tax_image}
+              helperText="Max file size: 20 MB"
+              uploading={false}
+              onFilesSelected={(files) => files[0] && handleFileUpload(files[0], "road_tax_image")}
+            />
           </div>
         </div>
 
@@ -1580,12 +1706,14 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
             <Input type="date" value={vehicleForm.pollution?.split('T')[0] || ''} onChange={e => setVehicleForm({...vehicleForm, pollution: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>Pollution Image</Label>
-            <div className="flex gap-2 items-center">
-              <Input type="file" onChange={e => handleFileUpload(e, 'pollution_image')} className="flex-1" />
-              {vehicleForm.pollution_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
-            </div>
-            <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
+            <FileUploadField
+              label="Pollution Image"
+              accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif"
+              value={vehicleForm.pollution_image}
+              helperText="Max file size: 20 MB"
+              uploading={false}
+              onFilesSelected={(files) => files[0] && handleFileUpload(files[0], "pollution_image")}
+            />
           </div>
         </div>
 
@@ -1595,12 +1723,14 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
             <Input type="date" value={vehicleForm.insurance?.split('T')[0] || ''} onChange={e => setVehicleForm({...vehicleForm, insurance: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>Insurance Image</Label>
-            <div className="flex gap-2 items-center">
-              <Input type="file" onChange={e => handleFileUpload(e, 'insurance_image')} className="flex-1" />
-              {vehicleForm.insurance_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
-            </div>
-            <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
+            <FileUploadField
+              label="Insurance Image"
+              accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif"
+              value={vehicleForm.insurance_image}
+              helperText="Max file size: 20 MB"
+              uploading={false}
+              onFilesSelected={(files) => files[0] && handleFileUpload(files[0], "insurance_image")}
+            />
           </div>
         </div>
 
@@ -1610,12 +1740,14 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
             <Input type="date" value={vehicleForm.fitness?.split('T')[0] || ''} onChange={e => setVehicleForm({...vehicleForm, fitness: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>Fitness Image</Label>
-            <div className="flex gap-2 items-center">
-              <Input type="file" onChange={e => handleFileUpload(e, 'fitness_image')} className="flex-1" />
-              {vehicleForm.fitness_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
-            </div>
-            <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
+            <FileUploadField
+              label="Fitness Image"
+              accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif"
+              value={vehicleForm.fitness_image}
+              helperText="Max file size: 20 MB"
+              uploading={false}
+              onFilesSelected={(files) => files[0] && handleFileUpload(files[0], "fitness_image")}
+            />
           </div>
         </div>
 
@@ -1625,12 +1757,14 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
             <Input type="date" value={vehicleForm.state_permit?.split('T')[0] || ''} onChange={e => setVehicleForm({...vehicleForm, state_permit: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>State Permit Image</Label>
-            <div className="flex gap-2 items-center">
-              <Input type="file" onChange={e => handleFileUpload(e, 'state_permit_image')} className="flex-1" />
-              {vehicleForm.state_permit_image && <Badge variant="outline" className="bg-green-50">Uploaded</Badge>}
-            </div>
-            <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
+            <FileUploadField
+              label="State Permit Image"
+              accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif"
+              value={vehicleForm.state_permit_image}
+              helperText="Max file size: 20 MB"
+              uploading={false}
+              onFilesSelected={(files) => files[0] && handleFileUpload(files[0], "state_permit_image")}
+            />
           </div>
         </div>
 
@@ -1727,14 +1861,14 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label>Driving Licence Upload</Label>
-        <div className="flex gap-2 items-center">
-          <Input type="file" onChange={e => handleFileUpload(e, 'dl_upload')} className="flex-1" />
-          {driverForm.dl_upload && <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Uploaded</Badge>}
-        </div>
-        <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
-      </div>
+        <FileUploadField
+          label="Driving Licence Upload"
+          accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+          value={driverForm.dl_upload || ""}
+          helperText="Max file size: 20 MB"
+          uploading={false}
+          onFilesSelected={(files) => files[0] && handleFileUpload(files[0], "dl_upload")}
+        />
 
       <Separator className="my-2" />
 
@@ -1743,14 +1877,14 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
           <Label>Aadhaar No</Label>
           <Input value={driverForm.aadhaar_no} onChange={e => setDriverForm({...driverForm, aadhaar_no: e.target.value})} placeholder="12-digit number" />
         </div>
-        <div className="space-y-2">
-          <Label>Aadhaar Upload</Label>
-          <div className="flex gap-2 items-center">
-            <Input type="file" onChange={e => handleFileUpload(e, 'aadhaar_upload')} className="flex-1" />
-            {driverForm.aadhaar_upload && <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Uploaded</Badge>}
-          </div>
-          <p className="text-[10px] text-slate-400">Max file size: 20 MB</p>
-        </div>
+        <FileUploadField
+          label="Aadhaar Upload"
+          accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+          value={driverForm.aadhaar_upload || ""}
+          helperText="Max file size: 20 MB"
+          uploading={false}
+          onFilesSelected={(files) => files[0] && handleFileUpload(files[0], "aadhaar_upload")}
+        />
       </div>
 
       <div className="space-y-2">
@@ -1843,7 +1977,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
   )
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto min-h-screen space-y-8 animate-in fade-in duration-700">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto min-h-screen space-y-4 md:space-y-6 animate-in fade-in duration-700">
       <PageHeader 
         title="Master Data" 
         description="Manage customers, depots, and brokers details"
@@ -1906,48 +2040,67 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
         </div>
       </PageHeader>
 
-      <Tabs defaultValue="customers" className="w-full space-y-6" onValueChange={setActiveTab}>
+      <Tabs value={activeTab} className="w-full space-y-6" onValueChange={setActiveTab}>
         <div className="relative group/tabs flex items-center">
           <TabsList className="flex w-full items-center justify-start gap-1 bg-transparent p-0 overflow-x-auto no-scrollbar scroll-smooth">
-            <TabsTrigger value="customers" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
-              <Users className="h-3.5 w-3.5" />
-              Customer
-            </TabsTrigger>
-            <TabsTrigger value="depots" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
-              <Warehouse className="h-3.5 w-3.5" />
-              Depots
-            </TabsTrigger>
-            <TabsTrigger value="brokers" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
-              <Briefcase className="h-3.5 w-3.5" />
-              Brokers
-            </TabsTrigger>
-            <TabsTrigger value="salespersons" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
-              <Users className="h-3.5 w-3.5" />
-              Salesperson
-            </TabsTrigger>
-            <TabsTrigger value="sku_details" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
-              <Package className="h-3.5 w-3.5" />
-              SKU List
-            </TabsTrigger>
-            <TabsTrigger value="sku_selling_price" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
-              <Package className="h-3.5 w-3.5" />
-              Pricing
-            </TabsTrigger>
-            <TabsTrigger value="vehicle_master" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
-              <Truck className="h-3.5 w-3.5" />
-              Vehicles
-            </TabsTrigger>
-            <TabsTrigger value="driver_master" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
-              <User className="h-3.5 w-3.5" />
-              Drivers
-            </TabsTrigger>
-            <TabsTrigger value="transport_master" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
-              <Truck className="h-3.5 w-3.5" />
-              Transporters
-            </TabsTrigger>
+            {visibleTabs.includes("customers") && (
+              <TabsTrigger value="customers" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap shrink-0 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
+                <Users className="h-3.5 w-3.5" />
+                Customer
+              </TabsTrigger>
+            )}
+            {visibleTabs.includes("depots") && (
+              <TabsTrigger value="depots" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap shrink-0 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
+                <Warehouse className="h-3.5 w-3.5" />
+                Depots
+              </TabsTrigger>
+            )}
+            {visibleTabs.includes("brokers") && (
+              <TabsTrigger value="brokers" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap shrink-0 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
+                <Briefcase className="h-3.5 w-3.5" />
+                Brokers
+              </TabsTrigger>
+            )}
+            {visibleTabs.includes("salespersons") && (
+              <TabsTrigger value="salespersons" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap shrink-0 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
+                <Users className="h-3.5 w-3.5" />
+                Salesperson
+              </TabsTrigger>
+            )}
+            {visibleTabs.includes("sku_details") && (
+              <TabsTrigger value="sku_details" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap shrink-0 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
+                <Package className="h-3.5 w-3.5" />
+                SKU List
+              </TabsTrigger>
+            )}
+            {visibleTabs.includes("sku_selling_price") && (
+              <TabsTrigger value="sku_selling_price" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap shrink-0 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
+                <Package className="h-3.5 w-3.5" />
+                Pricing
+              </TabsTrigger>
+            )}
+            {visibleTabs.includes("vehicle_master") && (
+              <TabsTrigger value="vehicle_master" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap shrink-0 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
+                <Truck className="h-3.5 w-3.5" />
+                Vehicles
+              </TabsTrigger>
+            )}
+            {visibleTabs.includes("driver_master") && (
+              <TabsTrigger value="driver_master" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap shrink-0 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
+                <User className="h-3.5 w-3.5" />
+                Drivers
+              </TabsTrigger>
+            )}
+            {visibleTabs.includes("transport_master") && (
+              <TabsTrigger value="transport_master" className="flex items-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap shrink-0 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300">
+                <Truck className="h-3.5 w-3.5" />
+                Transporters
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
+        {visibleTabs.includes("customers") && (
         <TabsContent value="customers">
           <Card className="shadow-xl border-none rounded-2xl bg-white">
             <CardHeader className="bg-slate-50/50 border-b p-6">
@@ -1960,127 +2113,202 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   <CardDescription className="mt-1">Manage your customer database</CardDescription>
                 </div>
               </div>
+              {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={() => setCustomerSubTab('active')}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${customerSubTab === 'active' ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                  >
+                    Active Records
+                  </button>
+                  <button
+                    onClick={() => setCustomerSubTab('pending')}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${customerSubTab === 'pending' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                  >
+                    Pending Approval
+                    {pendingCustomers.length > 0 && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${customerSubTab === 'pending' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'}`}>
+                        {pendingCustomers.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="p-0">
-              {/* Mobile card view */}
-              <div className="md:hidden">
-                {isCustomerLoading && customers.length === 0 ? (
-                  <div className="p-4 space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-2 animate-pulse"><div className="h-4 w-32 bg-slate-200 rounded" /><div className="h-3 w-48 bg-slate-200 rounded" /><div className="h-3 w-24 bg-slate-200 rounded" /></div>)}</div>
-                ) : customers.length === 0 ? (
-                  <div className="text-center py-16 text-slate-400">No customers found</div>
-                ) : (
-                  <div className="p-3 space-y-3 overflow-auto" style={{ maxHeight: 600 }}>
-                    {sortedCustomers.map(item => (
-                      <div key={item.id} className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="font-semibold text-slate-800 truncate">{item.customer_name}</p>
-                            <p className="text-xs text-slate-500">{item.customer_id}</p>
+              {customerSubTab === 'active' ? (
+                <>
+                  {/* Mobile card view */}
+                  <div className="md:hidden">
+                    {isCustomerLoading && customers.length === 0 ? (
+                      <div className="p-4 space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-2 animate-pulse"><div className="h-4 w-32 bg-slate-200 rounded" /><div className="h-3 w-48 bg-slate-200 rounded" /><div className="h-3 w-24 bg-slate-200 rounded" /></div>)}</div>
+                    ) : customers.length === 0 ? (
+                      <div className="text-center py-16 text-slate-400">No customers found</div>
+                    ) : (
+                      <div className="p-3 space-y-3 overflow-auto" style={{ maxHeight: 600 }}>
+                        {sortedCustomers.map(item => (
+                          <div key={item.id} className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="font-semibold text-slate-800 truncate">{item.customer_name}</p>
+                                <p className="text-xs text-slate-500">{item.customer_id}</p>
+                              </div>
+                              <div className="flex gap-1 shrink-0">
+                                <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly}><Pencil className="h-4 w-4" /></Button>
+                                <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly}><Trash2 className="h-4 w-4" /></Button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+                              <div><span className="font-medium text-slate-600">Contact: </span>{item.contact_person || "—"}</div>
+                              <div><span className="font-medium text-slate-600">Location: </span>{item.state ? `${item.state} (${item.pincode})` : "—"}</div>
+                              <div className="col-span-2"><span className="font-medium text-slate-600">Email: </span>{item.email || "—"}</div>
+                              <div><span className="font-medium text-slate-600">Phone: </span>{item.contact || "—"}</div>
+                            </div>
+                            <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>{item.status}</Badge>
                           </div>
-                          <div className="flex gap-1 shrink-0">
-                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly}><Pencil className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly}><Trash2 className="h-4 w-4" /></Button>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
-                          <div><span className="font-medium text-slate-600">Contact: </span>{item.contact_person || "—"}</div>
-                          <div><span className="font-medium text-slate-600">Location: </span>{item.state ? `${item.state} (${item.pincode})` : "—"}</div>
-                          <div className="col-span-2"><span className="font-medium text-slate-600">Email: </span>{item.email || "—"}</div>
-                          <div><span className="font-medium text-slate-600">Phone: </span>{item.contact || "—"}</div>
-                        </div>
-                        <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>{item.status}</Badge>
+                        ))}
+                        {isFetchingNextCustomer && <div className="flex items-center justify-center py-4 gap-2 text-slate-400 text-xs"><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce" /><span className="ml-2">Loading more customers...</span></div>}
                       </div>
-                    ))}
-                    {isFetchingNextCustomer && <div className="flex items-center justify-center py-4 gap-2 text-slate-400 text-xs"><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]" /><div className="h-1.5 w-1.5 bg-primary animate-bounce" /><span className="ml-2">Loading more customers...</span></div>}
+                    )}
                   </div>
-                )}
-              </div>
-              {/* Desktop table */}
-              <div className="hidden md:flex flex-col h-[600px]">
-                <div className="flex-1 overflow-auto rounded-b-2xl">
-                  <table className="w-full caption-bottom text-sm">
-                    <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
-                      <TableRow className="hover:bg-transparent border-b">
-                        <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('customer_id', customerSort, setCustomerSort)}>ID <SortIcon col="customer_id" sort={customerSort} /></TableHead>
-                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('customer_name', customerSort, setCustomerSort)}>Customer Name <SortIcon col="customer_name" sort={customerSort} /></TableHead>
-                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('contact_person', customerSort, setCustomerSort)}>Contact Person <SortIcon col="contact_person" sort={customerSort} /></TableHead>
-                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('email', customerSort, setCustomerSort)}>Email/Contact <SortIcon col="email" sort={customerSort} /></TableHead>
-                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('state', customerSort, setCustomerSort)}>Location <SortIcon col="state" sort={customerSort} /></TableHead>
-                        <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('status', customerSort, setCustomerSort)}>Status <SortIcon col="status" sort={customerSort} /></TableHead>
-                        <TableHead className="text-right pr-6">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {isCustomerLoading && customers.length === 0 ? (
-                        [...Array(8)].map((_, i) => (
-                          <TableRow key={i} className="opacity-40 border-b border-slate-50 h-16">
-                            <TableCell className="pl-6"><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
-                            <TableCell><div className="h-4 w-32 bg-slate-200 animate-pulse rounded" /></TableCell>
-                            <TableCell><div className="h-4 w-24 bg-slate-200 animate-pulse rounded" /></TableCell>
-                            <TableCell><div className="h-8 w-40 bg-slate-200 animate-pulse rounded" /></TableCell>
-                            <TableCell><div className="h-4 w-28 bg-slate-200 animate-pulse rounded" /></TableCell>
-                            <TableCell><div className="h-6 w-20 bg-slate-200 animate-pulse rounded-full" /></TableCell>
-                            <TableCell className="pr-6"><div className="h-8 w-16 bg-slate-100 animate-pulse rounded ml-auto" /></TableCell>
+                  {/* Desktop table */}
+                  <div className="hidden md:flex flex-col h-[600px]">
+                    <div className="flex-1 overflow-auto rounded-b-2xl">
+                      <table className="w-full caption-bottom text-sm">
+                        <TableHeader className="sticky top-0 z-20 bg-slate-50 shadow-sm">
+                          <TableRow className="hover:bg-transparent border-b">
+                            <TableHead className="pl-6 cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('customer_id', customerSort, setCustomerSort)}>ID <SortIcon col="customer_id" sort={customerSort} /></TableHead>
+                            <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('customer_name', customerSort, setCustomerSort)}>Customer Name <SortIcon col="customer_name" sort={customerSort} /></TableHead>
+                            <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('contact_person', customerSort, setCustomerSort)}>Contact Person <SortIcon col="contact_person" sort={customerSort} /></TableHead>
+                            <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('email', customerSort, setCustomerSort)}>Email/Contact <SortIcon col="email" sort={customerSort} /></TableHead>
+                            <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('state', customerSort, setCustomerSort)}>Location <SortIcon col="state" sort={customerSort} /></TableHead>
+                            <TableHead className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => toggleSort('status', customerSort, setCustomerSort)}>Status <SortIcon col="status" sort={customerSort} /></TableHead>
+                            <TableHead className="text-right pr-6">Actions</TableHead>
                           </TableRow>
-                        ))
-                      ) : customers.length === 0 ? (
-                        <TableRow><TableCell colSpan={7} className="text-center py-20 text-slate-400">No customers found</TableCell></TableRow>
-                      ) : (
-                        <>
-                          {sortedCustomers.map(item => (
-                            <TableRow key={item.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-50 h-16">
-                              <TableCell className="font-medium pl-6">{item.customer_id}</TableCell>
+                        </TableHeader>
+                        <TableBody>
+                          {isCustomerLoading && customers.length === 0 ? (
+                            [...Array(8)].map((_, i) => (
+                              <TableRow key={i} className="opacity-40 border-b border-slate-50 h-16">
+                                <TableCell className="pl-6"><div className="h-4 w-16 bg-slate-200 animate-pulse rounded" /></TableCell>
+                                <TableCell><div className="h-4 w-32 bg-slate-200 animate-pulse rounded" /></TableCell>
+                                <TableCell><div className="h-4 w-24 bg-slate-200 animate-pulse rounded" /></TableCell>
+                                <TableCell><div className="h-8 w-40 bg-slate-200 animate-pulse rounded" /></TableCell>
+                                <TableCell><div className="h-4 w-28 bg-slate-200 animate-pulse rounded" /></TableCell>
+                                <TableCell><div className="h-6 w-20 bg-slate-200 animate-pulse rounded-full" /></TableCell>
+                                <TableCell className="pr-6"><div className="h-8 w-16 bg-slate-100 animate-pulse rounded ml-auto" /></TableCell>
+                              </TableRow>
+                            ))
+                          ) : customers.length === 0 ? (
+                            <TableRow><TableCell colSpan={7} className="text-center py-20 text-slate-400">No customers found</TableCell></TableRow>
+                          ) : (
+                            <>
+                              {sortedCustomers.map(item => (
+                                <TableRow key={item.id} className="hover:bg-slate-50/30 transition-colors border-b border-slate-50 h-16">
+                                  <TableCell className="font-medium pl-6">{item.customer_id}</TableCell>
+                                  <TableCell className="font-semibold text-slate-900">{item.customer_name}</TableCell>
+                                  <TableCell>{item.contact_person || "—"}</TableCell>
+                                  <TableCell>
+                                    <div className="text-sm">
+                                      <p className="text-slate-600 font-medium">{item.email || "—"}</p>
+                                      <p className="text-slate-400 text-xs">{item.contact || "—"}</p>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>{item.state ? `${item.state} (${item.pincode})` : "—"}</TableCell>
+                                  <TableCell>
+                                    <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
+                                      {item.status}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-right pr-6">
+                                    <div className="flex justify-end gap-2">
+                                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit Customer"}>
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete Customer"}>
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {/* Infinite Scroll Sentinel */}
+                              <TableRow ref={customerEndRef}>
+                                <TableCell colSpan={7} className="p-0 h-12 border-none">
+                                  {isFetchingNextCustomer && (
+                                    <div className="flex items-center justify-center py-4 text-slate-400 bg-slate-50/20">
+                                      <div className="flex gap-1.5 items-center bg-white px-4 py-1.5 rounded-full shadow-sm border border-slate-100">
+                                        <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]"></div>
+                                        <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]"></div>
+                                        <div className="h-1.5 w-1.5 bg-primary animate-bounce"></div>
+                                        <span className="text-xs font-medium ml-2 text-slate-500">Loading more customers...</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            </>
+                          )}
+                        </TableBody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* Pending Approval */
+                <div className="flex flex-col h-[600px]">
+                  <div className="flex-1 overflow-auto rounded-b-2xl">
+                    {pendingCustomers.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
+                        <CheckCircle2 className="h-10 w-10 text-emerald-300" />
+                        <p className="text-sm font-medium">No pending approvals</p>
+                      </div>
+                    ) : (
+                      <table className="w-full caption-bottom text-sm">
+                        <TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm">
+                          <TableRow className="hover:bg-transparent border-b">
+                            <TableHead className="pl-6">ID</TableHead>
+                            <TableHead>Customer Name</TableHead>
+                            <TableHead>GSTIN</TableHead>
+                            <TableHead>Location</TableHead>
+                            <TableHead>Submitted By</TableHead>
+                            <TableHead>Submitted On</TableHead>
+                            <TableHead className="text-right pr-6">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pendingCustomers.map(item => (
+                            <TableRow key={item.id} className="hover:bg-amber-50/30 transition-colors border-b border-slate-50 h-16">
+                              <TableCell className="font-medium pl-6 text-slate-500">{item.customer_id}</TableCell>
                               <TableCell className="font-semibold text-slate-900">{item.customer_name}</TableCell>
-                              <TableCell>{item.contact_person || "—"}</TableCell>
-                              <TableCell>
-                                <div className="text-sm">
-                                  <p className="text-slate-600 font-medium">{item.email || "—"}</p>
-                                  <p className="text-slate-400 text-xs">{item.contact || "—"}</p>
-                                </div>
-                              </TableCell>
+                              <TableCell>{item.gstin || "—"}</TableCell>
                               <TableCell>{item.state ? `${item.state} (${item.pincode})` : "—"}</TableCell>
-                              <TableCell>
-                                <Badge variant={item.status === 'Active' ? 'default' : 'secondary'} className={item.status === 'Active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none' : ''}>
-                                  {item.status}
-                                </Badge>
-                              </TableCell>
+                              <TableCell>{item.created_by_name || "—"}</TableCell>
+                              <TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
                               <TableCell className="text-right pr-6">
                                 <div className="flex justify-end gap-2">
-                                  <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Edit Customer"}>
-                                    <Pencil className="h-4 w-4" />
+                                  <Button size="sm" onClick={() => handleReviewRecord('customers', item.id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg">
+                                    <Check className="h-3.5 w-3.5 mr-1" /> Approve
                                   </Button>
-                                  <Button variant="ghost" size="icon" onClick={() => { setDeletingItem(item); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-destructive hover:bg-red-50" disabled={isReadOnly} title={isReadOnly ? "View Only Access" : "Delete Customer"}>
-                                    <Trash2 className="h-4 w-4" />
+                                  <Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'customers', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg">
+                                    <X className="h-3.5 w-3.5 mr-1" /> Reject
                                   </Button>
                                 </div>
                               </TableCell>
                             </TableRow>
                           ))}
-                          {/* Infinite Scroll Sentinel */}
-                          <TableRow ref={customerEndRef}>
-                            <TableCell colSpan={7} className="p-0 h-12 border-none">
-                              {isFetchingNextCustomer && (
-                                <div className="flex items-center justify-center py-4 text-slate-400 bg-slate-50/20">
-                                  <div className="flex gap-1.5 items-center bg-white px-4 py-1.5 rounded-full shadow-sm border border-slate-100">
-                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.3s]"></div>
-                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce [animation-delay:-0.15s]"></div>
-                                    <div className="h-1.5 w-1.5 bg-primary animate-bounce"></div>
-                                    <span className="text-xs font-medium ml-2 text-slate-500">Loading more customers...</span>
-                                  </div>
-                                </div>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        </>
-                      )}
-                    </TableBody>
-                  </table>
+                        </TableBody>
+                      </table>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
+        )}
 
+        {visibleTabs.includes("depots") && (
         <TabsContent value="depots">
           <Card className="shadow-xl border-none rounded-2xl bg-white">
             <CardHeader className="bg-slate-50/50 border-b p-6">
@@ -2093,8 +2321,28 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   <CardDescription className="mt-1">Manage your warehouse and depots</CardDescription>
                 </div>
               </div>
+              {isAdminOrSuper && (
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => setDepotSubTab('active')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${depotSubTab === 'active' ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Active Records</button>
+                  <button onClick={() => setDepotSubTab('pending')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${depotSubTab === 'pending' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    Pending Approval {pendingDepots.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${depotSubTab === 'pending' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'}`}>{pendingDepots.length}</span>}
+                  </button>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="p-0">
+              {depotSubTab === 'pending' ? (
+                <div className="flex flex-col h-[600px]"><div className="flex-1 overflow-auto rounded-b-2xl">
+                  {pendingDepots.length === 0 ? <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400"><CheckCircle2 className="h-10 w-10 text-emerald-300" /><p className="text-sm font-medium">No pending approvals</p></div> : (
+                    <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">ID</TableHead><TableHead>Depot Name</TableHead><TableHead>State</TableHead><TableHead>Salesman/Broker</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
+                    <TableBody>{pendingDepots.map(item => (<TableRow key={item.depot_id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
+                      <TableCell className="font-medium pl-6 text-slate-500">{item.depot_id}</TableCell><TableCell className="font-semibold text-slate-900">{item.depot_name}</TableCell><TableCell>{item.state || "—"}</TableCell><TableCell>{item.salesman_broker_name || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('depots', item.depot_id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'depots', id: item.depot_id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                    </TableRow>))}</TableBody></table>
+                  )}
+                </div></div>
+              ) : (
+              <>
               {/* Mobile card view */}
               <div className="md:hidden">
                 {isDepotLoading && depots.length === 0 ? (
@@ -2204,10 +2452,14 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   </table>
                 </div>
               </div>
+              </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
+        )}
 
+        {visibleTabs.includes("brokers") && (
         <TabsContent value="brokers">
           <Card className="shadow-xl border-none rounded-2xl bg-white">
             <CardHeader className="bg-slate-50/50 border-b p-6">
@@ -2220,8 +2472,28 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   <CardDescription className="mt-1">Manage your broker database</CardDescription>
                 </div>
               </div>
+              {isAdminOrSuper && (
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => setBrokerSubTab('active')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${brokerSubTab === 'active' ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Active Records</button>
+                  <button onClick={() => setBrokerSubTab('pending')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${brokerSubTab === 'pending' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    Pending Approval {pendingBrokers.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${brokerSubTab === 'pending' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'}`}>{pendingBrokers.length}</span>}
+                  </button>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="p-0">
+              {brokerSubTab === 'pending' ? (
+                <div className="flex flex-col h-[600px]"><div className="flex-1 overflow-auto rounded-b-2xl">
+                  {pendingBrokers.length === 0 ? <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400"><CheckCircle2 className="h-10 w-10 text-emerald-300" /><p className="text-sm font-medium">No pending approvals</p></div> : (
+                    <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">ID</TableHead><TableHead>Name</TableHead><TableHead>Depot</TableHead><TableHead>Mobile</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
+                    <TableBody>{pendingBrokers.map(item => (<TableRow key={item.broker_id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
+                      <TableCell className="font-medium pl-6 text-slate-500">{item.broker_id}</TableCell><TableCell className="font-semibold text-slate-900">{item.salesman_name}</TableCell><TableCell>{item.depot_name || "—"}</TableCell><TableCell>{item.mobile_no || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('brokers', item.broker_id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'brokers', id: item.broker_id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                    </TableRow>))}</TableBody></table>
+                  )}
+                </div></div>
+              ) : (
+              <>
               {/* Mobile card view */}
               <div className="md:hidden">
                 {isBrokerLoading && brokers.length === 0 ? (
@@ -2329,10 +2601,14 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   </table>
                 </div>
               </div>
+              </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
+        )}
 
+        {visibleTabs.includes("salespersons") && (
         <TabsContent value="salespersons">
           <Card className="shadow-xl border-none rounded-2xl bg-white">
             <CardHeader className="bg-slate-50/50 border-b p-6">
@@ -2345,8 +2621,28 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   <CardDescription className="mt-1">Manage your salesperson database</CardDescription>
                 </div>
               </div>
+              {isAdminOrSuper && (
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => setSalespersonSubTab('active')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${salespersonSubTab === 'active' ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Active Records</button>
+                  <button onClick={() => setSalespersonSubTab('pending')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${salespersonSubTab === 'pending' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    Pending Approval {pendingSalespersons.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${salespersonSubTab === 'pending' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'}`}>{pendingSalespersons.length}</span>}
+                  </button>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="p-0">
+              {salespersonSubTab === 'pending' ? (
+                <div className="flex flex-col h-[600px]"><div className="flex-1 overflow-auto rounded-b-2xl">
+                  {pendingSalespersons.length === 0 ? <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400"><CheckCircle2 className="h-10 w-10 text-emerald-300" /><p className="text-sm font-medium">No pending approvals</p></div> : (
+                    <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">ID</TableHead><TableHead>Name</TableHead><TableHead>Mobile</TableHead><TableHead>Email</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
+                    <TableBody>{pendingSalespersons.map(item => (<TableRow key={item.broker_id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
+                      <TableCell className="font-medium pl-6 text-slate-500">{item.broker_id}</TableCell><TableCell className="font-semibold text-slate-900">{item.salesman_name}</TableCell><TableCell>{item.mobile_no || "—"}</TableCell><TableCell>{item.email_id || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('salespersons', item.broker_id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'salespersons', id: item.broker_id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                    </TableRow>))}</TableBody></table>
+                  )}
+                </div></div>
+              ) : (
+              <>
               {/* Mobile card view */}
               <div className="md:hidden">
                 {isSalespersonLoading && salespersons.length === 0 ? (
@@ -2454,10 +2750,14 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   </table>
                 </div>
               </div>
+              </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
+        )}
 
+        {visibleTabs.includes("sku_details") && (
         <TabsContent value="sku_details">
           <Card className="shadow-xl border-none rounded-2xl bg-white">
             <CardHeader className="bg-slate-50/50 border-b p-6">
@@ -2470,8 +2770,28 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   <CardDescription className="mt-1">Manage your SKU database</CardDescription>
                 </div>
               </div>
+              {isAdminOrSuper && (
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => setSkuSubTab('active')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${skuSubTab === 'active' ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Active Records</button>
+                  <button onClick={() => setSkuSubTab('pending')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${skuSubTab === 'pending' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    Pending Approval {pendingSkus.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${skuSubTab === 'pending' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'}`}>{pendingSkus.length}</span>}
+                  </button>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="p-0">
+              {skuSubTab === 'pending' ? (
+                <div className="flex flex-col h-[600px]"><div className="flex-1 overflow-auto rounded-b-2xl">
+                  {pendingSkus.length === 0 ? <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400"><CheckCircle2 className="h-10 w-10 text-emerald-300" /><p className="text-sm font-medium">No pending approvals</p></div> : (
+                    <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">SKU Code</TableHead><TableHead>SKU Name</TableHead><TableHead>Main UOM</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
+                    <TableBody>{pendingSkus.map(item => (<TableRow key={item.id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
+                      <TableCell className="font-medium pl-6 text-slate-500">{item.sku_code}</TableCell><TableCell className="font-semibold text-slate-900">{item.sku_name}</TableCell><TableCell>{item.main_uom || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('sku_details', item.id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'sku_details', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                    </TableRow>))}</TableBody></table>
+                  )}
+                </div></div>
+              ) : (
+              <>
               {/* Mobile card view */}
               <div className="md:hidden">
                 {isSkuLoading && skuDetails.length === 0 ? (
@@ -2585,10 +2905,14 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   </table>
                 </div>
               </div>
+              </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
+        )}
 
+        {visibleTabs.includes("sku_selling_price") && (
         <TabsContent value="sku_selling_price">
           <Card className="shadow-xl border-none rounded-2xl bg-white">
             <CardHeader className="bg-slate-50/50 border-b p-6">
@@ -2734,7 +3058,9 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
             </CardContent>
           </Card>
         </TabsContent>
+        )}
 
+        {visibleTabs.includes("vehicle_master") && (
         <TabsContent value="vehicle_master">
           <Card className="shadow-xl border-none rounded-2xl bg-white">
             <CardHeader className="bg-slate-50/50 border-b p-6">
@@ -2747,8 +3073,28 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   <CardDescription className="mt-1">Manage your vehicle database and documents</CardDescription>
                 </div>
               </div>
+              {isAdminOrSuper && (
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => setVehicleSubTab('active')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${vehicleSubTab === 'active' ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Active Records</button>
+                  <button onClick={() => setVehicleSubTab('pending')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${vehicleSubTab === 'pending' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    Pending Approval {pendingVehicles.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${vehicleSubTab === 'pending' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'}`}>{pendingVehicles.length}</span>}
+                  </button>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="p-0">
+              {vehicleSubTab === 'pending' ? (
+                <div className="flex flex-col h-[600px]"><div className="flex-1 overflow-auto rounded-b-2xl">
+                  {pendingVehicles.length === 0 ? <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400"><CheckCircle2 className="h-10 w-10 text-emerald-300" /><p className="text-sm font-medium">No pending approvals</p></div> : (
+                    <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">Reg No</TableHead><TableHead>Vehicle ID</TableHead><TableHead>Type</TableHead><TableHead>Transporter</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
+                    <TableBody>{pendingVehicles.map(item => (<TableRow key={item.id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
+                      <TableCell className="font-semibold text-slate-900 pl-6">{item.registration_no}</TableCell><TableCell className="font-medium text-slate-500">{item.vehicle_master_id}</TableCell><TableCell>{item.vehicle_type || "—"}</TableCell><TableCell>{item.transporter || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('vehicle_master', item.id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'vehicle_master', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                    </TableRow>))}</TableBody></table>
+                  )}
+                </div></div>
+              ) : (
+              <>
               {/* Mobile card view */}
               <div className="md:hidden">
                 {isVehicleLoading && vehicles.length === 0 ? (
@@ -2878,10 +3224,14 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   </table>
                 </div>
               </div>
+              </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
+        )}
 
+        {visibleTabs.includes("driver_master") && (
         <TabsContent value="driver_master">
           <Card className="shadow-xl border-none rounded-2xl bg-white">
             <CardHeader className="bg-slate-50/50 border-b p-6">
@@ -2894,8 +3244,28 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   <CardDescription className="mt-1">Manage your driver database and licences</CardDescription>
                 </div>
               </div>
+              {isAdminOrSuper && (
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => setDriverSubTab('active')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${driverSubTab === 'active' ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Active Records</button>
+                  <button onClick={() => setDriverSubTab('pending')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${driverSubTab === 'pending' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    Pending Approval {pendingDrivers.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${driverSubTab === 'pending' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'}`}>{pendingDrivers.length}</span>}
+                  </button>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="p-0">
+              {driverSubTab === 'pending' ? (
+                <div className="flex flex-col h-[600px]"><div className="flex-1 overflow-auto rounded-b-2xl">
+                  {pendingDrivers.length === 0 ? <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400"><CheckCircle2 className="h-10 w-10 text-emerald-300" /><p className="text-sm font-medium">No pending approvals</p></div> : (
+                    <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">Driver ID</TableHead><TableHead>Name</TableHead><TableHead>Mobile</TableHead><TableHead>DL No</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
+                    <TableBody>{pendingDrivers.map(item => (<TableRow key={item.id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
+                      <TableCell className="font-medium pl-6 text-slate-500">{item.driver_master_id}</TableCell><TableCell className="font-semibold text-slate-900">{item.driver_name}</TableCell><TableCell>{item.mobile_no || "—"}</TableCell><TableCell>{item.driving_licence_no || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('driver_master', item.id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'driver_master', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                    </TableRow>))}</TableBody></table>
+                  )}
+                </div></div>
+              ) : (
+              <>
               {/* Mobile card view */}
               <div className="md:hidden">
                 {isDriverLoading && drivers.length === 0 ? (
@@ -3021,9 +3391,14 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   </table>
                 </div>
               </div>
+              </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
+        )}
+
+        {visibleTabs.includes("transport_master") && (
         <TabsContent value="transport_master">
           <Card className="shadow-xl border-none rounded-2xl bg-white">
             <CardHeader className="bg-slate-50/50 border-b p-6">
@@ -3036,8 +3411,28 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   <CardDescription className="mt-1">Manage your transporter and logistics partners</CardDescription>
                 </div>
               </div>
+              {isAdminOrSuper && (
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => setTransportSubTab('active')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${transportSubTab === 'active' ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Active Records</button>
+                  <button onClick={() => setTransportSubTab('pending')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${transportSubTab === 'pending' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    Pending Approval {pendingTransporters.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${transportSubTab === 'pending' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'}`}>{pendingTransporters.length}</span>}
+                  </button>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="p-0">
+              {transportSubTab === 'pending' ? (
+                <div className="flex flex-col h-[600px]"><div className="flex-1 overflow-auto rounded-b-2xl">
+                  {pendingTransporters.length === 0 ? <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400"><CheckCircle2 className="h-10 w-10 text-emerald-300" /><p className="text-sm font-medium">No pending approvals</p></div> : (
+                    <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">ID</TableHead><TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>GSTIN</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
+                    <TableBody>{pendingTransporters.map(item => (<TableRow key={item.id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
+                      <TableCell className="font-medium pl-6 text-slate-500">{item.transport_master_id}</TableCell><TableCell className="font-semibold text-slate-900">{item.transporter_name}</TableCell><TableCell>{item.contact_number || "—"}</TableCell><TableCell>{item.gstin || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('transport_master', item.id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'transport_master', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                    </TableRow>))}</TableBody></table>
+                  )}
+                </div></div>
+              ) : (
+              <>
               {/* Mobile card view */}
               <div className="md:hidden">
                 {isTransportLoading && transporters.length === 0 ? (
@@ -3159,9 +3554,12 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                   </table>
                 </div>
               </div>
+              </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
+        )}
 
       </Tabs>
 
@@ -3171,7 +3569,10 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will mark the record as Inactive and it will no longer appear in active lists.
+              {activeTab === 'sku_details'
+                ? "This action cannot be undone. This will permanently delete the record from the database."
+                : "This action cannot be undone. This will mark the record as Inactive and it will no longer appear in active lists."
+              }
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -3179,6 +3580,32 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90 transition-all shadow-md">
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete Record
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reject Record Dialog (shared for all tabs) */}
+      <AlertDialog open={!!rejectDialogContext} onOpenChange={(open) => { if (!open) { setRejectDialogContext(null); setRejectionReason("") } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject Record</AlertDialogTitle>
+            <AlertDialogDescription>
+              Optionally provide a reason. The record will not be used anywhere once rejected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="px-1 pb-2">
+            <Input placeholder="Rejection reason (optional)" value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setRejectDialogContext(null); setRejectionReason("") }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => rejectDialogContext && handleReviewRecord(rejectDialogContext.tab, rejectDialogContext.id, 'reject', rejectionReason)}
+              className="bg-destructive text-white hover:bg-destructive/90 transition-all shadow-md"
+              disabled={isReviewing}
+            >
+              {isReviewing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Reject
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

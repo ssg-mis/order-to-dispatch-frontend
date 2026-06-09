@@ -164,7 +164,7 @@ export function useAuth() {
 
   // Role-based read-only (pc role) OR per-page view_only access
   const isReadOnly = user?.role === 'pc' || getPageAccess(currentPageName) === 'view_only'
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
 
   const isFeatureEnabled = (feature: string): boolean => {
     return user?.features?.[feature] === true

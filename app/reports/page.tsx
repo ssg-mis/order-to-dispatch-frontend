@@ -30,7 +30,7 @@ import { reportsApi } from "@/lib/api-service"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ExportPdfModal } from "@/components/export-pdf-modal"
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api/v1"
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5002/api/v1"
 
 const OIL_TYPES = ["All", "Soya", "Rice", "Palm", "Other"]
 

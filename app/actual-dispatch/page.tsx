@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { FileUploadField } from "@/components/file-upload-field"
 import { Separator } from "@/components/ui/separator"
 import { Settings2, ChevronDown, ChevronUp, Truck, Weight, CheckCircle2, XCircle, FileText, ExternalLink, Printer, Download, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -138,12 +139,14 @@ export default function ActualDispatchPage() {
     vehicleMaster
       .filter(v => v.registration_no && v.status === 'Active')
       .map(v => ({ value: v.registration_no, label: v.registration_no }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }))
   ), [vehicleMaster])
 
   const driverOptions = useMemo(() => (
     driverMaster
       .filter(d => d.driver_name && d.status === 'Active')
       .map(d => ({ value: d.driver_name, label: d.driver_name }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }))
   ), [driverMaster])
 
   const transporterOptions = useMemo(() => ([
@@ -2626,24 +2629,15 @@ export default function ActualDispatchPage() {
                               <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase break-words">
                                 Fitness <span className="text-red-500">*</span> {vehicleData.fitness_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.fitness_file_name})</span>}
                               </span>
-                              <div className="flex items-center gap-2">
-                                {vehicleData.fitness && vehicleData.fitness !== 'pending' ? (
-                                  <a
-                                    href={vehicleData.fitness}
-                                    target="_blank"
-                                    className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                                  >
-                                    VIEW
-                                  </a>
-                                ) : (
-                                  <>
-                                    <Input type="file" className="hidden" id="fitness-doc" onChange={(e) => handleFileChange('fitness', 'fitness_file_name', e.target.files?.[0] || null)} />
-                                    <Label htmlFor="fitness-doc" title="Max file size: 20 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                      {isUploading === 'fitness' ? "..." : (vehicleData.fitness_file_name ? 'REPLACE' : 'UPLOAD')}
-                                    </Label>
-                                  </>
-                                )}
-                              </div>
+                              <FileUploadField
+                                accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                                value={vehicleData.fitness && vehicleData.fitness !== 'pending' ? vehicleData.fitness : null}
+                                fileName={vehicleData.fitness_file_name}
+                                helperText="Max file size: 20 MB"
+                                uploading={isUploading === 'fitness'}
+                                buttonText={vehicleData.fitness_file_name ? 'REPLACE' : 'UPLOAD'}
+                                onFilesSelected={(files) => handleFileChange('fitness', 'fitness_file_name', files[0] || null)}
+                              />
                             </div>
                             <Input
                               type="date"
@@ -2659,24 +2653,15 @@ export default function ActualDispatchPage() {
                               <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase break-words">
                                 Insurance <span className="text-red-500">*</span> {vehicleData.insurance_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.insurance_file_name})</span>}
                               </span>
-                              <div className="flex items-center gap-2">
-                                {vehicleData.insurance && vehicleData.insurance !== 'pending' ? (
-                                  <a
-                                    href={vehicleData.insurance}
-                                    target="_blank"
-                                    className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                                  >
-                                    VIEW
-                                  </a>
-                                ) : (
-                                  <>
-                                    <Input type="file" className="hidden" id="ins-doc" onChange={(e) => handleFileChange('insurance', 'insurance_file_name', e.target.files?.[0] || null)} />
-                                    <Label htmlFor="ins-doc" title="Max file size: 20 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                      {isUploading === 'insurance' ? "..." : (vehicleData.insurance_file_name ? 'REPLACE' : 'UPLOAD')}
-                                    </Label>
-                                  </>
-                                )}
-                              </div>
+                              <FileUploadField
+                                accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                                value={vehicleData.insurance && vehicleData.insurance !== 'pending' ? vehicleData.insurance : null}
+                                fileName={vehicleData.insurance_file_name}
+                                helperText="Max file size: 20 MB"
+                                uploading={isUploading === 'insurance'}
+                                buttonText={vehicleData.insurance_file_name ? 'REPLACE' : 'UPLOAD'}
+                                onFilesSelected={(files) => handleFileChange('insurance', 'insurance_file_name', files[0] || null)}
+                              />
                             </div>
                             <Input
                               type="date"
@@ -2692,24 +2677,15 @@ export default function ActualDispatchPage() {
                               <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase break-words">
                                 Tax Copy <span className="text-red-500">*</span> {vehicleData.tax_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.tax_file_name})</span>}
                               </span>
-                              <div className="flex items-center gap-2">
-                                {vehicleData.tax_copy && vehicleData.tax_copy !== 'pending' ? (
-                                  <a
-                                    href={vehicleData.tax_copy}
-                                    target="_blank"
-                                    className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                                  >
-                                    VIEW
-                                  </a>
-                                ) : (
-                                  <>
-                                    <Input type="file" className="hidden" id="tax-doc" onChange={(e) => handleFileChange('tax_copy', 'tax_file_name', e.target.files?.[0] || null)} />
-                                    <Label htmlFor="tax-doc" title="Max file size: 20 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                      {isUploading === 'tax_copy' ? "..." : (vehicleData.tax_file_name ? 'REPLACE' : 'UPLOAD')}
-                                    </Label>
-                                  </>
-                                )}
-                              </div>
+                              <FileUploadField
+                                accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                                value={vehicleData.tax_copy && vehicleData.tax_copy !== 'pending' ? vehicleData.tax_copy : null}
+                                fileName={vehicleData.tax_file_name}
+                                helperText="Max file size: 20 MB"
+                                uploading={isUploading === 'tax_copy'}
+                                buttonText={vehicleData.tax_file_name ? 'REPLACE' : 'UPLOAD'}
+                                onFilesSelected={(files) => handleFileChange('tax_copy', 'tax_file_name', files[0] || null)}
+                              />
                             </div>
                             <Input
                               type="date"
@@ -2725,24 +2701,15 @@ export default function ActualDispatchPage() {
                               <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase break-words">
                                 Pollution <span className="text-red-500">*</span> {vehicleData.pollution_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.pollution_file_name})</span>}
                               </span>
-                              <div className="flex items-center gap-2">
-                                {vehicleData.polution && vehicleData.polution !== 'pending' ? (
-                                  <a
-                                    href={vehicleData.polution}
-                                    target="_blank"
-                                    className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                                  >
-                                    VIEW
-                                  </a>
-                                ) : (
-                                  <>
-                                    <Input type="file" className="hidden" id="poll-doc" onChange={(e) => handleFileChange('polution', 'pollution_file_name', e.target.files?.[0] || null)} />
-                                    <Label htmlFor="poll-doc" title="Max file size: 20 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                      {isUploading === 'polution' ? "..." : (vehicleData.pollution_file_name ? 'REPLACE' : 'UPLOAD')}
-                                    </Label>
-                                  </>
-                                )}
-                              </div>
+                              <FileUploadField
+                                accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                                value={vehicleData.polution && vehicleData.polution !== 'pending' ? vehicleData.polution : null}
+                                fileName={vehicleData.pollution_file_name}
+                                helperText="Max file size: 20 MB"
+                                uploading={isUploading === 'polution'}
+                                buttonText={vehicleData.pollution_file_name ? 'REPLACE' : 'UPLOAD'}
+                                onFilesSelected={(files) => handleFileChange('polution', 'pollution_file_name', files[0] || null)}
+                              />
                             </div>
                             <Input
                               type="date"
@@ -2758,24 +2725,15 @@ export default function ActualDispatchPage() {
                               <span className="text-[10px] font-black text-slate-500 group-hover:text-purple-600 transition-colors uppercase break-words">
                                 State Permit <span className="text-red-500">*</span> {vehicleData.permit1_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit1_file_name})</span>}
                               </span>
-                              <div className="flex items-center gap-2">
-                                {vehicleData.permit1 && vehicleData.permit1 !== 'pending' ? (
-                                  <a
-                                    href={vehicleData.permit1}
-                                    target="_blank"
-                                    className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                                  >
-                                    VIEW
-                                  </a>
-                                ) : (
-                                  <>
-                                    <Input type="file" className="hidden" id="permit1-doc" onChange={(e) => handleFileChange('permit1', 'permit1_file_name', e.target.files?.[0] || null)} />
-                                    <Label htmlFor="permit1-doc" title="Max file size: 20 MB" className="bg-slate-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-slate-600 group-hover:bg-purple-600 group-hover:text-white transition-all cursor-pointer">
-                                      {isUploading === 'permit1' ? "..." : (vehicleData.permit1_file_name ? 'REPLACE' : 'UPLOAD')}
-                                    </Label>
-                                  </>
-                                )}
-                              </div>
+                              <FileUploadField
+                                accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                                value={vehicleData.permit1 && vehicleData.permit1 !== 'pending' ? vehicleData.permit1 : null}
+                                fileName={vehicleData.permit1_file_name}
+                                helperText="Max file size: 20 MB"
+                                uploading={isUploading === 'permit1'}
+                                buttonText={vehicleData.permit1_file_name ? 'REPLACE' : 'UPLOAD'}
+                                onFilesSelected={(files) => handleFileChange('permit1', 'permit1_file_name', files[0] || null)}
+                              />
                             </div>
                             <Input
                               type="date"
@@ -2797,37 +2755,16 @@ export default function ActualDispatchPage() {
                               )}>
                                 National / Other State Permit {isInterState && <span className="text-red-500">*</span>} {vehicleData.permit2_file_name && <span className="text-purple-500 normal-case font-medium ml-1">({vehicleData.permit2_file_name})</span>}
                               </span>
-                              <div className="flex items-center gap-2">
-                                {vehicleData.permit2_out_state && vehicleData.permit2_out_state !== 'pending' ? (
-                                  <a
-                                    href={vehicleData.permit2_out_state}
-                                    target="_blank"
-                                    className="bg-purple-100 text-[9px] font-black px-2.5 py-1 rounded-lg text-purple-700 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                                  >
-                                    VIEW
-                                  </a>
-                                ) : (
-                                  <>
-                                    <Input
-                                      type="file"
-                                      className="hidden"
-                                      id="permit2-doc"
-                                      disabled={!isInterState}
-                                      onChange={(e) => handleFileChange('permit2_out_state', 'permit2_file_name', e.target.files?.[0] || null)}
-                                    />
-                                    <Label
-                                      htmlFor="permit2-doc"
-                                      title="Max file size: 20 MB"
-                                      className={cn(
-                                        "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all",
-                                        isInterState ? "bg-slate-100 text-slate-600 hover:bg-purple-600 hover:text-white cursor-pointer" : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                                      )}
-                                    >
-                                      {isUploading === 'permit2_out_state' ? "..." : (vehicleData.permit2_file_name ? 'REPLACE' : 'UPLOAD')}
-                                    </Label>
-                                  </>
-                                )}
-                              </div>
+                              <FileUploadField
+                                accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                                value={vehicleData.permit2_out_state && vehicleData.permit2_out_state !== 'pending' ? vehicleData.permit2_out_state : null}
+                                fileName={vehicleData.permit2_file_name}
+                                helperText="Max file size: 20 MB"
+                                uploading={isUploading === 'permit2_out_state'}
+                                buttonText={vehicleData.permit2_file_name ? 'REPLACE' : 'UPLOAD'}
+                                disabled={!isInterState}
+                                onFilesSelected={(files) => handleFileChange('permit2_out_state', 'permit2_file_name', files[0] || null)}
+                              />
                             </div>
                             <Input
                               type="date"
@@ -2902,23 +2839,29 @@ export default function ActualDispatchPage() {
                           <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-1">
                             Weightment Slip <span className="text-slate-400 font-normal normal-case">(Optional)</span> {loadData.weightmentSlip_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.weightmentSlip_file_name})</span>}
                           </Label>
-                          <div className="flex gap-2">
-                            <Input type="file" className="hidden" id="weightment-slip" onChange={(e) => handleFileChange('weightmentSlip', 'weightmentSlip_file_name', e.target.files?.[0] || null, 'load')} />
-                            <Label htmlFor="weightment-slip" title="Max file size: 20 MB" className="h-10 flex-1 flex items-center justify-center bg-slate-100 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-black text-slate-600 cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all">
-                              {isUploading === 'weightmentSlip' ? "..." : (loadData.weightmentSlip ? 'REPLACE' : 'UPLOAD')}
-                            </Label>
-                          </div>
+                          <FileUploadField
+                            accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                            value={loadData.weightmentSlip && loadData.weightmentSlip !== 'pending' ? loadData.weightmentSlip : null}
+                            fileName={loadData.weightmentSlip_file_name}
+                            helperText="Max file size: 20 MB"
+                            uploading={isUploading === 'weightmentSlip'}
+                            buttonText={loadData.weightmentSlip_file_name ? 'REPLACE' : 'UPLOAD'}
+                            onFilesSelected={(files) => handleFileChange('weightmentSlip', 'weightmentSlip_file_name', files[0] || null, 'load')}
+                          />
                         </div>
                         <div className="space-y-1.5">
                           <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter ml-1 flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-1">
                             No Plate Image <span className="text-slate-400 font-normal normal-case">(Optional)</span> {loadData.vehicleNoPlateImage_file_name && <span className="text-blue-600 text-[8px] truncate max-w-20">({loadData.vehicleNoPlateImage_file_name})</span>}
                           </Label>
-                          <div className="flex gap-2">
-                            <Input type="file" className="hidden" id="no-plate" onChange={(e) => handleFileChange('vehicleNoPlateImage', 'vehicleNoPlateImage_file_name', e.target.files?.[0] || null, 'load')} />
-                            <Label htmlFor="no-plate" title="Max file size: 20 MB" className="h-10 flex-1 flex items-center justify-center bg-slate-100 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-black text-slate-600 cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all">
-                              {isUploading === 'vehicleNoPlateImage' ? "..." : (loadData.vehicleNoPlateImage ? 'REPLACE' : 'UPLOAD')}
-                            </Label>
-                          </div>
+                          <FileUploadField
+                            accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                            value={loadData.vehicleNoPlateImage && loadData.vehicleNoPlateImage !== 'pending' ? loadData.vehicleNoPlateImage : null}
+                            fileName={loadData.vehicleNoPlateImage_file_name}
+                            helperText="Max file size: 20 MB"
+                            uploading={isUploading === 'vehicleNoPlateImage'}
+                            buttonText={loadData.vehicleNoPlateImage_file_name ? 'REPLACE' : 'UPLOAD'}
+                            onFilesSelected={(files) => handleFileChange('vehicleNoPlateImage', 'vehicleNoPlateImage_file_name', files[0] || null, 'load')}
+                          />
                         </div>
                       </div>
 

@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { FileUploadField } from "@/components/file-upload-field"
 import { Upload, Settings2, FileText, ChevronUp, ChevronDown, Plus, X, Truck, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -1709,39 +1710,15 @@ export default function MakeInvoicePage() {
                     </div>
 
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label>Upload Invoice Copy <span className="text-red-500">*</span></Label>
-                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Max 20 MB</span>
-                      </div>
-                      <div className="relative flex items-center">
-                        <Input
-                          type="file"
-                          id="invoice-file"
-                          accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
-                          onChange={(e) => {
-                            if (e.target.files?.[0]) {
-                              handleFileUpload(e.target.files[0])
-                            }
-                          }}
-                          className="hidden"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full justify-between text-xs h-10 border-dashed hover:border-blue-500 hover:bg-blue-50/20 transition-all"
-                          onClick={() => document.getElementById('invoice-file')?.click()}
-                        >
-                          <span className="flex items-center gap-2 text-slate-500 truncate">
-                            <Upload className="h-4 w-4 text-slate-400" />
-                            {invoiceData.invoiceFileName || 'Select Invoice Document'}
-                          </span>
-                          {invoiceData.invoiceFileName && (
-                            <span className="text-[9px] text-blue-700 font-black bg-blue-100 px-2 py-0.5 rounded-full ml-2 shrink-0 uppercase tracking-tight">
-                              Selected
-                            </span>
-                          )}
-                        </Button>
-                      </div>
+                      <FileUploadField
+                        label={<>Upload Invoice Copy <span className="text-red-500">*</span></>}
+                        accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.pdf"
+                        fileName={invoiceData.invoiceFileName}
+                        helperText="Max file size: 20 MB"
+                        uploading={isUploading}
+                        buttonText="Select Invoice Document"
+                        onFilesSelected={(files) => files[0] && handleFileUpload(files[0])}
+                      />
                     </div>
 
                     <div className="space-y-2">
