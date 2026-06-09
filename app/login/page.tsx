@@ -40,6 +40,7 @@ export default function LoginPage() {
         const { token, ...userData } = response.data
         localStorage.setItem("user", JSON.stringify(userData))
         localStorage.setItem("isAuthenticated", "true")
+        if (token) localStorage.setItem("token", token)
         
         toast({
           title: "Login Successful",

@@ -86,6 +86,12 @@ async function request<T = any>(
     ...options.headers,
   };
 
+  // Send JWT via Authorization header — works cross-origin regardless of cookie/SameSite config
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   // Inject master tab context so backend can enforce tab-level permissions.
   // Only present for master-page requests; workflow pages never set this.
   if (_masterTabContext) {
@@ -112,6 +118,7 @@ async function request<T = any>(
       if (typeof window !== 'undefined') {
         localStorage.removeItem('user');
         localStorage.removeItem('isAuthenticated');
+        localStorage.removeItem('token');
         window.location.href = '/login';
       }
       throw data;
