@@ -116,8 +116,8 @@ function InvoiceSummary({ selectedGroups, selectedProducts }: {
   }
 
   const rawTotal = totalTaxable + cgst + sgst + igst
-  const roundOff = rawTotal - Math.floor(rawTotal)
-  const invoiceTotal = Math.floor(rawTotal)
+  const invoiceTotal = Math.round(rawTotal)
+  const roundOff = parseFloat((invoiceTotal - rawTotal).toFixed(2))
 
   return (
     <div className="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-hidden">
@@ -143,7 +143,9 @@ function InvoiceSummary({ selectedGroups, selectedProducts }: {
         </div>
         <div className="flex justify-between items-center text-xs">
           <span className="font-black uppercase text-slate-500 text-[10px]">Round Off</span>
-          <span className="font-mono font-bold text-slate-500">{roundOff > 0 ? `-₹${roundOff.toFixed(2)}` : "—"}</span>
+          <span className="font-mono font-bold text-slate-500">
+            {roundOff > 0 ? `+₹${roundOff.toFixed(2)}` : roundOff < 0 ? `-₹${Math.abs(roundOff).toFixed(2)}` : `₹0.00`}
+          </span>
         </div>
         <div className="flex justify-between items-center border-t border-slate-200 pt-2">
           <span className="font-black uppercase text-slate-800 text-[11px]">Total Invoice Amount</span>

@@ -1067,7 +1067,7 @@ export const customerApi = {
     return request('/customers/pending');
   },
 
-  review: async (id: number, data: { action: string; reason?: string }): Promise<ApiResponse> => {
+  review: async (id: number, data: { action: string; reason?: string; [key: string]: any }): Promise<ApiResponse> => {
     return request(`/customers/${id}/approval`, {
       method: 'PATCH',
       body: JSON.stringify(data),
@@ -1171,7 +1171,7 @@ export const depotApi = {
     return request(`/depots/${id}`, { method: 'DELETE' });
   },
   getPending: async (): Promise<ApiResponse> => request('/depots/pending'),
-  review: async (id: string, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/depots/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
+  review: async (id: string, data: { action: string; reason?: string; [key: string]: any }): Promise<ApiResponse> => request(`/depots/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 export const processStageApi = {
@@ -1253,7 +1253,7 @@ export const brokerApi = {
     return request(`/brokers/${id}`, { method: 'DELETE' });
   },
   getPending: async (): Promise<ApiResponse> => request('/brokers/pending'),
-  review: async (id: string, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/brokers/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
+  review: async (id: string, data: { action: string; reason?: string; [key: string]: any }): Promise<ApiResponse> => request(`/brokers/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 /**
@@ -1289,7 +1289,7 @@ export const skuDetailsApi = {
     return request(`/sku-details/${id}`, { method: 'DELETE' });
   },
   getPending: async (): Promise<ApiResponse> => request('/sku-details/pending'),
-  review: async (id: number, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/sku-details/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
+  review: async (id: number, data: { action: string; reason?: string; [key: string]: any }): Promise<ApiResponse> => request(`/sku-details/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 /**
@@ -1378,7 +1378,7 @@ export const vehicleMasterApi = {
     return request(`/vehicle-master/${id}`, { method: 'DELETE' });
   },
   getPending: async (): Promise<ApiResponse> => request('/vehicle-master/pending'),
-  review: async (id: string | number, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/vehicle-master/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
+  review: async (id: string | number, data: { action: string; reason?: string; [key: string]: any }): Promise<ApiResponse> => request(`/vehicle-master/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 /**
@@ -1414,7 +1414,7 @@ export const driverMasterApi = {
     return request(`/driver-master/${id}`, { method: 'DELETE' });
   },
   getPending: async (): Promise<ApiResponse> => request('/driver-master/pending'),
-  review: async (id: string | number, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/driver-master/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
+  review: async (id: string | number, data: { action: string; reason?: string; [key: string]: any }): Promise<ApiResponse> => request(`/driver-master/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 /**
@@ -1450,7 +1450,7 @@ export const transportMasterApi = {
     return request(`/transport-master/${id}`, { method: 'DELETE' });
   },
   getPending: async (): Promise<ApiResponse> => request('/transport-master/pending'),
-  review: async (id: string | number, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/transport-master/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
+  review: async (id: string | number, data: { action: string; reason?: string; [key: string]: any }): Promise<ApiResponse> => request(`/transport-master/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 
@@ -1519,7 +1519,7 @@ export const salespersonApi = {
     return request(`/salespersons/${id}`, { method: 'DELETE' });
   },
   getPending: async (): Promise<ApiResponse> => request('/salespersons/pending'),
-  review: async (id: string, data: { action: string; reason?: string }): Promise<ApiResponse> => request(`/salespersons/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
+  review: async (id: string, data: { action: string; reason?: string; [key: string]: any }): Promise<ApiResponse> => request(`/salespersons/${id}/approval`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 /**
@@ -1673,6 +1673,9 @@ export const inventoryApi = {
 export const productionApi = {
   getByDate: async (date: string): Promise<ApiResponse> => {
     return request(`/production?date=${date}`);
+  },
+  getByRange: async (from: string, to: string): Promise<ApiResponse> => {
+    return request(`/production?from=${from}&to=${to}`);
   },
   bulkUpsert: async (data: { date: string; items: { sku_name: string; qty: number }[] }): Promise<ApiResponse> => {
     return request('/production/bulk', {

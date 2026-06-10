@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { inventoryApi, productionApi } from "@/lib/api-service"
+import { skuDetailsApi, productionApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -22,26 +22,27 @@ export default function ProductionPage() {
   const [isSavingProduction, setIsSavingProduction] = useState(false)
   const [isLoadingProduction, setIsLoadingProduction] = useState(false)
 
-  const [viewDate, setViewDate] = useState<string>(() => new Date().toISOString().split('T')[0])
-  const [viewData, setViewData] = useState<{ sku_name: string; qty: number }[]>([])
+  const [fromDate, setFromDate] = useState<string>(() => {
+    const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().split('T')[0]
+  })
+  const [toDate, setToDate] = useState<string>(() => new Date().toISOString().split('T')[0])
+  const [rangeData, setRangeData] = useState<{ sku_name: string; date: string; qty: number }[]>([])
   const [isLoadingView, setIsLoadingView] = useState(false)
 
-  const { data: inventoryDataRaw } = useQuery({
-    queryKey: ['inventory-data-production'],
+  const { data: skuListRaw } = useQuery({
+    queryKey: ['sku-details-production'],
     queryFn: async () => {
-      const res = await inventoryApi.getData()
-      return res.success ? res.data : []
+      const res = await skuDetailsApi.getAll({ all: 'true' })
+      return res.success ? (res.data.skuDetails || res.data) : []
     },
     staleTime: 5 * 60 * 1000,
   })
 
   const banariSkus = useMemo(() => {
-    return Array.from(new Set<string>(
-      (inventoryDataRaw || [])
-        .filter((r: any) => r.depot_name?.toLowerCase() === 'banari')
-        .map((r: any) => r.product_name as string)
-    )).sort()
-  }, [inventoryDataRaw])
+    return (skuListRaw || [])
+      .map((r: any) => ({ name: r.sku_name as string, sku_id: r.sku_code as string, status: r.status as string }))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name))
+  }, [skuListRaw])
 
   useEffect(() => {
     setIsLoadingProduction(true)
@@ -59,15 +60,14 @@ export default function ProductionPage() {
   }, [productionDate])
 
   useEffect(() => {
+    if (!fromDate || !toDate || fromDate > toDate) return
     setIsLoadingView(true)
-    setViewData([])
-    productionApi.getByDate(viewDate)
-      .then(res => {
-        if (res.success) setViewData(res.data.filter((r: any) => r.qty > 0))
-      })
+    setRangeData([])
+    productionApi.getByRange(fromDate, toDate)
+      .then(res => { if (res.success) setRangeData(res.data) })
       .catch(() => {})
       .finally(() => setIsLoadingView(false))
-  }, [viewDate])
+  }, [fromDate, toDate])
 
   const handleSaveProduction = async () => {
     setIsSavingProduction(true)
@@ -78,8 +78,11 @@ export default function ProductionPage() {
       const res = await productionApi.bulkUpsert({ date: productionDate, items })
       if (res.success) {
         toast({ title: "Saved", description: "Production data saved successfully" })
-        if (viewDate === productionDate) {
-          setViewData(items.filter(i => i.qty > 0).map(i => ({ sku_name: i.sku_name, qty: i.qty })))
+        // re-fetch history range if saved date falls within it
+        if (productionDate >= fromDate && productionDate <= toDate) {
+          productionApi.getByRange(fromDate, toDate)
+            .then(r => { if (r.success) setRangeData(r.data) })
+            .catch(() => {})
         }
       }
     } catch (error: any) {
@@ -143,29 +146,37 @@ export default function ProductionPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50 hover:bg-slate-50">
+                      <TableHead className="font-semibold text-slate-700 w-32">ID</TableHead>
                       <TableHead className="font-semibold text-slate-700">SKU Name</TableHead>
+                      <TableHead className="font-semibold text-slate-700 w-28">Status</TableHead>
                       <TableHead className="font-semibold text-slate-700 text-right w-48">Boxes Produced</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {banariSkus.map((skuName) => (
-                      <TableRow key={skuName} className="hover:bg-slate-50/60">
-                        <TableCell className="font-medium text-slate-800">{skuName}</TableCell>
+                    {banariSkus.map((sku: { name: string; sku_id: string; status: string }) => (
+                      <TableRow key={sku.name} className="hover:bg-slate-50/60">
+                        <TableCell className="text-xs text-slate-500 font-mono">{sku.sku_id || "—"}</TableCell>
+                        <TableCell className="font-medium text-slate-800">{sku.name}</TableCell>
+                        <TableCell>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sku.status === 'Active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                            {sku.status || 'Active'}
+                          </span>
+                        </TableCell>
                         <TableCell>
                           <Input
                             type="number"
                             className="w-36 text-right ml-auto"
                             placeholder="0"
                             min="0"
-                            value={productionQtyMap[skuName] ?? ''}
-                            onChange={e => setProductionQtyMap(prev => ({ ...prev, [skuName]: e.target.value }))}
+                            value={productionQtyMap[sku.name] ?? ''}
+                            onChange={e => setProductionQtyMap(prev => ({ ...prev, [sku.name]: e.target.value }))}
                           />
                         </TableCell>
                       </TableRow>
                     ))}
                     {banariSkus.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={2} className="text-center py-12 text-slate-400">No SKUs found for Banari depot</TableCell>
+                        <TableCell colSpan={4} className="text-center py-12 text-slate-400">No SKUs found for Banari depot</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -177,43 +188,73 @@ export default function ProductionPage() {
           {/* History Tab */}
           <TabsContent value="history" className="m-0">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-4 border-b">
-              <CardDescription>View production recorded for any date</CardDescription>
-              <Input
-                type="date"
-                className="w-44"
-                value={viewDate}
-                min="2026-04-01"
-                onChange={e => setViewDate(e.target.value)}
-              />
+              <CardDescription>View production across a date range</CardDescription>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  className="w-40"
+                  value={fromDate}
+                  min="2026-04-01"
+                  onChange={e => setFromDate(e.target.value)}
+                />
+                <span className="text-slate-400 text-sm">to</span>
+                <Input
+                  type="date"
+                  className="w-40"
+                  value={toDate}
+                  min="2026-04-01"
+                  onChange={e => setToDate(e.target.value)}
+                />
+              </div>
             </div>
             <CardContent className="p-0">
               {isLoadingView ? (
                 <div className="flex items-center justify-center py-16">
                   <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                 </div>
-              ) : viewData.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 gap-2">
-                  <CalendarSearch className="h-8 w-8 text-slate-300" />
-                  <p className="text-slate-400 text-sm">No data entered on {formatDate(viewDate)}</p>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50 hover:bg-slate-50">
-                      <TableHead className="font-semibold text-slate-700">SKU Name</TableHead>
-                      <TableHead className="font-semibold text-slate-700 text-right w-48">Boxes Produced</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {viewData.map((row) => (
-                      <TableRow key={row.sku_name} className="hover:bg-slate-50/60">
-                        <TableCell className="font-medium text-slate-800">{row.sku_name}</TableCell>
-                        <TableCell className="text-right font-semibold text-slate-800 pr-8">{row.qty}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+              ) : (() => {
+                const dates = Array.from(new Set(rangeData.map(r => r.date))).sort()
+                const bySkuMap: Record<string, Record<string, number>> = {}
+                rangeData.forEach(r => {
+                  if (!bySkuMap[r.sku_name]) bySkuMap[r.sku_name] = {}
+                  bySkuMap[r.sku_name][r.date] = r.qty
+                })
+                const pivotRows = Object.entries(bySkuMap).sort(([a], [b]) => a.localeCompare(b))
+                if (pivotRows.length === 0) return (
+                  <div className="flex flex-col items-center justify-center py-16 gap-2">
+                    <CalendarSearch className="h-8 w-8 text-slate-300" />
+                    <p className="text-slate-400 text-sm">No data for selected range</p>
+                  </div>
+                )
+                return (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50 hover:bg-slate-50">
+                          <TableHead className="font-semibold text-slate-700 sticky left-0 bg-slate-50 z-10">SKU Name</TableHead>
+                          {dates.map(d => (
+                            <TableHead key={d} className="font-semibold text-slate-700 text-center whitespace-nowrap">
+                              {formatDate(d)}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pivotRows.map(([skuName, dateMap]) => (
+                          <TableRow key={skuName} className="hover:bg-slate-50/60">
+                            <TableCell className="font-medium text-slate-800 sticky left-0 bg-white z-10">{skuName}</TableCell>
+                            {dates.map(d => (
+                              <TableCell key={d} className="text-center text-slate-700">
+                                {dateMap[d] ?? <span className="text-slate-300">—</span>}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )
+              })()}
             </CardContent>
           </TabsContent>
         </Tabs>

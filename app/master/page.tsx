@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Combobox } from "@/components/ui/combobox"
 import { FileUploadField } from "@/components/file-upload-field"
 import { useToast } from "@/hooks/use-toast"
 import { customerApi, depotApi, brokerApi, skuDetailsApi, commonApi, skuSellingPriceApi, varCalcApi, salespersonApi, vehicleMasterApi, driverMasterApi, transportMasterApi, orderApi, inventoryApi, setMasterTabContext } from "@/lib/api-service"
@@ -492,7 +493,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
     refetch: refetchVehicle,
   } = useInfiniteQuery({
     queryKey: ["vehicle_master", searchTerm],
-    queryFn: ({ pageParam = 1 }) => vehicleMasterApi.getAll({ page: pageParam, limit: 20, search: searchTerm, all: true }),
+    queryFn: ({ pageParam = 1 }) => vehicleMasterApi.getAll({ page: pageParam, limit: 20, search: searchTerm }),
     getNextPageParam: (lastPage) => {
       const { page, limit, total } = lastPage.data.pagination;
       return page * limit < total ? page + 1 : undefined;
@@ -538,6 +539,8 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
   const [rejectDialogContext, setRejectDialogContext] = useState<{ tab: string; id: any } | null>(null)
   const [rejectionReason, setRejectionReason] = useState("")
   const [isReviewing, setIsReviewing] = useState(false)
+  const [approvalReviewModal, setApprovalReviewModal] = useState<{ tab: string; item: any } | null>(null)
+  const [approvalEditData, setApprovalEditData] = useState<Record<string, any>>({})
 
   // Form states
   const [customerForm, setCustomerForm] = useState<Partial<Customer>>({
@@ -953,18 +956,24 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
     }
   }
 
-  const handleReviewRecord = async (tab: string, id: any, action: 'approve' | 'reject', reason?: string) => {
+  const openApprovalModal = (tab: string, item: any) => {
+    setApprovalReviewModal({ tab, item })
+    setApprovalEditData({ ...item })
+  }
+
+  const handleReviewRecord = async (tab: string, id: any, action: 'approve' | 'reject', reason?: string, overrides?: Record<string, any>) => {
     setIsReviewing(true)
     try {
       let res: any
-      if (tab === 'customers') res = await customerApi.review(id, { action, reason })
-      else if (tab === 'depots') res = await depotApi.review(id, { action, reason })
-      else if (tab === 'brokers') res = await brokerApi.review(id, { action, reason })
-      else if (tab === 'salespersons') res = await salespersonApi.review(id, { action, reason })
-      else if (tab === 'sku_details') res = await skuDetailsApi.review(id, { action, reason })
-      else if (tab === 'vehicle_master') res = await vehicleMasterApi.review(id, { action, reason })
-      else if (tab === 'driver_master') res = await driverMasterApi.review(id, { action, reason })
-      else if (tab === 'transport_master') res = await transportMasterApi.review(id, { action, reason })
+      const payload = { action, reason, ...(action === 'approve' ? overrides : {}) }
+      if (tab === 'customers') res = await customerApi.review(id, payload)
+      else if (tab === 'depots') res = await depotApi.review(id, payload)
+      else if (tab === 'brokers') res = await brokerApi.review(id, payload)
+      else if (tab === 'salespersons') res = await salespersonApi.review(id, payload)
+      else if (tab === 'sku_details') res = await skuDetailsApi.review(id, payload)
+      else if (tab === 'vehicle_master') res = await vehicleMasterApi.review(id, payload)
+      else if (tab === 'driver_master') res = await driverMasterApi.review(id, payload)
+      else if (tab === 'transport_master') res = await transportMasterApi.review(id, payload)
       if (res?.success) {
         toast({ title: "Success", description: res.message || `Record ${action}d successfully` })
         if (tab === 'customers') { refetchPendingCustomers(); refetchCustomer() }
@@ -982,6 +991,8 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
       setIsReviewing(false)
       setRejectDialogContext(null)
       setRejectionReason("")
+      setApprovalReviewModal(null)
+      setApprovalEditData({})
     }
   }
 
@@ -1652,16 +1663,13 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
           </div>
           <div className="space-y-2">
             <Label>Transporter</Label>
-            <Select value={vehicleForm.transporter} onValueChange={val => setVehicleForm({...vehicleForm, transporter: val})}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select transporter" className="truncate" />
-              </SelectTrigger>
-              <SelectContent>
-                {sortedVehicleTransporters.map((name) => (
-                  <SelectItem key={name} value={name}>{name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={sortedVehicleTransporters.map(name => ({ value: name, label: name }))}
+              value={vehicleForm.transporter}
+              onValueChange={val => setVehicleForm({...vehicleForm, transporter: val})}
+              placeholder="Select transporter"
+              searchPlaceholder="Search transporter..."
+            />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -2287,7 +2295,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                               <TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
                               <TableCell className="text-right pr-6">
                                 <div className="flex justify-end gap-2">
-                                  <Button size="sm" onClick={() => handleReviewRecord('customers', item.id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg">
+                                  <Button size="sm" onClick={() => openApprovalModal('customers', item)} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg">
                                     <Check className="h-3.5 w-3.5 mr-1" /> Approve
                                   </Button>
                                   <Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'customers', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg">
@@ -2337,7 +2345,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                     <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">ID</TableHead><TableHead>Depot Name</TableHead><TableHead>State</TableHead><TableHead>Salesman/Broker</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
                     <TableBody>{pendingDepots.map(item => (<TableRow key={item.depot_id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
                       <TableCell className="font-medium pl-6 text-slate-500">{item.depot_id}</TableCell><TableCell className="font-semibold text-slate-900">{item.depot_name}</TableCell><TableCell>{item.state || "—"}</TableCell><TableCell>{item.salesman_broker_name || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
-                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('depots', item.depot_id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'depots', id: item.depot_id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => openApprovalModal('depots', item)} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'depots', id: item.depot_id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
                     </TableRow>))}</TableBody></table>
                   )}
                 </div></div>
@@ -2488,7 +2496,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                     <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">ID</TableHead><TableHead>Name</TableHead><TableHead>Depot</TableHead><TableHead>Mobile</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
                     <TableBody>{pendingBrokers.map(item => (<TableRow key={item.broker_id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
                       <TableCell className="font-medium pl-6 text-slate-500">{item.broker_id}</TableCell><TableCell className="font-semibold text-slate-900">{item.salesman_name}</TableCell><TableCell>{item.depot_name || "—"}</TableCell><TableCell>{item.mobile_no || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
-                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('brokers', item.broker_id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'brokers', id: item.broker_id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => openApprovalModal('brokers', item)} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'brokers', id: item.broker_id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
                     </TableRow>))}</TableBody></table>
                   )}
                 </div></div>
@@ -2637,7 +2645,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                     <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">ID</TableHead><TableHead>Name</TableHead><TableHead>Mobile</TableHead><TableHead>Email</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
                     <TableBody>{pendingSalespersons.map(item => (<TableRow key={item.broker_id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
                       <TableCell className="font-medium pl-6 text-slate-500">{item.broker_id}</TableCell><TableCell className="font-semibold text-slate-900">{item.salesman_name}</TableCell><TableCell>{item.mobile_no || "—"}</TableCell><TableCell>{item.email_id || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
-                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('salespersons', item.broker_id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'salespersons', id: item.broker_id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => openApprovalModal('salespersons', item)} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'salespersons', id: item.broker_id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
                     </TableRow>))}</TableBody></table>
                   )}
                 </div></div>
@@ -2786,7 +2794,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                     <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">SKU Code</TableHead><TableHead>SKU Name</TableHead><TableHead>Main UOM</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
                     <TableBody>{pendingSkus.map(item => (<TableRow key={item.id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
                       <TableCell className="font-medium pl-6 text-slate-500">{item.sku_code}</TableCell><TableCell className="font-semibold text-slate-900">{item.sku_name}</TableCell><TableCell>{item.main_uom || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
-                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('sku_details', item.id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'sku_details', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => openApprovalModal('sku_details', item)} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'sku_details', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
                     </TableRow>))}</TableBody></table>
                   )}
                 </div></div>
@@ -3089,7 +3097,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                     <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">Reg No</TableHead><TableHead>Vehicle ID</TableHead><TableHead>Type</TableHead><TableHead>Transporter</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
                     <TableBody>{pendingVehicles.map(item => (<TableRow key={item.id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
                       <TableCell className="font-semibold text-slate-900 pl-6">{item.registration_no}</TableCell><TableCell className="font-medium text-slate-500">{item.vehicle_master_id}</TableCell><TableCell>{item.vehicle_type || "—"}</TableCell><TableCell>{item.transporter || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
-                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('vehicle_master', item.id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'vehicle_master', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => openApprovalModal('vehicle_master', item)} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'vehicle_master', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
                     </TableRow>))}</TableBody></table>
                   )}
                 </div></div>
@@ -3260,7 +3268,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                     <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">Driver ID</TableHead><TableHead>Name</TableHead><TableHead>Mobile</TableHead><TableHead>DL No</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
                     <TableBody>{pendingDrivers.map(item => (<TableRow key={item.id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
                       <TableCell className="font-medium pl-6 text-slate-500">{item.driver_master_id}</TableCell><TableCell className="font-semibold text-slate-900">{item.driver_name}</TableCell><TableCell>{item.mobile_no || "—"}</TableCell><TableCell>{item.driving_licence_no || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
-                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('driver_master', item.id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'driver_master', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => openApprovalModal('driver_master', item)} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'driver_master', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
                     </TableRow>))}</TableBody></table>
                   )}
                 </div></div>
@@ -3427,7 +3435,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                     <table className="w-full caption-bottom text-sm"><TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm"><TableRow className="hover:bg-transparent border-b"><TableHead className="pl-6">ID</TableHead><TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>GSTIN</TableHead><TableHead>Submitted By</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right pr-6">Actions</TableHead></TableRow></TableHeader>
                     <TableBody>{pendingTransporters.map(item => (<TableRow key={item.id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
                       <TableCell className="font-medium pl-6 text-slate-500">{item.transport_master_id}</TableCell><TableCell className="font-semibold text-slate-900">{item.transporter_name}</TableCell><TableCell>{item.contact_number || "—"}</TableCell><TableCell>{item.gstin || "—"}</TableCell><TableCell>{item.created_by_name || "—"}</TableCell><TableCell className="text-slate-500 text-xs">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : "—"}</TableCell>
-                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => handleReviewRecord('transport_master', item.id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'transport_master', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
+                      <TableCell className="text-right pr-6"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => openApprovalModal('transport_master', item)} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg"><Check className="h-3.5 w-3.5 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => setRejectDialogContext({ tab: 'transport_master', id: item.id })} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg"><X className="h-3.5 w-3.5 mr-1" />Reject</Button></div></TableCell>
                     </TableRow>))}</TableBody></table>
                   )}
                 </div></div>
@@ -3584,6 +3592,172 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Approve with Review Dialog (shared for all tabs) */}
+      <Dialog open={!!approvalReviewModal} onOpenChange={(open) => { if (!open) { setApprovalReviewModal(null); setApprovalEditData({}) } }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Check className="h-5 w-5 text-emerald-600" />
+              Review & Approve
+            </DialogTitle>
+            <DialogDescription>
+              Review the submitted values below. You can edit any field before approving — the final approved record will use these values.
+            </DialogDescription>
+          </DialogHeader>
+
+          {approvalReviewModal?.tab === 'customers' && (
+            <div className="grid gap-3 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Customer Name</Label><Input value={approvalEditData.customer_name || ''} onChange={e => setApprovalEditData(p => ({...p, customer_name: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Status</Label><Select value={approvalEditData.status || ''} onValueChange={v => setApprovalEditData(p => ({...p, status: v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{STATUS_OPTIONS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Contact Person</Label><Input value={approvalEditData.contact_person || ''} onChange={e => setApprovalEditData(p => ({...p, contact_person: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Mobile</Label><Input value={approvalEditData.contact || ''} onChange={e => setApprovalEditData(p => ({...p, contact: e.target.value}))} /></div>
+              </div>
+              <div className="space-y-1"><Label className="text-xs">Email</Label><Input value={approvalEditData.email || ''} onChange={e => setApprovalEditData(p => ({...p, email: e.target.value}))} /></div>
+              <div className="space-y-1"><Label className="text-xs">Address</Label><Input value={approvalEditData.address_line_1 || ''} onChange={e => setApprovalEditData(p => ({...p, address_line_1: e.target.value}))} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">State</Label><Input value={approvalEditData.state || ''} onChange={e => setApprovalEditData(p => ({...p, state: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Pincode</Label><Input value={approvalEditData.pincode || ''} onChange={e => setApprovalEditData(p => ({...p, pincode: e.target.value}))} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">PAN</Label><Input value={approvalEditData.pan || ''} onChange={e => setApprovalEditData(p => ({...p, pan: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">GSTIN</Label><Input value={approvalEditData.gstin || ''} onChange={e => setApprovalEditData(p => ({...p, gstin: e.target.value}))} /></div>
+              </div>
+            </div>
+          )}
+
+          {approvalReviewModal?.tab === 'depots' && (
+            <div className="grid gap-3 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Depot Name</Label><Input value={approvalEditData.depot_name || ''} onChange={e => setApprovalEditData(p => ({...p, depot_name: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Status</Label><Select value={approvalEditData.status || ''} onValueChange={v => setApprovalEditData(p => ({...p, status: v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{STATUS_OPTIONS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select></div>
+              </div>
+              <div className="space-y-1"><Label className="text-xs">Depot Address</Label><Input value={approvalEditData.depot_address || ''} onChange={e => setApprovalEditData(p => ({...p, depot_address: e.target.value}))} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">State</Label><Input value={approvalEditData.state || ''} onChange={e => setApprovalEditData(p => ({...p, state: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Salesman / Broker</Label><Input value={approvalEditData.salesman_broker_name || ''} onChange={e => setApprovalEditData(p => ({...p, salesman_broker_name: e.target.value}))} /></div>
+              </div>
+            </div>
+          )}
+
+          {(approvalReviewModal?.tab === 'brokers' || approvalReviewModal?.tab === 'salespersons') && (
+            <div className="grid gap-3 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Name</Label><Input value={approvalEditData.salesman_name || ''} onChange={e => setApprovalEditData(p => ({...p, salesman_name: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Status</Label><Select value={approvalEditData.status || ''} onValueChange={v => setApprovalEditData(p => ({...p, status: v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{STATUS_OPTIONS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Mobile</Label><Input value={approvalEditData.mobile_no || ''} onChange={e => setApprovalEditData(p => ({...p, mobile_no: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Email</Label><Input value={approvalEditData.email_id || ''} onChange={e => setApprovalEditData(p => ({...p, email_id: e.target.value}))} /></div>
+              </div>
+              <div className="space-y-1"><Label className="text-xs">Depot</Label><Input value={approvalEditData.depot_name || ''} onChange={e => setApprovalEditData(p => ({...p, depot_name: e.target.value}))} /></div>
+            </div>
+          )}
+
+          {approvalReviewModal?.tab === 'sku_details' && (
+            <div className="grid gap-3 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">SKU Name</Label><Input value={approvalEditData.sku_name || ''} onChange={e => setApprovalEditData(p => ({...p, sku_name: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">SKU Code</Label><Input value={approvalEditData.sku_code || ''} onChange={e => setApprovalEditData(p => ({...p, sku_code: e.target.value}))} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Main UOM</Label><Input value={approvalEditData.main_uom || ''} onChange={e => setApprovalEditData(p => ({...p, main_uom: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">HSN Code</Label><Input value={approvalEditData.hsn_code || ''} onChange={e => setApprovalEditData(p => ({...p, hsn_code: e.target.value}))} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">GST Rate (%)</Label><Input type="number" value={approvalEditData.gst_rate || ''} onChange={e => setApprovalEditData(p => ({...p, gst_rate: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Status</Label><Select value={approvalEditData.status || ''} onValueChange={v => setApprovalEditData(p => ({...p, status: v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{STATUS_OPTIONS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select></div>
+              </div>
+            </div>
+          )}
+
+          {approvalReviewModal?.tab === 'vehicle_master' && (
+            <div className="grid gap-3 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Registration No</Label><Input value={approvalEditData.registration_no || ''} onChange={e => setApprovalEditData(p => ({...p, registration_no: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Status</Label><Select value={approvalEditData.status || ''} onValueChange={v => setApprovalEditData(p => ({...p, status: v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{STATUS_OPTIONS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Vehicle Type</Label><Input value={approvalEditData.vehicle_type || ''} onChange={e => setApprovalEditData(p => ({...p, vehicle_type: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">RTO</Label><Input value={approvalEditData.rto || ''} onChange={e => setApprovalEditData(p => ({...p, rto: e.target.value}))} /></div>
+              </div>
+              <div className="space-y-1"><Label className="text-xs">Transporter</Label>
+                <Combobox
+                  options={sortedVehicleTransporters.map(name => ({ value: name, label: name }))}
+                  value={approvalEditData.transporter || ''}
+                  onValueChange={v => setApprovalEditData(p => ({...p, transporter: v}))}
+                  placeholder="Select transporter"
+                  searchPlaceholder="Search transporter..."
+                />
+              </div>
+            </div>
+          )}
+
+          {approvalReviewModal?.tab === 'driver_master' && (
+            <div className="grid gap-3 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Driver Name</Label><Input value={approvalEditData.driver_name || ''} onChange={e => setApprovalEditData(p => ({...p, driver_name: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Status</Label><Select value={approvalEditData.status || ''} onValueChange={v => setApprovalEditData(p => ({...p, status: v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{STATUS_OPTIONS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Mobile</Label><Input value={approvalEditData.mobile_no || ''} onChange={e => setApprovalEditData(p => ({...p, mobile_no: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">DL Number</Label><Input value={approvalEditData.driving_licence_no || ''} onChange={e => setApprovalEditData(p => ({...p, driving_licence_no: e.target.value}))} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">DL Type</Label><Input value={approvalEditData.driving_licence_type || ''} onChange={e => setApprovalEditData(p => ({...p, driving_licence_type: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Valid Upto</Label><Input type="date" value={approvalEditData.valid_upto?.split('T')[0] || ''} onChange={e => setApprovalEditData(p => ({...p, valid_upto: e.target.value}))} /></div>
+              </div>
+              <div className="space-y-1"><Label className="text-xs">RTO</Label><Input value={approvalEditData.rto || ''} onChange={e => setApprovalEditData(p => ({...p, rto: e.target.value}))} /></div>
+            </div>
+          )}
+
+          {approvalReviewModal?.tab === 'transport_master' && (
+            <div className="grid gap-3 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Transporter Name</Label><Input value={approvalEditData.transporter_name || ''} onChange={e => setApprovalEditData(p => ({...p, transporter_name: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Status</Label><Select value={approvalEditData.status || ''} onValueChange={v => setApprovalEditData(p => ({...p, status: v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{STATUS_OPTIONS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Contact Person</Label><Input value={approvalEditData.contact_person || ''} onChange={e => setApprovalEditData(p => ({...p, contact_person: e.target.value}))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Contact Number</Label><Input value={approvalEditData.contact_number || ''} onChange={e => setApprovalEditData(p => ({...p, contact_number: e.target.value}))} /></div>
+              </div>
+              <div className="space-y-1"><Label className="text-xs">GSTIN</Label><Input value={approvalEditData.gstin || ''} onChange={e => setApprovalEditData(p => ({...p, gstin: e.target.value}))} /></div>
+            </div>
+          )}
+
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+            Submitted by <span className="font-semibold">{approvalReviewModal?.item?.created_by_name || '—'}</span> on {approvalReviewModal?.item?.created_at ? new Date(approvalReviewModal.item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setApprovalReviewModal(null); setApprovalEditData({}) }}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!approvalReviewModal) return
+                const idMap: Record<string, any> = {
+                  customers: approvalReviewModal.item.id,
+                  depots: approvalReviewModal.item.depot_id,
+                  brokers: approvalReviewModal.item.broker_id,
+                  salespersons: approvalReviewModal.item.broker_id,
+                  sku_details: approvalReviewModal.item.id,
+                  vehicle_master: approvalReviewModal.item.id,
+                  driver_master: approvalReviewModal.item.id,
+                  transport_master: approvalReviewModal.item.id,
+                }
+                handleReviewRecord(approvalReviewModal.tab, idMap[approvalReviewModal.tab], 'approve', undefined, approvalEditData)
+              }}
+              disabled={isReviewing}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {isReviewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+              Approve
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reject Record Dialog (shared for all tabs) */}
       <AlertDialog open={!!rejectDialogContext} onOpenChange={(open) => { if (!open) { setRejectDialogContext(null); setRejectionReason("") } }}>
