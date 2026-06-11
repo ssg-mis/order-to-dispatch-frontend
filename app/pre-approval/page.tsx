@@ -1697,56 +1697,82 @@ export default function PreApprovalPage() {
     }
   }
 
-  const handleMobileApprovalQtyChange = (value: string, rowKey: string, product: any, orderDetails: any, baseDo: string) => {
-    const qty = parseFloat(value) || 0
+  // Shared appr-qty handler (used by both desktop table and mobile cards).
+  //
+  // Budget is tracked PER OIL-TYPE GROUP, never across different oil types:
+  //   • A group's budget = total order qty of the EXISTING (non-new) products of that oil type.
+  //   • A newly added SKU of the same oil type SHARES that budget — it does not add to it.
+  //   • The combined appr qty of every row in a group (existing + new SKUs) cannot exceed the group budget.
+  // Since different oil types are separate groups, a single-product oil type is still
+  // effectively capped at its own order qty (no cross-oil borrowing).
+  const handleApprovalQtyChange = (value: string, rowKey: string, product: any, orderDetails: any, baseDo: string) => {
     const allProducts = [...orderDetails._products, ...(dialogNewProducts[baseDo] || [])]
-    const originalTotalOrderQty = orderDetails._products.reduce((sum: number, p: any) => {
-      const pQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0
-      return sum + pQty
-    }, 0)
-    const totalApprovalQty = allProducts.reduce((sum, p) => {
-      if (p._rowKey === rowKey) return sum + qty
-      return sum + (parseFloat(productRates[p._rowKey]?.approvalQty || "0") || 0)
-    }, 0)
 
-    if (value && totalApprovalQty > originalTotalOrderQty) {
-      setQtyValidationErrors({ ...qtyValidationErrors, [rowKey]: `Total exceeds budget ${originalTotalOrderQty}` })
-    } else {
-      const newErrors = { ...qtyValidationErrors }
-      delete newErrors[rowKey]
-      setQtyValidationErrors(newErrors)
-    }
+    const oilOf = (p: any) =>
+      normalizeOilType(p?.oilType || p?.productName || productRates[p?._rowKey]?.productName || "")
+    const currentOil = oilOf(product)
+    const oilLabel = currentOil || "order"
 
-    const currentOilType = (product.oilType || product.productName || productRates[rowKey]?.productName || "").toLowerCase()
-    const sameOilTypeProducts = allProducts.filter(p => {
-      if (p._isNew) return false
-      const pOilType = (p.oilType || p.productName || "").toLowerCase()
-      return pOilType.includes("palm") && currentOilType.includes("palm") ||
-        (pOilType.includes("rice") || pOilType.includes("rbo")) && (currentOilType.includes("rice") || currentOilType.includes("rbo")) ||
-        (pOilType.includes("soya") || pOilType.includes("sbo")) && (currentOilType.includes("soya") || currentOilType.includes("sbo")) ||
-        pOilType.includes("sunflower") && currentOilType.includes("sunflower")
+    // All rows that share this oil-type budget (existing products + new SKUs of same oil).
+    const groupRows = currentOil
+      ? allProducts.filter(p => oilOf(p) === currentOil)
+      : [product]
+
+    // Effective approval qty per row AFTER applying this edit to the edited row.
+    const apprOf = (p: any) =>
+      p._rowKey === rowKey
+        ? (parseFloat(value) || 0)
+        : (parseFloat(productRates[p._rowKey]?.approvalQty || "0") || 0)
+
+    // Budget = order qty of EXISTING products of this oil type only (new SKUs draw from it).
+    const groupBudget = groupRows
+      .filter(p => !p._isNew)
+      .reduce((sum, p) => sum + (parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0), 0)
+
+    const groupApproved = groupRows.reduce((sum, p) => sum + apprOf(p), 0)
+    const overBudget = groupApproved > groupBudget
+    const sharedGroup = groupRows.length > 1
+    const groupKeys = new Set(groupRows.map(p => p._rowKey))
+
+    // Recompute error for EVERY row in the group so siblings never keep a stale message.
+    // When over budget, flag every contributing row (qty > 0); otherwise clear the group.
+    setQtyValidationErrors(prev => {
+      const next = { ...prev }
+      groupRows.forEach(p => {
+        if (overBudget && apprOf(p) > 0) {
+          next[p._rowKey] = groupBudget <= 0
+            ? `No order qty available for ${oilLabel}`
+            : `${oilLabel} total exceeds order qty (${groupBudget})`
+        } else {
+          delete next[p._rowKey]
+        }
+      })
+      return next
     })
-    const totalOilTypeOrderQty = sameOilTypeProducts.reduce((sum, p) => {
-      const pQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0
-      return sum + pQty
-    }, 0)
-    if (value && qty > 0) {
-      const sameOilTypeName = sameOilTypeProducts[0]?.productName || sameOilTypeProducts[0]?.oilType || "product"
-      setQtyInfoNotices({ ...qtyInfoNotices, [rowKey]: `Using ${qty} from ${sameOilTypeName}'s ${totalOilTypeOrderQty} budget` })
-    } else {
-      const newNotices = { ...qtyInfoNotices }
-      delete newNotices[rowKey]
-      setQtyInfoNotices(newNotices)
-    }
 
-    setProductRates({
-      ...productRates,
-      [rowKey]: {
-        ...productRates[rowKey],
-        approvalQty: value
-      }
+    // Recompute notice for every group row too. Show the shared-budget hint only when
+    // the group is valid and genuinely shared by more than one row.
+    setQtyInfoNotices(prev => {
+      const next = { ...prev }
+      groupRows.forEach(p => {
+        const a = apprOf(p)
+        if (sharedGroup && !overBudget && a > 0) {
+          next[p._rowKey] = `Using ${a} of ${groupBudget} ${oilLabel} budget (${groupBudget - groupApproved} left)`
+        } else if (groupKeys.has(p._rowKey)) {
+          delete next[p._rowKey]
+        }
+      })
+      return next
     })
+
+    setProductRates(prev => ({
+      ...prev,
+      [rowKey]: { ...prev[rowKey], approvalQty: value }
+    }))
   }
+
+  // Back-compat alias (mobile card layout calls this name).
+  const handleMobileApprovalQtyChange = handleApprovalQtyChange
 
   const handleMobileFinalRateChange = (newValue: string, rowKey: string, product: any, orderDetails: any) => {
     const enteredRate = parseFloat(newValue) || 0
@@ -2262,161 +2288,7 @@ export default function PreApprovalPage() {
                                                       hasError && "border-red-500 ring-1 ring-red-500"
                                                     )}
                                                     value={productRates[rowKey]?.approvalQty || ""}
-                                                    onChange={(e) => {
-                                                      const value = e.target.value
-                                                      const qty = parseFloat(value) || 0
-
-                                                      // Calculate total order qty for all products in this order
-                                                      const allProducts = [...orderDetails._products, ...(dialogNewProducts[baseDo] || [])]
-                                                      const originalTotalOrderQty = orderDetails._products.reduce((sum: number, p: any) => {
-                                                        const pQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0;
-                                                        return sum + pQty;
-                                                      }, 0);
-                                                      const totalOrderQty = allProducts.reduce((sum, p) => {
-                                                        const pQty = p._isNew
-                                                          ? (parseFloat(productRates[p._rowKey]?.orderQty || '0') || 0)
-                                                          : (parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0);
-                                                        return sum + pQty;
-                                                      }, 0)
-
-                                                      // Calculate total approval qty including this change
-                                                      const totalApprovalQty = allProducts.reduce((sum, p) => {
-                                                        if (p._rowKey === rowKey) {
-                                                          return sum + qty  // Use the new value for current product
-                                                        }
-                                                        const approvalQty = parseFloat(productRates[p._rowKey]?.approvalQty || '0') || 0
-                                                        return sum + approvalQty
-                                                      }, 0)
-
-                                                      // Validate only against total original budget (flexible distribution allowed)
-                                                      if (value && totalApprovalQty > originalTotalOrderQty) {
-                                                        setQtyValidationErrors({
-                                                          ...qtyValidationErrors,
-                                                          [rowKey]: `Total exceeds budget ${originalTotalOrderQty}`
-                                                        })
-                                                      } else {
-                                                        const newErrors = { ...qtyValidationErrors }
-                                                        delete newErrors[rowKey]
-                                                        setQtyValidationErrors(newErrors)
-                                                      }
-
-                                                      // Add informational notice if using other oil types' budget
-                                                      // Group by oil type to handle multiple SKUs for same product
-                                                      const currentOilType = (product.oilType || product.productName || productRates[rowKey]?.productName || "").toLowerCase()
-
-                                                      // Calculate total order qty for THIS oil type (ONLY from original products, not new SKUs)
-                                                      const sameOilTypeProducts = allProducts.filter(p => {
-                                                        if (p._isNew) return false; // Exclude new SKUs from budget calculation
-                                                        const pOilType = (p.oilType || p.productName || "").toLowerCase()
-                                                        return pOilType.includes("palm") && currentOilType.includes("palm") ||
-                                                          (pOilType.includes("rice") || pOilType.includes("rbo")) && (currentOilType.includes("rice") || currentOilType.includes("rbo")) ||
-                                                          (pOilType.includes("soya") || pOilType.includes("sbo")) && (currentOilType.includes("soya") || currentOilType.includes("sbo")) ||
-                                                          pOilType.includes("sunflower") && currentOilType.includes("sunflower")
-                                                      })
-
-                                                      const totalOilTypeOrderQty = sameOilTypeProducts.reduce((sum, p) => {
-                                                        const pQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0;
-                                                        return sum + pQty;
-                                                      }, 0)
-
-                                                      // Calculate ALREADY APPROVED qty for THIS oil type (excluding current row)
-                                                      const alreadyApprovedQty = allProducts.reduce((sum, p) => {
-                                                        const pKey = p._rowKey
-                                                        if (pKey === rowKey) return sum; // Skip current row
-
-                                                        // Check if same oil type
-                                                        const pOilType = (p.oilType || p.productName || (p._isNew ? productRates[pKey]?.productName : "")).toLowerCase()
-                                                        const isSameType =
-                                                          pOilType.includes("palm") && currentOilType.includes("palm") ||
-                                                          (pOilType.includes("rice") || pOilType.includes("rbo")) && (currentOilType.includes("rice") || currentOilType.includes("rbo")) ||
-                                                          (pOilType.includes("soya") || pOilType.includes("sbo")) && (currentOilType.includes("soya") || currentOilType.includes("sbo")) ||
-                                                          pOilType.includes("sunflower") && currentOilType.includes("sunflower")
-
-                                                        if (!isSameType) return sum;
-
-                                                        const pApproved = parseFloat(productRates[pKey]?.approvalQty || '0') || 0
-                                                        return sum + pApproved
-                                                      }, 0)
-
-                                                      // Calculate REMAINING budget for this oil type
-                                                      const remainingBudget = totalOilTypeOrderQty - alreadyApprovedQty
-
-                                                      // Calculate total approved qty for THIS oil type (including current change)
-                                                      const totalOilTypeApprovedQty = alreadyApprovedQty + qty
-
-                                                      // Check if exceeding THIS oil type's total budget
-                                                      if (value && totalOilTypeApprovedQty > totalOilTypeOrderQty) {
-                                                        // Exceeding budget - need to borrow from other oil types
-                                                        const usedFromSameOil = remainingBudget > 0 ? remainingBudget : 0
-                                                        const borrowedQty = qty - usedFromSameOil
-
-                                                        // Find products of OTHER oil types (only original products)
-                                                        const otherOilTypeProducts = allProducts.filter(p => {
-                                                          if (p._isNew) return false; // Exclude new SKUs
-                                                          const pOilType = (p.oilType || p.productName || "").toLowerCase()
-                                                          const isSameType =
-                                                            pOilType.includes("palm") && currentOilType.includes("palm") ||
-                                                            (pOilType.includes("rice") || pOilType.includes("rbo")) && (currentOilType.includes("rice") || currentOilType.includes("rbo")) ||
-                                                            (pOilType.includes("soya") || pOilType.includes("sbo")) && (currentOilType.includes("soya") || currentOilType.includes("sbo")) ||
-                                                            pOilType.includes("sunflower") && currentOilType.includes("sunflower")
-                                                          return !isSameType
-                                                        })
-
-                                                        // Calculate remaining budget in other oil types
-                                                        const otherOilTypeRemaining = otherOilTypeProducts.reduce((sum, p) => {
-                                                          const pQty = parseFloat(p.remaining_dispatch_qty || p.remainingDispatchQty || p.order_quantity || p.orderQty || "0") || 0;
-                                                          const pApproved = parseFloat(productRates[p._rowKey]?.approvalQty || '0') || 0
-                                                          return sum + (pQty - pApproved)
-                                                        }, 0)
-
-                                                        const otherOilTypeName = otherOilTypeProducts[0]?.productName || otherOilTypeProducts[0]?.oilType || 'other product'
-                                                        const sameOilTypeName = sameOilTypeProducts[0]?.productName || sameOilTypeProducts[0]?.oilType || 'product'
-
-                                                        // Check if we have enough in other oil types
-                                                        if (otherOilTypeRemaining >= borrowedQty) {
-                                                          // Can borrow from other oil types
-                                                          if (usedFromSameOil > 0) {
-                                                            setQtyInfoNotices({
-                                                              ...qtyInfoNotices,
-                                                              [rowKey]: `Using ${usedFromSameOil} from ${sameOilTypeName}, ${borrowedQty} from ${otherOilTypeName}`
-                                                            })
-                                                          } else {
-                                                            setQtyInfoNotices({
-                                                              ...qtyInfoNotices,
-                                                              [rowKey]: `Using ${borrowedQty} from ${otherOilTypeName}`
-                                                            })
-                                                          }
-                                                        } else {
-                                                          // Not enough budget even after borrowing - show exceed message
-                                                          const totalAvailable = remainingBudget + otherOilTypeRemaining
-                                                          setQtyInfoNotices({
-                                                            ...qtyInfoNotices,
-                                                            [rowKey]: `⚠️ Exceeds total available budget (${totalAvailable} available)`
-                                                          })
-                                                        }
-                                                      } else if (value && qty > 0) {
-                                                        // Within budget - show informational notice
-                                                        const sameOilTypeName = sameOilTypeProducts[0]?.productName || sameOilTypeProducts[0]?.oilType || 'product'
-                                                        setQtyInfoNotices({
-                                                          ...qtyInfoNotices,
-                                                          [rowKey]: `Using ${qty} from ${sameOilTypeName}'s ${totalOilTypeOrderQty} budget`
-                                                        })
-                                                      } else {
-                                                        const newNotices = { ...qtyInfoNotices }
-                                                        delete newNotices[rowKey]
-                                                        setQtyInfoNotices(newNotices)
-                                                      }
-
-
-
-                                                      setProductRates({
-                                                        ...productRates,
-                                                        [rowKey]: {
-                                                          ...productRates[rowKey],
-                                                          approvalQty: value
-                                                        }
-                                                      })
-                                                    }}
+                                                    onChange={(e) => handleApprovalQtyChange(e.target.value, rowKey, product, orderDetails, baseDo)}
                                                     disabled={!isSelected}
                                                   />
                                                   {hasError && <p className="text-[9px] text-red-600 font-black mt-1 uppercase tracking-tighter text-center">{hasError}</p>}
