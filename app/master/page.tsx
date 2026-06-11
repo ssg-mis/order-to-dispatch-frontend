@@ -195,8 +195,24 @@ export default function MasterPage() {
     if (!user || user.role === 'super_admin') return ALL_MASTER_TABS
     const masterTabsConfig = (user.features as any)?.master_tabs
     if (!masterTabsConfig || typeof masterTabsConfig !== 'object') return ALL_MASTER_TABS
-    return ALL_MASTER_TABS.filter(tab => masterTabsConfig[tab] === true)
+    return ALL_MASTER_TABS.filter(tab => {
+      const val = masterTabsConfig[tab]
+      // Support old boolean format (true) and new string format ('modify' | 'view_only')
+      return val === true || val === 'modify' || val === 'view_only'
+    })
   }, [user])
+
+  // Determine if the currently active tab is view-only based on master_tabs config
+  const isMasterTabReadOnly = useMemo(() => {
+    if (isReadOnly) return true // global page-level read-only takes precedence
+    if (!user || user.role === 'super_admin' || user.role === 'admin') return false
+    const masterTabsConfig = (user.features as any)?.master_tabs
+    if (!masterTabsConfig || typeof masterTabsConfig !== 'object') return false
+    const val = masterTabsConfig[activeTab]
+    // old boolean true or new 'modify' → can modify; 'view_only' → read only
+    if (val === 'view_only') return true
+    return false
+  }, [user, activeTab, isReadOnly])
 
   useEffect(() => {
     if (visibleTabs.length > 0 && !visibleTabs.includes(activeTab)) {
@@ -258,7 +274,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
   const pendingCustomers: any[] = pendingCustomersData || []
 
   const isAdminOrSuper = user?.role === 'admin' || user?.role === 'super_admin'
-  const canEditExisting = isAdminOrSuper // non-admins can add but not edit existing records
+  const canEditExisting = isAdminOrSuper && !isMasterTabReadOnly // non-admins can add but not edit existing records; view-only tab access also blocks edits
 
   const { data: pendingDepotsData, refetch: refetchPendingDepots } = useQuery({ queryKey: ['pending-depots'], queryFn: async () => { const res = await depotApi.getPending(); return res.success ? (res.data as any[]) : [] }, enabled: isAdminOrSuper && activeTab === 'depots' })
   const { data: pendingBrokersData, refetch: refetchPendingBrokers } = useQuery({ queryKey: ['pending-brokers'], queryFn: async () => { const res = await brokerApi.getPending(); return res.success ? (res.data as any[]) : [] }, enabled: isAdminOrSuper && activeTab === 'brokers' })
@@ -2024,7 +2040,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
             if (!open) resetForms()
           }}>
             <DialogTrigger asChild>
-              <Button size="sm" className="h-9 md:h-10 bg-primary hover:bg-primary/90 shadow-lg px-3 md:px-4 rounded-xl transition-all" disabled={isReadOnly} onClick={handleOpenAddDialog} title={isReadOnly ? "View Only Access" : `Add New ${activeTab.replace('_', ' ')}`}>
+              <Button size="sm" className="h-9 md:h-10 bg-primary hover:bg-primary/90 shadow-lg px-3 md:px-4 rounded-xl transition-all" disabled={isMasterTabReadOnly} onClick={handleOpenAddDialog} title={isMasterTabReadOnly ? "View Only Access" : `Add New ${activeTab.replace('_', ' ')}`}>
                 <Plus className="h-4 w-4 md:mr-2" />
                 <span className="hidden md:inline">Add {activeTab.split('_')[0].charAt(0).toUpperCase() + activeTab.split('_')[0].slice(1)}</span>
               </Button>

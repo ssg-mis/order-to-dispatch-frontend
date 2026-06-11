@@ -33,6 +33,7 @@ import { PageHeader } from "@/components/page-header"
 
 type AccessLevel = 'view_only' | 'modify'
 type PageAccessMap = Record<string, AccessLevel>
+type MasterTabAccessMap = Record<string, AccessLevel>
 
 interface User {
   id: number
@@ -125,7 +126,7 @@ export default function SettingsPage() {
     page_access: {} as PageAccessMap,
     depo_access: {} as Record<string, string[]>,
     features: {} as Record<string, boolean>,
-    master_tab_access: {} as Record<string, boolean>
+    master_tab_access: {} as MasterTabAccessMap
   })
 
   const [depots, setDepots] = useState<any[]>([])
@@ -254,7 +255,7 @@ export default function SettingsPage() {
       page_access: {},
       depo_access: {},
       features: {},
-      master_tab_access: {}
+      master_tab_access: {} as MasterTabAccessMap
     })
     setShowPassword(false)
   }
@@ -402,7 +403,7 @@ export default function SettingsPage() {
 
     // Normalize features — extract master_tabs separately
     let normalizedFeatures: Record<string, boolean> = {}
-    let masterTabAccess: Record<string, boolean> = {}
+    let masterTabAccess: MasterTabAccessMap = {}
     const hasMasterAccess = Array.isArray(pageAccessParsed)
       ? pageAccessParsed.includes("Master")
       : !!(pageAccessParsed && typeof pageAccessParsed === 'object' && pageAccessParsed["Master"]);
@@ -411,12 +412,22 @@ export default function SettingsPage() {
       const { master_tabs, ...restFeatures } = user.features as any
       normalizedFeatures = restFeatures as Record<string, boolean>
       if (master_tabs && typeof master_tabs === 'object') {
-        masterTabAccess = master_tabs as Record<string, boolean>
+        // Migrate old boolean format to new AccessLevel format
+        const raw = master_tabs as Record<string, any>
+        MASTER_TABS.forEach(t => {
+          const val = raw[t.key]
+          if (val === 'view_only' || val === 'modify') {
+            masterTabAccess[t.key] = val
+          } else if (val === true) {
+            masterTabAccess[t.key] = 'modify'
+          }
+          // false / undefined → not in map (no access)
+        })
       } else if (hasMasterAccess) {
-        MASTER_TABS.forEach(t => { masterTabAccess[t.key] = true })
+        MASTER_TABS.forEach(t => { masterTabAccess[t.key] = 'modify' })
       }
     } else if (hasMasterAccess) {
-      MASTER_TABS.forEach(t => { masterTabAccess[t.key] = true })
+      MASTER_TABS.forEach(t => { masterTabAccess[t.key] = 'modify' })
     }
 
     setFormData({
@@ -489,18 +500,29 @@ export default function SettingsPage() {
 
   // Master tab access helpers
   const toggleMasterTab = (key: string) => {
+    setFormData(prev => {
+      const current = { ...prev.master_tab_access } as MasterTabAccessMap
+      if (current[key]) {
+        delete current[key]
+      } else {
+        current[key] = 'modify'
+      }
+      return { ...prev, master_tab_access: current }
+    })
+  }
+  const setMasterTabLevel = (key: string, level: AccessLevel) => {
     setFormData(prev => ({
       ...prev,
-      master_tab_access: { ...prev.master_tab_access, [key]: !prev.master_tab_access[key] }
+      master_tab_access: { ...prev.master_tab_access, [key]: level } as MasterTabAccessMap
     }))
   }
   const selectAllMasterTabs = () => {
-    const all: Record<string, boolean> = {}
-    MASTER_TABS.forEach(t => { all[t.key] = true })
+    const all: MasterTabAccessMap = {}
+    MASTER_TABS.forEach(t => { all[t.key] = 'modify' })
     setFormData(prev => ({ ...prev, master_tab_access: all }))
   }
   const deselectAllMasterTabs = () => {
-    setFormData(prev => ({ ...prev, master_tab_access: {} }))
+    setFormData(prev => ({ ...prev, master_tab_access: {} as MasterTabAccessMap }))
   }
 
   // Helper: is a page enabled in the form
@@ -734,17 +756,49 @@ export default function SettingsPage() {
                       <button type="button" onClick={deselectAllMasterTabs} className="text-xs text-blue-600 hover:underline">None</button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {MASTER_TABS.map(tab => (
-                      <div key={tab.key} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`add-master-${tab.key}`}
-                          checked={!!formData.master_tab_access[tab.key]}
-                          onCheckedChange={() => toggleMasterTab(tab.key)}
-                        />
-                        <Label htmlFor={`add-master-${tab.key}`} className="text-xs font-normal cursor-pointer text-slate-700">{tab.label}</Label>
-                      </div>
-                    ))}
+                  <div className="space-y-1.5">
+                    {MASTER_TABS.map(tab => {
+                      const tabEnabled = !!formData.master_tab_access[tab.key]
+                      const tabLevel = (formData.master_tab_access as MasterTabAccessMap)[tab.key] || 'modify'
+                      return (
+                        <div key={tab.key} className="py-1 px-1 rounded hover:bg-slate-100 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`add-master-${tab.key}`}
+                              checked={tabEnabled}
+                              onCheckedChange={() => toggleMasterTab(tab.key)}
+                            />
+                            <Label htmlFor={`add-master-${tab.key}`} className="text-xs font-normal cursor-pointer text-slate-700">{tab.label}</Label>
+                          </div>
+                          {tabEnabled && (
+                            <div className="flex rounded-md border overflow-hidden text-xs">
+                              <button
+                                type="button"
+                                onClick={() => setMasterTabLevel(tab.key, 'view_only')}
+                                className={`px-2 py-0.5 font-medium transition-colors ${
+                                  tabLevel === 'view_only'
+                                    ? 'bg-amber-100 text-amber-700 border-amber-300'
+                                    : 'bg-white text-slate-500 hover:bg-slate-50'
+                                }`}
+                              >
+                                View
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setMasterTabLevel(tab.key, 'modify')}
+                                className={`px-2 py-0.5 font-medium transition-colors border-l ${
+                                  tabLevel === 'modify'
+                                    ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                                    : 'bg-white text-slate-500 hover:bg-slate-50'
+                                }`}
+                              >
+                                Modify
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -1309,17 +1363,49 @@ export default function SettingsPage() {
                     <button type="button" onClick={deselectAllMasterTabs} className="text-xs text-blue-600 hover:underline">None</button>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {MASTER_TABS.map(tab => (
-                    <div key={tab.key} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`edit-master-${tab.key}`}
-                        checked={!!formData.master_tab_access[tab.key]}
-                        onCheckedChange={() => toggleMasterTab(tab.key)}
-                      />
-                      <Label htmlFor={`edit-master-${tab.key}`} className="text-xs font-normal cursor-pointer text-slate-700">{tab.label}</Label>
-                    </div>
-                  ))}
+                <div className="space-y-1.5">
+                  {MASTER_TABS.map(tab => {
+                    const tabEnabled = !!formData.master_tab_access[tab.key]
+                    const tabLevel = (formData.master_tab_access as MasterTabAccessMap)[tab.key] || 'modify'
+                    return (
+                      <div key={tab.key} className="py-1 px-1 rounded hover:bg-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id={`edit-master-${tab.key}`}
+                            checked={tabEnabled}
+                            onCheckedChange={() => toggleMasterTab(tab.key)}
+                          />
+                          <Label htmlFor={`edit-master-${tab.key}`} className="text-xs font-normal cursor-pointer text-slate-700">{tab.label}</Label>
+                        </div>
+                        {tabEnabled && (
+                          <div className="flex rounded-md border overflow-hidden text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setMasterTabLevel(tab.key, 'view_only')}
+                              className={`px-2 py-0.5 font-medium transition-colors ${
+                                tabLevel === 'view_only'
+                                  ? 'bg-amber-100 text-amber-700 border-amber-300'
+                                  : 'bg-white text-slate-500 hover:bg-slate-50'
+                              }`}
+                            >
+                              View
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMasterTabLevel(tab.key, 'modify')}
+                              className={`px-2 py-0.5 font-medium transition-colors border-l ${
+                                tabLevel === 'modify'
+                                  ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                                  : 'bg-white text-slate-500 hover:bg-slate-50'
+                              }`}
+                            >
+                              Modify
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
