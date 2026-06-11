@@ -271,7 +271,8 @@ export default function OrderPunchPage() {
 
   useEffect(() => {
     const allowedDepos = user?.depo_access?.['Order Punch'] || []
-    setDepoName(allowedDepos.length > 0 ? allowedDepos[0] : "Banari")
+    const banari = allowedDepos.find((d: string) => d.toLowerCase() === "banari")
+    setDepoName(banari || (allowedDepos.length > 0 ? allowedDepos[0] : "Banari"))
   }, [user])
 
   // Customer Auto-fill Effect
@@ -742,7 +743,8 @@ export default function OrderPunchPage() {
     setCustomerType("existing")
     setOrderCategory("Sales")
     const allowedDepos = user?.depo_access?.['Order Punch'] || []
-    setDepoName(allowedDepos.length > 0 ? allowedDepos[0] : "Banari")
+    const banari = allowedDepos.find((d: string) => d.toLowerCase() === "banari")
+    setDepoName(banari || (allowedDepos.length > 0 ? allowedDepos[0] : "Banari"))
     setIsBrokerOrder("Broker")
     setOrderPurpose("week-on-week")
     setOrderType("regular")
