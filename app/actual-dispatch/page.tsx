@@ -2291,12 +2291,20 @@ export default function ActualDispatchPage() {
                                     const val = e.target.value;
                                     const planned = parseFloat(prod.qtyToDispatch || 0);
                                     if (parseFloat(val) > planned) {
-                                      toast({
-                                        title: "Limit Exceeded",
-                                        description: `Actual qty cannot be more than planned qty (${planned})`,
-                                        variant: "destructive"
-                                      });
-                                      return;
+                                      const isStockTransfer = (prod.order_category || "").toUpperCase() === "STOCK TRANSFER";
+                                      if (isStockTransfer) {
+                                        toast({
+                                          title: "Warning",
+                                          description: `Actual qty exceeds planned qty (${planned}). Allowed for Stock Transfer.`,
+                                        });
+                                      } else {
+                                        toast({
+                                          title: "Limit Exceeded",
+                                          description: `Actual qty cannot be more than planned qty (${planned})`,
+                                          variant: "destructive"
+                                        });
+                                        return;
+                                      }
                                     }
                                     setConfirmDetails((prev) => ({
                                       ...prev,
@@ -2422,12 +2430,20 @@ export default function ActualDispatchPage() {
                                   const val = e.target.value;
                                   const planned = parseFloat(prod.qtyToDispatch || 0);
                                   if (parseFloat(val) > planned) {
-                                    toast({
-                                      title: "Limit Exceeded",
-                                      description: `Actual qty cannot be more than planned qty (${planned})`,
-                                      variant: "destructive"
-                                    });
-                                    return;
+                                    const isStockTransfer = (prod.order_category || "").toUpperCase() === "STOCK TRANSFER";
+                                    if (isStockTransfer) {
+                                      toast({
+                                        title: "Warning",
+                                        description: `Actual qty exceeds planned qty (${planned}). Allowed for Stock Transfer.`,
+                                      });
+                                    } else {
+                                      toast({
+                                        title: "Limit Exceeded",
+                                        description: `Actual qty cannot be more than planned qty (${planned})`,
+                                        variant: "destructive"
+                                      });
+                                      return;
+                                    }
                                   }
                                   setConfirmDetails(prev => ({ ...prev, [rowKey]: { ...prev[rowKey], qty: val } }));
                                 }}

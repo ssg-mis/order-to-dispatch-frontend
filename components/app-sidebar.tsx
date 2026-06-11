@@ -32,9 +32,10 @@ import {
   Warehouse,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
-import { useEffect, useState, useMemo } from "react"
+import { useMemo } from "react"
 import { useToast } from "@/hooks/use-toast"
 import { userApi } from "@/lib/api-service"
+import { useAuth } from "@/hooks/use-auth"
 
 import {
   Sidebar,
@@ -78,47 +79,33 @@ const modules = [
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const [allowedModules, setAllowedModules] = useState(modules)
-  const [username, setUsername] = useState<string>("")
-  const [userRole, setUserRole] = useState<string>("")
-
+  const { user } = useAuth()
   const { toast } = useToast()
 
-  useEffect(() => {
-    const userStr = localStorage.getItem("user")
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr)
-        const pageAccess = user.page_access
-        setUsername(user.username || "")
-        setUserRole(user.role || "")
+  const username = user?.username || ""
+  const userRole = user?.role || ""
 
-        // Special mapping for cases where sidebar title differs from permission name
-        const permissionMapping: Record<string, string> = {
-          "Make Invoice (Proforma)": "Make Invoice",
-          "Confirm Material Receipt": "Confirm Material Receipt",
-          "Damage Adjustment": "Damage Adjustment",
-          "Owner Dashboard": "Owner Dashboard",
-        }
+  const allowedModules = useMemo(() => {
+    const pageAccess = user?.page_access
+    if (!pageAccess) return []
 
-        // Helper: check if a page is allowed, supporting both old (string[]) and new ({ page: level }) formats
-        const hasAccess = (permissionName: string): boolean => {
-          if (!pageAccess) return false
-          if (Array.isArray(pageAccess)) return pageAccess.includes(permissionName)
-          return !!pageAccess[permissionName]
-        }
-
-        const filtered = modules.filter(module => {
-          const permissionName = permissionMapping[module.title] || module.title
-          return hasAccess(permissionName)
-        })
-
-        setAllowedModules(filtered)
-      } catch (e) {
-        console.error("Failed to parse user for sidebar filtering", e)
-      }
+    const permissionMapping: Record<string, string> = {
+      "Make Invoice (Proforma)": "Make Invoice",
+      "Confirm Material Receipt": "Confirm Material Receipt",
+      "Damage Adjustment": "Damage Adjustment",
+      "Owner Dashboard": "Owner Dashboard",
     }
-  }, [pathname])
+
+    const hasAccess = (permissionName: string): boolean => {
+      if (Array.isArray(pageAccess)) return pageAccess.includes(permissionName)
+      return !!pageAccess[permissionName as keyof typeof pageAccess]
+    }
+
+    return modules.filter(module => {
+      const permissionName = permissionMapping[module.title] || module.title
+      return hasAccess(permissionName)
+    })
+  }, [user])
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
@@ -240,9 +227,6 @@ export function AppSidebar() {
                 } catch (e) {
                   console.error("Failed to call logout api:", e)
                 } finally {
-                  localStorage.removeItem('user')
-                  localStorage.removeItem('isAuthenticated')
-                  localStorage.removeItem('token')
                   window.location.href = '/login'
                 }
               }}

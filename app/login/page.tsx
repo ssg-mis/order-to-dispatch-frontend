@@ -8,11 +8,13 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { userApi } from "@/lib/api-service"
+import { useAuthContext } from "@/contexts/auth-context"
 import { Loader2, PackageCheck } from "lucide-react"
 
 export default function LoginPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { login } = useAuthContext()
   const [isLoading, setIsLoading] = useState(false)
   const [credentials, setCredentials] = useState({
     username: "",
@@ -36,17 +38,15 @@ export default function LoginPage() {
       const response = await userApi.login(credentials)
       
       if (response.success && response.data) {
-        // Store user metadata for UI (token is in HTTP-only cookie set by the server)
+        // Token is in HTTP-only cookie set by the server — just populate React state
         const { token: _token, ...userData } = response.data
-        localStorage.setItem("user", JSON.stringify(userData))
-        localStorage.setItem("isAuthenticated", "true")
-        
+        login(userData)
+
         toast({
           title: "Login Successful",
           description: `Welcome back, ${response.data.username}!`,
         })
-        
-        // Redirect to dashboard
+
         router.push("/")
       } else {
         toast({

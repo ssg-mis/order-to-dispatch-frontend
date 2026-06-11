@@ -110,8 +110,6 @@ async function request<T = any>(
     // Token expired or invalid — force logout
     if (response.status === 401) {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('user');
-        localStorage.removeItem('isAuthenticated');
         window.location.href = '/login';
       }
       throw data;
@@ -963,6 +961,10 @@ export const userApi = {
     return request(`/users/${id}`, {
       method: 'DELETE',
     });
+  },
+
+  me: async (): Promise<ApiResponse> => {
+    return request('/users/me');
   },
 
   login: async (credentials: { username: string; password: string }): Promise<ApiResponse> => {

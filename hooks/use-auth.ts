@@ -1,21 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
 import { usePathname } from "next/navigation"
-import { userApi } from "@/lib/api-service"
-import { API_CONFIG } from "@/lib/api-config"
+import { useAuthContext } from "@/contexts/auth-context"
 
-// page_access can be old format (string[]) or new format ({ pageName: 'view_only' | 'modify' })
 type PageAccessMap = Record<string, 'view_only' | 'modify'>
-
-interface User {
-  id: number
-  username: string
-  role: string
-  page_access: string[] | PageAccessMap | null
-  depo_access: Record<string, string[]> | null
-  features?: Record<string, boolean>
-}
 
 // URL path → page name mapping (matches PAGE_ACCESS_OPTIONS in settings)
 const URL_TO_PAGE: Record<string, string> = {
@@ -42,124 +30,8 @@ const URL_TO_PAGE: Record<string, string> = {
 }
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const { user, isAuthenticated, isLoading } = useAuthContext()
   const pathname = usePathname()
-
-  // Read user from localStorage
-  const checkAuth = useCallback(() => {
-    try {
-      const userStr = localStorage.getItem("user")
-      const authStatus = localStorage.getItem("isAuthenticated") === "true"
-
-      if (authStatus && userStr) {
-        const userData = JSON.parse(userStr)
-        if (userData) {
-          userData.depo_access = normalizeDepoAccess(userData.depo_access)
-        }
-        setUser(userData)
-        setIsAuthenticated(true)
-      } else {
-        setUser(null)
-        setIsAuthenticated(false)
-      }
-    } catch (error) {
-      console.error("Auth check failed:", error)
-      setUser(null)
-      setIsAuthenticated(false)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  // Initial load + listen for storage events
-  useEffect(() => {
-    checkAuth()
-    window.addEventListener("storage", checkAuth)
-    return () => window.removeEventListener("storage", checkAuth)
-  }, [checkAuth])
-
-  // Re-fetch fresh user data from server on every navigation.
-  // Uses raw fetch (not api-service request()) so a 401 here doesn't
-  // trigger the global auto-logout — session expiry is handled explicitly below.
-  useEffect(() => {
-    const refreshUser = async () => {
-      try {
-        const userStr = localStorage.getItem("user")
-        const authStatus = localStorage.getItem("isAuthenticated") === "true"
-        if (!authStatus || !userStr) return
-
-        const currentUser = JSON.parse(userStr)
-        if (!currentUser?.id) return
-
-        const res = await fetch(`${API_CONFIG.baseURL}/users/${currentUser.id}`, {
-          credentials: "include",
-        })
-
-        if (res.status === 401) {
-          // Session truly expired — clean up and redirect
-          localStorage.removeItem("user")
-          localStorage.removeItem("isAuthenticated")
-          window.location.href = "/login"
-          return
-        }
-
-        if (!res.ok) return // transient error — silent fail, keep user logged in
-
-        const data = await res.json()
-        if (data.success && data.data) {
-          const freshUser = data.data
-          freshUser.depo_access = normalizeDepoAccess(freshUser.depo_access)
-          localStorage.setItem("user", JSON.stringify(freshUser))
-          setUser(freshUser)
-        }
-      } catch (error) {
-        // Network error — silent fail, keep user logged in
-        console.warn("Failed to refresh user data:", error)
-      }
-    }
-
-    refreshUser()
-  }, [pathname])
-
-  /**
-   * Normalizes depo_access from DB (potentially string/JSON) to Record<string, string[]>
-   */
-  function normalizeDepoAccess(raw: any): Record<string, string[]> {
-    if (!raw) return {}
-    let parsed: any = raw
-    if (typeof raw === 'string') {
-      try {
-        parsed = JSON.parse(raw)
-      } catch {
-        // Fallback for Postgres text array format "{Value1,Value2}"
-        const clean = raw.replace(/^\{/, '').replace(/\}$/, '')
-        if (clean === "") return {}
-        // This is a simple fallback; real Postgres arrays can be more complex, 
-        // but for this app's depot names it should work.
-        return { 'Default': clean.split(',').map(s => s.trim()) }
-      }
-    }
-
-    if (!parsed || typeof parsed !== 'object') return {}
-
-    const result: Record<string, string[]> = {}
-    Object.entries(parsed).forEach(([page, val]) => {
-      if (Array.isArray(val)) {
-        result[page] = val.map(String)
-      } else if (typeof val === 'string') {
-        result[page] = val
-          .replace(/^\{/, '').replace(/\}$/, '')
-          .split(',')
-          .map((s: string) => s.replace(/^"/, '').replace(/"$/, '').trim())
-          .filter(Boolean)
-      } else {
-        result[page] = []
-      }
-    })
-    return result
-  }
 
   /**
    * Returns 'modify' | 'view_only' | 'none' for a given page name.
@@ -175,10 +47,8 @@ export function useAuth() {
     return (pa as PageAccessMap)[pageName] || 'none'
   }
 
-  // Current page name based on URL path
   const currentPageName = URL_TO_PAGE[pathname] || ''
 
-  // Role-based read-only (pc role) OR per-page view_only access
   const isReadOnly = user?.role === 'pc' || getPageAccess(currentPageName) === 'view_only'
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
 

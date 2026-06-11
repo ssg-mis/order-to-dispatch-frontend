@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { userApi, depotApi } from "@/lib/api-service"
 import { useAuth } from "@/hooks/use-auth"
+import { useAuthContext } from "@/contexts/auth-context"
 import { Plus, Pencil, Trash2, Loader2, RefreshCw, Users, Shield, Eye, EyeOff, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { useInView } from "react-intersection-observer"
@@ -94,6 +95,7 @@ const STATUSES = ["active", "inactive"]
 export default function SettingsPage() {
   const { toast } = useToast()
   const { isReadOnly, user: currentUser } = useAuth()
+  const { refreshUser } = useAuthContext()
   const currentUserRole = currentUser?.role ?? ''
   const isSuperAdmin = currentUserRole === 'super_admin'
 
@@ -308,18 +310,9 @@ export default function SettingsPage() {
 
       const response = await userApi.update(selectedUser.id, updateData)
       if (response.success) {
-        // If we just edited the currently logged-in user, sync localStorage immediately
-        try {
-          const currentUserStr = localStorage.getItem("user")
-          if (currentUserStr) {
-            const currentUser = JSON.parse(currentUserStr)
-            if (currentUser.id === selectedUser.id) {
-              const updatedUser = { ...currentUser, ...updateData, password: currentUser.password }
-              localStorage.setItem("user", JSON.stringify(updatedUser))
-            }
-          }
-        } catch (e) {
-          console.warn("Failed to sync localStorage after edit", e)
+        // If we just edited the currently logged-in user, refresh auth context immediately
+        if (currentUser?.id === selectedUser.id) {
+          refreshUser()
         }
 
         toast({
