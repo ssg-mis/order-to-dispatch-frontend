@@ -493,7 +493,7 @@ export default function DamageAdjustmentPage() {
         const submitData = {
           credit_note_date: adjustmentData.creditNoteDate,
           credit_note_no: adjustmentData.creditNoteNo,
-          credit_note_qty: 0,
+          credit_note_qty: parseFloat(product.damageQty) || 0,
           credit_note_amount: 0,
           net_banalce: 0,
           status_2: "Completed",
