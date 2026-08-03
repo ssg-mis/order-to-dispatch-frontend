@@ -664,6 +664,9 @@ export default function InventoryPage() {
                     <th className="text-left px-3 py-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">Order No</th>
                     <th className="text-left px-3 py-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">Customer</th>
                     <th className="text-left px-3 py-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</th>
+                    {drillDown?.type === 'stockIn' && (
+                      <th className="text-right px-3 py-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">Deducted (CN)</th>
+                    )}
                     <th className="text-right px-3 py-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">Qty</th>
                   </tr>
                 </thead>
@@ -673,13 +676,22 @@ export default function InventoryPage() {
                       <td className="px-3 py-2 font-mono text-xs text-slate-700">{r.order_no || '—'}</td>
                       <td className="px-3 py-2 text-slate-700">{r.customer_name || '—'}</td>
                       <td className="px-3 py-2 text-slate-500 text-xs">{r.date ? new Date(r.date).toLocaleDateString('en-IN') : '—'}</td>
+                      {drillDown?.type === 'stockIn' && (
+                        <td className="px-3 py-2 text-right text-xs">
+                          {r.deducted_qty > 0 ? (
+                            <span className="text-rose-600 font-semibold">
+                              -{r.deducted_qty}{r.credit_note_no ? ` (CN ${r.credit_note_no})` : ''}
+                            </span>
+                          ) : '—'}
+                        </td>
+                      )}
                       <td className="px-3 py-2 text-right font-semibold text-slate-800">{r.qty}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="sticky bottom-0 bg-white border-t border-slate-200">
                   <tr>
-                    <td colSpan={3} className="px-3 py-2 text-xs font-semibold text-slate-500">Total ({detailRows.length} records)</td>
+                    <td colSpan={drillDown?.type === 'stockIn' ? 4 : 3} className="px-3 py-2 text-xs font-semibold text-slate-500">Total ({detailRows.length} records)</td>
                     <td className="px-3 py-2 text-right font-bold text-slate-800">
                       {detailRows.reduce((s, r) => s + (r.qty || 0), 0)}
                     </td>
