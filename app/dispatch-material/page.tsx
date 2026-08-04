@@ -213,7 +213,7 @@ export default function DispatchMaterialPage() {
       <div className="space-y-8">
         {Object.entries(partyGroups).map(([party, partyProducts]) => {
           const firstProd = partyProducts[0]
-          const date = new Date().toLocaleDateString('en-GB')
+          const date = formatDate(firstProd.party_so_date || firstProd.partySoDate)
           const commitmentNo = firstProd.orderNo || "—"
           const reference = getSlipReference(firstProd)
           const place = firstProd.address || firstProd.customer_delivery_address || firstProd.customer_address || "—"
@@ -337,7 +337,7 @@ export default function DispatchMaterialPage() {
       return {
         party,
         commitmentNo: firstProd.orderNo || "—",
-        date: new Date().toLocaleDateString('en-GB'),
+        date: formatDate(firstProd.party_so_date || firstProd.partySoDate),
         referenceLabel: reference.label,
         referenceValue: reference.value,
         place: firstProd.address || firstProd.customer_delivery_address || firstProd.customer_address || "—",

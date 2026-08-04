@@ -1100,7 +1100,7 @@ export default function ActualDispatchPage() {
       <div className="space-y-8">
         {Object.entries(partyGroups).map(([party, partyProducts]) => {
           const firstProd = partyProducts[0];
-          const date = new Date().toLocaleDateString('en-GB');
+          const date = formatDate(firstProd.party_so_date || firstProd.partySoDate);
           const commitmentNo = firstProd.orderNo || "—";
           const isBroker = firstProd.isBroker || firstProd.is_order_through_broker;
           const brokerName = isBroker ? (firstProd.brokerName || firstProd.broker_name || "—") : "—";
@@ -1237,7 +1237,7 @@ export default function ActualDispatchPage() {
       return {
         party,
         commitmentNo: firstProd.orderNo || "—",
-        date: new Date().toLocaleDateString('en-GB'),
+        date: formatDate(firstProd.party_so_date || firstProd.partySoDate),
         brokerName: isBroker ? (firstProd.brokerName || firstProd.broker_name || "—") : "—",
         place: firstProd.address || firstProd.customer_delivery_address || firstProd.customer_address || "—",
         partyMo: firstProd.whatsapp || firstProd.customer_contact_person_whatsapp_no || firstProd.party_mo || firstProd.mobile || "—",
