@@ -1858,6 +1858,17 @@ export const inventoryApi = {
     const params = new URLSearchParams({ depot_name, product_name, type });
     return request(`/inventory/detail?${params}`);
   },
+
+  getPendingOpeningQty: async (): Promise<ApiResponse> => {
+    return request('/inventory/opening-qty/pending');
+  },
+
+  reviewOpeningQty: async (id: number | string, action: 'approve' | 'reject', reason?: string): Promise<ApiResponse> => {
+    return request(`/inventory/opening-qty/${id}/approval`, {
+      method: 'PATCH',
+      body: JSON.stringify({ action, reason }),
+    });
+  },
 };
 
 /**

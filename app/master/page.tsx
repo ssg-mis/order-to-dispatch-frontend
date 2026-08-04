@@ -379,6 +379,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
   const { data: pendingVehiclesData, refetch: refetchPendingVehicles } = useQuery({ queryKey: ['pending-vehicles'], queryFn: async () => { const res = await vehicleMasterApi.getPending(); return res.success ? (res.data as any[]) : [] }, enabled: isAdminOrSuper && activeTab === 'vehicle_master' })
   const { data: pendingDriversData, refetch: refetchPendingDrivers } = useQuery({ queryKey: ['pending-drivers'], queryFn: async () => { const res = await driverMasterApi.getPending(); return res.success ? (res.data as any[]) : [] }, enabled: isAdminOrSuper && activeTab === 'driver_master' })
   const { data: pendingTransportData, refetch: refetchPendingTransport } = useQuery({ queryKey: ['pending-transport'], queryFn: async () => { const res = await transportMasterApi.getPending(); return res.success ? (res.data as any[]) : [] }, enabled: isAdminOrSuper && activeTab === 'transport_master' })
+  const { data: pendingOpeningQtyData, refetch: refetchPendingOpeningQty } = useQuery({ queryKey: ['pending-opening-qty'], queryFn: async () => { const res = await inventoryApi.getPendingOpeningQty(); return res.success ? (res.data as any[]) : [] }, enabled: isAdminOrSuper && activeTab === 'sku_details' })
 
   const pendingDepots: any[] = pendingDepotsData || []
   const pendingBrokers: any[] = pendingBrokersData || []
@@ -387,6 +388,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
   const pendingVehicles: any[] = pendingVehiclesData || []
   const pendingDrivers: any[] = pendingDriversData || []
   const pendingTransporters: any[] = pendingTransportData || []
+  const pendingOpeningQtys: any[] = pendingOpeningQtyData || []
 
   // Depots
   const {
@@ -986,7 +988,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
           res = await skuDetailsApi.create(skuDetailsForm)
         }
         if (res?.success && skuDetailsForm.sku_name) {
-          await Promise.allSettled(
+          const openingQtyResults = await Promise.allSettled(
             Object.entries(openingStockByDepot)
               .filter(([_, qty]) => qty !== '')
               .map(([depotName, qty]) =>
@@ -997,6 +999,12 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                 })
               )
           )
+          const anyOpeningQtyStaged = openingQtyResults.some(
+            r => r.status === 'fulfilled' && r.value?.data?.approval_status !== 'approved' && r.value?.data?.pending_opening_qty != null
+          )
+          if (anyOpeningQtyStaged) {
+            toast({ title: "Opening qty pending approval", description: "Your opening stock changes need admin approval before they appear in Inventory." })
+          }
         }
       } else if (activeTab === "sku_selling_price") {
         if (editingItem) {
@@ -1072,7 +1080,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
         else if (activeTab === "depots") { refetchDepot(); refetchPendingDepots() }
         else if (activeTab === "brokers") { refetchBroker(); refetchPendingBrokers() }
         else if (activeTab === "salespersons") { refetchSalesperson(); refetchPendingSalespersons() }
-        else if (activeTab === "sku_details") { refetchSku(); refetchPendingSku() }
+        else if (activeTab === "sku_details") { refetchSku(); refetchPendingSku(); refetchPendingOpeningQty() }
         else if (activeTab === "sku_selling_price") refetchSkuSellingPrice()
         else if (activeTab === "vehicle_master") { refetchVehicle(); refetchPendingVehicles() }
         else if (activeTab === "driver_master") { refetchDriver(); refetchPendingDrivers() }
@@ -1185,6 +1193,21 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
       setApprovalReviewModal(null)
       setApprovalEditData({})
       resetForms()
+    }
+  }
+
+  const handleReviewOpeningQty = async (id: number, action: 'approve' | 'reject') => {
+    setIsReviewing(true)
+    try {
+      const res = await inventoryApi.reviewOpeningQty(id, action)
+      if (res?.success) {
+        toast({ title: "Success", description: res.message || `Opening qty ${action}d successfully` })
+        refetchPendingOpeningQty()
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Failed to review opening qty", variant: "destructive" })
+    } finally {
+      setIsReviewing(false)
     }
   }
 
@@ -2466,7 +2489,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
               else if (activeTab === "depots") { refetchDepot(); refetchPendingDepots() }
               else if (activeTab === "brokers") { refetchBroker(); refetchPendingBrokers() }
               else if (activeTab === "salespersons") { refetchSalesperson(); refetchPendingSalespersons() }
-              else if (activeTab === "sku_details") { refetchSku(); refetchPendingSku() }
+              else if (activeTab === "sku_details") { refetchSku(); refetchPendingSku(); refetchPendingOpeningQty() }
               else if (activeTab === "sku_selling_price") refetchSkuSellingPrice()
               else if (activeTab === "vehicle_master") { refetchVehicle(); refetchPendingVehicles() }
               else if (activeTab === "driver_master") { refetchDriver(); refetchPendingDrivers() }
@@ -3514,7 +3537,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                 <div className="flex gap-2 mt-4">
                   <button onClick={() => setSkuSubTab('active')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${skuSubTab === 'active' ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Active Records</button>
                   <button onClick={() => setSkuSubTab('pending')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${skuSubTab === 'pending' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                    Pending Approval {pendingSkus.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${skuSubTab === 'pending' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'}`}>{pendingSkus.length}</span>}
+                    Pending Approval {(pendingSkus.length + pendingOpeningQtys.length) > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${skuSubTab === 'pending' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'}`}>{pendingSkus.length + pendingOpeningQtys.length}</span>}
                   </button>
                 </div>
               )}
@@ -3522,8 +3545,10 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
             <CardContent className="p-0">
               {skuSubTab === 'pending' ? (
                 <div className="flex flex-col h-[600px]"><div className="flex-1 overflow-auto rounded-b-2xl">
-                  {pendingSkus.length === 0 ? <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400"><CheckCircle2 className="h-10 w-10 text-emerald-300" /><p className="text-sm font-medium">No pending approvals</p></div> : (
+                  {pendingSkus.length === 0 && pendingOpeningQtys.length === 0 ? <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400"><CheckCircle2 className="h-10 w-10 text-emerald-300" /><p className="text-sm font-medium">No pending approvals</p></div> : (
                     <>
+                      {pendingSkus.length === 0 ? null : (
+                      <>
                       {/* Mobile card view */}
                       <div className="md:hidden p-3 space-y-3">
                         {pendingSkus.map(item => {
@@ -3600,6 +3625,50 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
                         </TableBody>
                       </table>
                     </>
+                  )}
+
+                  {pendingOpeningQtys.length > 0 && (
+                    <div className="mt-6 border-t border-slate-100 pt-4 px-3 md:px-0">
+                      <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2 px-3 md:px-0">
+                        Pending Opening Stock Changes
+                        <span className="text-xs px-1.5 py-0.5 rounded-full font-bold bg-amber-500 text-white">{pendingOpeningQtys.length}</span>
+                      </h3>
+                      <table className="w-full caption-bottom text-sm">
+                        <TableHeader className="sticky top-0 z-20 bg-amber-50 shadow-sm">
+                          <TableRow className="hover:bg-transparent border-b">
+                            <TableHead className="pl-6">SKU</TableHead>
+                            <TableHead>Depot</TableHead>
+                            <TableHead>Current Qty</TableHead>
+                            <TableHead>Requested Qty</TableHead>
+                            <TableHead>Submitted By</TableHead>
+                            <TableHead className="text-right pr-6">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pendingOpeningQtys.map(item => (
+                            <TableRow key={item.id} className="hover:bg-amber-50/30 border-b border-slate-50 h-16">
+                              <TableCell className="font-semibold pl-6 text-slate-900">{item.product_name}</TableCell>
+                              <TableCell>{item.depo_name}</TableCell>
+                              <TableCell className="text-slate-500">{item.opening_qty}</TableCell>
+                              <TableCell className="font-medium text-amber-700">{item.pending_opening_qty}</TableCell>
+                              <TableCell>{item.pending_by_name || "—"}</TableCell>
+                              <TableCell className="text-right pr-6">
+                                <div className="flex justify-end gap-2">
+                                  <Button size="sm" onClick={() => handleReviewOpeningQty(item.id, 'approve')} disabled={isReviewing} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg">
+                                    <Check className="h-3.5 w-3.5 mr-1" /> Approve
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={() => handleReviewOpeningQty(item.id, 'reject')} disabled={isReviewing} className="h-8 border-red-200 text-red-600 hover:bg-red-50 px-3 rounded-lg">
+                                    <X className="h-3.5 w-3.5 mr-1" /> Reject
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </table>
+                    </div>
+                  )}
+                  </>
                   )}
                 </div></div>
               ) : (
