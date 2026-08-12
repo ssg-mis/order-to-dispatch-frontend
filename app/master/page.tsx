@@ -1000,7 +1000,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
               )
           )
           const anyOpeningQtyStaged = openingQtyResults.some(
-            r => r.status === 'fulfilled' && r.value?.data?.approval_status !== 'approved' && r.value?.data?.pending_opening_qty != null
+            r => r.status === 'fulfilled' && (r.value?.data?.approval_status === 'pending' || r.value?.data?.pending_opening_qty != null)
           )
           if (anyOpeningQtyStaged) {
             toast({ title: "Opening qty pending approval", description: "Your opening stock changes need admin approval before they appear in Inventory." })
@@ -1179,7 +1179,7 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
         else if (tab === 'depots') { refetchPendingDepots(); refetchDepot() }
         else if (tab === 'brokers') { refetchPendingBrokers(); refetchBroker() }
         else if (tab === 'salespersons') { refetchPendingSalespersons(); refetchSalesperson() }
-        else if (tab === 'sku_details') { refetchPendingSku(); refetchSku() }
+        else if (tab === 'sku_details') { refetchPendingSku(); refetchSku(); refetchPendingOpeningQty() }
         else if (tab === 'vehicle_master') { refetchPendingVehicles(); refetchVehicle() }
         else if (tab === 'driver_master') { refetchPendingDrivers(); refetchDriver() }
         else if (tab === 'transport_master') { refetchPendingTransport(); refetchTransport() }
@@ -1295,7 +1295,8 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
           res.data
             .filter((row: any) => row.product_name?.toLowerCase() === data.sku_name?.toLowerCase())
             .forEach((row: any) => {
-              if (row.opening_qty) stockMap[row.depot_name] = String(row.opening_qty)
+              const qtyVal = (approvalReviewModal && row.pending_opening_qty != null) ? row.pending_opening_qty : row.opening_qty
+              if (qtyVal != null && qtyVal !== '') stockMap[row.depot_name] = String(qtyVal)
             })
           setOpeningStockByDepot(stockMap)
         }
@@ -1396,25 +1397,36 @@ const { ref: customerEndRef, inView: customerInView } = useInView()
     if (!approvalReviewModal || approvalReviewModal.item?.request_type !== 'edit') return null
     let pc = approvalReviewModal.item.pending_changes
     if (typeof pc === 'string') { try { pc = JSON.parse(pc) } catch { pc = null } }
-    if (!pc) return null
+    pc = pc || {}
     const changed = Object.keys(pc).filter(k => String(pc[k] ?? '') !== String(approvalReviewModal.item[k] ?? ''))
+
+    const pendingStockEntries = approvalReviewModal.tab === 'sku_details'
+      ? pendingOpeningQtys.filter(p => p.product_name?.toLowerCase() === approvalReviewModal.item?.sku_name?.toLowerCase())
+      : []
+
+    if (changed.length === 0 && pendingStockEntries.length === 0) return null
+
     return (
       <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 space-y-1.5">
         <p className="text-xs font-semibold text-blue-800">Proposed changes to an existing record</p>
-        {changed.length === 0 ? (
-          <p className="text-xs text-blue-600">No field differs from the current record.</p>
-        ) : (
-          <div className="space-y-1">
-            {changed.map(k => (
-              <div key={k} className="text-xs flex flex-wrap gap-1">
-                <span className="font-medium text-slate-600">{APPROVAL_FIELD_LABELS[k] || k}:</span>
-                <span className="text-red-600 line-through">{String(approvalReviewModal.item[k] ?? '—') || '—'}</span>
-                <span className="text-slate-400">→</span>
-                <span className="text-emerald-700 font-medium">{String(pc[k] ?? '—') || '—'}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="space-y-1">
+          {changed.map(k => (
+            <div key={k} className="text-xs flex flex-wrap gap-1">
+              <span className="font-medium text-slate-600">{APPROVAL_FIELD_LABELS[k] || k}:</span>
+              <span className="text-red-600 line-through">{String(approvalReviewModal.item[k] ?? '—') || '—'}</span>
+              <span className="text-slate-400">→</span>
+              <span className="text-emerald-700 font-medium">{String(pc[k] ?? '—') || '—'}</span>
+            </div>
+          ))}
+          {pendingStockEntries.map(p => (
+            <div key={p.id} className="text-xs flex flex-wrap gap-1">
+              <span className="font-medium text-slate-600">Opening Stock ({p.depo_name}):</span>
+              <span className="text-red-600 line-through">{String(p.opening_qty ?? '0')}</span>
+              <span className="text-slate-400">→</span>
+              <span className="text-emerald-700 font-medium">{String(p.pending_opening_qty ?? '0')}</span>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
