@@ -16,6 +16,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -74,6 +75,10 @@ export default function InventoryPage() {
   const [selectedDepo, setSelectedDepo] = useState<string>("all")
   const [selectedProduct, setSelectedProduct] = useState<string>("all")
   const [skuWiseMode, setSkuWiseMode] = useState(false)
+  // Date range — applies to Sales (Make Invoice) only, by invoice date
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
+  const salesDates = { from_date: fromDate || undefined, to_date: toDate || undefined }
 
   // Column visibility — persisted per-browser under col_prefs_inventory, same as workflow stages
   const [visibleColumns, setVisibleColumns] = usePersistedColumns("inventory", INVENTORY_COLUMN_IDS)
@@ -96,7 +101,7 @@ export default function InventoryPage() {
     setDetailRows([])
     try {
       const apiType = type === 'stockIn' ? 'stock_in' : type === 'stockOut' ? 'stock_out' : 'sales'
-      const res = await inventoryApi.getDetail(row.depot_name, row.product_name, apiType)
+      const res = await inventoryApi.getDetail(row.depot_name, row.product_name, apiType, salesDates)
       setDetailRows(res.success ? res.data : [])
     } finally {
       setDetailLoading(false)
@@ -104,9 +109,9 @@ export default function InventoryPage() {
   }
 
   const { data: rawData, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["inventory-data"],
+    queryKey: ["inventory-data", fromDate, toDate],
     queryFn: async () => {
-      const res = await inventoryApi.getData()
+      const res = await inventoryApi.getData(salesDates)
       return res.success ? (res.data as InventoryRow[]) : []
     },
     staleTime: 30_000,
@@ -309,6 +314,16 @@ export default function InventoryPage() {
           </Select>
         </div>
 
+        {/* Date range (Sales / Make Invoice) */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-500 whitespace-nowrap">From</span>
+          <Input type="date" value={fromDate} max={toDate || undefined}
+            onChange={(e) => setFromDate(e.target.value)} className="h-9 w-40 text-sm" />
+          <span className="text-xs font-medium text-slate-500 whitespace-nowrap">To</span>
+          <Input type="date" value={toDate} min={fromDate || undefined}
+            onChange={(e) => setToDate(e.target.value)} className="h-9 w-40 text-sm" />
+        </div>
+
         {/* Divider */}
         <div className="h-6 w-px bg-slate-200" />
 
@@ -329,12 +344,12 @@ export default function InventoryPage() {
         </div>
 
         {/* Clear all */}
-        {(selectedDepo !== "all" || selectedProduct !== "all" || skuWiseMode) && (
+        {(selectedDepo !== "all" || selectedProduct !== "all" || skuWiseMode || fromDate || toDate) && (
           <Button
             variant="ghost"
             size="sm"
             className="h-9 gap-1.5 text-slate-500 hover:text-slate-700"
-            onClick={() => { setSelectedDepo("all"); setSelectedProduct("all"); setSkuWiseMode(false) }}
+            onClick={() => { setSelectedDepo("all"); setSelectedProduct("all"); setSkuWiseMode(false); setFromDate(""); setToDate("") }}
           >
             <X className="h-3.5 w-3.5" />
             Clear

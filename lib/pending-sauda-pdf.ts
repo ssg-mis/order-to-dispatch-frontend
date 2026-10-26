@@ -11,6 +11,7 @@ export interface PendingSaudaDORow {
   sauda_no: string
   customer_name: string
   broker_name: string
+  depo_name: string
   rice: OilBucket
   soya: OilBucket
   palm: OilBucket
@@ -25,20 +26,27 @@ interface MonthSubtotal {
   rice: number; soya: number; palm: number; total: number
   riceKg: number; soyaKg: number; palmKg: number; totalKg: number
 }
+export interface PendingSaudaDepot {
+  name: string
+  rows: PendingSaudaDORow[]
+}
 export interface PendingSaudaMonth {
   label: string
   rows: PendingSaudaDORow[]
+  depots?: PendingSaudaDepot[]
   subtotal: MonthSubtotal
 }
 export interface PendingSaudaReport {
   months: PendingSaudaMonth[]
   grandTotal: MonthSubtotal
   count: number
+  depotOptions?: string[]
 }
 
 // ── Colors (RGB) — matched to the source workbook ───────────────────────────
 const WHITE: [number, number, number] = [255, 255, 255]
 const YELLOW: [number, number, number] = [255, 255, 0]
+const DEPOT_FILL: [number, number, number] = [255, 242, 204]
 
 // Column header fills (more saturated)
 const HEAD_FILL: Record<number, [number, number, number]> = {
@@ -89,7 +97,8 @@ const remarkOf = (r: PendingSaudaDORow): string => {
 }
 
 // ── Main entry ──────────────────────────────────────────────────────────────
-export function generatePendingSaudaPdf(report: PendingSaudaReport) {
+// `depotName` = the depot chosen for export; omit/blank for all depots.
+export function generatePendingSaudaPdf(report: PendingSaudaReport, depotName?: string) {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
 
   // "upto" date is always one day before the download date
@@ -117,6 +126,10 @@ export function generatePendingSaudaPdf(report: PendingSaudaReport) {
     body.push([{ content: label, colSpan: 17, styles: { halign: "center" } }])
     rowTypes.push("special")
   }
+  const pushDepotBanner = (name: string) => {
+    body.push([{ content: `DEPO : ${name.toUpperCase()}`, colSpan: 17, styles: { halign: "center" } }])
+    rowTypes.push("depot")
+  }
   const pushSubtotalUnits = (s: MonthSubtotal) => {
     body.push([
       "", "", "", "", "",
@@ -136,7 +149,11 @@ export function generatePendingSaudaPdf(report: PendingSaudaReport) {
 
   report.months.forEach((m) => {
     pushBanner(m.label)
-    m.rows.forEach(pushData)
+    const depots = m.depots?.length ? m.depots : [{ name: "DEPO NOT SET", rows: m.rows }]
+    depots.forEach((dp) => {
+      pushDepotBanner(dp.name)
+      dp.rows.forEach(pushData)
+    })
     pushSubtotalUnits(m.subtotal)
     pushSubtotalKg(m.subtotal)
   })
@@ -157,9 +174,10 @@ export function generatePendingSaudaPdf(report: PendingSaudaReport) {
   rowTypes.push("special")
 
   // Head: company title + report subtitle + column headers (repeats per page)
+  const subtitle = `CP Pending Sauda Report upto ${uptoStr}` + (depotName ? ` (Depo : ${depotName})` : "")
   const head = [
     [{ content: "SHRI SHYAM OIL EXTRACTIONS PVT LTD", colSpan: 17, styles: { fontSize: 13, halign: "center", valign: "middle" } }],
-    [{ content: `CP Pending Sauda Report upto ${uptoStr}`, colSpan: 17, styles: { fontSize: 9.5, halign: "center", valign: "middle" } }],
+    [{ content: subtitle, colSpan: 17, styles: { fontSize: 9.5, halign: "center", valign: "middle" } }],
     HEADERS.map((h) => ({ content: h })),
   ]
 
@@ -196,6 +214,9 @@ export function generatePendingSaudaPdf(report: PendingSaudaReport) {
         if (rowTypes[d.row.index] === "data") {
           d.cell.styles.fillColor = DATA_FILL[ci] || WHITE
           d.cell.styles.halign = ci === 3 || ci === 4 || ci === 15 || ci === 16 ? "left" : "center"
+        } else if (rowTypes[d.row.index] === "depot") {
+          d.cell.styles.fillColor = DEPOT_FILL
+          d.cell.styles.fontStyle = "bold"
         } else {
           d.cell.styles.fillColor = YELLOW
           d.cell.styles.fontStyle = "bold"
@@ -218,6 +239,6 @@ export function generatePendingSaudaPdf(report: PendingSaudaReport) {
   }
 
   // Open in a new tab for preview; the browser's PDF viewer handles download/print.
-  doc.setProperties({ title: `CP Pending Sauda Report upto ${uptoStr}` })
+  doc.setProperties({ title: subtitle })
   window.open(doc.output("bloburl") as unknown as string, "_blank")
 }

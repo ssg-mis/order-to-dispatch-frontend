@@ -1735,7 +1735,8 @@ export default function PreApprovalPage() {
       cust2: "Global Industries",
       cust3: "Zenith Supply",
     }
-    const oilTypes = rawOrder._allProducts?.map((p: any) => p.oilType || p.productName).filter(Boolean).join(", ") || "—"
+    // oil_type can be empty on reverted rows (e.g. Stock Transfer) — derive it from the product name
+    const oilTypes = rawOrder._allProducts?.map((p: any) => p.oilType || normalizeOilType(p.productName || "")).filter(Boolean).join(", ") || "—"
     const firstProduct = rawOrder._allProducts?.[0]
 
     return {

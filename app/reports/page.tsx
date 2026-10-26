@@ -29,7 +29,7 @@ import {
 import { reportsApi } from "@/lib/api-service"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ExportPdfModal } from "@/components/export-pdf-modal"
-import { generatePendingSaudaPdf } from "@/lib/pending-sauda-pdf"
+import { PendingSaudaModal } from "@/components/pending-sauda-modal"
 import { CustomerWiseSaudaModal } from "@/components/customer-wise-sauda-modal"
 import { CustomerWiseDetailedModal } from "@/components/customer-wise-detailed-modal"
 import { SkuCustomerWisePendingModal } from "@/components/sku-customer-wise-pending-modal"
@@ -83,7 +83,6 @@ export default function ReportsPage() {
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<"summary" | "skus" | "timeline">("summary")
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null)
-  const [pendingSaudaLoading, setPendingSaudaLoading] = useState(false)
 
   // Export & Reports menu + the dialogs it opens (kept outside the popover so closing
   // the popover doesn't unmount an open dialog)
@@ -93,23 +92,7 @@ export default function ReportsPage() {
   const [custDetailedOpen, setCustDetailedOpen] = useState(false)
   const [custSkuOpen, setCustSkuOpen] = useState(false)
   const [dailyOpen, setDailyOpen] = useState(false)
-
-  const handlePendingSaudaPdf = useCallback(async () => {
-    setPendingSaudaLoading(true)
-    try {
-      const res = await reportsApi.getPendingSauda()
-      if (!res.success || !res.data) throw new Error(res.message || "Failed to fetch report")
-      if (!res.data.count) {
-        toast({ title: "No pending saudas", description: "No DOs are currently stuck in dispatch planning." })
-        return
-      }
-      generatePendingSaudaPdf(res.data)
-    } catch (e: any) {
-      toast({ title: "Could not generate PDF", description: e?.message || "An error occurred.", variant: "destructive" })
-    } finally {
-      setPendingSaudaLoading(false)
-    }
-  }, [toast])
+  const [pendingSaudaOpen, setPendingSaudaOpen] = useState(false)
 
   // Filters
   const [filterOrderNo, setFilterOrderNo] = useState("")
@@ -318,11 +301,10 @@ export default function ReportsPage() {
 
               <div className="my-1 h-px bg-slate-100" />
               <div className="px-2 pt-1 pb-1 text-[10px] font-black uppercase tracking-widest text-slate-400">PDF Reports</div>
-              <Button variant="ghost" size="sm" disabled={pendingSaudaLoading}
+              <Button variant="ghost" size="sm"
                 className="w-full justify-start rounded-xl text-xs font-bold gap-2 text-slate-700 hover:bg-amber-50 hover:text-amber-700"
-                onClick={() => { setExportMenuOpen(false); handlePendingSaudaPdf() }}>
-                <FileText className={`h-3.5 w-3.5 ${pendingSaudaLoading ? "animate-pulse" : ""}`} />
-                {pendingSaudaLoading ? "Generating…" : "Pending Sauda"}
+                onClick={() => { setExportMenuOpen(false); setPendingSaudaOpen(true) }}>
+                <FileText className="h-3.5 w-3.5" /> Pending Sauda
               </Button>
               <Button variant="ghost" size="sm"
                 className="w-full justify-start rounded-xl text-xs font-bold gap-2 text-slate-700 hover:bg-sky-50 hover:text-sky-700"
@@ -359,6 +341,7 @@ export default function ReportsPage() {
           <CustomerWiseDetailedModal hideTrigger open={custDetailedOpen} onOpenChange={setCustDetailedOpen} />
           <SkuCustomerWisePendingModal hideTrigger open={custSkuOpen} onOpenChange={setCustSkuOpen} />
           <DailyDispatchModal hideTrigger open={dailyOpen} onOpenChange={setDailyOpen} />
+          <PendingSaudaModal open={pendingSaudaOpen} onOpenChange={setPendingSaudaOpen} />
         </div>
       </div>
 

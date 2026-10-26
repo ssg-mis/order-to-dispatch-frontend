@@ -1843,8 +1843,12 @@ export const commitmentPunchApi = {
  * Inventory API
  */
 export const inventoryApi = {
-  getData: async (): Promise<ApiResponse> => {
-    return request('/inventory/data');
+  getData: async (dates?: { from_date?: string; to_date?: string }): Promise<ApiResponse> => {
+    const params = new URLSearchParams()
+    if (dates?.from_date) params.set('from_date', dates.from_date)
+    if (dates?.to_date) params.set('to_date', dates.to_date)
+    const qs = params.toString()
+    return request(`/inventory/data${qs ? `?${qs}` : ''}`);
   },
 
   upsertOpeningQty: async (data: { depo_name: string; product_name: string; opening_qty: number }): Promise<ApiResponse> => {
@@ -1854,8 +1858,10 @@ export const inventoryApi = {
     });
   },
 
-  getDetail: async (depot_name: string, product_name: string, type: string): Promise<ApiResponse> => {
+  getDetail: async (depot_name: string, product_name: string, type: string, dates?: { from_date?: string; to_date?: string }): Promise<ApiResponse> => {
     const params = new URLSearchParams({ depot_name, product_name, type });
+    if (dates?.from_date) params.set('from_date', dates.from_date)
+    if (dates?.to_date) params.set('to_date', dates.to_date)
     return request(`/inventory/detail?${params}`);
   },
 
