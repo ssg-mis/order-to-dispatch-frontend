@@ -88,7 +88,16 @@ const rateOrDash = (n: number) =>
 const dispatchedStr = (arr: number[]) =>
   (arr || []).map((q) => (q % 1 === 0 ? String(q) : String(q))).join("+")
 
-const statusOf = (_r: PendingSaudaDORow): string => "Upcoming"
+// Expired once the End Date has passed (before today); otherwise Upcoming
+const statusOf = (r: PendingSaudaDORow): string => {
+  if (!r.end_date) return "Upcoming"
+  const end = new Date(r.end_date)
+  if (isNaN(end.getTime())) return "Upcoming"
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  end.setHours(0, 0, 0, 0)
+  return end < today ? "Expired" : "Upcoming"
+}
 const remarkOf = (r: PendingSaudaDORow): string => {
   const p = (r.delivery_purpose || "").toLowerCase()
   if (p.includes("week")) return "W-W"
@@ -144,6 +153,12 @@ export function generatePendingSaudaPdf(report: PendingSaudaReport, depotName?: 
       qtyOrDash(s.riceKg), "KGS", qtyOrDash(s.soyaKg), "KGS", qtyOrDash(s.palmKg), "KGS",
       qtyOrDash(s.totalKg), "KGS", "", "", "", "",
     ])
+    rowTypes.push("special")
+  }
+
+  // Nothing pending (e.g. a depot with no open DOs): one clear notice row instead of data
+  if (!report.months.length) {
+    body.push([{ content: "NO PENDING SAUDA", colSpan: 17, styles: { halign: "center", fontSize: 11, cellPadding: 4 } }])
     rowTypes.push("special")
   }
 

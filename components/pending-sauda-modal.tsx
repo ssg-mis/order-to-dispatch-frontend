@@ -18,8 +18,8 @@ export function PendingSaudaModal({ open, onOpenChange }: { open: boolean; onOpe
   const [optionsLoading, setOptionsLoading] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  // Each time the dialog opens, list the Depot Master depots plus any depot that
-  // has pending DOs (in case a DO carries a depot name missing from the master).
+  // Each time the dialog opens, list the Active Depot Master depots plus any depot that
+  // has pending DOs but is missing from the master. Inactive depots are never listed.
   useEffect(() => {
     if (!open) return
     setDepot(ALL)
@@ -27,12 +27,19 @@ export function PendingSaudaModal({ open, onOpenChange }: { open: boolean; onOpe
     Promise.allSettled([depotApi.getAll({ all: "true" }), reportsApi.getPendingSauda()])
       .then(([masterRes, pendingRes]) => {
         const names: string[] = []
+        const inMaster = new Set<string>()
         if (masterRes.status === "fulfilled") {
           const items = masterRes.value?.data?.depots || (Array.isArray(masterRes.value?.data) ? masterRes.value.data : [])
-          items.forEach((d: any) => d?.depot_name && names.push(String(d.depot_name).trim()))
+          items.forEach((d: any) => {
+            if (!d?.depot_name) return
+            const name = String(d.depot_name).trim()
+            inMaster.add(name.toUpperCase())
+            if (String(d.status || "").toLowerCase() === "active") names.push(name)
+          })
         }
         if (pendingRes.status === "fulfilled") {
-          ((pendingRes.value?.data as PendingSaudaReport)?.depotOptions || []).forEach((n) => n && names.push(n.trim()))
+          ((pendingRes.value?.data as PendingSaudaReport)?.depotOptions || [])
+            .forEach((n) => n && !inMaster.has(n.trim().toUpperCase()) && names.push(n.trim()))
         }
         const seen = new Set<string>()
         const unique = names.filter((n) => {
@@ -52,12 +59,8 @@ export function PendingSaudaModal({ open, onOpenChange }: { open: boolean; onOpe
       const depoName = depot === ALL ? "" : depot
       const res = await reportsApi.getPendingSauda(depoName ? { depo_name: depoName } : undefined)
       if (!res.success || !res.data) throw new Error(res.message || "Failed to fetch report")
-      const data = res.data as PendingSaudaReport
-      if (!data.count) {
-        toast({ title: "No pending saudas", description: depoName ? `No pending DOs for ${depoName}.` : "No DOs are currently stuck in dispatch planning." })
-        return
-      }
-      generatePendingSaudaPdf(data, depoName || undefined)
+      // An empty report still produces a PDF, marked "NO PENDING SAUDA"
+      generatePendingSaudaPdf(res.data as PendingSaudaReport, depoName || undefined)
       onOpenChange(false)
     } catch (e: any) {
       toast({ title: "Could not generate PDF", description: e?.message || "An error occurred.", variant: "destructive" })
