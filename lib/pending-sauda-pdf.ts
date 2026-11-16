@@ -107,7 +107,8 @@ const remarkOf = (r: PendingSaudaDORow): string => {
 
 // ── Main entry ──────────────────────────────────────────────────────────────
 // `depotName` = the depot chosen for export; omit/blank for all depots.
-export function generatePendingSaudaPdf(report: PendingSaudaReport, depotName?: string) {
+// `emptyDepots` = (All Depots only) depots with no pending sauda, listed before the Grand Total.
+export function generatePendingSaudaPdf(report: PendingSaudaReport, depotName?: string, emptyDepots: string[] = []) {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
 
   // "upto" date is always one day before the download date
@@ -162,6 +163,9 @@ export function generatePendingSaudaPdf(report: PendingSaudaReport, depotName?: 
     rowTypes.push("special")
   }
 
+  // When nothing at all is pending, the single notice row above already covers every depot
+  const noSaudaDepots = report.months.length ? emptyDepots : []
+
   report.months.forEach((m) => {
     pushBanner(m.label)
     const depots = m.depots?.length ? m.depots : [{ name: "DEPO NOT SET", rows: m.rows }]
@@ -172,6 +176,15 @@ export function generatePendingSaudaPdf(report: PendingSaudaReport, depotName?: 
     pushSubtotalUnits(m.subtotal)
     pushSubtotalKg(m.subtotal)
   })
+
+  // All Depots: depots with nothing pending, each marked "NO PENDING SAUDA"
+  if (noSaudaDepots.length) {
+    pushBanner("DEPOTS WITH NO PENDING SAUDA")
+    noSaudaDepots.forEach((name) => {
+      body.push([{ content: `DEPO : ${name.toUpperCase()}  -  NO PENDING SAUDA`, colSpan: 17, styles: { halign: "center" } }])
+      rowTypes.push("depot")
+    })
+  }
 
   // Grand total (two rows)
   const g = report.grandTotal

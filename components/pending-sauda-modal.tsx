@@ -59,8 +59,19 @@ export function PendingSaudaModal({ open, onOpenChange }: { open: boolean; onOpe
       const depoName = depot === ALL ? "" : depot
       const res = await reportsApi.getPendingSauda(depoName ? { depo_name: depoName } : undefined)
       if (!res.success || !res.data) throw new Error(res.message || "Failed to fetch report")
+      const report = res.data as PendingSaudaReport
+      // All Depots: list every Active depot that has no pending sauda, so it shows "NO PENDING SAUDA"
+      let emptyDepots: string[] = []
+      if (!depoName) {
+        const present = new Set<string>()
+        report.months.forEach((m) => {
+          (m.depots || []).forEach((d) => present.add(String(d.name || "").trim().toUpperCase()))
+          m.rows.forEach((r) => r.depo_name && present.add(String(r.depo_name).trim().toUpperCase()))
+        })
+        emptyDepots = depots.filter((d) => !present.has(d.trim().toUpperCase()))
+      }
       // An empty report still produces a PDF, marked "NO PENDING SAUDA"
-      generatePendingSaudaPdf(res.data as PendingSaudaReport, depoName || undefined)
+      generatePendingSaudaPdf(report, depoName || undefined, emptyDepots)
       onOpenChange(false)
     } catch (e: any) {
       toast({ title: "Could not generate PDF", description: e?.message || "An error occurred.", variant: "destructive" })
