@@ -1822,12 +1822,18 @@ export const commitmentPunchApi = {
     return request(`/commitment-punch${queryString}`);
   },
 
-  getPending: async (params?: { page?: number; limit?: number; search?: string }): Promise<ApiResponse> => {
+  getPending: async (params?: { page?: number; limit?: number; search?: string; tab?: 'pending' | 'history' }): Promise<ApiResponse> => {
     const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
     return request(`/commitment-punch/pending${queryString}`);
   },
+
+  preclose: async (id: number, data: { remarks?: string; username?: string }): Promise<ApiResponse> =>
+    request(`/commitment-punch/${id}/preclose`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 
   processCommitment: async (id: number, data: any): Promise<ApiResponse> =>
     request(`/commitment-punch/${id}/process`, {

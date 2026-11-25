@@ -107,6 +107,12 @@ const MASTER_TABS = [
 
 const STATUSES = ["active", "inactive"]
 
+// Broker / Salesperson master row usable for Order Punch access: Active, named, not rejected
+const isActiveMasterRow = (r: any) =>
+  String(r?.status || "").trim().toLowerCase() === "active" &&
+  String(r?.salesman_name || "").trim() !== "" &&
+  String(r?.approval_status || "").trim().toLowerCase() !== "rejected"
+
 export default function SettingsPage() {
   const { toast } = useToast()
   const { isReadOnly, user: currentUser } = useAuth()
@@ -182,7 +188,8 @@ export default function SettingsPage() {
         const brokerRes = await brokerApi.getAll({ all: "true" });
         if (brokerRes.success) {
           const list = brokerRes.data?.brokers || (Array.isArray(brokerRes.data) ? brokerRes.data : [])
-          setBrokers(list)
+          // Only Active brokers with a name are offered for access
+          setBrokers(list.filter((b: any) => isActiveMasterRow(b)))
         }
       } catch (error) {
         console.error("Failed to fetch brokers", error)
@@ -201,7 +208,8 @@ export default function SettingsPage() {
         const salespersonRes = await salespersonApi.getAll({ all: "true" });
         if (salespersonRes.success) {
           const list = salespersonRes.data?.salespersons || (Array.isArray(salespersonRes.data) ? salespersonRes.data : [])
-          setSalespersons(list)
+          // Only Active salespersons with a name are offered for access
+          setSalespersons(list.filter((s: any) => isActiveMasterRow(s)))
         }
       } catch (error) {
         console.error("Failed to fetch salespersons", error)

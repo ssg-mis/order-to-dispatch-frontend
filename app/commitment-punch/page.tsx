@@ -26,7 +26,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Save, Plus, Trash2, CheckCircle2, RefreshCw, ChevronRight, CalendarIcon, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Save, Plus, Trash2, CheckCircle2, RefreshCw, ChevronRight, CalendarIcon, ArrowUpDown, ArrowUp, ArrowDown, XCircle } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
@@ -67,6 +68,23 @@ type PendingCommitment = {
   remaining_qty: number
   delivery_qty?: number
   po_pending_qty?: number
+  status?: "Pending" | "Completed" | "Preclosed"
+  preclose_qty?: number
+  preclose_remarks?: string | null
+  preclosed_at?: string | null
+}
+
+// Only open commitments can be processed / preclosed
+const isSelectable = (row: PendingCommitment) => !row.status || row.status === "Pending"
+
+const StatusBadge = ({ status }: { status?: string }) => {
+  const s = status || "Pending"
+  const cls = s === "Preclosed"
+    ? "border-red-200 bg-red-50 text-red-700"
+    : s === "Completed"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : "border-blue-200 bg-blue-50 text-blue-700"
+  return <Badge variant="outline" className={`text-xs ${cls}`}>{s}</Badge>
 }
 
 type SkuRow = {
@@ -108,6 +126,14 @@ export default function CommitmentPunchPage() {
   const [pendingList, setPendingList] = useState<PendingCommitment[]>([])
   const [isLoadingPending, setIsLoadingPending] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [activeTab, setActiveTab] = useState<"pending" | "history">("pending")
+  const [historyList, setHistoryList] = useState<PendingCommitment[]>([])
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+
+  // ── Preclose dialog ─────────────────────────────────────────
+  const [isPrecloseOpen, setIsPrecloseOpen] = useState(false)
+  const [precloseRemarks, setPrecloseRemarks] = useState("")
+  const [isPreclosing, setIsPreclosing] = useState(false)
 
   // ── Add Commitment dialog ───────────────────────────────────
   const [isAddOpen, setIsAddOpen] = useState(false)
@@ -165,9 +191,12 @@ export default function CommitmentPunchPage() {
   const loadPending = useCallback(async () => {
     setIsLoadingPending(true)
     try {
-      const res = await commitmentPunchApi.getPending()
+      const res = await commitmentPunchApi.getPending({ tab: "pending", limit: 500 })
       if (res.success) {
-        setPendingList(res.data?.commitments || [])
+        const list: PendingCommitment[] = res.data?.commitments || []
+        setPendingList(list)
+        // Drop any selection that is no longer open (e.g. just preclosed)
+        setSelectedIds(prev => new Set([...prev].filter(id => list.some(r => r.id === id && isSelectable(r)))))
       }
     } catch {
       toast({ title: "Error", description: "Failed to load pending commitments.", variant: "destructive" })
@@ -176,7 +205,22 @@ export default function CommitmentPunchPage() {
     }
   }, [toast])
 
+  const loadHistory = useCallback(async () => {
+    setIsLoadingHistory(true)
+    try {
+      const res = await commitmentPunchApi.getPending({ tab: "history", limit: 500 })
+      if (res.success) setHistoryList(res.data?.commitments || [])
+    } catch {
+      toast({ title: "Error", description: "Failed to load commitment history.", variant: "destructive" })
+    } finally {
+      setIsLoadingHistory(false)
+    }
+  }, [toast])
+
   useEffect(() => { loadPending() }, [loadPending])
+  useEffect(() => { if (activeTab === "history") loadHistory() }, [activeTab, loadHistory])
+
+  const refreshAll = () => { loadPending(); if (activeTab === "history") loadHistory() }
 
   // ── Fetch commitment details for popup ─────────────────────────────────────
   const openDetails = async (row: PendingCommitment, e: React.MouseEvent) => {
@@ -320,6 +364,8 @@ export default function CommitmentPunchPage() {
 
   // ── Checkbox selection ──────────────────────────────────────
   const toggleSelect = (id: number) => {
+    const row = pendingList.find(r => r.id === id)
+    if (row && !isSelectable(row)) return
     setSelectedIds(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
@@ -327,12 +373,41 @@ export default function CommitmentPunchPage() {
     })
   }
 
+  const selectableList = pendingList.filter(isSelectable)
   const toggleSelectAll = () => {
-    if (selectedIds.size === pendingList.length) {
+    if (selectableList.length > 0 && selectedIds.size === selectableList.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(pendingList.map(r => r.id)))
+      setSelectedIds(new Set(selectableList.map(r => r.id)))
     }
+  }
+
+  // ── Preclose ────────────────────────────────────────────────
+  const precloseRows = pendingList.filter(r => selectedIds.has(r.id))
+  const handlePrecloseSubmit = async () => {
+    if (!precloseRemarks.trim()) {
+      toast({ title: "Remarks required", description: "Please enter the reason for preclose.", variant: "destructive" })
+      return
+    }
+    setIsPreclosing(true)
+    const done: string[] = []
+    const failed: string[] = []
+    for (const row of precloseRows) {
+      try {
+        const res = await commitmentPunchApi.preclose(row.id, { remarks: precloseRemarks.trim(), username: user?.username || "system" })
+        if (res.success) done.push(row.commitment_no)
+        else failed.push(`${row.commitment_no}: ${res.message || "failed"}`)
+      } catch (e: any) {
+        failed.push(`${row.commitment_no}: ${e?.message || "failed"}`)
+      }
+    }
+    setIsPreclosing(false)
+    if (done.length) toast({ title: "Preclosed", description: `${done.join(", ")} preclosed successfully.` })
+    if (failed.length) toast({ title: "Preclose failed", description: failed.join("\n"), variant: "destructive" })
+    setIsPrecloseOpen(false)
+    setPrecloseRemarks("")
+    setSelectedIds(new Set())
+    loadPending()
   }
 
   // ── Add Commitment helpers ──────────────────────────────────
@@ -588,16 +663,21 @@ export default function CommitmentPunchPage() {
   }
 
   // Sorts pendingList by any field key
+  // Rows of the active tab (Pending / History)
+  const isHistory = activeTab === "history"
+  const tabList = isHistory ? historyList : pendingList
+  const isTabLoading = isHistory ? isLoadingHistory : isLoadingPending
+
   const sortedPendingList = useMemo(() => {
-    if (!pendingSortField || !pendingList || pendingList.length === 0) return pendingList
-    return [...pendingList].sort((a: any, b: any) => {
+    if (!pendingSortField || !tabList || tabList.length === 0) return tabList
+    return [...tabList].sort((a: any, b: any) => {
       const aVal = String(a[pendingSortField] ?? "").toLowerCase()
       const bVal = String(b[pendingSortField] ?? "").toLowerCase()
       if (aVal < bVal) return pendingSortDir === "asc" ? -1 : 1
       if (aVal > bVal) return pendingSortDir === "asc" ? 1 : -1
       return 0
     })
-  }, [pendingList, pendingSortField, pendingSortDir])
+  }, [tabList, pendingSortField, pendingSortDir])
 
   const [visibleColumns] = usePersistedColumns("commitment-punch", PAGE_COLUMNS.map(c => c.id))
   const [columnOrder, setColumnOrder] = useColumnOrder("commitment-punch", PAGE_COLUMNS.map(c => c.id))
@@ -673,8 +753,8 @@ export default function CommitmentPunchPage() {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
-          <Button variant="outline" size="sm" onClick={loadPending} disabled={isLoadingPending} className="w-full sm:w-auto">
-            <RefreshCw className={`h-4 w-4 mr-1 ${isLoadingPending ? "animate-spin" : ""}`} />
+          <Button variant="outline" size="sm" onClick={refreshAll} disabled={isTabLoading} className="w-full sm:w-auto">
+            <RefreshCw className={`h-4 w-4 mr-1 ${isTabLoading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
           <Button
@@ -693,17 +773,41 @@ export default function CommitmentPunchPage() {
           <div className="min-w-0">
             <CardTitle>Commitment Name</CardTitle>
             <CardDescription>
-              Showing pending commitments ({pendingList.length} record{pendingList.length !== 1 ? "s" : ""})
+              {isHistory
+                ? `Showing fully closed commitments (${tabList.length} record${tabList.length !== 1 ? "s" : ""})`
+                : `Showing pending commitments (${tabList.length} record${tabList.length !== 1 ? "s" : ""})`}
             </CardDescription>
+            <div className="mt-3 inline-flex rounded-lg border bg-slate-50 p-1">
+              {(["pending", "history"] as const).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setActiveTab(t)}
+                  className={`rounded-md px-4 py-1.5 text-sm font-semibold transition-colors ${activeTab === t ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                >
+                  {t === "pending" ? "Pending" : "History"}
+                </button>
+              ))}
+            </div>
           </div>
-          {selectedIds.size > 0 && (
-            <Button
-              className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 sm:w-auto"
-              onClick={() => setIsProcessOpen(true)}
-            >
-              <ChevronRight className="h-4 w-4" />
-              Process ({selectedIds.size} selected)
-            </Button>
+          {!isHistory && selectedIds.size > 0 && (
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+              <Button
+                variant="outline"
+                className="w-full gap-2 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 sm:w-auto"
+                onClick={() => { setPrecloseRemarks(""); setIsPrecloseOpen(true) }}
+              >
+                <XCircle className="h-4 w-4" />
+                Preclose ({selectedIds.size})
+              </Button>
+              <Button
+                className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 sm:w-auto"
+                onClick={() => setIsProcessOpen(true)}
+              >
+                <ChevronRight className="h-4 w-4" />
+                Process ({selectedIds.size} selected)
+              </Button>
+            </div>
           )}
         </CardHeader>
         <CardContent className="p-0">
@@ -713,8 +817,9 @@ export default function CommitmentPunchPage() {
                 <TableRow>
                   <TableHead className="w-[48px] text-center">
                     <Checkbox
-                      checked={pendingList.length > 0 && selectedIds.size === pendingList.length}
+                      checked={!isHistory && selectableList.length > 0 && selectedIds.size === selectableList.length}
                       onCheckedChange={toggleSelectAll}
+                      disabled={isHistory || selectableList.length === 0}
                     />
                   </TableHead>
                   <ColumnDragProvider columnIds={orderedVisibleCols.map(c => c.id)} onReorder={handleColumnReorder} disabled={!isAdmin && !isFeatureEnabled('can_reorder_columns')}>
@@ -733,50 +838,58 @@ export default function CommitmentPunchPage() {
                       )
                     })}
                   </ColumnDragProvider>
+                  <TableHead className="whitespace-nowrap text-center">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoadingPending ? (
+                {isTabLoading ? (
                   [...Array(4)].map((_, i) => (
                     <TableRow key={i} className="opacity-40">
-                      {[...Array(orderedVisibleCols.length + 1)].map((__, j) => (
+                      {[...Array(orderedVisibleCols.length + 2)].map((__, j) => (
                         <TableCell key={j}><div className="h-4 w-full bg-slate-200 animate-pulse rounded" /></TableCell>
                       ))}
                     </TableRow>
                   ))
-                ) : pendingList.length === 0 ? (
+                ) : tabList.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={orderedVisibleCols.length + 1} className="text-center py-16 text-muted-foreground">
+                    <TableCell colSpan={orderedVisibleCols.length + 2} className="text-center py-16 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <CheckCircle2 className="h-10 w-10 text-slate-300" />
-                        <p className="font-medium">No pending commitments</p>
-                        <p className="text-sm text-slate-400">Click "Add Commitment" to create one.</p>
+                        <p className="font-medium">{isHistory ? "No closed commitments yet" : "No pending commitments"}</p>
+                        {!isHistory && <p className="text-sm text-slate-400">Click "Add Commitment" to create one.</p>}
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sortedPendingList.map(row => (
+                  sortedPendingList.map(row => {
+                    const selectable = !isHistory && isSelectable(row)
+                    return (
                     <TableRow
                       key={row.id}
-                      className={`hover:bg-slate-50 cursor-pointer transition-colors ${selectedIds.has(row.id) ? "bg-blue-50 hover:bg-blue-50" : ""}`}
-                      onClick={() => toggleSelect(row.id)}
+                      className={`transition-colors ${selectable ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50/60"} ${selectedIds.has(row.id) ? "bg-blue-50 hover:bg-blue-50" : ""}`}
+                      onClick={() => selectable && toggleSelect(row.id)}
                     >
                       <TableCell className="text-center" onClick={e => e.stopPropagation()}>
                         <Checkbox
                           checked={selectedIds.has(row.id)}
                           onCheckedChange={() => toggleSelect(row.id)}
+                          disabled={!selectable}
                         />
                       </TableCell>
                       {orderedVisibleCols.map(col => renderCell(row, col.id))}
+                      <TableCell className="text-center" title={row.preclose_remarks || undefined}>
+                        <StatusBadge status={row.status} />
+                      </TableCell>
                     </TableRow>
-                  ))
+                    )
+                  })
                 )}
               </TableBody>
             </Table>
           </div>
 
           <div className="space-y-3 p-3 md:hidden">
-            {isLoadingPending ? (
+            {isTabLoading ? (
               [...Array(4)].map((_, i) => (
                 <div key={i} className="rounded-lg border p-4 space-y-3 opacity-60">
                   <div className="h-4 w-32 bg-slate-200 animate-pulse rounded" />
@@ -787,20 +900,20 @@ export default function CommitmentPunchPage() {
                   </div>
                 </div>
               ))
-            ) : pendingList.length === 0 ? (
+            ) : tabList.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground">
                 <div className="flex flex-col items-center gap-2">
                   <CheckCircle2 className="h-10 w-10 text-slate-300" />
-                  <p className="font-medium">No pending commitments</p>
-                  <p className="text-sm text-slate-400">Click "Add Commitment" to create one.</p>
+                  <p className="font-medium">{isHistory ? "No closed commitments yet" : "No pending commitments"}</p>
+                  {!isHistory && <p className="text-sm text-slate-400">Click "Add Commitment" to create one.</p>}
                 </div>
               </div>
             ) : (
-              pendingList.map(row => (
+              tabList.map(row => (
                 <div
                   key={row.id}
-                  className={`rounded-lg border p-4 transition-colors ${selectedIds.has(row.id) ? "border-blue-200 bg-blue-50" : "bg-white"}`}
-                  onClick={() => toggleSelect(row.id)}
+                  className={`rounded-lg border p-4 transition-colors ${selectedIds.has(row.id) ? "border-blue-200 bg-blue-50" : !isHistory && isSelectable(row) ? "bg-white" : "bg-slate-50"}`}
+                  onClick={() => !isHistory && isSelectable(row) && toggleSelect(row.id)}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -808,11 +921,13 @@ export default function CommitmentPunchPage() {
                       <p className="mt-1 text-xs text-slate-500">
                         {row.commitment_date ? new Date(row.commitment_date).toLocaleDateString("en-IN") : "—"}
                       </p>
+                      <div className="mt-1"><StatusBadge status={row.status} /></div>
                     </div>
                     <div onClick={e => e.stopPropagation()}>
                       <Checkbox
                         checked={selectedIds.has(row.id)}
                         onCheckedChange={() => toggleSelect(row.id)}
+                        disabled={isHistory || !isSelectable(row)}
                       />
                     </div>
                   </div>
@@ -867,6 +982,51 @@ export default function CommitmentPunchPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ═══════════════════════════════════════════════════════
+          PRECLOSE COMMITMENT DIALOG
+      ═══════════════════════════════════════════════════════ */}
+      <Dialog open={isPrecloseOpen} onOpenChange={open => { if (!isPreclosing) setIsPrecloseOpen(open) }}>
+        <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-[520px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>Preclose Commitment</DialogTitle>
+            <DialogDescription>
+              The pending commitment quantity below will be closed. A preclosed commitment cannot be processed again.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {precloseRows.map(row => (
+              <div key={row.id} className="grid grid-cols-1 gap-2 rounded-lg border bg-slate-50 p-3 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs text-slate-500">Commitment No.</Label>
+                  <p className="font-mono text-sm font-semibold text-blue-700">{row.commitment_no}</p>
+                  <p className="text-xs text-slate-500 truncate">{row.party_name} · {row.oil_type}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Commitment Pending (MT)</Label>
+                  <Input value={Number(row.remaining_qty ?? row.quantity).toFixed(4)} readOnly className="mt-1 h-9 bg-white font-mono font-bold text-emerald-700" />
+                </div>
+              </div>
+            ))}
+            <div>
+              <Label className="text-xs text-slate-500">Remarks <span className="text-red-500">*</span></Label>
+              <Textarea
+                value={precloseRemarks}
+                onChange={e => setPrecloseRemarks(e.target.value)}
+                placeholder="Reason for preclose (required)"
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsPrecloseOpen(false)} disabled={isPreclosing}>Cancel</Button>
+            <Button className="bg-red-600 hover:bg-red-700" onClick={handlePrecloseSubmit} disabled={isPreclosing || precloseRows.length === 0 || !precloseRemarks.trim()}>
+              {isPreclosing ? "Preclosing…" : `Preclose (${precloseRows.length})`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ═══════════════════════════════════════════════════════
           ADD COMMITMENT DIALOG
